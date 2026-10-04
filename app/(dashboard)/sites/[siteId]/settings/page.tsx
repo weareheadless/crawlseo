@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -10,13 +10,15 @@ interface Props {
 }
 
 export default async function SettingsPage({ params }: Props) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: {
       userId: true,
+      projectId: true,
       domain: true,
       gscProperty: true,
       createdAt: true,
@@ -32,20 +34,42 @@ export default async function SettingsPage({ params }: Props) {
       },
     },
   });
-  if (!site || site.userId !== session?.user?.id) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   // Check API key status
-  const apiKeys = await db.apiKey.findMany({
-    where: { userId: session.user.id },
-    select: { provider: true, updatedAt: true },
-  });
-  const apiKeyStatus: Record<string, { connected: boolean; updatedAt?: string }> = {
+  const [apiKeys, platformGrant] = await Promise.all([
+    db.apiKey.findMany({
+      where: { userId },
+      select: { provider: true, updatedAt: true },
+    }),
+    site.projectId
+      ? db.projectApiKeyGrant.findFirst({
+          where: {
+            projectId: site.projectId,
+            provider: "dataforseo",
+            status: "ACTIVE",
+            providerCredentialId: { not: null },
+          },
+          select: {
+            providerCredential: { select: { status: true, updatedAt: true } },
+          },
+        })
+      : Promise.resolve(null),
+  ]);
+  const apiKeyStatus: Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }> = {
     dataforseo: { connected: false },
   };
   for (const key of apiKeys) {
     apiKeyStatus[key.provider] = {
       connected: true,
       updatedAt: key.updatedAt.toISOString(),
+    };
+  }
+  if (platformGrant?.providerCredential?.status === "ACTIVE") {
+    apiKeyStatus.dataforseo = {
+      connected: true,
+      managed: true,
+      updatedAt: platformGrant.providerCredential.updatedAt.toISOString(),
     };
   }
 

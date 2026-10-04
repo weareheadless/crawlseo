@@ -1,10 +1,10 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { testConnection } from "@/lib/dataforseo/client";
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 

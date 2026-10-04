@@ -1,73 +1,88 @@
-import { auth } from "@/lib/auth";
+import { randomUUID } from "node:crypto";
+import { JobKind, JobStatus } from "@prisma/client";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { runSiteCrawl } from "@/lib/crawler/engine";
+import { enqueueJob } from "@/lib/jobs/queue";
+
+function authorized(site: { userId: string | null }, userId: string): boolean {
+  // Project-only sites are intentionally invisible to the legacy browser UI
+  // unless provisioning attached an explicit operator owner.
+  return site.userId === userId;
+}
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = await getUserIdFromCookies();
+    if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { siteId } = await params;
     const site = await db.site.findUnique({
       where: { id: siteId },
-      select: { userId: true, domain: true },
+      select: { userId: true, projectId: true },
     });
-
-    if (!site || site.userId !== session.user.id) {
+    if (!site || !authorized(site, userId)) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Prevent concurrent crawls
+    let maxPages = 200;
+    try {
+      const body = (await req.json()) as { maxPages?: unknown };
+      if (typeof body.maxPages === "number" && Number.isFinite(body.maxPages)) {
+        maxPages = Math.max(1, Math.min(Math.floor(body.maxPages), 2000));
+      }
+    } catch {
+      // Empty request bodies use the default.
+    }
+
+    const idempotencyKey =
+      req.headers.get("idempotency-key")?.trim() || `browser:${siteId}:${randomUUID()}`;
+    const existingJob = await db.job.findUnique({
+      where: { siteId_kind_idempotencyKey: { siteId, kind: JobKind.CRAWL, idempotencyKey } },
+      select: { id: true, status: true, payload: true },
+    });
+    if (existingJob) {
+      const payload = existingJob.payload as { crawlId?: string };
+      return Response.json(
+        { jobId: existingJob.id, crawlId: payload.crawlId ?? null, status: existingJob.status },
+        { status: existingJob.status === JobStatus.COMPLETED ? 200 : 202 }
+      );
+    }
+
     const running = await db.crawl.findFirst({
-      where: { siteId, status: "RUNNING" },
+      where: { siteId, status: { in: ["PENDING", "RUNNING"] } },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
     });
     if (running) {
       return Response.json(
-        { error: "A crawl is already running", crawlId: running.id },
+        { error: "A crawl is already queued or running", crawlId: running.id },
         { status: 409 }
       );
     }
 
-    // Accept optional maxPages from request body
-    let maxPages: number | undefined;
-    try {
-      const body = (await req.json()) as { maxPages?: number };
-      if (body.maxPages && typeof body.maxPages === "number" && body.maxPages > 0) {
-        maxPages = body.maxPages;
-      }
-    } catch {
-      // No body or invalid JSON — use defaults
-    }
-
-    // Create the crawl record upfront so we can return its ID immediately
     const crawl = await db.crawl.create({
-      data: {
+      data: { siteId, status: "PENDING", maxPages },
+      select: { id: true },
+    });
+    try {
+      const job = await enqueueJob({
+        projectId: site.projectId,
         siteId,
-        status: "PENDING",
-        ...(maxPages && { maxPages }),
-      },
-    });
-
-    // Fire-and-forget: run crawl in background using the pre-created record
-    runSiteCrawl(siteId, site.domain, maxPages, crawl.id).catch((error) => {
-      console.error(`Background crawl failed for site ${siteId}:`, error);
-    });
-
-    return Response.json(
-      { crawlId: crawl.id, status: "RUNNING" },
-      { status: 202 }
-    );
+        kind: JobKind.CRAWL,
+        payload: { crawlId: crawl.id, maxPages, userId },
+        idempotencyKey,
+      });
+      return Response.json({ jobId: job.id, crawlId: crawl.id, status: job.status }, { status: 202 });
+    } catch (error) {
+      await db.crawl.delete({ where: { id: crawl.id } }).catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
-    console.error("Crawl error:", error);
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Crawl failed" },
-      { status: 500 }
-    );
+    console.error("Crawl queue error:", error instanceof Error ? error.message : "unknown");
+    return Response.json({ error: "Failed to queue crawl" }, { status: 500 });
   }
 }
 
@@ -76,32 +91,19 @@ export async function GET(
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = await getUserIdFromCookies();
+    if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({
-      where: { id: siteId },
-      select: { userId: true },
-    });
-    if (!site || site.userId !== session.user.id) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
+    const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true } });
+    if (!site || !authorized(site, userId)) return Response.json({ error: "Not found" }, { status: 404 });
 
     const crawls = await db.crawl.findMany({
       where: { siteId },
       orderBy: { startedAt: "desc" },
       take: 10,
-      include: {
-        issues: {
-          take: 200,
-          orderBy: { severity: "asc" },
-        },
-      },
+      include: { issues: { take: 200, orderBy: { severity: "asc" } } },
     });
-
     return Response.json(crawls);
   } catch (error) {
     console.error(error);

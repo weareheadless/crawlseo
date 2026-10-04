@@ -9,7 +9,7 @@
 
 Google Search Console + Site Crawler + Core Web Vitals + MCP Server — all in one self-hosted dashboard. Free forever.
 
-[![GitHub stars](https://img.shields.io/github/stars/crawlseo/crawlseo?style=flat-square)](https://github.com/crawlseo/crawlseo/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/weareheadless/crawlseo?style=flat-square)](https://github.com/weareheadless/crawlseo/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 [![Docker](https://img.shields.io/badge/docker-ready-blue?style=flat-square&logo=docker)](docker-compose.yml)
@@ -88,7 +88,7 @@ Crawl up to 2,000 pages with concurrent fetching. Health score, 16 issue types, 
 ## Quick Start
 
 ```bash
-git clone https://github.com/crawlseo/crawlseo.git
+git clone https://github.com/weareheadless/crawlseo.git
 cd crawlseo
 cp .env.example .env.local
 # Add your Google OAuth credentials to .env.local
@@ -164,7 +164,7 @@ Works with Claude Code, Claude Desktop, and Cursor. See [`mcp/README.md`](mcp/RE
 ### Docker Compose (recommended)
 
 ```bash
-git clone https://github.com/crawlseo/crawlseo.git
+git clone https://github.com/weareheadless/crawlseo.git
 cd crawlseo
 cp .env.example .env
 # Edit .env with your credentials

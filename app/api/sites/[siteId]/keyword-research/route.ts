@@ -1,6 +1,6 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { keywordResearch } from "@/lib/dataforseo/client";
+import { cachedKeywordReport, getLatestResearchReport } from "@/lib/dataforseo/research";
 import { fetchSuggestions } from "@/lib/google/autocomplete";
 
 export async function GET(
@@ -8,17 +8,17 @@ export async function GET(
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { siteId } = await params;
     const site = await db.site.findUnique({
       where: { id: siteId },
-      select: { userId: true, domain: true },
+      select: { userId: true, projectId: true, domain: true },
     });
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -28,12 +28,15 @@ export async function GET(
       return Response.json({ error: "Missing query parameter: q" }, { status: 400 });
     }
 
-    // Try DataForSEO first
-    const dfResults = await keywordResearch(session.user.id, query);
+    // DataForSEO is paid and only runs inside Ada's monthly batch. The dashboard
+    // reads that persisted batch and falls back to free autocomplete.
+    const latest = site.projectId ? await getLatestResearchReport(site.projectId) : null;
+    const dfResults = cachedKeywordReport(latest?.report, query);
 
     if (dfResults !== null) {
       return Response.json({
         source: "dataforseo",
+        research_report_id: latest?.report_id ?? null,
         keywords: dfResults,
       });
     }

@@ -7,13 +7,6 @@ import {
   Terminal,
   Monitor,
   Code2,
-  Globe,
-  Search,
-  FileText,
-  Bug,
-  Gauge,
-  Lightbulb,
-  BarChart3,
   Rocket,
 } from "lucide-react";
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { getSitePeriodMetrics, formatCompact } from "@/lib/seo-metrics";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,10 +12,11 @@ import { formatDeltaPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
+  if (!userId) redirect("/login");
 
   const sites = await db.site.findMany({
-    where: { userId: session?.user?.id },
+    where: { userId },
     select: {
       id: true,
       domain: true,

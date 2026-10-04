@@ -39,12 +39,16 @@ export function AppShell({
 
   // Close mobile drawer on route change
   useEffect(() => {
+    // This is a transient UI reset, not derived render state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMobileOpen(false);
   }, [pathname]);
 
   // Load collapsed state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("crawlseo-sidebar-collapsed");
+    // Read browser-only persisted state after hydration to avoid a mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved === "true") setCollapsed(true);
   }, []);
 
@@ -142,7 +146,14 @@ export function AppShell({
             </div>
 
             <a
-              href="/api/auth/signout"
+              href="/crawlseo/api/auth/google/start"
+              className="mb-2 flex w-full items-center justify-center rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary"
+            >
+              Reconnect Google
+            </a>
+
+            <a
+              href="/crawlseo/api/auth/signout"
               className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary"
             >
               <LogOut className="size-3.5" />

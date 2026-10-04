@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -12,14 +12,14 @@ interface Props {
 }
 
 export default async function CrawlPage({ params }: Props) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== session?.user?.id) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   // Check for running crawl
   const runningCrawl = await db.crawl.findFirst({

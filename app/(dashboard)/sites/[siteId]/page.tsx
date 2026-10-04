@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DashboardMetrics } from "@/components/dashboard/metrics";
@@ -21,7 +21,7 @@ interface SitePageProps {
 }
 
 export default async function SiteOverviewPage({ params }: SitePageProps) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
 
   const site = await db.site.findUnique({
@@ -34,7 +34,7 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
     },
   });
 
-  if (!site || site.userId !== session?.user?.id) {
+  if (!site || site.userId !== userId) {
     redirect("/sites");
   }
 

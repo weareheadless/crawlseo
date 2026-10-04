@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -9,17 +9,18 @@ interface Props {
 }
 
 export default async function DomainOverviewPage({ params }: Props) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== session?.user?.id) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   const hasDataForSEO = !!(await db.apiKey.findUnique({
-    where: { userId_provider: { userId: session.user.id, provider: "dataforseo" } },
+    where: { userId_provider: { userId, provider: "dataforseo" } },
     select: { id: true },
   }));
 

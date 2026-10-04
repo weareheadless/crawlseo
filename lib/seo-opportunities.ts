@@ -111,7 +111,7 @@ export async function getCannibalization(siteId: string, limit = 20) {
     where: {
       siteId,
       date: { gte: r.start, lte: r.end },
-      page: { not: null },
+      page: { not: "" },
     },
     select: {
       query: true,

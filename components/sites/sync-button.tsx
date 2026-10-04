@@ -28,7 +28,7 @@ export function SyncButton({
     setError(false);
 
     try {
-      const response = await fetch("/api/gsc/sync", {
+      const response = await fetch("/crawlseo/api/gsc/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ siteId }),
@@ -43,7 +43,9 @@ export function SyncButton({
       }
 
       setMessage(
-        `Synced ${data.keywordsInserted ?? 0} keywords · ${data.pagesInserted ?? 0} pages`
+        data.queued
+          ? `GSC sync queued (job: ${data.jobId?.slice(0, 8) ?? "pending"}...)`
+          : `Synced ${data.keywordsInserted ?? 0} keywords · ${data.pagesInserted ?? 0} pages`
       );
       router.refresh();
       setTimeout(() => setMessage(null), 4000);

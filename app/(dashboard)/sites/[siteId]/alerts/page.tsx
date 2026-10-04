@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ensureDefaultAlerts } from "@/lib/alerts/evaluate";
@@ -10,19 +10,20 @@ interface Props {
 }
 
 export default async function AlertsPage({ params }: Props) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== session?.user?.id) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
-  await ensureDefaultAlerts(session!.user!.id, siteId);
+  await ensureDefaultAlerts(userId, siteId);
 
   const alerts = await db.alert.findMany({
-    where: { userId: session!.user!.id, siteId },
+    where: { userId, siteId },
     orderBy: { type: "asc" },
   });
 

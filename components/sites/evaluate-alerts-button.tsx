@@ -11,7 +11,7 @@ export function EvaluateAlertsButton() {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/alerts", {
+      const res = await fetch("/crawlseo/api/alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "evaluate" }),

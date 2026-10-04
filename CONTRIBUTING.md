@@ -70,7 +70,7 @@ We use conventional commits:
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/crawlseo/crawlseo/issues)
+- Use [GitHub Issues](https://github.com/weareheadless/crawlseo/issues)
 - Search existing issues before creating a new one
 - Include steps to reproduce, expected behavior, and actual behavior
 

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { getDailyTraffic } from "@/lib/seo-metrics";
 
@@ -7,8 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -18,7 +18,7 @@ export async function GET(
       select: { userId: true },
     });
 
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 

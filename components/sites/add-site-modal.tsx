@@ -54,7 +54,7 @@ export function AddSiteModal({
     setError("");
 
     try {
-      const response = await fetch("/api/gsc/properties");
+      const response = await fetch("/crawlseo/api/gsc/properties");
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to load GSC properties");
@@ -100,7 +100,7 @@ export function AddSiteModal({
         // keep as-is
       }
 
-      const response = await fetch("/api/sites", {
+      const response = await fetch("/crawlseo/api/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

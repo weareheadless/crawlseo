@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getAllOpportunities } from "@/lib/seo-opportunities";
@@ -14,14 +14,14 @@ interface Props {
 }
 
 export default async function OpportunitiesPage({ params }: Props) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true, _count: { select: { keywords: true } } },
   });
-  if (!site || site.userId !== session?.user?.id) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   if (site._count.keywords === 0) {
     return (

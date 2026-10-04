@@ -1,6 +1,6 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { domainOverview, backlinksOverview } from "@/lib/dataforseo/client";
+import { cachedBacklinksReport, cachedDomainReport, getLatestResearchReport } from "@/lib/dataforseo/research";
 import { getSitePeriodMetrics } from "@/lib/seo-metrics";
 
 export async function GET(
@@ -8,31 +8,32 @@ export async function GET(
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { siteId } = await params;
     const site = await db.site.findUnique({
       where: { id: siteId },
-      select: { userId: true, domain: true },
+      select: { userId: true, projectId: true, domain: true },
     });
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
     const targetDomain = site.domain;
 
-    // Try DataForSEO
-    const [domainData, backlinksData] = await Promise.all([
-      domainOverview(session.user.id, targetDomain),
-      backlinksOverview(session.user.id, targetDomain),
-    ]);
+    // DataForSEO is populated by Ada's bounded monthly batch. Never spend a
+    // paid task from a dashboard read.
+    const latest = site.projectId ? await getLatestResearchReport(site.projectId) : null;
+    const domainData = cachedDomainReport(latest?.report, targetDomain);
+    const backlinksData = cachedBacklinksReport(latest?.report, targetDomain);
 
     if (domainData !== null) {
       return Response.json({
         source: "dataforseo",
+        research_report_id: latest?.report_id ?? null,
         domain: targetDomain,
         overview: domainData,
         backlinks: backlinksData,

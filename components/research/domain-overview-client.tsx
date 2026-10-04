@@ -52,7 +52,7 @@ export function DomainOverviewClient({
   async function loadOwnDomain() {
     setLoadingOwn(true);
     try {
-      const res = await fetch(`/api/sites/${siteId}/domain-overview`);
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/domain-overview`);
       const data = await res.json();
       setOwnData(data);
       setLoaded(true);
@@ -72,7 +72,7 @@ export function DomainOverviewClient({
     setLoadingCompetitor(true);
     try {
       const res = await fetch(
-        `/api/sites/${siteId}/domain-overview?domain=${encodeURIComponent(competitorDomain.trim())}`
+        `/crawlseo/api/sites/${siteId}/domain-overview?domain=${encodeURIComponent(competitorDomain.trim())}`
       );
       const data = await res.json();
       setCompetitorData(data);

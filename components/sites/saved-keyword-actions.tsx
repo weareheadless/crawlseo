@@ -17,7 +17,7 @@ export function SaveKeywordForm({ siteId }: { siteId: string }) {
     if (!query.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/sites/${siteId}/saved-keywords`, {
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/saved-keywords`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: query.trim(), notes: notes.trim() || undefined }),
@@ -83,7 +83,7 @@ export function DeleteKeywordButton({ siteId, query }: { siteId: string; query: 
   async function handleDelete() {
     setLoading(true);
     try {
-      await fetch(`/api/sites/${siteId}/saved-keywords`, {
+      await fetch(`/crawlseo/api/sites/${siteId}/saved-keywords`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),

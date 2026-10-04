@@ -1,16 +1,16 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { ensureDefaultAlerts, evaluateAlertsForUser } from "@/lib/alerts/evaluate";
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const alerts = await db.alert.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       include: { site: { select: { domain: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -24,8 +24,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -39,14 +39,14 @@ export async function POST(req: Request) {
         where: { id: body.siteId },
         select: { userId: true },
       });
-      if (!site || site.userId !== session.user.id) {
+      if (!site || site.userId !== userId) {
         return Response.json({ error: "Not found" }, { status: 404 });
       }
-      await ensureDefaultAlerts(session.user.id, body.siteId);
+      await ensureDefaultAlerts(userId, body.siteId);
       return Response.json({ ok: true });
     }
 
-    const fires = await evaluateAlertsForUser(session.user.id);
+    const fires = await evaluateAlertsForUser(userId);
     return Response.json({ fires });
   } catch (error) {
     console.error(error);

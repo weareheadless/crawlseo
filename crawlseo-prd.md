@@ -10,7 +10,7 @@ CrawlSEO is an open-source, self-hosted SEO monitoring tool that combines Google
 
 **One-liner:** Open-source alternative to $140/mo SEO tools. GSC data + site crawler + Core Web Vitals in one dashboard.
 
-**Repository:** github.com/crawlseo/crawlseo
+**Repository:** github.com/weareheadless/crawlseo
 **Domain:** crawlseo.dev or crawlseo.pro
 **License:** MIT
 **Author:** Mike / Brandson Digital
@@ -874,7 +874,7 @@ Follow Plausible's proven formula:
 ## Quick Start
 
 \```bash
-git clone https://github.com/crawlseo/crawlseo.git
+git clone https://github.com/weareheadless/crawlseo.git
 cd crawlseo
 cp .env.example .env
 # Edit .env with your Google OAuth credentials

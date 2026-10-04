@@ -7,7 +7,6 @@ import {
   Bookmark,
   Check,
   AlertTriangle,
-  Settings,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -44,7 +43,7 @@ export function KeywordResearchClient({
 
     try {
       const res = await fetch(
-        `/api/sites/${siteId}/keyword-research?q=${encodeURIComponent(query.trim())}`
+        `/crawlseo/api/sites/${siteId}/keyword-research?q=${encodeURIComponent(query.trim())}`
       );
       const data = await res.json();
       setResults(data.keywords ?? []);
@@ -60,7 +59,7 @@ export function KeywordResearchClient({
     setSavingSet((prev) => new Set(prev).add(keyword));
 
     try {
-      const res = await fetch(`/api/sites/${siteId}/saved-keywords`, {
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/saved-keywords`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: keyword }),

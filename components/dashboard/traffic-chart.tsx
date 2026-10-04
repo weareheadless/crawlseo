@@ -39,7 +39,7 @@ export function TrafficChart({ siteId, days = 90 }: TrafficChartProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/sites/${siteId}/traffic?days=${days}`);
+        const res = await fetch(`/crawlseo/api/sites/${siteId}/traffic?days=${days}`);
         if (!res.ok) throw new Error("Failed to load traffic");
         const json = (await res.json()) as ChartData[];
         if (!cancelled) setData(json);

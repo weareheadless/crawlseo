@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getTopKeywords } from "@/lib/seo-metrics";
@@ -19,7 +19,7 @@ interface KeywordsPageProps {
 }
 
 export default async function KeywordsPage({ params }: KeywordsPageProps) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
 
   const site = await db.site.findUnique({
@@ -27,7 +27,7 @@ export default async function KeywordsPage({ params }: KeywordsPageProps) {
     select: { userId: true, domain: true },
   });
 
-  if (!site || site.userId !== session?.user?.id) {
+  if (!site || site.userId !== userId) {
     redirect("/sites");
   }
 

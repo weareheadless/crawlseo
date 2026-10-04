@@ -464,7 +464,7 @@ function parseSitemapUrls(xml: string, base: string): string[] {
 /*  Issue detection per page                                          */
 /* ------------------------------------------------------------------ */
 
-function issuesFromPage(page: PageSnapshot, _seedOrigin: string): IssueInput[] {
+function issuesFromPage(page: PageSnapshot): IssueInput[] {
   const issues: IssueInput[] = [];
   const { url } = page;
 
@@ -827,7 +827,7 @@ async function executeCrawl(
 
       pages.push(page);
       allLinks.push(...page.links);
-      issues.push(...issuesFromPage(page, origin));
+      issues.push(...issuesFromPage(page));
 
       // Enqueue discovered internal links
       for (const link of page.internalOutlinks) {

@@ -19,6 +19,8 @@ export function ThemeToggle() {
 
   useEffect(() => {
     const saved = (localStorage.getItem("crawlseo-theme") as Mode) || "dark";
+    // Restore browser-only preference after hydration without changing SSR output.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode(saved);
     applyMode(saved);
   }, []);

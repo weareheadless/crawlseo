@@ -16,16 +16,20 @@ export async function syncVitalsForSite(
     throw new Error("Site not found or unauthorized");
   }
 
+  return syncVitalsForResolvedSite(siteId, site.domain, limit);
+}
+
+async function syncVitalsForResolvedSite(siteId: string, domain: string, limit: number) {
   const pages = await getTopPages(siteId, 28, limit);
   let urls = pages.map((p) => p.url);
 
   // Fallback to homepage
   if (urls.length === 0) {
-    urls = [`https://${site.domain}`];
+    urls = [`https://${domain}`];
   }
 
   const normalized = urls.map((u) =>
-    u.startsWith("http") ? u : `https://${site.domain}${u.startsWith("/") ? "" : "/"}${u}`
+    u.startsWith("http") ? u : `https://${domain}${u.startsWith("/") ? "" : "/"}${u}`
   );
 
   let inserted = 0;
@@ -65,4 +69,17 @@ export async function syncVitalsForSite(
   }
 
   return { inserted, results };
+}
+
+export async function syncVitalsForProject(
+  projectId: string,
+  siteId: string,
+  limit = 5
+) {
+  const site = await db.site.findFirst({
+    where: { id: siteId, projectId },
+    select: { domain: true },
+  });
+  if (!site) throw new Error("Site not found or unauthorized");
+  return syncVitalsForResolvedSite(siteId, site.domain, limit);
 }

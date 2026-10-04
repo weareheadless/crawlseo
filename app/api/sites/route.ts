@@ -1,19 +1,20 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { assertPublicDomain } from "@/lib/crawler/engine";
-import { syncGSCDataForSite } from "@/lib/workers/gsc-sync";
+import { JobKind } from "@prisma/client";
+import { enqueueJob } from "@/lib/jobs/queue";
 import { ensureDefaultAlerts } from "@/lib/alerts/evaluate";
 
 export async function GET() {
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const sites = await db.site.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       select: {
         id: true,
         domain: true,
@@ -45,9 +46,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
     const existing = await db.site.findUnique({
       where: {
         userId_domain: {
-          userId: session.user.id,
+          userId,
           domain,
         },
       },
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
     // Create the site
     const site = await db.site.create({
       data: {
-        userId: session.user.id,
+        userId,
         domain,
         gscProperty,
       },
@@ -105,12 +106,14 @@ export async function POST(req: Request) {
       },
     });
 
-    await ensureDefaultAlerts(session.user.id, site.id);
+    await ensureDefaultAlerts(userId, site.id);
 
-    // Kick off initial GSC sync (don't block the response)
-    void syncGSCDataForSite(session.user.id, site.id, 28).catch((err) =>
-      console.error("Initial GSC sync failed:", err)
-    );
+    await enqueueJob({
+      siteId: site.id,
+      kind: JobKind.GSC_SYNC,
+      payload: { userId, daysBack: 28 },
+      idempotencyKey: `site-create:${site.id}:gsc`,
+    });
 
     return Response.json(site, { status: 201 });
   } catch (error) {

@@ -25,7 +25,7 @@ export function CrawlStatusPoller({ siteId, crawlId }: CrawlStatusPollerProps) {
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/sites/${siteId}/crawl/${crawlId}/status`);
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/crawl/${crawlId}/status`);
       if (!res.ok) return;
       const data = (await res.json()) as CrawlStatus;
       setStatus(data);
@@ -38,6 +38,8 @@ export function CrawlStatusPoller({ siteId, crawlId }: CrawlStatusPollerProps) {
   }, [siteId, crawlId, router]);
 
   useEffect(() => {
+    // Start the external polling loop immediately when the component mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     poll();
     const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 
 export default async function Home() {
-  const session = await auth();
-  redirect(session ? "/dashboard" : "/login");
+  const userId = await getUserIdFromCookies();
+  redirect(userId ? "/dashboard" : "/login");
 }

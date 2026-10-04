@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Open-source SEO monitoring. GSC + Crawler + Core Web Vitals + MCP in one dashboard.",
-  "homepage": "https://github.com/crawlseo/crawlseo",
-  "repository": "https://github.com/crawlseo/crawlseo",
+  "homepage": "https://github.com/weareheadless/crawlseo",
+  "repository": "https://github.com/weareheadless/crawlseo",
   "license": "MIT",
   "author": "Brandson Digital",
   "keywords": [
@@ -23,8 +23,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run",
     "lint": "eslint",
     "mcp": "npx tsx mcp/server.ts",
+    "mcp:http": "npx tsx mcp/http-server.ts",
+    "worker": "npx tsx scripts/job-worker.ts",
+    "test:dataforseo:mcp": "npx tsx scripts/test-dataforseo-mcp.ts",
+    "provision:oceanicvibes": "npx tsx scripts/provision-oceanicvibes.ts",
     "seed:demo": "npx tsx scripts/seed-demo.ts",
     "seed:demo:clean": "npx tsx scripts/seed-demo.ts --clean"
   },
@@ -36,6 +41,7 @@
     "@prisma/client": "^6.19.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "google-auth-library": "^10.4.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
     "next-auth": "^5.0.0-beta.30",
@@ -57,6 +63,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

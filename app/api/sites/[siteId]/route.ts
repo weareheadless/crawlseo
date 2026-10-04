@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 
 export async function GET(
@@ -8,9 +8,9 @@ export async function GET(
   const { siteId } = await params;
 
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -39,12 +39,19 @@ export async function GET(
     }
 
     // Verify ownership
-    if (site.userId !== session.user.id) {
+    if (site.userId !== userId) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Remove userId from response
-    const { userId, ...siteData } = site;
+    // Remove userId from response without relying on an unused destructured value.
+    const siteData = {
+      id: site.id,
+      domain: site.domain,
+      gscProperty: site.gscProperty,
+      createdAt: site.createdAt,
+      updatedAt: site.updatedAt,
+      _count: site._count,
+    };
 
     return Response.json(siteData);
   } catch (error) {
@@ -66,9 +73,9 @@ export async function PUT(
   const { siteId } = await params;
 
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -78,7 +85,7 @@ export async function PUT(
       select: { userId: true },
     });
 
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -121,9 +128,9 @@ export async function DELETE(
   const { siteId } = await params;
 
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -133,7 +140,7 @@ export async function DELETE(
       select: { userId: true },
     });
 
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

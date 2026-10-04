@@ -19,7 +19,7 @@ export function DeleteSiteButton({
   async function handleDelete() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sites/${siteId}`, { method: "DELETE" });
+      const res = await fetch(`/crawlseo/api/sites/${siteId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete site");
       router.push("/sites");
       router.refresh();

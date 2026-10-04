@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AddSiteModal } from "@/components/sites/add-site-modal";
@@ -8,10 +9,11 @@ import { SyncButton } from "@/components/sites/sync-button";
 import { formatCompact } from "@/lib/seo-metrics";
 
 export default async function SitesPage() {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
+  if (!userId) redirect("/login");
 
   const sites = await db.site.findMany({
-    where: { userId: session?.user?.id },
+    where: { userId },
     select: {
       id: true,
       domain: true,

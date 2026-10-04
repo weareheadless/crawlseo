@@ -31,6 +31,11 @@ export type DailyTraffic = {
   impressions: number;
 };
 
+export type SeoMetricsDateRange = {
+  start: Date;
+  end: Date;
+};
+
 function parseRange(days: number) {
   const { start, end } = getDateRange(days);
   return {
@@ -45,6 +50,21 @@ function previousRange(days: number) {
   start.setUTCDate(start.getUTCDate() - days);
   const end = new Date(current.start);
   end.setUTCMilliseconds(end.getUTCMilliseconds() - 1);
+  return { start, end };
+}
+
+function previousDateRange(current: SeoMetricsDateRange): SeoMetricsDateRange {
+  const duration = current.end.getTime() - current.start.getTime();
+  const end = new Date(current.start.getTime() - 1);
+  return { start: new Date(end.getTime() - duration), end };
+}
+
+export function seoMetricsDateRange(startDate: string, endDate: string): SeoMetricsDateRange {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T23:59:59.999Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end) {
+    throw new Error("SEO metrics date range is invalid");
+  }
   return { start, end };
 }
 
@@ -83,7 +103,8 @@ function aggregatePeriod(
 
 export async function getSitePeriodMetrics(
   siteId: string,
-  days = 28
+  days = 28,
+  dateRange?: SeoMetricsDateRange
 ): Promise<{
   current: PeriodMetrics;
   previous: PeriodMetrics;
@@ -94,8 +115,8 @@ export async function getSitePeriodMetrics(
     avgCtr: number;
   };
 }> {
-  const currentRange = parseRange(days);
-  const prevRange = previousRange(days);
+  const currentRange = dateRange ?? parseRange(days);
+  const prevRange = dateRange ? previousDateRange(dateRange) : previousRange(days);
 
   const [currentRows, previousRows] = await Promise.all([
     db.keyword.findMany({
@@ -147,9 +168,10 @@ export async function getSitePeriodMetrics(
 export async function getTopKeywords(
   siteId: string,
   days = 28,
-  limit = 50
+  limit = 50,
+  dateRange?: SeoMetricsDateRange
 ): Promise<KeywordRow[]> {
-  const range = parseRange(days);
+  const range = dateRange ?? parseRange(days);
   const rows = await db.keyword.findMany({
     where: {
       siteId,
@@ -200,9 +222,10 @@ export async function getTopKeywords(
 export async function getTopPages(
   siteId: string,
   days = 28,
-  limit = 50
+  limit = 50,
+  dateRange?: SeoMetricsDateRange
 ): Promise<PageRow[]> {
-  const range = parseRange(days);
+  const range = dateRange ?? parseRange(days);
   const rows = await db.page.findMany({
     where: {
       siteId,

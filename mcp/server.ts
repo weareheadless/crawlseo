@@ -11,6 +11,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Prisma, type IssueSeverity } from "@prisma/client";
 import { z } from "zod";
 
 import { db } from "../lib/db";
@@ -290,9 +291,9 @@ server.tool(
     limit: z.number().optional().default(50).describe("Max issues to return (default 50)"),
   },
   async ({ crawlId, severity, limit }) => {
-    const where: any = { crawlId };
+    const where: Prisma.CrawlIssueWhereInput = { crawlId };
     if (severity) {
-      where.severity = severity.toUpperCase();
+      where.severity = severity.toUpperCase() as IssueSeverity;
     }
 
     const issues = await db.crawlIssue.findMany({

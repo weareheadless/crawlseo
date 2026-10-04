@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, XCircle, Loader2, FlaskConical, Save, Trash2 } from "lucide-react";
 
-type ApiKeyStatus = Record<string, { connected: boolean; updatedAt?: string }>;
+type ApiKeyStatus = Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }>;
 
 export function ApiKeysSection({
   initialStatus,
@@ -20,6 +20,7 @@ export function ApiKeysSection({
   const [error, setError] = useState<string | null>(null);
 
   const isConnected = status.dataforseo?.connected ?? false;
+  const isManaged = status.dataforseo?.managed === true;
 
   async function handleTest() {
     if (!login || !password) return;
@@ -28,7 +29,7 @@ export function ApiKeysSection({
     setError(null);
 
     try {
-      const res = await fetch("/api/user/api-keys/test", {
+      const res = await fetch("/crawlseo/api/user/api-keys/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login, password }),
@@ -50,7 +51,7 @@ export function ApiKeysSection({
     setError(null);
 
     try {
-      const res = await fetch("/api/user/api-keys", {
+      const res = await fetch("/crawlseo/api/user/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: "dataforseo", login, password }),
@@ -80,7 +81,7 @@ export function ApiKeysSection({
     setError(null);
 
     try {
-      const res = await fetch("/api/user/api-keys", {
+      const res = await fetch("/crawlseo/api/user/api-keys", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: "dataforseo" }),
@@ -118,7 +119,12 @@ export function ApiKeysSection({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isConnected ? (
+            {isManaged ? (
+              <span className="flex items-center gap-1.5 rounded-full bg-signal/10 px-2.5 py-1 text-xs font-medium text-signal">
+                <CheckCircle2 className="size-3.5" />
+                Managed by CrawlSEO
+              </span>
+            ) : isConnected ? (
               <span className="flex items-center gap-1.5 rounded-full bg-signal/10 px-2.5 py-1 text-xs font-medium text-signal">
                 <CheckCircle2 className="size-3.5" />
                 Connected
@@ -132,7 +138,12 @@ export function ApiKeysSection({
           </div>
         </div>
 
-        {isConnected ? (
+        {isManaged ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            DataForSEO is configured by the platform. This project receives an
+            isolated CrawlSEO grant automatically.
+          </p>
+        ) : isConnected ? (
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Last updated:{" "}

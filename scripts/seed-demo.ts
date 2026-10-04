@@ -10,7 +10,7 @@
  * at least once). To target a specific user pass --email=you@example.com.
  */
 
-import { PrismaClient } from "@prisma/client";
+import { IssueSeverity, IssueType, PrismaClient } from "@prisma/client";
 const db = new PrismaClient();
 
 const DEMO_DOMAIN = "acme.com";
@@ -332,8 +332,8 @@ async function seed() {
       data: {
         crawlId: crawl.id,
         url: `https://acme.com${issue.path}`,
-        type: issue.type as any,
-        severity: issue.severity as any,
+         type: issue.type as IssueType,
+         severity: issue.severity as IssueSeverity,
         message: issue.message,
       },
     });

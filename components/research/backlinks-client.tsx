@@ -5,7 +5,6 @@ import {
   Link as LinkIcon,
   Loader2,
   AlertTriangle,
-  ExternalLink,
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,11 +29,9 @@ type BacklinksOverview = {
 
 export function BacklinksClient({
   siteId,
-  domain,
   hasDataForSEO,
 }: {
   siteId: string;
-  domain: string;
   hasDataForSEO: boolean;
 }) {
   const [loading, setLoading] = useState(false);
@@ -46,7 +43,7 @@ export function BacklinksClient({
   async function handleLoad() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sites/${siteId}/backlinks`);
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/backlinks`);
       const data = await res.json();
       setSource(data.source);
       setOverview(data.overview);

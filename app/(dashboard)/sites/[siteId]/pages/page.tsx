@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getTopPages } from "@/lib/seo-metrics";
@@ -19,7 +19,7 @@ interface PagesPageProps {
 }
 
 export default async function PagesPage({ params }: PagesPageProps) {
-  const session = await auth();
+  const userId = await getUserIdFromCookies();
   const { siteId } = await params;
 
   const site = await db.site.findUnique({
@@ -27,7 +27,7 @@ export default async function PagesPage({ params }: PagesPageProps) {
     select: { userId: true, domain: true },
   });
 
-  if (!site || site.userId !== session?.user?.id) {
+  if (!site || site.userId !== userId) {
     redirect("/sites");
   }
 

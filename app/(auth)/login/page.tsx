@@ -1,10 +1,11 @@
-import { signIn, auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
+import { signInWithPassword } from "@/lib/local-auth";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default async function LoginPage() {
-  const session = await auth();
-  if (session) {
+  const userId = await getUserIdFromCookies();
+  if (userId) {
     redirect("/dashboard");
   }
 
@@ -38,20 +39,34 @@ export default async function LoginPage() {
             Sign in
           </h2>
           <p className="mt-2 text-atom-body text-muted-foreground">
-            Connect Google Search Console with read-only access.
+            Sign in to manage your SEO workspace.
           </p>
 
           <form
             className="mt-6"
-            action={async () => {
-              "use server";
-              await signIn("google", { redirectTo: "/dashboard" });
-            }}
+            action={signInWithPassword}
           >
-            <Button type="submit" size="lg" className="w-full">
-              Continue with Google
+            <label className="block text-sm font-medium text-foreground" htmlFor="email">Email</label>
+            <input id="email" name="email" type="email" autoComplete="username" required className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none focus:border-primary" />
+            <label className="mt-4 block text-sm font-medium text-foreground" htmlFor="password">Password</label>
+            <input id="password" name="password" type="password" autoComplete="current-password" required className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none focus:border-primary" />
+            <Button type="submit" size="lg" className="mt-6 w-full">
+              Sign in
             </Button>
           </form>
+
+          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span>or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          <a
+            href="/crawlseo/api/auth/google/sign-in"
+            className="flex w-full items-center justify-center rounded-lg border border-border bg-secondary/60 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-secondary"
+          >
+            Continue with Google
+          </a>
 
           <div className="mt-6 space-y-2 border-t border-border pt-5 text-atom-caption text-muted-foreground">
             <p>· Keywords, positions, CTR from GSC</p>

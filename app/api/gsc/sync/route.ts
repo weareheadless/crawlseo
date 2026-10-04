@@ -1,126 +1,43 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { fetchSearchAnalytics, fetchPageAnalytics } from "@/lib/google";
-import { getDateRange } from "@/lib/date-utils";
+import { syncGSCDataForSite } from "@/lib/workers/gsc-sync";
+import { randomUUID } from "node:crypto";
+import { JobKind } from "@prisma/client";
+import { enqueueJob } from "@/lib/jobs/queue";
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
+    const userId = await getUserIdFromCookies();
+    if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { siteId } = (await req.json()) as { siteId: string };
-
-    // Verify site belongs to user
+    const { siteId } = (await req.json()) as { siteId?: string };
+    if (!siteId) return Response.json({ error: "Missing siteId" }, { status: 400 });
     const site = await db.site.findUnique({
       where: { id: siteId },
-      select: { userId: true, gscProperty: true },
+      select: { userId: true, projectId: true },
     });
-
-    if (!site || site.userId !== session.user.id) {
-      return Response.json(
-        { error: "Site not found or unauthorized" },
-        { status: 404 }
-      );
+    if (!site || site.userId !== userId) {
+      return Response.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
-    if (!site.gscProperty) {
-      return Response.json(
-        { error: "Site does not have GSC property connected" },
-        { status: 400 }
-      );
-    }
-
-    // Fetch last 28 days of data
-    const { start, end } = getDateRange(28);
-
-    const [keywords, pages] = await Promise.all([
-      fetchSearchAnalytics(
-        session.user.id,
-        site.gscProperty,
-        start,
-        end,
-        ["query", "page", "date", "device", "country"]
-      ),
-      fetchPageAnalytics(session.user.id, site.gscProperty, start, end),
-    ]);
-
-    // Insert/update keywords
-    for (const keyword of keywords) {
-      await db.keyword.upsert({
-        where: {
-          siteId_query_date: {
-            siteId,
-            query: keyword.query,
-            date: new Date(keyword.date),
-          },
-        },
-        create: {
-          siteId,
-          query: keyword.query,
-          date: new Date(keyword.date),
-          clicks: keyword.clicks,
-          impressions: keyword.impressions,
-          ctr: keyword.ctr,
-          position: keyword.position,
-          page: keyword.page,
-          device: keyword.device,
-          country: keyword.country,
-        },
-        update: {
-          clicks: keyword.clicks,
-          impressions: keyword.impressions,
-          ctr: keyword.ctr,
-          position: keyword.position,
-        },
+    if (site.projectId) {
+      const job = await enqueueJob({
+        projectId: site.projectId,
+        siteId,
+        kind: JobKind.GSC_SYNC,
+        payload: { daysBack: 28 },
+        idempotencyKey: req.headers.get("idempotency-key")?.trim() || `browser-gsc:${siteId}:${randomUUID()}`,
       });
+      return Response.json({ queued: true, jobId: job.id, status: job.status }, { status: 202 });
     }
 
-    // Insert/update pages
-    for (const page of pages) {
-      if (!page.page) continue;
-
-      await db.page.upsert({
-        where: {
-          siteId_url_date: {
-            siteId,
-            url: page.page,
-            date: new Date(page.date),
-          },
-        },
-        create: {
-          siteId,
-          url: page.page,
-          date: new Date(page.date),
-          clicks: page.clicks,
-          impressions: page.impressions,
-          ctr: page.ctr,
-          position: page.position,
-        },
-        update: {
-          clicks: page.clicks,
-          impressions: page.impressions,
-          ctr: page.ctr,
-          position: page.position,
-        },
-      });
+    const result = await syncGSCDataForSite(userId, siteId, 28);
+    if (!result.success) {
+      return Response.json({ error: result.error ?? "Failed to sync GSC data" }, { status: 502 });
     }
-
-    return Response.json({
-      success: true,
-      keywordsInserted: keywords.length,
-      pagesInserted: pages.length,
-    });
+    return Response.json(result);
   } catch (error) {
-    console.error("Error syncing GSC data:", error);
-
-    return Response.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to sync GSC data",
-      },
-      { status: 500 }
-    );
+    console.error("Error syncing GSC data:", error instanceof Error ? error.message : "unknown");
+    return Response.json({ error: "Failed to sync GSC data" }, { status: 500 });
   }
 }

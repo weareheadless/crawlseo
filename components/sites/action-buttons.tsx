@@ -16,7 +16,7 @@ export function CrawlButton({ siteId }: { siteId: string }) {
     setMsg(null);
     setErr(false);
     try {
-      const res = await fetch(`/api/sites/${siteId}/crawl`, { method: "POST" });
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/crawl`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Crawl failed");
       setMsg(`Crawl started (ID: ${data.crawlId?.slice(0, 8)}...)`);
@@ -59,10 +59,14 @@ export function VitalsButton({ siteId }: { siteId: string }) {
     setMsg(null);
     setErr(false);
     try {
-      const res = await fetch(`/api/sites/${siteId}/vitals`, { method: "POST" });
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/vitals`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Vitals failed");
-      setMsg(`Saved ${data.inserted} PageSpeed reports`);
+      setMsg(
+        data.queued
+          ? `PageSpeed check queued (job: ${data.jobId?.slice(0, 8) ?? "pending"}...)`
+          : `Saved ${data.inserted ?? 0} PageSpeed reports`
+      );
       router.refresh();
     } catch (e) {
       setErr(true);
@@ -101,7 +105,7 @@ export function IndexCheckButton({ siteId }: { siteId: string }) {
     setLoading(true);
     setResults([]);
     try {
-      const res = await fetch(`/api/sites/${siteId}/index-status`, {
+      const res = await fetch(`/crawlseo/api/sites/${siteId}/index-status`, {
         method: "POST",
       });
       const data = await res.json();
@@ -153,13 +157,13 @@ export function ExportLinks({ siteId }: { siteId: string }) {
   return (
     <div className="flex flex-wrap gap-2">
       <a
-        href={`/api/sites/${siteId}/export?type=keywords`}
+        href={`/crawlseo/api/sites/${siteId}/export?type=keywords`}
         className="inline-flex h-8 items-center rounded-lg border border-border bg-card px-3 text-atom-caption font-medium text-muted-foreground shadow-[var(--shadow-1)] transition hover:bg-muted hover:text-foreground"
       >
         Export keywords CSV
       </a>
       <a
-        href={`/api/sites/${siteId}/export?type=pages`}
+        href={`/crawlseo/api/sites/${siteId}/export?type=pages`}
         className="inline-flex h-8 items-center rounded-lg border border-border bg-card px-3 text-atom-caption font-medium text-muted-foreground shadow-[var(--shadow-1)] transition hover:bg-muted hover:text-foreground"
       >
         Export pages CSV

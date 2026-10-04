@@ -1,29 +1,44 @@
-import { auth } from "@/lib/auth";
+import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { syncVitalsForSite } from "@/lib/workers/vitals-sync";
+import { randomUUID } from "node:crypto";
+import { JobKind, JobStatus } from "@prisma/client";
+import { enqueueJob } from "@/lib/jobs/queue";
 
 export const maxDuration = 60;
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { siteId } = await params;
     const site = await db.site.findUnique({
       where: { id: siteId },
-      select: { userId: true },
+      select: { userId: true, projectId: true },
     });
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    const result = await syncVitalsForSite(session.user.id, siteId, 5);
-    return Response.json(result);
+    const existing = await db.job.findFirst({
+      where: { siteId, kind: JobKind.VITALS_SYNC, status: { in: [JobStatus.PENDING, JobStatus.RUNNING] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true },
+    });
+    if (existing) return Response.json({ queued: true, jobId: existing.id, status: existing.status }, { status: 202 });
+
+    const job = await enqueueJob({
+      projectId: site.projectId,
+      siteId,
+      kind: JobKind.VITALS_SYNC,
+      payload: { limit: 5, userId },
+      idempotencyKey: req.headers.get("idempotency-key")?.trim() || `browser-vitals:${siteId}:${randomUUID()}`,
+    });
+    return Response.json({ queued: true, jobId: job.id, status: job.status }, { status: 202 });
   } catch (error) {
     console.error(error);
     return Response.json(
@@ -38,8 +53,8 @@ export async function GET(
   { params }: { params: Promise<{ siteId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const userId = await getUserIdFromCookies();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -48,7 +63,7 @@ export async function GET(
       where: { id: siteId },
       select: { userId: true },
     });
-    if (!site || site.userId !== session.user.id) {
+    if (!site || site.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 

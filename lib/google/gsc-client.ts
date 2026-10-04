@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { GoogleCredentialProvider } from "@/lib/integrations/google/credential-provider";
 
 const GSC_API_BASE = "https://www.googleapis.com/webmasters/v3";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -85,7 +86,7 @@ async function refreshAccessToken(
 /**
  * Gets a valid access token for a user, refreshing if necessary
  */
-async function getAccessToken(userId: string): Promise<string> {
+async function getUserAccessToken(userId: string): Promise<string> {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { googleTokens: true },
@@ -131,7 +132,7 @@ async function getAccessToken(userId: string): Promise<string> {
 export async function listGSCProperties(
   userId: string
 ): Promise<GSCProperty[]> {
-  const accessToken = await getAccessToken(userId);
+  const accessToken = await getUserAccessToken(userId);
 
   const response = await fetch(`${GSC_API_BASE}/sites`, {
     headers: {
@@ -157,14 +158,17 @@ export async function listGSCProperties(
  * Fetches search analytics data from Google Search Console
  */
 export async function fetchSearchAnalytics(
-  userId: string,
+  auth: string | GoogleCredentialProvider,
   siteUrl: string,
   startDate: string,
   endDate: string,
   dimensions: string[] = ["query", "page", "date", "device", "country"],
   filters?: GSCFilter[]
 ): Promise<KeywordData[]> {
-  const accessToken = await getAccessToken(userId);
+  const accessToken =
+    typeof auth === "string"
+      ? await getUserAccessToken(auth)
+      : await auth.getAccessToken(["https://www.googleapis.com/auth/webmasters.readonly"]);
 
   const results: KeywordData[] = [];
   let startRow = 0;
@@ -239,12 +243,15 @@ export async function fetchSearchAnalytics(
  * Fetches search analytics aggregated by page
  */
 export async function fetchPageAnalytics(
-  userId: string,
+  auth: string | GoogleCredentialProvider,
   siteUrl: string,
   startDate: string,
   endDate: string
 ): Promise<KeywordData[]> {
-  const accessToken = await getAccessToken(userId);
+  const accessToken =
+    typeof auth === "string"
+      ? await getUserAccessToken(auth)
+      : await auth.getAccessToken(["https://www.googleapis.com/auth/webmasters.readonly"]);
 
   const response = await fetch(
     `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
