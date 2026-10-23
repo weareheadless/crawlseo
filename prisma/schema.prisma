@@ -641,6 +641,27 @@ model AgentTaskArtifact {
   @@index([taskId, kind])
 }
 
+model DeliveryTarget {
+  id           String   @id @default(cuid())
+  siteId       String
+  key          String
+  kind         String
+  adapter      String
+  componentTag String?
+  snippetId    String?
+  sourcePath   String?
+  route        String?
+  enabled      Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, key])
+  @@index([siteId, adapter])
+}
+
 // ============ SITES ============
 
 model Site {
@@ -676,6 +697,7 @@ model Site {
   agentTasks                 AgentTask[]
   researchPolicy             ResearchPolicy?
   siteDeliveryConfig         SiteDeliveryConfig?
+  deliveryTargets            DeliveryTarget[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])

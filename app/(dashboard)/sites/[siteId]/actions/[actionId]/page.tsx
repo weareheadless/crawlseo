@@ -4,12 +4,14 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { getActionDetail } from "@/lib/work/service";
+import { db } from "@/lib/db";
 import { ActionControls } from "@/components/work/action-controls";
 import { AgentChat } from "@/components/work/agent-chat";
 import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
 import { AgentTaskRunButton } from "@/components/work/agent-task-run-button";
 import { AgentTaskActions } from "@/components/work/agent-task-actions";
 import { AgentTaskBridgePlanButton } from "@/components/work/agent-task-bridge-plan-button";
+import { EmbedDeliveryControls } from "@/components/work/embed-delivery-controls";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -30,6 +32,11 @@ export default async function ActionDetailPage({ params }: Props) {
   } catch {
     redirect(`/sites/${siteId}/work`);
   }
+  const deliveryTargets = await db.deliveryTarget.findMany({
+    where: { siteId, enabled: true, adapter: "wix_embed" },
+    orderBy: { key: "asc" },
+    select: { key: true, componentTag: true, snippetId: true, sourcePath: true },
+  });
 
   return (
     <div>
@@ -132,6 +139,7 @@ export default async function ActionDetailPage({ params }: Props) {
                     <AgentTaskRunButton taskId={task.id} status={task.status} />
                     <AgentTaskActions taskId={task.id} status={task.status} commitSha={task.commitSha} />
                     <AgentTaskBridgePlanButton taskId={task.id} disabled={!task.worktreePath} />
+                    <EmbedDeliveryControls taskId={task.id} status={task.status} hasWorktree={Boolean(task.worktreePath)} targets={deliveryTargets} />
                   </div>
                   <p className="mt-1 font-data text-[10px] text-muted-foreground">
                     {task.repoPath}{task.branch ? ` · ${task.branch}` : ""}{task.route ? ` · ${task.route}` : ""}

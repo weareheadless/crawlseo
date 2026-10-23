@@ -594,13 +594,17 @@ Implemented:
 - live Wix Blog draft created for Susi and verified as unpublished
 - agent task review transitions, local commit with SHA, publish record, and close
 - bridge plan API/UI and plan artifact storage
+- DeliveryTarget model and Susi component/snippet inventory
+- live-synced Susi manifest page scopes and load settings
+- bridge `--preserve-scope` content packet updates
+- Wix embed packet rebuilding that preserves multi-component packets
+- embed plan/apply controls with explicit confirmation
+- live-tested Wix Blog draft creation, agent worktree execution, local commit, publish-record, and close transitions
 
 Still pending:
 
-- bridge apply/verify UI workflow
-- Susi route/component delivery map
-- Wix embed delivery adapter
-- post-delivery outcome tracking
+- live embed apply verification on a non-critical Susi section
+- post-delivery GSC/GA4 outcome tracking
 
 ## 15. Immediate next implementation
 

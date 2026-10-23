@@ -30,8 +30,8 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan" | "deploy" | "verify",
-  options: { siteRepo?: string; apply?: boolean; extraArgs?: string[] } = {},
+  command: "inspect" | "plan" | "deploy" | "verify" | "snippet" | "update-snippet",
+  options: { siteRepo?: string; apply?: boolean; snippetId?: string; htmlFile?: string; preserveScope?: boolean; extraArgs?: string[] } = {},
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -41,6 +41,9 @@ function runBridge(
       "--site", alias,
       "--state-dir", path.join(BRIDGE_ROOT, "sites", alias, ".wix-bridge-state"),
       ...(options.siteRepo ? ["--site-repo", options.siteRepo] : []),
+      ...(options.snippetId ? ["--snippet", options.snippetId] : []),
+      ...(options.htmlFile ? ["--html-file", options.htmlFile] : []),
+      ...(options.preserveScope ? ["--preserve-scope"] : []),
       ...(options.apply ? ["--apply"] : []),
       ...(options.extraArgs ?? []),
     ];
@@ -89,4 +92,22 @@ export async function deployBridgeSite(alias: string, siteRepo: string, apply = 
 
 export async function verifyBridgeSite(alias: string, siteRepo: string) {
   return runBridge(alias, "verify", { siteRepo });
+}
+
+export async function readBridgeSnippet(alias: string, snippetId: string) {
+  return runBridge(alias, "snippet", { snippetId });
+}
+
+export async function updateBridgeSnippet(
+  alias: string,
+  snippetId: string,
+  htmlFile: string,
+  apply = false,
+) {
+  return runBridge(alias, "update-snippet", {
+    snippetId,
+    htmlFile,
+    preserveScope: true,
+    apply,
+  });
 }
