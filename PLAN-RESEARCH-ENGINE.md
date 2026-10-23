@@ -600,11 +600,13 @@ Implemented:
 - Wix embed packet rebuilding that preserves multi-component packets
 - embed plan/apply controls with explicit confirmation
 - live-tested Wix Blog draft creation, agent worktree execution, local commit, publish-record, and close transitions
+- outcome measurement with 28-day current/previous GSC comparison and cron
+- live-tested outcome measurement against Susi GSC data
 
 Still pending:
 
-- live embed apply verification on a non-critical Susi section
-- post-delivery GSC/GA4 outcome tracking
+- live embed apply verification on a non-critical Susi section, which requires explicit operator approval because it mutates a live Wix packet
+- promotion/merge policy for the bridge changes currently on `codex/customer-site-layout`
 
 ## 15. Immediate next implementation
 

@@ -180,7 +180,7 @@ export async function applyEmbedDelivery(
         actionId: task.actionId,
         platform: "wix_embed",
         externalId: target.snippetId!,
-        status: "DRAFT_VERIFIED",
+        status: "PUBLISHED",
         payload: { target: target.key, receipt: JSON.parse(JSON.stringify(receipt)) },
         verifiedAt: new Date(),
       },

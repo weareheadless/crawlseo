@@ -456,18 +456,20 @@ model ResearchAction {
 }
 
 model Delivery {
-  id         String    @id @default(cuid())
-  actionId   String
-  draftId    String?
-  platform   String
-  externalId String?
-  status     String
-  payload    Json?
-  diff       Json?
-  errorCode  String?
-  verifiedAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  actionId          String
+  draftId           String?
+  platform          String
+  externalId        String?
+  status            String
+  payload           Json?
+  diff              Json?
+  errorCode         String?
+  outcome           Json?
+  outcomeMeasuredAt DateTime?
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   action ResearchAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
   draft  ContentDraft?  @relation(fields: [draftId], references: [id], onDelete: SetNull)

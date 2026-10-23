@@ -33,6 +33,7 @@
     "sync:seo-actions": "npx tsx scripts/sync-seo-actions.ts",
     "sync:research": "npx tsx scripts/sync-research.ts",
     "inventory:delivery": "npx tsx scripts/inventory-wix-delivery.ts",
+    "measure:outcomes": "npx tsx scripts/measure-delivery-outcomes.ts",
     "test:dataforseo:mcp": "npx tsx scripts/test-dataforseo-mcp.ts",
     "provision:oceanicvibes": "npx tsx scripts/provision-oceanicvibes.ts",
     "seed:demo": "npx tsx scripts/seed-demo.ts",
