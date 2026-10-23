@@ -478,7 +478,7 @@ export function ResearchWorkbench({
                   )}
                   {action.status === "DRAFT_READY" && (
                     <Link
-                      href={`/crawlseo/sites/${siteId}/content-studio`}
+                      href={`/sites/${siteId}/content-studio`}
                       className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary"
                     >
                       Review draft
