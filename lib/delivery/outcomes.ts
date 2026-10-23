@@ -75,6 +75,7 @@ export async function measurePendingDeliveryOutcomes() {
       status: "PUBLISHED",
       outcomeMeasuredAt: null,
       actionId: { not: undefined },
+      createdAt: { lte: new Date(Date.now() - 28 * DAY) },
     },
     select: { id: true },
     take: 100,

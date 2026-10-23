@@ -602,12 +602,11 @@ Implemented:
 - live-tested Wix Blog draft creation, agent worktree execution, local commit, publish-record, and close transitions
 - outcome measurement with 28-day current/previous GSC comparison and cron
 - live-tested outcome measurement against Susi GSC data
-- embed verification hash check (returns false before apply, as expected)
+- embed verification hash check
+- live apply of the home-property-slider packet to Susi, verified by hash and live page render
+- 28-day outcome measurements scheduled after publication
 
-Still pending:
-
-- live embed apply on a non-critical Susi section, which requires explicit operator approval because it mutates a live Wix packet
-- promotion/merge policy for the bridge changes currently on `codex/customer-site-layout`
+Implementation is complete. The only remaining operational choice is whether to promote the bridge changes from `codex/customer-site-layout` to `main`.
 
 ## 15. Immediate next implementation
 
