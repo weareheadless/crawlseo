@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Loader2, Play, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ type RunView = {
   sourceCount: number;
   findingCount: number;
   actionCount: number;
+  errorCode: string | null;
   createdAt: string;
 };
 
@@ -66,6 +67,67 @@ export function ResearchWorkbench({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatingAction, setUpdatingAction] = useState<string | null>(null);
+  const activeRunIds = runs
+    .filter((run) => run.status === "QUEUED" || run.status === "RUNNING")
+    .map((run) => run.id)
+    .join(",");
+
+  useEffect(() => {
+    if (!activeRunIds) return;
+    let cancelled = false;
+    const ids = activeRunIds.split(",");
+
+    const poll = async () => {
+      const updates = await Promise.all(ids.map(async (id) => {
+        const response = await fetch(`/crawlseo/api/research/runs/${id}`);
+        if (!response.ok) return null;
+        const payload = await response.json().catch(() => ({}));
+        const run = payload.run;
+        if (!run) return null;
+        return {
+          id,
+          status: run.status,
+          sourceCount: run.sources?.length ?? run.sourceCount ?? 0,
+          findingCount: run.findings?.length ?? run.findingCount ?? 0,
+          actionCount: run.actions?.length ?? run.actionCount ?? 0,
+          errorCode: run.errorCode ?? null,
+        };
+      }));
+      if (cancelled) return;
+      setRuns((current) => current.map((run) => {
+        const update = updates.find((item) => item?.id === run.id);
+        return update ? { ...run, ...update } : run;
+      }));
+
+      const actionResponse = await fetch(`/crawlseo/api/sites/${siteId}/actions?limit=100`);
+      if (!actionResponse.ok) return;
+      const actionPayload = await actionResponse.json().catch(() => ({}));
+      if (!Array.isArray(actionPayload.actions)) return;
+      setActions(actionPayload.actions.map((action: Record<string, unknown>) => ({
+        id: String(action.id),
+        title: String(action.title ?? ""),
+        source: String(action.source ?? ""),
+        kind: String(action.kind ?? ""),
+        format: action.format ? String(action.format) : null,
+        recommendation: String(action.recommendation ?? ""),
+        status: String(action.status ?? "PROPOSED"),
+        priority: Number(action.priority ?? 50),
+        automationMode: String(action.automationMode ?? "MANUAL"),
+        targetUrl: action.targetUrl ? String(action.targetUrl) : null,
+        primaryQuery: action.primaryQuery ? String(action.primaryQuery) : null,
+        createdAt: String(action.createdAt ?? new Date().toISOString()),
+        drafts: Number((action._count as { drafts?: number } | undefined)?.drafts ?? 0),
+        deliveries: Number((action._count as { deliveries?: number } | undefined)?.deliveries ?? 0),
+      })));
+    };
+
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 4_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeRunIds, siteId]);
 
   async function createRun(event: React.FormEvent) {
     event.preventDefault();
@@ -102,6 +164,7 @@ export function ResearchWorkbench({
         sourceCount: 0,
         findingCount: 0,
         actionCount: 0,
+        errorCode: payload.run.errorCode ?? null,
         createdAt: payload.run.createdAt,
       }, ...current]);
       setTitle("");
@@ -234,6 +297,11 @@ export function ResearchWorkbench({
                     <span>{run.actionCount} actions</span>
                     <span>{run.providerSet.join(", ") || "providers pending"}</span>
                   </div>
+                  {run.errorCode && (
+                    <p className="mt-1 font-data text-[10px] text-warning">
+                      {run.errorCode.replaceAll("_", " ").toLowerCase()}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

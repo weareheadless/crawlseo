@@ -30,6 +30,7 @@
     "worker": "npx tsx scripts/job-worker.ts",
     "recompute:health": "npx tsx scripts/recompute-crawl-health.ts",
     "sync:all": "npx tsx scripts/sync-all-sites.ts",
+    "sync:seo-actions": "npx tsx scripts/sync-seo-actions.ts",
     "test:dataforseo:mcp": "npx tsx scripts/test-dataforseo-mcp.ts",
     "provision:oceanicvibes": "npx tsx scripts/provision-oceanicvibes.ts",
     "seed:demo": "npx tsx scripts/seed-demo.ts",

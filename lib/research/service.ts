@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { enqueueJob } from "@/lib/jobs/queue";
+import { JobKind } from "@prisma/client";
 import type {
   CreateResearchActionInput,
   CreateResearchRunInput,
   IngestResearchFindingInput,
+  ResearchSourceInput,
   UpdateResearchActionInput,
 } from "@/lib/research/types";
 
@@ -81,7 +84,7 @@ export async function createResearchRun(
     recency_days: input.recencyDays,
   };
 
-  return db.researchRun.create({
+  const run = await db.researchRun.create({
     data: {
       siteId,
       projectId: site.projectId,
@@ -96,6 +99,25 @@ export async function createResearchRun(
     },
     include: { _count: { select: { sources: true, findings: true, actions: true } } },
   });
+
+  try {
+    await enqueueJob({
+      projectId: site.projectId,
+      siteId,
+      kind: JobKind.RESEARCH_RUN,
+      payload: { researchRunId: run.id },
+      idempotencyKey: `research-run:${run.id}`,
+      maxAttempts: 2,
+    });
+  } catch {
+    await db.researchRun.update({
+      where: { id: run.id },
+      data: { status: "FAILED", errorCode: "RESEARCH_JOB_ENQUEUE_FAILED", completedAt: new Date() },
+    });
+    throw new ResearchServiceError("Failed to queue research run", 500);
+  }
+
+  return run;
 }
 
 export async function listResearchRuns(siteId: string, limit = 20) {
@@ -188,6 +210,117 @@ export async function ingestResearchFinding(
       },
     });
 
+    return finding;
+  });
+}
+
+export async function saveResearchSources(
+  runId: string,
+  sources: ResearchSourceInput[],
+) {
+  const run = await db.researchRun.findUnique({
+    where: { id: runId },
+    select: { id: true },
+  });
+  if (!run) throw new ResearchServiceError("Research run not found", 404);
+
+  return db.$transaction(async (tx) => {
+    const saved: Array<{
+      id: string;
+      provider: string;
+      url: string;
+      title: string | null;
+      community: string | null;
+      publishedAt: Date | null;
+      excerpt: string | null;
+      contentHash: string | null;
+    }> = [];
+    let created = 0;
+
+    for (const source of sources) {
+      const existing = source.contentHash
+        ? await tx.researchSource.findFirst({
+            where: { runId, contentHash: source.contentHash },
+            select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true },
+          })
+        : await tx.researchSource.findFirst({
+            where: { runId, url: source.url },
+            select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true },
+          });
+      if (existing) {
+        saved.push(existing);
+        continue;
+      }
+      const row = await tx.researchSource.create({
+        data: {
+          runId,
+          provider: source.provider,
+          url: source.url,
+          title: source.title,
+          author: source.author,
+          community: source.community,
+          publishedAt: source.publishedAt ? new Date(source.publishedAt) : undefined,
+          excerpt: source.excerpt,
+          contentHash: source.contentHash,
+          language: source.language,
+          metadata: source.metadata ? json(source.metadata) : undefined,
+        },
+        select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true },
+      });
+      saved.push(row);
+      created += 1;
+    }
+
+    if (created > 0) {
+      await tx.researchRun.update({
+        where: { id: runId },
+        data: { sourceCount: { increment: created } },
+      });
+    }
+    return saved;
+  });
+}
+
+export async function createResearchFinding(
+  runId: string,
+  input: {
+    type: IngestResearchFindingInput["type"];
+    theme: string;
+    summary: string;
+    confidence: number;
+    sentiment?: string;
+    urgency?: string;
+    suggestedActionKind?: string;
+  },
+  sourceIds: string[],
+) {
+  if (sourceIds.length === 0) {
+    throw new ResearchServiceError("A research finding requires at least one source", 400);
+  }
+
+  const existing = await db.researchFinding.findFirst({
+    where: { runId, type: input.type, theme: input.theme },
+  });
+  if (existing) return existing;
+
+  return db.$transaction(async (tx) => {
+    const finding = await tx.researchFinding.create({
+      data: {
+        runId,
+        type: input.type,
+        theme: input.theme,
+        summary: input.summary,
+        confidence: input.confidence,
+        sentiment: input.sentiment,
+        urgency: input.urgency,
+        evidenceSourceIds: json(sourceIds),
+        suggestedActionKind: input.suggestedActionKind,
+      },
+    });
+    await tx.researchRun.update({
+      where: { id: runId },
+      data: { findingCount: { increment: 1 } },
+    });
     return finding;
   });
 }

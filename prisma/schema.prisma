@@ -1018,6 +1018,7 @@ enum JobKind {
   VITALS_SYNC
   SEO_RESEARCH
   ARTICLE_KEYWORD_RESEARCH
+  RESEARCH_RUN
 }
 
 enum JobStatus {
@@ -1034,6 +1035,7 @@ enum SyncSource {
   CRAWL
   VITALS
   DATAFORSEO
+  RESEARCH
 }
 
 enum SyncStatus {

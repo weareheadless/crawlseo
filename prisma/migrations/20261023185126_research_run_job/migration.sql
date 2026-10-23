@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "JobKind" ADD VALUE 'RESEARCH_RUN';
+
+-- AlterEnum
+ALTER TYPE "SyncSource" ADD VALUE 'RESEARCH';

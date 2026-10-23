@@ -26,6 +26,8 @@ export function sourceForJobKind(kind: JobKind): SyncSource {
     case JobKind.SEO_RESEARCH:
     case JobKind.ARTICLE_KEYWORD_RESEARCH:
       return SyncSource.DATAFORSEO;
+    case JobKind.RESEARCH_RUN:
+      return SyncSource.RESEARCH;
   }
 }
 

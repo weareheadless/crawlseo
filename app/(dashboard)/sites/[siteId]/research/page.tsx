@@ -51,6 +51,7 @@ export default async function ResearchPage({ params }: Props) {
           sourceCount: run.sourceCount,
           findingCount: run.findingCount,
           actionCount: run.actionCount,
+          errorCode: run.errorCode,
           createdAt: run.createdAt.toISOString(),
         }))}
         initialActions={actions.map((action) => ({

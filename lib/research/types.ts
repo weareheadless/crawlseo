@@ -89,6 +89,7 @@ export const updateResearchActionSchema = z.object({
   priority: z.number().int().min(0).max(100).optional(),
 });
 
+export type ResearchSourceInput = z.infer<typeof researchSourceInputSchema>;
 export type CreateResearchRunInput = z.infer<typeof createResearchRunSchema>;
 export type IngestResearchFindingInput = z.infer<typeof ingestResearchFindingSchema>;
 export type CreateResearchActionInput = z.infer<typeof createResearchActionSchema>;

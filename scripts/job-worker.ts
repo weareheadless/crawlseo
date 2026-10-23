@@ -19,6 +19,7 @@ import { syncVitalsForProject, syncVitalsForSite } from "@/lib/workers/vitals-sy
 import { runSiteCrawl } from "@/lib/crawler/engine";
 import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
+import { runResearchRun } from "@/lib/research/runner";
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
@@ -114,6 +115,12 @@ async function executeJob(
         }
         throw error;
       }
+      return;
+    }
+    case JobKind.RESEARCH_RUN: {
+      const researchRunId = text(payload.researchRunId, "");
+      if (!researchRunId) throw new JobExecutionError("RESEARCH_RUN_ID_REQUIRED");
+      await runResearchRun(researchRunId);
       return;
     }
     case JobKind.ARTICLE_KEYWORD_RESEARCH: {
