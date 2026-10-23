@@ -14,7 +14,6 @@ export async function GET() {
     }
 
     const sites = await db.site.findMany({
-      where: { userId },
       select: {
         id: true,
         domain: true,

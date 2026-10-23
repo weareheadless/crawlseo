@@ -14,12 +14,13 @@ interface Props {
 export default async function SavedKeywordsPage({ params }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   const saved = await db.savedKeyword.findMany({
     where: { siteId },

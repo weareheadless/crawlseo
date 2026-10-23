@@ -21,13 +21,14 @@ interface KeywordsPageProps {
 export default async function KeywordsPage({ params }: KeywordsPageProps) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
 
-  if (!site || site.userId !== userId) {
+  if (!site) {
     redirect("/sites");
   }
 

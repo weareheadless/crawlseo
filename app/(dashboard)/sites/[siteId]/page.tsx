@@ -23,6 +23,7 @@ interface SitePageProps {
 export default async function SiteOverviewPage({ params }: SitePageProps) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
@@ -34,7 +35,7 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
     },
   });
 
-  if (!site || site.userId !== userId) {
+  if (!site) {
     redirect("/sites");
   }
 
@@ -74,6 +75,7 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
       <div className="mb-6 flex flex-wrap gap-2">
         {[
           ["Opportunities", "opportunities"],
+          ["Content Studio", "content-studio"],
           ["Keywords", "keywords"],
           ["Saved Keywords", "saved-keywords"],
           ["Pages", "pages"],

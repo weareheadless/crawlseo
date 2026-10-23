@@ -17,7 +17,7 @@ export default async function DomainOverviewPage({ params }: Props) {
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   const hasDataForSEO = !!(await db.apiKey.findUnique({
     where: { userId_provider: { userId, provider: "dataforseo" } },

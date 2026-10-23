@@ -18,7 +18,7 @@ export default async function AlertsPage({ params }: Props) {
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   await ensureDefaultAlerts(userId, siteId);
 

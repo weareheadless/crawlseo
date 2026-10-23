@@ -11,20 +11,30 @@ import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { formatDeltaPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
+  const showAll = (await searchParams).all === "1";
 
-  const sites = await db.site.findMany({
-    where: { userId },
+  // Single-operator CrawlSEO: show all sites regardless of provisioning path.
+  const allSites = await db.site.findMany({
     select: {
       id: true,
       domain: true,
       gscProperty: true,
-      _count: { select: { keywords: true, crawls: true } },
+      _count: { select: { keywords: true, pages: true, crawls: true } },
     },
     orderBy: { domain: "asc" },
   });
+  const sites = showAll
+    ? allSites
+    : allSites.filter((site) =>
+        site._count.keywords > 0 || site._count.pages > 0 || site._count.crawls > 0,
+      );
 
   // Onboarding state
   const hasSites = sites.length > 0;
@@ -81,10 +91,18 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Workspace"
         title="Portfolio overview"
-        description={`${sites.length} site${sites.length === 1 ? "" : "s"} · last 28 days vs prior period`}
+        description={showAll
+          ? `${allSites.length} sites including empty records · last 28 days vs prior period`
+          : `${sites.length} of ${allSites.length} sites with data · last 28 days vs prior period`}
         actions={
           <div className="flex items-center gap-3">
             <DataLagBadge />
+            <Link
+              href={showAll ? "/dashboard" : "/dashboard?all=1"}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              {showAll ? "Only with data" : `Show all ${allSites.length}`}
+            </Link>
             <AddSiteModal />
           </div>
         }

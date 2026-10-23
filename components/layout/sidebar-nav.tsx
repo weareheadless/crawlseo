@@ -17,6 +17,7 @@ import {
   Bot,
   Link as LinkIcon,
   SearchCheck,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +64,7 @@ export function SidebarNav({
           { href: `/sites/${activeSiteId}/crawl`, label: "Crawl / Audit", icon: Bug },
           { href: `/sites/${activeSiteId}/vitals`, label: "Vitals", icon: Gauge },
           { href: `/sites/${activeSiteId}/opportunities`, label: "Opportunities", icon: Lightbulb },
+          { href: `/sites/${activeSiteId}/content-studio`, label: "Content Studio", icon: Sparkles },
           { href: `/sites/${activeSiteId}/alerts`, label: "Alerts", icon: Bell },
         ],
       }

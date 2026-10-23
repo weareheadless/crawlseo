@@ -16,12 +16,13 @@ interface Props {
 export default async function OpportunitiesPage({ params }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true, _count: { select: { keywords: true } } },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   if (site._count.keywords === 0) {
     return (

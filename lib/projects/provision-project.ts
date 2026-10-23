@@ -19,6 +19,11 @@ export type ProvisionProjectInput = {
   ga4PropertyId: string;
   serviceAccountCredentials?: string | Record<string, unknown>;
   serviceCredentialIdempotencyKey: string;
+  /** Link an existing legacy site row instead of creating a duplicate site. */
+  existingSiteId?: string;
+  /** Optional least-privilege service identity for a project-specific agent. */
+  serviceCredentialName?: string;
+  serviceCredentialScopes?: string[];
   googleOAuthUserEmail?: string;
   googleImpersonatedUserEmail?: string;
   operatorUserEmail?: string;
@@ -236,22 +241,64 @@ export async function provisionProject(
       throw new Error("Configured operator user does not exist");
     }
 
-    const site = await tx.site.upsert({
-      where: { projectId_domain: { projectId: project.id, domain } },
-      create: {
-        projectId: project.id,
-        userId: operator?.id,
-        domain,
-        gscProperty,
-        domainVerificationMethod,
-      },
-      update: {
-        ...(operator ? { userId: operator.id } : {}),
-        gscProperty,
-        domainVerificationMethod,
-      },
-      select: { id: true },
-    });
+    let site: { id: string };
+    if (input.existingSiteId?.trim()) {
+      const existingSite = await tx.site.findUnique({
+        where: { id: input.existingSiteId.trim() },
+        select: { id: true, domain: true, projectId: true, userId: true },
+      });
+      if (!existingSite) throw new Error("Existing site record was not found");
+      if (canonicalDomain(existingSite.domain) !== domain) {
+        throw new Error("Existing site record does not match the requested domain");
+      }
+      if (existingSite.projectId && existingSite.projectId !== project.id) {
+        throw new Error("Existing site record already belongs to a different project");
+      }
+      const duplicateProjectSite = await tx.site.findUnique({
+        where: { projectId_domain: { projectId: project.id, domain } },
+        select: { id: true },
+      });
+      if (duplicateProjectSite && duplicateProjectSite.id !== existingSite.id) {
+        throw new Error("Project already contains a different site record for this domain");
+      }
+      if (existingSite.userId) {
+        const duplicateUserSite = await tx.site.findUnique({
+          where: { userId_domain: { userId: existingSite.userId, domain } },
+          select: { id: true },
+        });
+        if (duplicateUserSite && duplicateUserSite.id !== existingSite.id) {
+          throw new Error("A duplicate user-owned site record already exists for this domain");
+        }
+      }
+      site = await tx.site.update({
+        where: { id: existingSite.id },
+        data: {
+          projectId: project.id,
+          domain,
+          gscProperty,
+          domainVerificationMethod,
+          ...(operator ? { userId: operator.id } : {}),
+        },
+        select: { id: true },
+      });
+    } else {
+      site = await tx.site.upsert({
+        where: { projectId_domain: { projectId: project.id, domain } },
+        create: {
+          projectId: project.id,
+          userId: operator?.id,
+          domain,
+          gscProperty,
+          domainVerificationMethod,
+        },
+        update: {
+          ...(operator ? { userId: operator.id } : {}),
+          gscProperty,
+          domainVerificationMethod,
+        },
+        select: { id: true },
+      });
+    }
 
     let serviceConnectionId: string | null = null;
     if (credentials && encryptedCredentials) {
@@ -367,57 +414,71 @@ export async function provisionProject(
       });
     }
 
-    await tx.integrationGrant.upsert({
+    const existingGscGrant = await tx.integrationGrant.findFirst({
       where: {
-        connectionId_projectId_provider_externalResourceId: {
-          connectionId: gscConnectionId,
-          projectId: project.id,
-          provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
-          externalResourceId: gscProperty,
-        },
-      },
-      create: {
         connectionId: gscConnectionId,
         projectId: project.id,
         siteId: site.id,
         provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
         externalResourceId: gscProperty,
-        metadata: { propertyType: "siteUrl" },
-        status: "UNVERIFIED",
       },
-      update: {
-        siteId: site.id,
-        status: "UNVERIFIED",
-        safeErrorCode: null,
-        metadata: { propertyType: "siteUrl" },
-      },
+      select: { id: true },
     });
-
-    await tx.integrationGrant.upsert({
-      where: {
-        connectionId_projectId_provider_externalResourceId: {
-          connectionId: ga4ConnectionId,
-          projectId: project.id,
-          provider: IntegrationProvider.GOOGLE_ANALYTICS,
-          externalResourceId: ga4PropertyId,
+    if (existingGscGrant) {
+      await tx.integrationGrant.update({
+        where: { id: existingGscGrant.id },
+        data: {
+          status: "UNVERIFIED",
+          safeErrorCode: null,
+          metadata: { propertyType: "siteUrl" },
         },
-      },
-      create: {
+      });
+    } else {
+      await tx.integrationGrant.create({
+        data: {
+          connectionId: gscConnectionId,
+          projectId: project.id,
+          siteId: site.id,
+          provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
+          externalResourceId: gscProperty,
+          metadata: { propertyType: "siteUrl" },
+          status: "UNVERIFIED",
+        },
+      });
+    }
+
+    const existingGa4Grant = await tx.integrationGrant.findFirst({
+      where: {
         connectionId: ga4ConnectionId,
         projectId: project.id,
         siteId: site.id,
         provider: IntegrationProvider.GOOGLE_ANALYTICS,
         externalResourceId: ga4PropertyId,
-        metadata: { propertyType: "propertyId" },
-        status: "UNVERIFIED",
       },
-      update: {
-        siteId: site.id,
-        status: "UNVERIFIED",
-        safeErrorCode: null,
-        metadata: { propertyType: "propertyId" },
-      },
+      select: { id: true },
     });
+    if (existingGa4Grant) {
+      await tx.integrationGrant.update({
+        where: { id: existingGa4Grant.id },
+        data: {
+          status: "UNVERIFIED",
+          safeErrorCode: null,
+          metadata: { propertyType: "propertyId" },
+        },
+      });
+    } else {
+      await tx.integrationGrant.create({
+        data: {
+          connectionId: ga4ConnectionId,
+          projectId: project.id,
+          siteId: site.id,
+          provider: IntegrationProvider.GOOGLE_ANALYTICS,
+          externalResourceId: ga4PropertyId,
+          metadata: { propertyType: "propertyId" },
+          status: "UNVERIFIED",
+        },
+      });
+    }
 
     await tx.seoResearchPolicy.upsert({
       where: { siteId: site.id },
@@ -432,9 +493,10 @@ export async function provisionProject(
       update: {},
     });
 
+    const serviceCredentialName = input.serviceCredentialName?.trim() || "site-agent";
     const principal = await tx.servicePrincipal.upsert({
-      where: { projectId_name: { projectId: project.id, name: "site-agent" } },
-      create: { projectId: project.id, name: "site-agent" },
+      where: { projectId_name: { projectId: project.id, name: serviceCredentialName } },
+      create: { projectId: project.id, name: serviceCredentialName },
       update: { status: "ACTIVE" },
       select: { id: true },
     });
@@ -493,14 +555,16 @@ export async function provisionProject(
   });
 
   const credential = await createServiceCredential(records.projectId, [
-    "seo:read",
-    "seo:research:request",
-    "analytics:read",
-    "crawl:read",
-    "crawl:run",
+    ...(input.serviceCredentialScopes ?? [
+      "seo:read",
+      "seo:research:request",
+      "analytics:read",
+      "crawl:read",
+      "crawl:run",
+    ]),
   ], {
     idempotencyKey: input.serviceCredentialIdempotencyKey,
-    principalName: "site-agent",
+    principalName: input.serviceCredentialName?.trim() || "site-agent",
     reissueIfReused: input.reissueCredential === true,
   });
 

@@ -34,7 +34,7 @@ export default async function SettingsPage({ params }: Props) {
       },
     },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   // Check API key status
   const [apiKeys, platformGrant] = await Promise.all([

@@ -21,7 +21,7 @@ export async function POST(
       where: { id: siteId },
       select: { userId: true, projectId: true },
     });
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
     const existing = await db.job.findFirst({
@@ -63,7 +63,7 @@ export async function GET(
       where: { id: siteId },
       select: { userId: true },
     });
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 

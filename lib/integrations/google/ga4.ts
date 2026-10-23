@@ -17,6 +17,22 @@ type ReportRow = {
   metricValues?: Array<{ value?: string }>;
 };
 
+export type AnalyticsFilter = {
+  /** Restrict a property-level report to one site's host (shared GA4 property). */
+  hostName?: string;
+};
+
+function hostFilter(filter?: AnalyticsFilter): Record<string, unknown> | undefined {
+  const hostName = filter?.hostName?.trim();
+  if (!hostName) return undefined;
+  return {
+    filter: {
+      fieldName: "hostName",
+      stringFilter: { matchType: "EXACT", value: hostName },
+    },
+  };
+}
+
 function propertyPath(propertyId: string): string {
   const normalized = propertyId.trim().replace(/^properties\//, "");
   if (!/^\d+$/.test(normalized)) throw new Error("GA4 property ID is invalid");
@@ -59,10 +75,12 @@ async function totals(
   provider: GoogleCredentialProvider,
   propertyId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  filter?: AnalyticsFilter
 ): Promise<Record<string, number>> {
   const result = await runReport(provider, propertyId, {
     dateRanges: [{ startDate, endDate }],
+    dimensionFilter: hostFilter(filter),
     metrics: [
       { name: "activeUsers" },
       { name: "totalUsers" },
@@ -78,10 +96,12 @@ async function topPages(
   provider: GoogleCredentialProvider,
   propertyId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  filter?: AnalyticsFilter
 ): Promise<AnalyticsSummary["top_pages"]> {
   const result = await runReport(provider, propertyId, {
     dateRanges: [{ startDate, endDate }],
+    dimensionFilter: hostFilter(filter),
     dimensions: [{ name: "pagePath" }],
     metrics: [{ name: "screenPageViews" }],
     orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
@@ -97,10 +117,12 @@ async function sources(
   provider: GoogleCredentialProvider,
   propertyId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  filter?: AnalyticsFilter
 ): Promise<AnalyticsSummary["sources"]> {
   const result = await runReport(provider, propertyId, {
     dateRanges: [{ startDate, endDate }],
+    dimensionFilter: hostFilter(filter),
     dimensions: [{ name: "sessionDefaultChannelGroup" }],
     metrics: [{ name: "sessions" }, { name: "totalUsers" }],
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
@@ -117,11 +139,13 @@ async function organicQueries(
   provider: GoogleCredentialProvider,
   propertyId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  filter?: AnalyticsFilter
 ): Promise<AnalyticsSummary["organic_queries"]> {
   try {
     const result = await runReport(provider, propertyId, {
       dateRanges: [{ startDate, endDate }],
+      dimensionFilter: hostFilter(filter),
       dimensions: [{ name: "googleOrganicSearchQuery" }],
       metrics: [
         { name: "sessions" },
@@ -156,14 +180,15 @@ export async function fetchAnalyticsSummary(
     currentEnd: string;
     previousStart: string;
     previousEnd: string;
-  }
+  },
+  filter?: AnalyticsFilter
 ): Promise<AnalyticsSummary> {
   const [current, previous, pages, trafficSources, queries] = await Promise.all([
-    totals(provider, propertyId, dates.currentStart, dates.currentEnd),
-    totals(provider, propertyId, dates.previousStart, dates.previousEnd),
-    topPages(provider, propertyId, dates.currentStart, dates.currentEnd),
-    sources(provider, propertyId, dates.currentStart, dates.currentEnd),
-    organicQueries(provider, propertyId, dates.currentStart, dates.currentEnd),
+    totals(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
+    totals(provider, propertyId, dates.previousStart, dates.previousEnd, filter),
+    topPages(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
+    sources(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
+    organicQueries(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
   ]);
 
   const delta_pct = Object.fromEntries(

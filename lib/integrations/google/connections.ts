@@ -28,6 +28,7 @@ export type ActiveGoogleGrant = {
   projectId: string;
   siteId: string | null;
   connectionId: string;
+  metadata: unknown;
   connection: {
     id: string;
     type: string;
@@ -62,6 +63,7 @@ export async function getGoogleGrant(
       projectId: true,
       siteId: true,
       connectionId: true,
+      metadata: true,
       connection: {
         select: {
           id: true,

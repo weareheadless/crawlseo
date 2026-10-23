@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       where: { id: siteId },
       select: { userId: true, projectId: true },
     });
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 

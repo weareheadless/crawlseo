@@ -8,12 +8,17 @@ import { AddSiteModal } from "@/components/sites/add-site-modal";
 import { SyncButton } from "@/components/sites/sync-button";
 import { formatCompact } from "@/lib/seo-metrics";
 
-export default async function SitesPage() {
+export default async function SitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
+  const showAll = (await searchParams).all === "1";
 
-  const sites = await db.site.findMany({
-    where: { userId },
+  // Single-operator CrawlSEO: show all sites regardless of provisioning path.
+  const allSites = await db.site.findMany({
     select: {
       id: true,
       domain: true,
@@ -29,14 +34,31 @@ export default async function SitesPage() {
     },
     orderBy: { createdAt: "desc" },
   });
+  const sites = showAll
+    ? allSites
+    : allSites.filter((site) =>
+        site._count.keywords > 0 || site._count.pages > 0 || site._count.crawls > 0,
+      );
 
   return (
     <div>
       <PageHeader
         eyebrow="Properties"
         title="Sites"
-        description="Connect and sync Google Search Console properties."
-        actions={<AddSiteModal />}
+        description={showAll
+          ? `${allSites.length} sites including empty records`
+          : `${sites.length} of ${allSites.length} sites with data`}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link
+              href={showAll ? "/sites" : "/sites?all=1"}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              {showAll ? "Only with data" : `Show all ${allSites.length}`}
+            </Link>
+            <AddSiteModal />
+          </div>
+        }
       />
 
       {sites.length === 0 ? (

@@ -21,7 +21,7 @@ export async function POST(
       select: { userId: true, domain: true, gscProperty: true },
     });
 
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 

@@ -38,11 +38,6 @@ export async function GET(
       return Response.json({ error: "Site not found" }, { status: 404 });
     }
 
-    // Verify ownership
-    if (site.userId !== userId) {
-      return Response.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
     // Remove userId from response without relying on an unused destructured value.
     const siteData = {
       id: site.id,
@@ -85,7 +80,7 @@ export async function PUT(
       select: { userId: true },
     });
 
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -140,7 +135,7 @@ export async function DELETE(
       select: { userId: true },
     });
 
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

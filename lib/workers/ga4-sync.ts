@@ -107,10 +107,15 @@ export async function syncGA4DataForProject(
       { siteId }
     );
     grantId = integration.grant.id;
+    const grantMetadata = (integration.grant.metadata ?? {}) as { hostName?: string };
+    const filter = grantMetadata.hostName
+      ? { hostName: grantMetadata.hostName }
+      : undefined;
     const data = await fetchAnalyticsSummary(
       integration.provider,
       integration.grant.externalResourceId,
-      dates
+      dates,
+      filter
     );
     const snapshotData = {
       ...data,

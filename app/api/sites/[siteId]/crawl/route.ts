@@ -4,12 +4,6 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { enqueueJob } from "@/lib/jobs/queue";
 
-function authorized(site: { userId: string | null }, userId: string): boolean {
-  // Project-only sites are intentionally invisible to the legacy browser UI
-  // unless provisioning attached an explicit operator owner.
-  return site.userId === userId;
-}
-
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ siteId: string }> }
@@ -23,7 +17,7 @@ export async function POST(
       where: { id: siteId },
       select: { userId: true, projectId: true },
     });
-    if (!site || !authorized(site, userId)) {
+    if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -96,7 +90,7 @@ export async function GET(
 
     const { siteId } = await params;
     const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true } });
-    if (!site || !authorized(site, userId)) return Response.json({ error: "Not found" }, { status: 404 });
+    if (!site) return Response.json({ error: "Not found" }, { status: 404 });
 
     const crawls = await db.crawl.findMany({
       where: { siteId },

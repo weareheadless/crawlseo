@@ -273,6 +273,43 @@ model SeoResearchTask {
   @@index([researchRunId, status])
 }
 
+// ============ CONTENT STUDIO ============
+
+model ContentDraft {
+  id              String             @id @default(cuid())
+  siteId          String
+  opportunityKey  String
+  actionKind      String
+  format          String
+  primaryQuery    String             @default("")
+  targetUrl       String?
+  intent          String
+  title           String
+  slug            String
+  metaTitle       String
+  metaDescription String
+  excerpt         String
+  markdown        String
+  outline         Json?
+  brief           Json
+  model           String
+  provider        String
+  status          ContentDraftStatus @default(READY)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
+  @@index([siteId, opportunityKey])
+  @@index([siteId, status])
+}
+
+enum ContentDraftStatus {
+  READY
+  ARCHIVED
+}
+
 // ============ SITES ============
 
 model Site {
@@ -301,6 +338,7 @@ model Site {
   seoResearchPolicies SeoResearchPolicy[]
   seoResearchRuns     SeoResearchRun[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
+  contentDrafts       ContentDraft[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])
@@ -371,7 +409,10 @@ model IntegrationGrant {
   project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site       Site?            @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@unique([connectionId, projectId, provider, externalResourceId])
+  // Uniqueness is enforced by partial indexes in SQL so the same external
+  // resource (e.g. a shared GA4 property) can be granted per site while a
+  // project-level grant (siteId NULL) stays unique.
+  @@index([connectionId, projectId, provider, externalResourceId])
   @@index([projectId, provider, status])
 }
 

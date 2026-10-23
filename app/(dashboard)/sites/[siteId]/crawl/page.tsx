@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { CrawlButton } from "@/components/sites/action-buttons";
 import { CrawlStatusPoller } from "@/components/sites/crawl-status-poller";
 import { cn } from "@/lib/utils";
+import { buildIssuePriorities } from "@/lib/crawler/health";
+import { REMEDIATION } from "@/lib/crawler/remediation";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -14,12 +16,13 @@ interface Props {
 export default async function CrawlPage({ params }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { userId: true, domain: true },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site) redirect("/sites");
 
   // Check for running crawl
   const runningCrawl = await db.crawl.findFirst({
@@ -32,13 +35,8 @@ export default async function CrawlPage({ params }: Props) {
     orderBy: { finishedAt: "desc" },
     include: {
       issues: {
-        where: {
-          NOT: {
-            details: { path: ["kind"], equals: "crawl_summary" },
-          },
-        },
         orderBy: [{ severity: "asc" }, { type: "asc" }],
-        take: 200,
+        take: 1000,
       },
     },
   });
@@ -62,6 +60,10 @@ export default async function CrawlPage({ params }: Props) {
     WARNING: realIssues.filter((i) => i.severity === "WARNING").length,
     INFO: realIssues.filter((i) => i.severity === "INFO").length,
   };
+
+  const issuePriorities = latest
+    ? buildIssuePriorities(realIssues, latest.pagesFound)
+    : [];
 
   const avgContentScore = auditPages.length > 0
     ? Math.round(auditPages.reduce((s, p) => s + p.contentScore, 0) / auditPages.length)
@@ -98,7 +100,7 @@ export default async function CrawlPage({ params }: Props) {
             <ScoreCard
               label="Health"
               value={`${latest.healthScore ?? "—"}`}
-              hint="/100"
+              hint="/100 page-normalized"
               tone={(latest.healthScore ?? 0) >= 80 ? "good" : (latest.healthScore ?? 0) >= 60 ? "mid" : "bad"}
             />
             <ScoreCard label="Pages" value={String(latest.pagesFound)} hint="crawled" />
@@ -114,6 +116,53 @@ export default async function CrawlPage({ params }: Props) {
               hint="no inlinks"
             />
           </div>
+
+          {/* Prioritised issues */}
+          {issuePriorities.length > 0 && (
+            <div className="panel overflow-hidden">
+              <div className="border-b border-border/60 px-5 py-4">
+                <h3 className="font-heading text-lg font-semibold">Fix first</h3>
+                <p className="text-sm text-muted-foreground">
+                  Ranked by severity and share of crawled pages affected, not raw issue count.
+                </p>
+              </div>
+              <ul className="divide-y divide-border/40">
+                {issuePriorities.slice(0, 5).map((issue, index) => (
+                  <li key={issue.type} className="flex items-start gap-3 px-5 py-3">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted font-data text-[10px] font-semibold text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground">
+                          {issue.type.replace(/_/g, " ").toLowerCase()}
+                        </p>
+                        <span
+                          className={cn(
+                            "rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            issue.severity === "CRITICAL" && "bg-danger/15 text-danger",
+                            issue.severity === "WARNING" && "bg-warning/15 text-warning",
+                            issue.severity === "INFO" && "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {issue.severity}
+                        </span>
+                        <span className="font-data text-[11px] text-muted-foreground">
+                          {issue.affectedPages}/{latest.pagesFound} pages · {issue.affectedPct}%
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {REMEDIATION[issue.type]?.howToFix ?? "Review the affected pages and fix the underlying template or content issue."}
+                      </p>
+                      <p className="truncate font-data text-[10px] text-muted-foreground/70" title={issue.sampleUrl}>
+                        {issue.sampleUrl}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Crawled pages table (from AuditPage model) */}
           {auditPages.length > 0 && (

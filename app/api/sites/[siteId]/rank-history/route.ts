@@ -16,7 +16,7 @@ export async function GET(
       where: { id: siteId },
       select: { userId: true },
     });
-    if (!site || site.userId !== userId) {
+    if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 

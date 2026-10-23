@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import type { IssueSeverity, IssueType } from "@prisma/client";
 import robotsParser from "robots-parser";
 import { REMEDIATION } from "./remediation";
+import { computeHealthScore } from "./health";
 
 const ABSOLUTE_MAX_PAGES = 2000;
 const BATCH_SIZE = 15;
@@ -577,17 +578,6 @@ function issuesFromPage(page: PageSnapshot): IssueInput[] {
   }
 
   return issues;
-}
-
-function computeHealthScore(issues: IssueInput[], pagesFound: number): number {
-  if (pagesFound === 0) return 0;
-  let score = 100;
-  for (const issue of issues) {
-    if (issue.severity === "CRITICAL") score -= 8;
-    else if (issue.severity === "WARNING") score -= 3;
-    else score -= 1;
-  }
-  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 /* ------------------------------------------------------------------ */

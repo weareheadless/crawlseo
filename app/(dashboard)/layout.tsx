@@ -20,8 +20,9 @@ export default async function DashboardLayout({
     select: { email: true, name: true, image: true },
   });
 
+  // Single-operator CrawlSEO: authenticated users see every site,
+  // including project-provisioned sites with no userId.
   const sites = await db.site.findMany({
-    where: { userId },
     select: { id: true, domain: true },
     orderBy: { domain: "asc" },
   });
