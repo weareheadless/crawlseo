@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -187,4 +188,25 @@ export async function applyEmbedDelivery(
     });
   }
   return { task: updated, receipt };
+}
+
+export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
+  const { task, target, delivery } = await loadTaskAndTarget(taskId, targetKey);
+  const sourcePath = path.join(task.worktreePath!, target.sourcePath!);
+  const source = await readFile(sourcePath, "utf8");
+  const snippet = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as {
+    snippet?: { embedData?: { html?: string } };
+  };
+  const currentHtml = snippet.snippet?.embedData?.html ?? "";
+  const expectedHtml = rebuildSusiEarlyPacket(currentHtml, target.componentTag!, source);
+  const result = {
+    verified: currentHtml === expectedHtml,
+    target: target.key,
+    snippetId: target.snippetId,
+    componentTag: target.componentTag,
+    expectedSha256: createHash("sha256").update(expectedHtml).digest("hex"),
+    actualSha256: createHash("sha256").update(currentHtml).digest("hex"),
+  };
+  await addAgentArtifact(task.id, { kind: "embed_verify", content: JSON.stringify(result, null, 2) });
+  return result;
 }

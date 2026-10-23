@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Network, Upload } from "lucide-react";
+import { Check, Loader2, Network, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Target = {
@@ -79,6 +79,15 @@ export function EmbedDeliveryControls({
         >
           {busy === "plan" ? <Loader2 className="size-3 animate-spin" /> : <Network className="size-3" />}
           Plan embed
+        </Button>
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={!targetKey || !hasWorktree || Boolean(busy)}
+          onClick={() => call(`/crawlseo/api/agent-tasks/${taskId}/embed-verify`, { targetKey }, "verify")}
+        >
+          {busy === "verify" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+          Verify embed
         </Button>
         <Button
           size="xs"
