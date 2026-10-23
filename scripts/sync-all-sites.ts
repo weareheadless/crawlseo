@@ -10,7 +10,7 @@ const runDate = process.argv
   .find((arg) => arg.startsWith("--date="))
   ?.slice("--date=".length) || new Date().toISOString().slice(0, 10);
 
-type Source = "gsc" | "ga4";
+type Source = "gsc" | "ga4" | "crawl" | "vitals";
 type Outcome = {
   domain: string;
   siteId: string;
@@ -40,7 +40,18 @@ async function main() {
       projectId: true,
       userId: true,
       gscProperty: true,
+      _count: { select: { keywords: true, pages: true, crawls: true } },
       user: { select: { googleTokens: true } },
+      crawls: {
+        orderBy: { startedAt: "desc" },
+        take: 1,
+        select: { status: true, finishedAt: true },
+      },
+      vitals: {
+        orderBy: { date: "desc" },
+        take: 1,
+        select: { date: true },
+      },
       project: {
         select: {
           integrationGrants: {
@@ -82,21 +93,52 @@ async function main() {
       sources.push({ source: "ga4", projectId: site.projectId });
     }
 
+    const hasSiteData = site._count.keywords > 0 || site._count.pages > 0 || site._count.crawls > 0;
+    const latestCrawl = site.crawls[0];
+    const crawlActive = latestCrawl?.status === "PENDING" || latestCrawl?.status === "RUNNING";
+    const crawlAgeMs = latestCrawl?.status === "COMPLETED" && latestCrawl.finishedAt
+      ? Date.now() - latestCrawl.finishedAt.getTime()
+      : Number.POSITIVE_INFINITY;
+    if (
+      hasSiteData
+      && !crawlActive
+      && crawlAgeMs > 7 * 24 * 60 * 60 * 1000
+    ) {
+      sources.push({ source: "crawl" });
+    }
+
+    const vitalsAgeMs = site.vitals[0]?.date
+      ? Date.now() - site.vitals[0].date.getTime()
+      : Number.POSITIVE_INFINITY;
+    if (
+      hasSiteData
+      && process.env.GOOGLE_PAGESPEED_KEY
+      && vitalsAgeMs > 7 * 24 * 60 * 60 * 1000
+    ) {
+      if (site.projectId) {
+        sources.push({ source: "vitals", projectId: site.projectId });
+      } else if (site.userId) {
+        sources.push({ source: "vitals", userId: site.userId });
+      }
+    }
+
     if (sources.length === 0) {
       outcomes.push({
         domain: site.domain,
         siteId: site.id,
         source: "gsc",
         result: "skipped",
-        reason: site.projectId
-          ? "no active GSC/GA4 grant"
-          : !site.userId
-            ? "no owner and no active project grant"
-            : !site.gscProperty
-              ? "no GSC property"
-              : !site.user?.googleTokens
-                ? "no Google OAuth token"
-                : "no supported source",
+        reason: !process.env.GOOGLE_PAGESPEED_KEY && vitalsAgeMs > 7 * 24 * 60 * 60 * 1000
+          ? "no PageSpeed key and no fresh vitals"
+          : site.projectId
+            ? "no active GSC/GA4 grant"
+            : !site.userId
+              ? "no owner and no active project grant"
+              : !site.gscProperty
+                ? "no GSC property"
+                : !site.user?.googleTokens
+                  ? "no Google OAuth token"
+                  : "no supported source",
       });
       continue;
     }
@@ -117,12 +159,24 @@ async function main() {
         const job = await enqueueJob({
           projectId: source.projectId ?? null,
           siteId: site.id,
-          kind: source.source === "gsc" ? JobKind.GSC_SYNC : JobKind.GA4_SYNC,
-          payload: source.userId
-            ? { userId: source.userId, daysBack: 28 }
-            : source.source === "gsc"
-              ? { daysBack: 28 }
-              : {},
+          kind:
+            source.source === "gsc"
+              ? JobKind.GSC_SYNC
+              : source.source === "ga4"
+                ? JobKind.GA4_SYNC
+                : source.source === "crawl"
+                  ? JobKind.CRAWL
+                  : JobKind.VITALS_SYNC,
+          payload:
+            source.source === "crawl"
+              ? { maxPages: 200 }
+              : source.source === "vitals"
+                ? { ...(source.userId ? { userId: source.userId } : {}), limit: 5 }
+                : source.userId
+                  ? { userId: source.userId, daysBack: 28 }
+                  : source.source === "gsc"
+                    ? { daysBack: 28 }
+                    : {},
           idempotencyKey: key,
           maxAttempts: 2,
         });

@@ -19,6 +19,9 @@ import { syncVitalsForProject, syncVitalsForSite } from "@/lib/workers/vitals-sy
 import { runSiteCrawl } from "@/lib/crawler/engine";
 import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const workerId = `${hostname()}:${process.pid}:${randomUUID()}`;
 const pollMs = Math.max(250, Number(process.env.JOB_WORKER_POLL_MS ?? 1000));
