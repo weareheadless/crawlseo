@@ -387,6 +387,147 @@ The engine converts findings into Actions using deterministic rules plus the AI 
 - default automation mode from site policy
 - never create duplicate open Actions for the same change
 
+## 5A. Existing systems to reuse
+
+Two existing implementations already contain useful research patterns.
+
+### MCP investment brief generator
+
+Files:
+
+- `/REAIupdate/intelligence/generate_investment_brief.py`
+- `/MCP/mcp_server/investment_analysis_service.py`
+
+Reusable ideas:
+
+- Google Search grounding with a verified source register
+- source typing (`official_primary`, `government`, `court`, `developer`, `reputable_secondary`, etc.)
+- rejection of untrusted hosts for official claims
+- explicit handling of adverse claims
+- source redirect resolution before trust checks
+- contradiction and unsupported-claim sanitization
+- source-fingerprinted cache with writer version
+- hard quality gate that rejects an empty or source-only brief
+
+This is the right model for **high-stakes factual claims**, not for general sentiment.
+
+### site-agent incubation research
+
+Files:
+
+- `/SOCIAL/site-agent/src/site_agent/brain/incubation_research.py`
+- `/SOCIAL/site-agent/src/site_agent/application/incubation_research.py`
+- `/SOCIAL/site-agent/src/site_agent/hands/feed_discovery.py`
+- `/SOCIAL/site-agent/src/site_agent/brain/article_research.py`
+- `/SOCIAL/site-agent/docs/ada-incubation-research-and-provisioning-implementation-plan.md`
+
+Reusable ideas:
+
+- research planning from an intake/site profile
+- candidate subreddit/feed/query discovery
+- bounded source and item limits
+- source trust states: candidate, allowed, excluded
+- owner exclusions and per-revision research caps
+- findings and insights with confidence and provenance
+- audience concern / desire / trend / content opportunity classification
+- research used to inform design and content without becoming owner-confirmed fact
+
+This is the right model for **audience and market intelligence**.
+
+### Combined approach
+
+Use the site-agent planner and synthesis model for market research, and the
+investment-brief evidence gate for factual claims.
+
+```text
+Site profile / incubation draft
+  -> AI research planner
+  -> source discovery
+  -> bounded retrieval
+  -> evidence validation by claim type
+  -> findings
+  -> actions
+  -> content briefs
+```
+
+#### Claim-type source policy
+
+| Claim type | Allowed evidence |
+|---|---|
+| Audience concerns, language, desires, objections | Reddit, forums, news, web; labelled as signal |
+| Content gaps and recurring questions | Reddit, forums, news, web |
+| Market trends | Multiple reputable sources; require recency and source count |
+| Prices, yields, legal ownership, taxes, medical/financial advice | Official primary sources only |
+| Developer, HOA, litigation, safety, misconduct claims | Official primary/court/regulatory only; social posts are not evidence |
+| SEO performance | GSC, GA4, crawl, DataForSEO |
+
+Reddit is valuable for **what people are saying**, not for proving **what is true**.
+
+## 5B. Reddit provider and bot
+
+Reddit RSS is not a durable production dependency. `site-agent` currently turns
+subreddit candidates into `.rss` URLs in `RedditFeedDiscovery`; that adapter
+must be replaced.
+
+### Recommended access path
+
+Use the official Reddit Data API with OAuth and a dedicated read-only bot
+account/application.
+
+- App type: script or confidential client
+- Bot identity: a dedicated service account, not a personal account
+- Scopes: read-only (`read`, plus the minimum identity/history scope required)
+- Token storage: encrypted secret store, never in the database or logs
+- No posting, voting, commenting, messaging, or moderation in v1
+- Respect subreddit rules, Reddit API terms, rate limits, and deletion semantics
+
+### Provider contract
+
+```ts
+interface RedditResearchProvider {
+  searchSubreddits(query: string, limit: number): Promise<SubredditCandidate[]>;
+  searchPosts(input: {
+    subreddit?: string;
+    query: string;
+    sort: "relevance" | "new" | "top";
+    timeWindow: "week" | "month" | "year" | "all";
+    limit: number;
+  }): Promise<RedditPost[]>;
+  getThread(postId: string, commentLimit: number): Promise<RedditThread>;
+}
+```
+
+### Stored fields
+
+- Reddit fullname (`t3_...`) and permalink
+- subreddit and language
+- title, selftext excerpt, and selected top comments
+- publication time and retrieval time
+- score and comment count
+- content hash
+- trust state and relevance
+- source URL and citation URI
+
+Store excerpts and links, not full thread dumps. If a post is deleted or removed,
+mark the stored source unavailable rather than pretending the evidence still
+exists.
+
+### Operational controls
+
+- per-run request budget
+- global rate limiter and exponential backoff
+- `429` handling with retry windows
+- per-subreddit and per-query caps
+- deduplication by Reddit fullname and content hash
+- user-agent and contact metadata
+- audit log of every retrieval attempt
+- no credentials in prompts, findings, or client bundles
+
+### RSS policy
+
+RSS remains supported for publisher blogs and news feeds, but not as the
+primary Reddit path. Reddit-specific discovery must not generate `.rss` URLs.
+
 ## 6. Action lifecycle
 
 ```text
@@ -588,13 +729,21 @@ The queue must make it obvious:
 
 ## 15. Immediate implementation in this branch
 
-Phase 1 only:
+Phase 1 is implemented:
 
 - schema and migration
 - validation and service layer
 - API endpoints for research runs, findings, and actions
 - ContentDraft linkage
-- minimal Research/Actions UI
+- Research/Actions UI
 - tests
 
-The AI provider worker and delivery adapters follow in separate phases.
+Phase 1.5 starts next:
+
+- provider interface
+- Reddit OAuth provider to replace RSS
+- news and web provider adapters
+- claim-type source policy
+- AI planner and synthesizer worker
+
+The content and delivery phases follow after research output is stable.
