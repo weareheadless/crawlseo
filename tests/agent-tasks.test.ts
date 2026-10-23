@@ -47,3 +47,24 @@ describe("agent prompt", () => {
     expect(prompt).toContain("Keep the existing design.");
   });
 });
+
+describe("agent task transitions", () => {
+  it("allows the review and delivery workflow", async () => {
+    const { canTransitionAgentTask } = await import("@/lib/agent-tasks/transitions");
+    expect(canTransitionAgentTask("READY", "RUNNING")).toBe(true);
+    expect(canTransitionAgentTask("RUNNING", "AWAITING_REVIEW")).toBe(true);
+    expect(canTransitionAgentTask("AWAITING_REVIEW", "CHANGES_REQUESTED")).toBe(true);
+    expect(canTransitionAgentTask("CHANGES_REQUESTED", "RUNNING")).toBe(true);
+    expect(canTransitionAgentTask("AWAITING_REVIEW", "APPROVED")).toBe(true);
+    expect(canTransitionAgentTask("APPROVED", "COMMITTED")).toBe(true);
+    expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);
+    expect(canTransitionAgentTask("PUBLISHING", "PUBLISHED")).toBe(true);
+    expect(canTransitionAgentTask("PUBLISHED", "CLOSED")).toBe(true);
+  });
+
+  it("rejects skipped states", async () => {
+    const { canTransitionAgentTask } = await import("@/lib/agent-tasks/transitions");
+    expect(canTransitionAgentTask("READY", "PUBLISHED")).toBe(false);
+    expect(canTransitionAgentTask("CLOSED", "RUNNING")).toBe(false);
+  });
+});

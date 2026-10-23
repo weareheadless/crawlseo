@@ -8,6 +8,7 @@ import { ActionControls } from "@/components/work/action-controls";
 import { AgentChat } from "@/components/work/agent-chat";
 import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
 import { AgentTaskRunButton } from "@/components/work/agent-task-run-button";
+import { AgentTaskActions } from "@/components/work/agent-task-actions";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -128,6 +129,7 @@ export default async function ActionDetailPage({ params }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{task.title}</p>
                     <AgentTaskRunButton taskId={task.id} status={task.status} />
+                    <AgentTaskActions taskId={task.id} status={task.status} commitSha={task.commitSha} />
                   </div>
                   <p className="mt-1 font-data text-[10px] text-muted-foreground">
                     {task.repoPath}{task.branch ? ` · ${task.branch}` : ""}{task.route ? ` · ${task.route}` : ""}

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { buildAgentPrompt } from "@/lib/agent-tasks/prompt";
 import { isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
 import { ResearchServiceError } from "@/lib/research/service";
+import { canTransitionAgentTask } from "@/lib/agent-tasks/transitions";
 
 export async function createAgentTaskForAction(
   actionId: string,
@@ -93,15 +94,21 @@ export async function listAgentTasks(siteId: string, limit = 50) {
 export async function updateAgentTask(
   taskId: string,
   input: {
-    status?: "READY" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+    status?: "READY" | "RUNNING" | "AWAITING_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "COMMITTED" | "PUBLISHING" | "PUBLISHED" | "CLOSED" | "COMPLETED" | "FAILED" | "CANCELLED";
     result?: unknown;
     errorCode?: string | null;
     branch?: string | null;
     worktreePath?: string | null;
+    commitSha?: string | null;
+    publishedUrl?: string | null;
+    bridgeReceiptId?: string | null;
   },
 ) {
-  const task = await db.agentTask.findUnique({ where: { id: taskId }, select: { id: true } });
+  const task = await db.agentTask.findUnique({ where: { id: taskId }, select: { id: true, status: true } });
   if (!task) throw new ResearchServiceError("Agent task not found", 404);
+  if (input.status && !canTransitionAgentTask(task.status, input.status)) {
+    throw new ResearchServiceError(`Cannot move agent task from ${task.status} to ${input.status}`, 409);
+  }
   const now = new Date();
   return db.agentTask.update({
     where: { id: taskId },
@@ -111,7 +118,11 @@ export async function updateAgentTask(
       ...(input.errorCode !== undefined ? { errorCode: input.errorCode } : {}),
       ...(input.branch !== undefined ? { branch: input.branch } : {}),
       ...(input.worktreePath !== undefined ? { worktreePath: input.worktreePath } : {}),
+      ...(input.commitSha !== undefined ? { commitSha: input.commitSha } : {}),
+      ...(input.publishedUrl !== undefined ? { publishedUrl: input.publishedUrl } : {}),
+      ...(input.bridgeReceiptId !== undefined ? { bridgeReceiptId: input.bridgeReceiptId } : {}),
       ...(input.status === "RUNNING" ? { startedAt: now } : {}),
+      ...(input.status === "CLOSED" ? { closedAt: now } : {}),
       ...(input.status && ["COMPLETED", "FAILED", "CANCELLED"].includes(input.status)
         ? { completedAt: now }
         : {}),
