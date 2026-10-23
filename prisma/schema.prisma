@@ -50,15 +50,17 @@ model Project {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sites               Site[]
-  integrationGrants   IntegrationGrant[]
-  servicePrincipals   ServicePrincipal[]
-  jobs                Job[]
-  dataforseoGrants    ProjectApiKeyGrant[]
-  seoResearchPolicies SeoResearchPolicy[]
-  seoResearchRuns     SeoResearchRun[]
+  workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sites                      Site[]
+  integrationGrants          IntegrationGrant[]
+  servicePrincipals          ServicePrincipal[]
+  jobs                       Job[]
+  dataforseoGrants           ProjectApiKeyGrant[]
+  seoResearchPolicies        SeoResearchPolicy[]
+  seoResearchRuns            SeoResearchRun[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
+  siteProfiles               SiteProfile[]
+  researchRuns               ResearchRun[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -157,19 +159,19 @@ model ProjectApiKeyGrant {
 }
 
 model SeoResearchPolicy {
-  id               String   @id @default(cuid())
-  projectId        String
-  siteId           String
-  enabled          Boolean  @default(true)
-  monthlyTaskLimit Int      @default(9)
-  keywordSeedLimit Int      @default(5)
-  competitorLimit  Int      @default(1)
-  packageVersion   String   @default("standard-v1")
+  id                       String   @id @default(cuid())
+  projectId                String
+  siteId                   String
+  enabled                  Boolean  @default(true)
+  monthlyTaskLimit         Int      @default(9)
+  keywordSeedLimit         Int      @default(5)
+  competitorLimit          Int      @default(1)
+  packageVersion           String   @default("standard-v1")
   articleResearchEnabled   Boolean  @default(true)
   articleTaskLimitPerMonth Int      @default(5)
   articleMinIntervalDays   Int      @default(7)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -179,34 +181,34 @@ model SeoResearchPolicy {
 }
 
 model ArticleKeywordResearchRun {
-  id             String                       @id @default(cuid())
-  projectId      String
-  siteId         String
-  ideaKey        String
-  ideaSummary    String
-  idempotencyKey String
-  requestHash    String
-  seed           String
-  queries        Json?
-  kind           ArticleKeywordResearchKind @default(RELATED_KEYWORDS)
-  parentRunId    String?                      @unique
-  language       String
-  country        String
+  id                   String                       @id @default(cuid())
+  projectId            String
+  siteId               String
+  ideaKey              String
+  ideaSummary          String
+  idempotencyKey       String
+  requestHash          String
+  seed                 String
+  queries              Json?
+  kind                 ArticleKeywordResearchKind   @default(RELATED_KEYWORDS)
+  parentRunId          String?                      @unique
+  language             String
+  country              String
   providerLanguageCode String?
   providerLocationCode Int?
-  status         ArticleKeywordResearchStatus @default(REQUESTED)
-  providerTaskId String?
-  costMicros     Int?
-  result         Json?
-  errorCode      String?
-  requestedAt    DateTime                     @default(now())
-  attemptedAt    DateTime?
-  completedAt    DateTime?
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
+  status               ArticleKeywordResearchStatus @default(REQUESTED)
+  providerTaskId       String?
+  costMicros           Int?
+  result               Json?
+  errorCode            String?
+  requestedAt          DateTime                     @default(now())
+  attemptedAt          DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site      Site                       @relation(fields: [siteId], references: [id], onDelete: Cascade)
   parentRun ArticleKeywordResearchRun? @relation("ArticleResearchSerp", fields: [parentRunId], references: [id], onDelete: Cascade)
   serpRun   ArticleKeywordResearchRun? @relation("ArticleResearchSerp")
 
@@ -278,6 +280,7 @@ model SeoResearchTask {
 model ContentDraft {
   id              String             @id @default(cuid())
   siteId          String
+  actionId        String?
   opportunityKey  String
   actionKind      String
   format          String
@@ -298,16 +301,225 @@ model ContentDraft {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site       Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action     ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  deliveries Delivery[]
 
   @@index([siteId, createdAt])
   @@index([siteId, opportunityKey])
   @@index([siteId, status])
+  @@index([actionId])
 }
 
 enum ContentDraftStatus {
   READY
   ARCHIVED
+}
+
+// ============ RESEARCH ENGINE ============
+
+model SiteProfile {
+  id          String   @id @default(cuid())
+  siteId      String   @unique
+  projectId   String?
+  language    String   @default("en")
+  country     String?
+  audience    Json?
+  topics      Json?
+  services    Json?
+  competitors Json?
+  brandVoice  String?
+  constraints Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+model ResearchRun {
+  id            String            @id @default(cuid())
+  siteId        String
+  projectId     String?
+  kind          ResearchRunKind   @default(MARKET)
+  trigger       ResearchTrigger   @default(MANUAL)
+  status        ResearchRunStatus @default(QUEUED)
+  title         String
+  brief         Json
+  topics        Json?
+  recencyDays   Int               @default(90)
+  providerSet   Json?
+  promptVersion String            @default("research-v1")
+  model         String?
+  report        Json?
+  sourceCount   Int               @default(0)
+  findingCount  Int               @default(0)
+  actionCount   Int               @default(0)
+  costMicros    Int               @default(0)
+  errorCode     String?
+  requestedBy   String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  site     Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project  Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  sources  ResearchSource[]
+  findings ResearchFinding[]
+  actions  ResearchAction[]
+
+  @@index([siteId, createdAt])
+  @@index([siteId, status])
+  @@index([projectId, createdAt])
+}
+
+model ResearchSource {
+  id          String    @id @default(cuid())
+  runId       String
+  provider    String
+  url         String
+  title       String?
+  author      String?
+  community   String?
+  publishedAt DateTime?
+  retrievedAt DateTime  @default(now())
+  excerpt     String?
+  contentHash String?
+  language    String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  run ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, contentHash])
+  @@index([runId, provider])
+}
+
+model ResearchFinding {
+  id                  String              @id @default(cuid())
+  runId               String
+  type                ResearchFindingType
+  theme               String
+  summary             String
+  confidence          Int                 @default(50)
+  sentiment           String?
+  urgency             String?
+  evidenceSourceIds   Json?
+  suggestedActionKind String?
+  createdAt           DateTime            @default(now())
+
+  run     ResearchRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  actions ResearchAction[]
+
+  @@index([runId, type])
+}
+
+model ResearchAction {
+  id             String               @id @default(cuid())
+  siteId         String
+  runId          String?
+  findingId      String?
+  source         String
+  kind           String
+  format         String?
+  title          String
+  primaryQuery   String?
+  targetUrl      String?
+  recommendation String
+  evidence       Json?
+  priority       Int                  @default(50)
+  status         ResearchActionStatus @default(PROPOSED)
+  automationMode AutomationMode       @default(MANUAL)
+  dedupeKey      String
+  owner          String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  deliveredAt    DateTime?
+  verifiedAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  site       Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  run        ResearchRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  drafts     ContentDraft[]
+  deliveries Delivery[]
+
+  @@unique([siteId, dedupeKey])
+  @@index([siteId, status, priority])
+  @@index([siteId, createdAt])
+}
+
+model Delivery {
+  id         String    @id @default(cuid())
+  actionId   String
+  draftId    String?
+  platform   String
+  externalId String?
+  status     String
+  payload    Json?
+  diff       Json?
+  errorCode  String?
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  action ResearchAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  draft  ContentDraft?  @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@index([actionId, createdAt])
+}
+
+enum ResearchRunKind {
+  MARKET
+  SEO
+  MIXED
+}
+
+enum ResearchTrigger {
+  MANUAL
+  SCHEDULED
+  API
+}
+
+enum ResearchRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum ResearchFindingType {
+  THEME
+  QUESTION
+  CONCERN
+  OBJECTION
+  TREND
+  MISCONCEPTION
+  CONTENT_GAP
+}
+
+enum ResearchActionStatus {
+  PROPOSED
+  APPROVED
+  DISMISSED
+  DRAFTING
+  DRAFT_READY
+  DELIVERY_APPROVED
+  DELIVERING
+  DELIVERED
+  VERIFIED
+  FAILED
+}
+
+enum AutomationMode {
+  MANUAL
+  ASSISTED
+  AUTOMATIC
 }
 
 // ============ SITES ============
@@ -322,23 +534,26 @@ model Site {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  user                User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project             Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  keywords            Keyword[]
-  pages               Page[]
-  crawls              Crawl[]
-  vitals              VitalsReport[]
-  alerts              Alert[]
-  savedKeywords       SavedKeyword[]
-  rankSnapshots       RankSnapshot[]
-  integrationGrants   IntegrationGrant[]
-  analyticsSnapshots  AnalyticsSnapshot[]
-  jobs                Job[]
-  syncRuns            SyncRun[]
-  seoResearchPolicies SeoResearchPolicy[]
-  seoResearchRuns     SeoResearchRun[]
+  user                       User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keywords                   Keyword[]
+  pages                      Page[]
+  crawls                     Crawl[]
+  vitals                     VitalsReport[]
+  alerts                     Alert[]
+  savedKeywords              SavedKeyword[]
+  rankSnapshots              RankSnapshot[]
+  integrationGrants          IntegrationGrant[]
+  analyticsSnapshots         AnalyticsSnapshot[]
+  jobs                       Job[]
+  syncRuns                   SyncRun[]
+  seoResearchPolicies        SeoResearchPolicy[]
+  seoResearchRuns            SeoResearchRun[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
-  contentDrafts       ContentDraft[]
+  siteProfiles               SiteProfile[]
+  researchRuns               ResearchRun[]
+  contentDrafts              ContentDraft[]
+  researchActions            ResearchAction[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])
@@ -412,7 +627,7 @@ model IntegrationGrant {
   // Uniqueness is enforced by partial indexes in SQL so the same external
   // resource (e.g. a shared GA4 property) can be granted per site while a
   // project-level grant (siteId NULL) stays unique.
-  @@index([connectionId, projectId, provider, externalResourceId])
+  @@index([connectionId, projectId, provider, externalResourceId], map: "IntegrationGrant_conn_project_provider_resource_idx")
   @@index([projectId, provider, status])
 }
 

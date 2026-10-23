@@ -18,6 +18,7 @@ import {
   Link as LinkIcon,
   SearchCheck,
   Sparkles,
+  Microscope,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +75,7 @@ export function SidebarNav({
     ? {
         label: "Research",
         items: [
+          { href: `/sites/${activeSiteId}/research`, label: "Research & Actions", icon: Microscope },
           { href: `/sites/${activeSiteId}/keyword-research`, label: "Keyword Research", icon: SearchCheck },
           { href: `/sites/${activeSiteId}/domain-overview`, label: "Domain Overview", icon: Globe },
           { href: `/sites/${activeSiteId}/backlinks`, label: "Backlinks", icon: LinkIcon },
