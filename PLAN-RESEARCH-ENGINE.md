@@ -528,6 +528,141 @@ exists.
 RSS remains supported for publisher blogs and news feeds, but not as the
 primary Reddit path. Reddit-specific discovery must not generate `.rss` URLs.
 
+## 5C. Reddit RSS interim phase
+
+Before building the Reddit OAuth bot, use Reddit's public search RSS as a
+bounded interim provider.
+
+Endpoint:
+
+```text
+https://www.reddit.com/search.rss?q=<query>&type=link&sort=relevance&t=year&limit=25
+```
+
+Notes:
+
+- `type=link` is required; without it Reddit returns subreddit results.
+- Parse Atom entries and store title, URL, author, subreddit, published time,
+  excerpt, and content hash.
+- RSS does not reliably provide comments, scores, or full thread context.
+- Respect rate limits and use a descriptive User-Agent.
+- Treat RSS as a temporary adapter behind the same provider interface that the
+  bot will implement later.
+- Do not store RSS feed URLs as the canonical source URL; store the Reddit post
+  permalink.
+
+The bot replaces the transport, not the research pipeline.
+
+## 5D. Unified signal and action model
+
+Keyword research and SEO opportunities are not separate content pipelines.
+They are inputs to the same Action.
+
+```text
+Market research finding
+  "Buyers repeatedly ask how foreign ownership works"
+
+Keyword research evidence
+  "can foreigners own property in mexico" — demand, intent, difficulty
+
+SEO opportunity evidence
+  Page ranks #12, low CTR, missing FAQ, no canonical
+
+                    ↓ merge by topic / query / target URL
+
+Action
+  "Add an ownership FAQ to this page and update its metadata"
+
+                    ↓
+
+Content brief
+  Audience language + keyword intent + SERP expectations + page facts
+
+                    ↓
+
+ContentDraft → review → delivery → outcome
+```
+
+### Signal types
+
+- `market_research` — Reddit/news/web findings
+- `keyword_research` — DataForSEO/volume/SERP evidence
+- `gsc_opportunity` — striking distance, CTR gap, decay, cannibalization
+- `crawl_issue` — page-level technical/content evidence
+- `analytics` — GA4 behaviour/conversion evidence
+- `manual` — operator instruction
+
+### Action merging rules
+
+1. Same target URL + same query/topic merges into one Action.
+2. Market research without demand can still create an Action, but lower priority.
+3. Keyword demand without audience insight can create an Action, but content is
+   more likely to be generic.
+4. A page update is preferred when a relevant URL already exists.
+5. A new article is preferred when no page satisfies the intent.
+6. Actions must preserve all evidence, not only the winning signal.
+7. One Action can link to multiple findings, keyword rows, GSC opportunities,
+   crawl issues, and sources.
+
+### Action evidence shape
+
+```json
+{
+  "market_findings": [],
+  "keyword_evidence": {
+    "seed": "...",
+    "volume": 0,
+    "difficulty": 0,
+    "intent": "...",
+    "serp_features": []
+  },
+  "gsc_evidence": {
+    "query": "...",
+    "page": "...",
+    "position": 0,
+    "impressions": 0,
+    "ctr": 0
+  },
+  "page_evidence": {
+    "url": "...",
+    "title": "...",
+    "word_count": 0,
+    "issues": []
+  },
+  "citations": []
+}
+```
+
+### Priority model
+
+Priority should combine:
+
+- demand (volume, impressions, clicks)
+- business relevance
+- evidence confidence and source count
+- freshness
+- page/content gap
+- conversion or decision intent
+- effort
+
+No single signal decides. The SEO opportunity tells us where the site can win.
+The market research tells us what the audience actually needs. Keyword research
+quantifies the demand. The page/crawl evidence tells us what to change.
+
+### UI implication
+
+The Research & Actions queue should show:
+
+- what triggered the Action
+- all supporting signals
+- whether demand is proven, inferred, or absent
+- the target page or query
+- whether it is a page update, article, FAQ, or metadata change
+- what content brief will be generated
+
+Keyword Research and Opportunities remain useful exploration screens, but their
+outputs must be attachable to Actions rather than ending as isolated tables.
+
 ## 6. Action lifecycle
 
 ```text
@@ -741,9 +876,12 @@ Phase 1 is implemented:
 Phase 1.5 starts next:
 
 - provider interface
-- Reddit OAuth provider to replace RSS
+- Reddit RSS provider (`search.rss?type=link`)
 - news and web provider adapters
 - claim-type source policy
 - AI planner and synthesizer worker
+- persist keyword and GSC evidence into the same Action queue
+
+Phase 2 replaces the Reddit RSS transport with the read-only OAuth bot.
 
 The content and delivery phases follow after research output is stable.
