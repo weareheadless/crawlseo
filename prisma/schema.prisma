@@ -304,6 +304,7 @@ model ContentDraft {
   site       Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
   action     ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
   deliveries Delivery[]
+  agentTasks AgentTask[]
 
   @@index([siteId, createdAt])
   @@index([siteId, opportunityKey])
@@ -447,6 +448,7 @@ model ResearchAction {
   finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
   drafts     ContentDraft[]
   deliveries Delivery[]
+  agentTasks AgentTask[]
 
   @@unique([siteId, dedupeKey])
   @@index([siteId, status, priority])
@@ -522,6 +524,47 @@ enum AutomationMode {
   AUTOMATIC
 }
 
+// ============ AGENT TASKS ============
+
+model AgentTask {
+  id           String          @id @default(cuid())
+  siteId       String
+  actionId     String?
+  draftId      String?
+  kind         String
+  status       AgentTaskStatus @default(READY)
+  title        String
+  goal         String
+  prompt       String
+  repoPath     String
+  route        String?
+  branch       String?
+  worktreePath String?
+  agent        String          @default("opencode")
+  result       Json?
+  errorCode    String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  site   Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  draft  ContentDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@index([siteId, createdAt])
+  @@index([actionId])
+  @@index([status, createdAt])
+}
+
+enum AgentTaskStatus {
+  READY
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 // ============ SITES ============
 
 model Site {
@@ -554,6 +597,7 @@ model Site {
   researchRuns               ResearchRun[]
   contentDrafts              ContentDraft[]
   researchActions            ResearchAction[]
+  agentTasks                 AgentTask[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])

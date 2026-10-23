@@ -901,6 +901,8 @@ Implemented:
 - SEO/GSC/crawl opportunity persistence into the same Action queue
 - keyword research evidence attachment and merge into existing query Actions
 - Action-to-ContentDraft generation through Content Studio
+- agent-task handoff for embed/page implementation with repo, route, evidence, guardrails, diff/build/bridge-plan requirements
+- Wix Blog detection that keeps blog targets on the Blog API path instead of the embed agent path
 - daily GSC/GA4/crawl/vitals sync
 - daily SEO opportunity persistence
 
@@ -909,6 +911,8 @@ Still pending:
 - Reddit OAuth bot to replace Reddit RSS
 - general web search provider
 - claim-type policy enforcement beyond prompt instructions
-- delivery adapters (Wix CMS/Blog, Webflow, manual)
+- Wix Blog draft/update adapter
+- Wix embed delivery adapter using the existing bridge
+- agent-task executor integration (worktree creation, OpenCode run, diff/build capture)
 - post-delivery outcome tracking
 - automation policy and auto-delivery controls

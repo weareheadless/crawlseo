@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { listResearchActions, listResearchRuns } from "@/lib/research/service";
+import { listAgentTasks } from "@/lib/agent-tasks/service";
 import { ResearchWorkbench } from "@/components/research/research-workbench";
 
 interface Props {
@@ -25,9 +26,10 @@ export default async function ResearchPage({ params }: Props) {
   });
   if (!site) redirect("/sites");
 
-  const [runs, actions] = await Promise.all([
+  const [runs, actions, agentTasks] = await Promise.all([
     listResearchRuns(siteId),
     listResearchActions(siteId, { limit: 100 }),
+    listAgentTasks(siteId),
   ]);
 
   return (
@@ -53,6 +55,19 @@ export default async function ResearchPage({ params }: Props) {
           actionCount: run.actionCount,
           errorCode: run.errorCode,
           createdAt: run.createdAt.toISOString(),
+        }))}
+        initialAgentTasks={agentTasks.map((task) => ({
+          id: task.id,
+          actionId: task.actionId,
+          title: task.title,
+          status: task.status,
+          goal: task.goal,
+          route: task.route,
+          repoPath: task.repoPath,
+          branch: task.branch,
+          prompt: task.prompt,
+          errorCode: task.errorCode,
+          createdAt: task.createdAt.toISOString(),
         }))}
         initialActions={actions.map((action) => ({
           id: action.id,

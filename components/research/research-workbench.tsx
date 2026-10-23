@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, FileText, Loader2, Play, Plus, X } from "lucide-react";
+import { Bot, Check, FileText, Loader2, Play, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { cn } from "@/lib/utils";
 
 type RunView = {
@@ -17,6 +18,20 @@ type RunView = {
   sourceCount: number;
   findingCount: number;
   actionCount: number;
+  errorCode: string | null;
+  createdAt: string;
+};
+
+type AgentTaskView = {
+  id: string;
+  actionId: string | null;
+  title: string;
+  status: string;
+  goal: string;
+  route: string | null;
+  repoPath: string;
+  branch: string | null;
+  prompt: string;
   errorCode: string | null;
   createdAt: string;
 };
@@ -53,13 +68,17 @@ export function ResearchWorkbench({
   siteId,
   initialRuns,
   initialActions,
+  initialAgentTasks,
 }: {
   siteId: string;
   initialRuns: RunView[];
   initialActions: ActionView[];
+  initialAgentTasks: AgentTaskView[];
 }) {
   const [runs, setRuns] = useState(initialRuns);
   const [actions, setActions] = useState(initialActions);
+  const [agentTasks, setAgentTasks] = useState(initialAgentTasks);
+  const [creatingTask, setCreatingTask] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [topics, setTopics] = useState("");
   const [audience, setAudience] = useState("");
@@ -155,6 +174,28 @@ export function ResearchWorkbench({
     }
   }
 
+  async function createAgentTask(actionId: string) {
+    setCreatingTask(actionId);
+    setError(null);
+    setDraftNotice(null);
+    try {
+      const response = await fetch(`/crawlseo/api/actions/${actionId}/agent-task`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? "Could not create agent task");
+      const task = payload.task as AgentTaskView;
+      setAgentTasks((current) => [task, ...current]);
+      setDraftNotice(`Agent task ready: ${task.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create agent task");
+    } finally {
+      setCreatingTask(null);
+    }
+  }
+
   async function createRun(event: React.FormEvent) {
     event.preventDefault();
     const topicList = topics.split(",").map((item) => item.trim()).filter(Boolean);
@@ -227,6 +268,7 @@ export function ResearchWorkbench({
   }
 
   return (
+    <div className="space-y-5">
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <section className="panel p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -406,16 +448,33 @@ export function ResearchWorkbench({
                     </div>
                   )}
                   {action.status === "APPROVED" && (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      className="shrink-0"
-                      disabled={draftingAction === action.id}
-                      onClick={() => generateDraft(action.id)}
-                    >
-                      {draftingAction === action.id ? <Loader2 className="size-3 animate-spin" /> : <FileText className="size-3" />}
-                      Write draft
-                    </Button>
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={draftingAction === action.id}
+                        onClick={() => generateDraft(action.id)}
+                      >
+                        {draftingAction === action.id ? <Loader2 className="size-3 animate-spin" /> : <FileText className="size-3" />}
+                        Write draft
+                      </Button>
+                      {action.format !== "article" && !isWixBlogTarget(action.targetUrl) && !agentTasks.some((task) => task.actionId === action.id && ["READY", "RUNNING"].includes(task.status)) && (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={creatingTask === action.id}
+                          onClick={() => createAgentTask(action.id)}
+                        >
+                          {creatingTask === action.id ? <Loader2 className="size-3 animate-spin" /> : <Bot className="size-3" />}
+                          Agent task
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {agentTasks.find((task) => task.actionId === action.id && ["READY", "RUNNING"].includes(task.status)) && (
+                    <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 font-data text-[10px] uppercase text-primary">
+                      agent {agentTasks.find((task) => task.actionId === action.id)?.status.toLowerCase()}
+                    </span>
                   )}
                   {action.status === "DRAFT_READY" && (
                     <Link
@@ -431,6 +490,50 @@ export function ResearchWorkbench({
           </div>
         )}
       </section>
+    </div>
+
+    <section className="panel overflow-hidden">
+      <div className="border-b border-border/60 p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Agent handoff
+        </p>
+        <h2 className="mt-1 font-heading text-lg font-semibold">Implementation tasks</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Structured instructions for a coding agent. Tasks never publish or apply Wix changes automatically.
+        </p>
+      </div>
+      {agentTasks.length === 0 ? (
+        <p className="px-5 py-8 text-sm text-muted-foreground">No agent tasks yet.</p>
+      ) : (
+        <div className="divide-y divide-border/40">
+          {agentTasks.map((task) => (
+            <details key={task.id} className="px-5 py-4">
+              <summary className="cursor-pointer list-none">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">{task.title}</span>
+                  <span className="rounded-md bg-muted px-1.5 py-0.5 font-data text-[10px] uppercase text-muted-foreground">
+                    {task.status.toLowerCase()}
+                  </span>
+                  <span className="font-data text-[10px] text-muted-foreground">
+                    {task.route || "route not set"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{task.goal}</p>
+              </summary>
+              <div className="mt-3 space-y-2">
+                <p className="font-data text-[10px] text-muted-foreground">
+                  repo {task.repoPath} {task.branch ? `· branch ${task.branch}` : ""}
+                </p>
+                {task.errorCode && <p className="text-xs text-danger">{task.errorCode}</p>}
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-3 text-[11px] leading-5 text-foreground/80">
+                  {task.prompt}
+                </pre>
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </section>
     </div>
   );
 }
