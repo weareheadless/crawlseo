@@ -1141,6 +1141,7 @@ enum JobKind {
   SEO_RESEARCH
   ARTICLE_KEYWORD_RESEARCH
   RESEARCH_RUN
+  AGENT_TASK
 }
 
 enum JobStatus {
@@ -1158,6 +1159,7 @@ enum SyncSource {
   VITALS
   DATAFORSEO
   RESEARCH
+  AGENT
 }
 
 enum SyncStatus {

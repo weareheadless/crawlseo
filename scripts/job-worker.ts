@@ -20,6 +20,7 @@ import { runSiteCrawl } from "@/lib/crawler/engine";
 import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
+import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
@@ -121,6 +122,12 @@ async function executeJob(
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("RESEARCH_RUN_ID_REQUIRED");
       await runResearchRun(researchRunId);
+      return;
+    }
+    case JobKind.AGENT_TASK: {
+      const agentTaskId = text(payload.agentTaskId, "");
+      if (!agentTaskId) throw new JobExecutionError("AGENT_TASK_ID_REQUIRED");
+      await runAgentTask(agentTaskId);
       return;
     }
     case JobKind.ARTICLE_KEYWORD_RESEARCH: {

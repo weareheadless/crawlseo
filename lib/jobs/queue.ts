@@ -28,6 +28,8 @@ export function sourceForJobKind(kind: JobKind): SyncSource {
       return SyncSource.DATAFORSEO;
     case JobKind.RESEARCH_RUN:
       return SyncSource.RESEARCH;
+    case JobKind.AGENT_TASK:
+      return SyncSource.AGENT;
   }
 }
 

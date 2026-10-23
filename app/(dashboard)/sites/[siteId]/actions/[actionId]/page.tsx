@@ -6,6 +6,8 @@ import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { getActionDetail } from "@/lib/work/service";
 import { ActionControls } from "@/components/work/action-controls";
 import { AgentChat } from "@/components/work/agent-chat";
+import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
+import { AgentTaskRunButton } from "@/components/work/agent-task-run-button";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -98,6 +100,13 @@ export default async function ActionDetailPage({ params }: Props) {
                     <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-foreground/80">
                       {draft.markdown}
                     </pre>
+                    {draft.format === "article" && (
+                      <WixBlogDraftButton
+                        draftId={draft.id}
+                        existingExternalId={action.deliveries.find((delivery) =>
+                          delivery.draftId === draft.id && delivery.platform === "wix_blog")?.externalId ?? null}
+                      />
+                    )}
                   </details>
                 ))}
               </div>
@@ -118,9 +127,7 @@ export default async function ActionDetailPage({ params }: Props) {
                 <div key={task.id} className="p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{task.title}</p>
-                    <span className="rounded-md bg-muted px-1.5 py-0.5 font-data text-[10px] uppercase text-muted-foreground">
-                      {task.status.toLowerCase().replaceAll("_", " ")}
-                    </span>
+                    <AgentTaskRunButton taskId={task.id} status={task.status} />
                   </div>
                   <p className="mt-1 font-data text-[10px] text-muted-foreground">
                     {task.repoPath}{task.branch ? ` · ${task.branch}` : ""}{task.route ? ` · ${task.route}` : ""}

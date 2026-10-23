@@ -587,23 +587,24 @@ Implemented:
 - `SiteDeliveryConfig` model and Susi bridge alias/adapters
 - navigation consolidation removing separate Opportunities/Content Studio entries
 - manual research form removed from the primary Research page
+- OpenCode worktree runner with durable `AGENT_TASK` jobs
+- agent run artifacts (diff/git status), chat message, and `AWAITING_REVIEW` state
+- Wix Blog draft adapter with rich-content conversion, category/tag/member resolution, slug checks, and readback verification
+- bridge inspect client and delivery status UI
+- live Wix Blog draft created for Susi and verified as unpublished
 
 Still pending:
 
-- OpenCode executor integration and worktree runner
-- task status transitions and artifacts for review/approve/commit/publish/close
-- bridge `site inspect/plan/apply/verify --json` interface in the bridge repository
+- task transitions for review/approve/commit/publish/close
+- bridge `site plan/apply/verify --json` UI workflow
 - Susi route/component delivery map
-- Wix Blog draft/update adapter
 - Wix embed delivery adapter
 - delivery verification and outcome tracking
 
 ## 15. Immediate next implementation
 
-1. Add bridge `site inspect/plan/apply/verify --json` commands.
-2. Add OpenCode executor/worktree runner for AgentTask.
-3. Add review/approve/commit/publish/close transitions and artifacts.
-4. Populate Susi route/component delivery map.
-5. Add Wix Blog draft adapter.
-6. Add Wix embed delivery adapter.
-7. Add post-delivery verification and outcome tracking.
+1. Add review/approve/commit/publish/close transitions and artifacts.
+2. Add bridge `site plan/apply/verify --json` UI workflow.
+3. Populate Susi route/component delivery map.
+4. Add Wix embed delivery adapter.
+5. Add post-delivery verification and outcome tracking.
