@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Globe,
   Search,
@@ -48,6 +48,12 @@ export function DomainOverviewClient({
   const [loadingOwn, setLoadingOwn] = useState(false);
   const [loadingCompetitor, setLoadingCompetitor] = useState(false);
   const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    void loadOwnDomain();
+    // Run once for the selected site; the endpoint is read-only/cached.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteId]);
 
   async function loadOwnDomain() {
     setLoadingOwn(true);

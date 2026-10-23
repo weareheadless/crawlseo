@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Link as LinkIcon,
   Loader2,
@@ -39,6 +39,12 @@ export function BacklinksClient({
   const [overview, setOverview] = useState<BacklinksOverview | null>(null);
   const [backlinks, setBacklinks] = useState<BacklinkItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    void handleLoad();
+    // Run once for the selected site; the endpoint is read-only/cached.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteId]);
 
   async function handleLoad() {
     setLoading(true);
