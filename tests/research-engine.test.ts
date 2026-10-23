@@ -8,6 +8,8 @@ import {
   createResearchRunSchema,
   ingestResearchFindingSchema,
 } from "@/lib/research/types";
+import { contentActionFromResearchAction } from "@/lib/research/content";
+import type { ResearchAction } from "@prisma/client";
 
 describe("research run input", () => {
   it("accepts a market research brief with defaults", () => {
@@ -124,5 +126,52 @@ describe("action transitions", () => {
     expect(canTransitionActionStatus("PROPOSED", "DELIVERED")).toBe(false);
     expect(canTransitionActionStatus("DISMISSED", "APPROVED")).toBe(false);
     expect(canTransitionActionStatus("VERIFIED", "DRAFTING")).toBe(false);
+  });
+});
+
+
+describe("research action to content action", () => {
+  const action = {
+    id: "action-1",
+    siteId: "site-1",
+    runId: null,
+    findingId: null,
+    source: "market_research",
+    kind: "add_faq",
+    format: "page_update",
+    title: "Add ownership FAQ",
+    primaryQuery: "can foreigners own property in mexico",
+    targetUrl: null,
+    recommendation: "Add a source-grounded FAQ to the existing ownership page.",
+    evidence: {
+      signals: ["striking_distance"],
+      confidence: 0.72,
+      expected_clicks: 14,
+    },
+    priority: 78,
+    status: "APPROVED",
+    automationMode: "MANUAL",
+    dedupeKey: "dedupe-1",
+    owner: null,
+    approvedBy: "user-1",
+    approvedAt: new Date(),
+    deliveredAt: null,
+    verifiedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as ResearchAction;
+
+  it("maps a research action into the content generator contract", () => {
+    const mapped = contentActionFromResearchAction(action);
+    expect(mapped).toMatchObject({
+      id: "action-1",
+      kind: "improve_page",
+      format: "page_update",
+      primaryQuery: "can foreigners own property in mexico",
+      impact: 78,
+      confidence: 72,
+      expectedClicks: 14,
+    });
+    expect(mapped.signals).toEqual(["striking_distance"]);
   });
 });

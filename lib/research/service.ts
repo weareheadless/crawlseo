@@ -107,7 +107,7 @@ export async function createResearchRun(
       kind: JobKind.RESEARCH_RUN,
       payload: { researchRunId: run.id },
       idempotencyKey: `research-run:${run.id}`,
-      maxAttempts: 2,
+      maxAttempts: 3,
     });
   } catch {
     await db.researchRun.update({
@@ -325,6 +325,19 @@ export async function createResearchFinding(
   });
 }
 
+function mergeActionEvidence(
+  existing: Prisma.JsonValue | null,
+  incoming: unknown,
+): Prisma.InputJsonValue {
+  const base = existing && typeof existing === "object" && !Array.isArray(existing)
+    ? existing as Record<string, unknown>
+    : {};
+  const added = incoming && typeof incoming === "object" && !Array.isArray(incoming)
+    ? incoming as Record<string, unknown>
+    : {};
+  return json({ ...base, ...added, merged_at: new Date().toISOString() });
+}
+
 export async function createResearchAction(
   siteId: string,
   input: CreateResearchActionInput,
@@ -372,6 +385,33 @@ export async function createResearchAction(
     where: { siteId_dedupeKey: { siteId, dedupeKey } },
   });
   if (existing) return { action: existing, created: false };
+
+  // Merge the same open work item across sources (market research, keyword
+  // research, GSC, crawl) instead of creating parallel queues.
+  const openConflict = await db.researchAction.findFirst({
+    where: {
+      siteId,
+      status: { notIn: ["DISMISSED", "VERIFIED", "FAILED"] },
+      kind: input.kind,
+      targetUrl: input.targetUrl ?? null,
+      ...(input.primaryQuery
+        ? { primaryQuery: input.primaryQuery }
+        : { title: input.title }),
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (openConflict) {
+    const merged = await db.researchAction.update({
+      where: { id: openConflict.id },
+      data: {
+        priority: Math.max(openConflict.priority, input.priority),
+        evidence: mergeActionEvidence(openConflict.evidence, input.evidence),
+        ...(input.runId && !openConflict.runId ? { runId: input.runId } : {}),
+        ...(input.findingId && !openConflict.findingId ? { findingId: input.findingId } : {}),
+      },
+    });
+    return { action: merged, created: false, merged: true };
+  }
 
   const evidence = input.evidence ?? (finding
     ? {

@@ -7,6 +7,7 @@ import {
   Bookmark,
   Check,
   AlertTriangle,
+  ListPlus,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -32,6 +33,8 @@ export function KeywordResearchClient({
   const [source, setSource] = useState<string | null>(null);
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [savingSet, setSavingSet] = useState<Set<string>>(new Set());
+  const [queuedSet, setQueuedSet] = useState<Set<string>>(new Set());
+  const [queuingSet, setQueuingSet] = useState<Set<string>>(new Set());
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +55,34 @@ export function KeywordResearchClient({
       setResults([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleQueueAction(result: KeywordResult) {
+    setQueuingSet((prev) => new Set(prev).add(result.keyword));
+    try {
+      const response = await fetch(`/crawlseo/api/sites/${siteId}/keyword-research/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          keyword: result.keyword,
+          volume: result.volume,
+          difficulty: result.difficulty,
+          cpc: result.cpc,
+          competition: result.competition,
+        }),
+      });
+      if (response.ok) {
+        setQueuedSet((prev) => new Set(prev).add(result.keyword));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setQueuingSet((prev) => {
+        const next = new Set(prev);
+        next.delete(result.keyword);
+        return next;
+      });
     }
   }
 
@@ -191,26 +222,48 @@ export function KeywordResearchClient({
                         </>
                       )}
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleSave(result.keyword)}
-                          disabled={isSaved || isSaving}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-                        >
-                          {isSaved ? (
-                            <>
-                              <Check className="size-3 text-signal" />
-                              Saved
-                            </>
-                          ) : isSaving ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <>
-                              <Bookmark className="size-3" />
-                              Save
-                            </>
-                          )}
-                        </button>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSave(result.keyword)}
+                            disabled={isSaved || isSaving}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+                          >
+                            {isSaved ? (
+                              <>
+                                <Check className="size-3 text-signal" />
+                                Saved
+                              </>
+                            ) : isSaving ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Bookmark className="size-3" />
+                                Save
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQueueAction(result)}
+                            disabled={queuedSet.has(result.keyword) || queuingSet.has(result.keyword)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+                          >
+                            {queuedSet.has(result.keyword) ? (
+                              <>
+                                <Check className="size-3 text-signal" />
+                                Queued
+                              </>
+                            ) : queuingSet.has(result.keyword) ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <>
+                                <ListPlus className="size-3" />
+                                Queue
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Loader2, Play, Plus, X } from "lucide-react";
+import { Check, FileText, Loader2, Play, Plus, X } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,8 @@ export function ResearchWorkbench({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatingAction, setUpdatingAction] = useState<string | null>(null);
+  const [draftingAction, setDraftingAction] = useState<string | null>(null);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const activeRunIds = runs
     .filter((run) => run.status === "QUEUED" || run.status === "RUNNING")
     .map((run) => run.id)
@@ -129,6 +132,29 @@ export function ResearchWorkbench({
     };
   }, [activeRunIds, siteId]);
 
+  async function generateDraft(actionId: string) {
+    setDraftingAction(actionId);
+    setError(null);
+    setDraftNotice(null);
+    try {
+      const response = await fetch(`/crawlseo/api/actions/${actionId}/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? "Could not generate draft");
+      setActions((current) => current.map((action) =>
+        action.id === actionId ? { ...action, status: "DRAFT_READY" } : action,
+      ));
+      setDraftNotice(`Draft ready: ${payload.draft?.title ?? "content draft"}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not generate draft");
+    } finally {
+      setDraftingAction(null);
+    }
+  }
+
   async function createRun(event: React.FormEvent) {
     event.preventDefault();
     const topicList = topics.split(",").map((item) => item.trim()).filter(Boolean);
@@ -148,7 +174,7 @@ export function ResearchWorkbench({
           audience: audience.trim() || undefined,
           market: market.trim() || undefined,
           questions: questions.split("\n").map((item) => item.trim()).filter(Boolean),
-          providers: ["reddit", "news", "web"],
+          providers: ["reddit", "news"],
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -160,7 +186,7 @@ export function ResearchWorkbench({
         trigger: payload.run.trigger,
         status: payload.run.status,
         topics: topicList,
-        providerSet: ["reddit", "news", "web"],
+        providerSet: ["reddit", "news"],
         sourceCount: 0,
         findingCount: 0,
         actionCount: 0,
@@ -320,6 +346,12 @@ export function ResearchWorkbench({
           </p>
         </div>
 
+        {draftNotice && (
+          <div className="border-b border-border/60 bg-signal/5 px-4 py-2 text-xs text-signal">
+            {draftNotice}
+          </div>
+        )}
+
         {actions.length === 0 ? (
           <div className="p-8 text-center">
             <Play className="mx-auto size-7 text-muted-foreground/50" />
@@ -372,6 +404,26 @@ export function ResearchWorkbench({
                         <X className="size-3" />
                       </Button>
                     </div>
+                  )}
+                  {action.status === "APPROVED" && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="shrink-0"
+                      disabled={draftingAction === action.id}
+                      onClick={() => generateDraft(action.id)}
+                    >
+                      {draftingAction === action.id ? <Loader2 className="size-3 animate-spin" /> : <FileText className="size-3" />}
+                      Write draft
+                    </Button>
+                  )}
+                  {action.status === "DRAFT_READY" && (
+                    <Link
+                      href={`/crawlseo/sites/${siteId}/content-studio`}
+                      className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary"
+                    >
+                      Review draft
+                    </Link>
                   )}
                 </div>
               </div>

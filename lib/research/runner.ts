@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { fetchRedditRssSearch } from "@/lib/research/providers/reddit-rss";
+import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import {
   createResearchAction,
   createResearchFinding,
@@ -45,29 +46,57 @@ export async function runResearchRun(runId: string) {
     const effectiveTopics = topics.length > 0 ? topics : stringList(brief.topics);
     if (effectiveTopics.length === 0) throw new Error("Research run has no topics");
 
+    const providers = stringList(run.providerSet);
+    const useReddit = providers.length === 0 || providers.includes("reddit");
+    const useNews = providers.includes("news");
+    if (!useReddit && !useNews) {
+      throw new Error("No supported research provider is enabled");
+    }
+
     const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
     const sourceErrors: string[] = [];
-    for (const [index, topic] of effectiveTopics.slice(0, 5).entries()) {
-      try {
-        const sources = await fetchRedditRssSearch({
-          query: topic,
-          sort: "relevance",
-          timeWindow: "year",
-          limit: 10,
-        });
-        for (const source of sources) {
-          collected.set(source.contentHash, source);
+    const language = typeof brief.language === "string" ? brief.language : "en";
+    const market = typeof brief.market === "string" ? brief.market : "";
+    const country = /mexico|méxico/i.test(market) ? "MX" : "US";
+    const topicsForRun = effectiveTopics.slice(0, 5);
+    const requestCount = topicsForRun.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
+    let requestIndex = 0;
+
+    for (const topic of topicsForRun) {
+      if (useReddit) {
+        try {
+          const sources = await fetchRedditRssSearch({
+            query: topic,
+            sort: "relevance",
+            timeWindow: "year",
+            limit: 10,
+          });
+          for (const source of sources) collected.set(source.contentHash, source);
+        } catch (error) {
+          sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
         }
-      } catch (error) {
-        sourceErrors.push(error instanceof Error ? error.message : "Reddit RSS failed");
+        requestIndex += 1;
+        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (index < effectiveTopics.slice(0, 5).length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      if (useNews) {
+        try {
+          const sources = await fetchGoogleNewsRssSearch({
+            query: topic,
+            language,
+            country,
+            limit: 10,
+          });
+          for (const source of sources) collected.set(source.contentHash, source);
+        } catch (error) {
+          sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
+        }
+        requestIndex += 1;
+        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
     }
 
     if (collected.size === 0) {
-      throw new Error(sourceErrors[0] || "No Reddit sources were collected");
+      throw new Error(sourceErrors[0] || "No research sources were collected");
     }
 
     const savedSources = await saveResearchSources(
@@ -161,7 +190,10 @@ export async function runResearchRun(runId: string) {
     const report = {
       schema_version: 1,
       generated_at: new Date().toISOString(),
-      provider: "reddit_rss",
+      providers: [
+        ...(useReddit ? ["reddit_rss"] : []),
+        ...(useNews ? ["google_news_rss"] : []),
+      ],
       topics: effectiveTopics,
       source_count: savedSources.length,
       source_errors: sourceErrors,

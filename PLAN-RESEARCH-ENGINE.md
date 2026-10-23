@@ -885,3 +885,30 @@ Phase 1.5 starts next:
 Phase 2 replaces the Reddit RSS transport with the read-only OAuth bot.
 
 The content and delivery phases follow after research output is stable.
+
+## 16. Implementation status
+
+Updated: 2026-10-23
+
+Implemented:
+
+- central `ResearchRun`, `ResearchSource`, `ResearchFinding`, `ResearchAction`, and `Delivery` schema
+- Research & Actions UI with run creation, status polling, approve/dismiss, and draft actions
+- durable research-job worker
+- Reddit RSS interim provider (`search.rss?type=link`)
+- Google News RSS provider
+- evidence-grounded AI synthesis into findings and proposed Actions
+- SEO/GSC/crawl opportunity persistence into the same Action queue
+- keyword research evidence attachment and merge into existing query Actions
+- Action-to-ContentDraft generation through Content Studio
+- daily GSC/GA4/crawl/vitals sync
+- daily SEO opportunity persistence
+
+Still pending:
+
+- Reddit OAuth bot to replace Reddit RSS
+- general web search provider
+- claim-type policy enforcement beyond prompt instructions
+- delivery adapters (Wix CMS/Blog, Webflow, manual)
+- post-delivery outcome tracking
+- automation policy and auto-delivery controls
