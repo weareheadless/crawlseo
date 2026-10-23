@@ -1,0 +1,83 @@
+import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+const BRIDGE_ROOT = process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge";
+const BRIDGE_CLI = path.join(BRIDGE_ROOT, "src", "cli.mjs");
+
+function parseEnvFile(value: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const rawLine of value.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const index = line.indexOf("=");
+    if (index <= 0) continue;
+    const key = line.slice(0, index).trim();
+    let entry = line.slice(index + 1).trim();
+    if ((entry.startsWith("\"") && entry.endsWith("\"")) || (entry.startsWith("'") && entry.endsWith("'"))) {
+      entry = entry.slice(1, -1);
+    }
+    if (key) env[key] = entry;
+  }
+  return env;
+}
+
+async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
+  const envPath = path.join(BRIDGE_ROOT, "sites", alias, ".wix-bridge-state", "app.env");
+  const contents = await readFile(envPath, "utf8").catch(() => "");
+  return parseEnvFile(contents);
+}
+
+function runBridge(
+  alias: string,
+  command: "inspect" | "plan",
+  options: { siteRepo?: string; extraArgs?: string[] } = {},
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      BRIDGE_CLI,
+      command,
+      "--manifest", path.join(BRIDGE_ROOT, "sites", alias, "site.manifest.json"),
+      "--site", alias,
+      "--state-dir", path.join(BRIDGE_ROOT, "sites", alias, ".wix-bridge-state"),
+      ...(options.siteRepo ? ["--site-repo", options.siteRepo] : []),
+      ...(options.extraArgs ?? []),
+    ];
+    void bridgeSiteEnv(alias).then((fileEnv) => {
+      execFile(
+        process.execPath,
+        args,
+        {
+          cwd: BRIDGE_ROOT,
+          env: { ...process.env, ...fileEnv },
+          timeout: 90_000,
+          maxBuffer: 4 * 1024 * 1024,
+        },
+        (error, stdout, stderr) => {
+          const text = String(stdout || "").trim();
+          if (text) {
+            try {
+              resolve(JSON.parse(text));
+              return;
+            } catch {
+              // Fall through to the command error.
+            }
+          }
+          reject(new Error(String(stderr || error?.message || `Bridge ${command} failed`).slice(0, 1_000)));
+        },
+      );
+    }, reject);
+  });
+}
+
+export async function inspectBridgeSite(alias: string, siteRepo?: string) {
+  return runBridge(alias, "inspect", { siteRepo });
+}
+
+export async function planBridgeSite(alias: string, siteRepo: string) {
+  return runBridge(alias, "plan", { siteRepo });
+}
+
+export function bridgeRoot(): string {
+  return BRIDGE_ROOT;
+}
