@@ -580,24 +580,30 @@ Implemented:
 - AgentTask handoff with prompt and guardrails
 - Wix Blog target detection
 - Agent task APIs/UI
+- unified Work page with Inbox, Actions, Drafts, and Agent tasks
+- Action detail page with evidence, drafts, agent tasks, and task-scoped chat
+- `ResearchPolicy` configuration UI and API
+- autonomous scheduled research script and cron
+- `SiteDeliveryConfig` model and Susi bridge alias/adapters
+- navigation consolidation removing separate Opportunities/Content Studio entries
+- manual research form removed from the primary Research page
 
-To replace or revise:
+Still pending:
 
-- primary “New research run” form
-- separate Research and Content Studio queues
-- hardcoded agent target paths
-- direct bridge path assumptions in CrawlSEO
-- missing AgentTask chat/review loop
-- missing bridge JSON interface
-- missing Wix Blog and embed delivery adapters
+- OpenCode executor integration and worktree runner
+- task status transitions and artifacts for review/approve/commit/publish/close
+- bridge `site inspect/plan/apply/verify --json` interface in the bridge repository
+- Susi route/component delivery map
+- Wix Blog draft/update adapter
+- Wix embed delivery adapter
+- delivery verification and outcome tracking
 
 ## 15. Immediate next implementation
 
-1. Add `ResearchPolicy` and site research-config UI.
-2. Add Work → Inbox and Action detail page.
-3. Move manual research form to advanced.
-4. Add `SiteDeliveryConfig` and replace hardcoded agent targets.
-5. Add `AgentTaskMessage`/artifacts and task-scoped chat.
-6. Add bridge `site inspect/plan` JSON interface.
-7. Add Wix Blog draft adapter.
-8. Add Wix embed delivery adapter after Susi route/component mapping.
+1. Add bridge `site inspect/plan/apply/verify --json` commands.
+2. Add OpenCode executor/worktree runner for AgentTask.
+3. Add review/approve/commit/publish/close transitions and artifacts.
+4. Populate Susi route/component delivery map.
+5. Add Wix Blog draft adapter.
+6. Add Wix embed delivery adapter.
+7. Add post-delivery verification and outcome tracking.

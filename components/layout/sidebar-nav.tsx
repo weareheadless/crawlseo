@@ -10,15 +10,14 @@ import {
   FileText,
   Bug,
   Gauge,
-  Lightbulb,
   Bell,
   Settings,
   Bookmark,
   Bot,
   Link as LinkIcon,
   SearchCheck,
-  Sparkles,
   Microscope,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,13 +58,12 @@ export function SidebarNav({
         label: "Workspace",
         items: [
           { href: `/sites/${activeSiteId}`, label: "Overview", icon: LayoutDashboard, exact: true },
+          { href: `/sites/${activeSiteId}/work`, label: "Work", icon: ListChecks },
           { href: `/sites/${activeSiteId}/keywords`, label: "Keywords", icon: Search },
           { href: `/sites/${activeSiteId}/saved-keywords`, label: "Saved Keywords", icon: Bookmark },
           { href: `/sites/${activeSiteId}/pages`, label: "Pages", icon: FileText },
           { href: `/sites/${activeSiteId}/crawl`, label: "Crawl / Audit", icon: Bug },
           { href: `/sites/${activeSiteId}/vitals`, label: "Vitals", icon: Gauge },
-          { href: `/sites/${activeSiteId}/opportunities`, label: "Opportunities", icon: Lightbulb },
-          { href: `/sites/${activeSiteId}/content-studio`, label: "Content Studio", icon: Sparkles },
           { href: `/sites/${activeSiteId}/alerts`, label: "Alerts", icon: Bell },
         ],
       }
@@ -75,7 +73,7 @@ export function SidebarNav({
     ? {
         label: "Research",
         items: [
-          { href: `/sites/${activeSiteId}/research`, label: "Research & Actions", icon: Microscope },
+          { href: `/sites/${activeSiteId}/research`, label: "Research", icon: Microscope },
           { href: `/sites/${activeSiteId}/keyword-research`, label: "Keyword Research", icon: SearchCheck },
           { href: `/sites/${activeSiteId}/domain-overview`, label: "Domain Overview", icon: Globe },
           { href: `/sites/${activeSiteId}/backlinks`, label: "Backlinks", icon: LinkIcon },

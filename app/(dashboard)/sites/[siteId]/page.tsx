@@ -74,9 +74,8 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
 
       <div className="mb-6 flex flex-wrap gap-2">
         {[
-          ["Research & Actions", "research"],
-          ["Opportunities", "opportunities"],
-          ["Content Studio", "content-studio"],
+          ["Work", "work"],
+          ["Research", "research"],
           ["Keywords", "keywords"],
           ["Saved Keywords", "saved-keywords"],
           ["Pages", "pages"],

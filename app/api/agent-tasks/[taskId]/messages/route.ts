@@ -1,0 +1,47 @@
+import { getUserIdFromCookies } from "@/lib/session-helper";
+import { addAgentMessage, listAgentMessages } from "@/lib/agent-tasks/chat";
+import { ResearchServiceError } from "@/lib/research/service";
+import { z } from "zod";
+import { ZodError } from "zod";
+
+const schema = z.object({ content: z.string().trim().min(1).max(20_000) });
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ taskId: string }> },
+) {
+  const userId = await getUserIdFromCookies();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { taskId } = await params;
+  try {
+    return Response.json({ messages: await listAgentMessages(taskId) });
+  } catch (error) {
+    if (error instanceof ResearchServiceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    return Response.json({ error: "Failed to load messages" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ taskId: string }> },
+) {
+  const userId = await getUserIdFromCookies();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { taskId } = await params;
+  try {
+    const { content } = schema.parse(await req.json());
+    const message = await addAgentMessage(taskId, content, "HUMAN");
+    return Response.json({ message }, { status: 201 });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return Response.json({ error: error.issues[0]?.message ?? "Invalid message" }, { status: 400 });
+    }
+    if (error instanceof ResearchServiceError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    console.error("Agent message error:", error);
+    return Response.json({ error: "Failed to send message" }, { status: 500 });
+  }
+}

@@ -527,30 +527,37 @@ enum AutomationMode {
 // ============ AGENT TASKS ============
 
 model AgentTask {
-  id           String          @id @default(cuid())
-  siteId       String
-  actionId     String?
-  draftId      String?
-  kind         String
-  status       AgentTaskStatus @default(READY)
-  title        String
-  goal         String
-  prompt       String
-  repoPath     String
-  route        String?
-  branch       String?
-  worktreePath String?
-  agent        String          @default("opencode")
-  result       Json?
-  errorCode    String?
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id                String          @id @default(cuid())
+  siteId            String
+  actionId          String?
+  draftId           String?
+  kind              String
+  status            AgentTaskStatus @default(READY)
+  title             String
+  goal              String
+  prompt            String
+  repoPath          String
+  route             String?
+  branch            String?
+  worktreePath      String?
+  agent             String          @default("opencode")
+  opencodeSessionId String?
+  commitSha         String?
+  bridgeReceiptId   String?
+  publishedUrl      String?
+  result            Json?
+  errorCode         String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  site   Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  action ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
-  draft  ContentDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  site      Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action    ResearchAction?     @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  draft     ContentDraft?       @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  messages  AgentTaskMessage[]
+  artifacts AgentTaskArtifact[]
 
   @@index([siteId, createdAt])
   @@index([actionId])
@@ -560,9 +567,78 @@ model AgentTask {
 enum AgentTaskStatus {
   READY
   RUNNING
+  AWAITING_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  COMMITTED
+  PUBLISHING
+  PUBLISHED
+  CLOSED
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum AgentMessageRole {
+  HUMAN
+  AGENT
+  SYSTEM
+}
+
+// ============ RESEARCH POLICY / DELIVERY CONFIG ============
+
+model ResearchPolicy {
+  id            String   @id @default(cuid())
+  siteId        String   @unique
+  enabled       Boolean  @default(true)
+  cadence       String   @default("weekly")
+  providers     Json?
+  maxSources    Int      @default(30)
+  monthlyBudget Int      @default(9)
+  autoDraft     Boolean  @default(false)
+  autoAgent     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+model SiteDeliveryConfig {
+  id          String   @id @default(cuid())
+  siteId      String   @unique
+  bridgeAlias String
+  adapters    Json?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+model AgentTaskMessage {
+  id        String           @id @default(cuid())
+  taskId    String
+  role      AgentMessageRole
+  content   String
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  task AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model AgentTaskArtifact {
+  id        String   @id @default(cuid())
+  taskId    String
+  kind      String
+  content   String?
+  url       String?
+  createdAt DateTime @default(now())
+
+  task AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, kind])
 }
 
 // ============ SITES ============
@@ -593,11 +669,13 @@ model Site {
   seoResearchPolicies        SeoResearchPolicy[]
   seoResearchRuns            SeoResearchRun[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
-  siteProfiles               SiteProfile[]
+  siteProfile                SiteProfile?
   researchRuns               ResearchRun[]
   contentDrafts              ContentDraft[]
   researchActions            ResearchAction[]
   agentTasks                 AgentTask[]
+  researchPolicy             ResearchPolicy?
+  siteDeliveryConfig         SiteDeliveryConfig?
 
   @@unique([userId, domain])
   @@unique([projectId, domain])
