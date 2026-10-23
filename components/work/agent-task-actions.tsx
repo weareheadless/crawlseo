@@ -60,6 +60,30 @@ export function AgentTaskActions({
         </Button>
       )}
       {sha && <span className="font-data text-[10px] text-muted-foreground">commit {sha.slice(0, 10)}</span>}
+      {status === "COMMITTED" && (
+        <Button
+          size="xs"
+          onClick={async () => {
+            const publishedUrl = window.prompt("Published URL (optional)") || undefined;
+            await request(`/crawlseo/api/agent-tasks/${taskId}/publish`, "POST", { publishedUrl }, "publish");
+          }}
+          disabled={Boolean(busy)}
+        >
+          {busy === "publish" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+          Record published
+        </Button>
+      )}
+      {status === "PUBLISHED" && (
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "CLOSED" }, "close")}
+          disabled={Boolean(busy)}
+        >
+          {busy === "close" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+          Close task
+        </Button>
+      )}
       {status === "CLOSED" && <span className="font-data text-[10px] text-signal">closed</span>}
       {error && <span className="text-[11px] text-danger">{error}</span>}
     </div>

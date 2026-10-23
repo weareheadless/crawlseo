@@ -9,6 +9,7 @@ import { AgentChat } from "@/components/work/agent-chat";
 import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
 import { AgentTaskRunButton } from "@/components/work/agent-task-run-button";
 import { AgentTaskActions } from "@/components/work/agent-task-actions";
+import { AgentTaskBridgePlanButton } from "@/components/work/agent-task-bridge-plan-button";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -130,6 +131,7 @@ export default async function ActionDetailPage({ params }: Props) {
                     <p className="text-sm font-medium">{task.title}</p>
                     <AgentTaskRunButton taskId={task.id} status={task.status} />
                     <AgentTaskActions taskId={task.id} status={task.status} commitSha={task.commitSha} />
+                    <AgentTaskBridgePlanButton taskId={task.id} disabled={!task.worktreePath} />
                   </div>
                   <p className="mt-1 font-data text-[10px] text-muted-foreground">
                     {task.repoPath}{task.branch ? ` · ${task.branch}` : ""}{task.route ? ` · ${task.route}` : ""}

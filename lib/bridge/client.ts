@@ -30,8 +30,8 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan",
-  options: { siteRepo?: string; extraArgs?: string[] } = {},
+  command: "inspect" | "plan" | "deploy" | "verify",
+  options: { siteRepo?: string; apply?: boolean; extraArgs?: string[] } = {},
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -41,6 +41,7 @@ function runBridge(
       "--site", alias,
       "--state-dir", path.join(BRIDGE_ROOT, "sites", alias, ".wix-bridge-state"),
       ...(options.siteRepo ? ["--site-repo", options.siteRepo] : []),
+      ...(options.apply ? ["--apply"] : []),
       ...(options.extraArgs ?? []),
     ];
     void bridgeSiteEnv(alias).then((fileEnv) => {
@@ -80,4 +81,12 @@ export async function planBridgeSite(alias: string, siteRepo: string) {
 
 export function bridgeRoot(): string {
   return BRIDGE_ROOT;
+}
+
+export async function deployBridgeSite(alias: string, siteRepo: string, apply = false) {
+  return runBridge(alias, "deploy", { siteRepo, apply });
+}
+
+export async function verifyBridgeSite(alias: string, siteRepo: string) {
+  return runBridge(alias, "verify", { siteRepo });
 }

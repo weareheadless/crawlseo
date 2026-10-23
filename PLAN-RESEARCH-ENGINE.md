@@ -592,14 +592,15 @@ Implemented:
 - Wix Blog draft adapter with rich-content conversion, category/tag/member resolution, slug checks, and readback verification
 - bridge inspect client and delivery status UI
 - live Wix Blog draft created for Susi and verified as unpublished
+- agent task review transitions, local commit with SHA, publish record, and close
+- bridge plan API/UI and plan artifact storage
 
 Still pending:
 
-- task transitions for review/approve/commit/publish/close
-- bridge `site plan/apply/verify --json` UI workflow
+- bridge apply/verify UI workflow
 - Susi route/component delivery map
 - Wix embed delivery adapter
-- delivery verification and outcome tracking
+- post-delivery outcome tracking
 
 ## 15. Immediate next implementation
 
