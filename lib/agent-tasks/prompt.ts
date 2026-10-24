@@ -23,6 +23,13 @@ export type AgentPromptInput = {
 };
 
 export function buildAgentPrompt(input: AgentPromptInput): string {
+  const evidenceRecord = input.action.evidence && typeof input.action.evidence === "object" && !Array.isArray(input.action.evidence)
+    ? input.action.evidence as Record<string, unknown>
+    : {};
+  const batch = evidenceRecord.batch === true;
+  const affectedUrls = Array.isArray(evidenceRecord.urls)
+    ? evidenceRecord.urls.filter((url): url is string => typeof url === "string")
+    : [];
   const evidence = JSON.stringify(input.action.evidence, null, 2).slice(0, 12_000);
   const draft = input.draft
     ? [
@@ -51,12 +58,26 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
     "RECOMMENDATION",
     input.action.recommendation,
     "",
-    "TARGET SCOPE",
-    `Target route: ${input.action.targetUrl ?? "(none)"}`,
-    "If this route is one item in a shared template — a category, city, guide, product family, or similar — gate every content, SEO, and rendering change to that exact key or slug.",
-    "Do not apply an item-specific change to every item that uses the same component or page model.",
-    "When changing a shared component, verify that at least two sibling routes remain unchanged, and state the gating key and the sibling check in your final summary.",
-    "",
+    ...(batch
+      ? [
+          "BATCH SCOPE",
+          `This action covers ${String(evidenceRecord.affected_pages ?? affectedUrls.length)} affected pages across ${Array.isArray(evidenceRecord.route_families) ? evidenceRecord.route_families.length : "multiple"} templates.`,
+          "Fix every affected template/page family listed in the evidence, not only the representative target route.",
+          "Do not add a one-page special case. Apply the fix at the shared component, page-code, or template level.",
+          "Verify sibling routes in each affected family remain unchanged and state the families you changed in your final summary.",
+          "",
+          "AFFECTED URLS",
+          affectedUrls.slice(0, 100).join("\n") || "(see evidence)",
+          "",
+        ]
+      : [
+          "TARGET SCOPE",
+          `Target route: ${input.action.targetUrl ?? "(none)"}`,
+          "If this route is one item in a shared template — a category, city, guide, product family, or similar — gate every content, SEO, and rendering change to that exact key or slug.",
+          "Do not apply an item-specific change to every item that uses the same component or page model.",
+          "When changing a shared component, verify that at least two sibling routes remain unchanged, and state the gating key and the sibling check in your final summary.",
+          "",
+        ]),
     "EVIDENCE",
     evidence,
     "",

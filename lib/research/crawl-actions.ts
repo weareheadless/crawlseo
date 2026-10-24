@@ -64,6 +64,8 @@ type IssueGroup = {
   sourceUrl: string | null;
   brokenUrls: Set<string>;
   anchors: Set<string>;
+  batch: boolean;
+  families: Set<string>;
 };
 
 const SITE_WIDE_ISSUES = new Set(["MISSING_ROBOTS", "MISSING_SITEMAP"]);
@@ -209,11 +211,21 @@ export function buildCrawlActionDrafts(input: {
   const groups = new Map<string, IssueGroup>();
 
   for (const issue of input.issues) {
-    const group = groupForIssue(issue, linksByTarget);
-    if (!group) continue;
-    const orphan = issue.type === "MISSING_CANONICAL" && record(issue.details).kind === "orphan";
+    const details = record(issue.details);
+    if (EXCLUDED_DETAIL_KINDS.has(String(details.kind ?? ""))) continue;
+    if (!validUrl(issue.url)) continue;
     const sourceLinks = issue.type === "BROKEN_LINK" ? linksByTarget.get(issue.url) ?? [] : [];
     const sourceUrl = sourceLinks[0]?.sourceUrl ?? null;
+    const blogContentIssue = issue.type === "BROKEN_LINK" && Boolean(sourceUrl) && isWixBlogTarget(sourceUrl!);
+    const batch = !blogContentIssue
+      && !SITE_WIDE_ISSUES.has(issue.type)
+      && !["BROKEN_LINK", "DUPLICATE_TITLE", "DUPLICATE_DESCRIPTION"].includes(issue.type);
+    const group = batch
+      ? { key: "all-pages", label: "all affected pages" }
+      : groupForIssue(issue, linksByTarget);
+    if (!group) continue;
+    const orphan = issue.type === "MISSING_CANONICAL" && record(issue.details).kind === "orphan";
+    const family = pathFamily(sourceUrl ?? issue.url).label;
     const urls = issue.type === "DUPLICATE_TITLE" || issue.type === "DUPLICATE_DESCRIPTION"
       ? duplicateUrls(issue)
       : [issue.url];
@@ -231,6 +243,7 @@ export function buildCrawlActionDrafts(input: {
       if (status) existing.statusCodes.add(status);
       if (!existing.sourceUrl && sourceUrl) existing.sourceUrl = sourceUrl;
       existing.brokenUrls.add(issue.url);
+      existing.families.add(family);
       for (const link of sourceLinks) {
         if (link.anchorText) existing.anchors.add(link.anchorText);
       }
@@ -249,6 +262,8 @@ export function buildCrawlActionDrafts(input: {
         sourceUrl,
         brokenUrls: new Set(issue.type === "BROKEN_LINK" ? [issue.url] : []),
         anchors: new Set(sourceLinks.map((link) => link.anchorText).filter((value): value is string => Boolean(value))),
+        batch,
+        families: new Set([family]),
       });
     }
   }
@@ -272,9 +287,11 @@ export function buildCrawlActionDrafts(input: {
       : remediation?.title ?? group.type.replaceAll("_", " ").toLowerCase();
     const title = group.type === "BROKEN_LINK" && group.sourceUrl
       ? `Broken links in ${group.label.replace(/ source$/, "")} (${affectedPages} link${affectedPages === 1 ? "" : "s"})`
-      : SITE_WIDE_ISSUES.has(group.type)
-        ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
-        : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
+      : group.batch
+        ? `${issueTitle} — ${affectedPages} pages across ${group.families.size} template${group.families.size === 1 ? "" : "s"}`
+        : SITE_WIDE_ISSUES.has(group.type)
+          ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
+          : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
     const fix = group.orphan
       ? "Add internal links from relevant pages to this orphan page, or remove or redirect it if it should not be indexed."
       : remediation?.howToFix ?? "Review the affected pages and fix the underlying template or content issue.";
@@ -285,9 +302,11 @@ export function buildCrawlActionDrafts(input: {
       ? `The broken URLs are linked from ${group.sourceUrl}: ${[...group.brokenUrls].join(", ")}.${group.anchors.size ? ` Anchor text: ${[...group.anchors].join(", ")}.` : ""} ${blogContent ? "Update the Wix Blog post content to remove or correct these links. This is a content update, not a repo code change." : "Update the source page content to remove or correct these links."}`
       : group.orphan
         ? `This affects ${affectedPages} orphaned page${affectedPages === 1 ? "" : "s"} with no internal inlinks. Add contextual internal links from relevant pages, or remove/redirect the page.`
-        : SITE_WIDE_ISSUES.has(group.type)
-          ? `This is a site-wide issue affecting ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"}.`
-          : `This affects ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"} in the ${group.label} group. Fix the shared template or component where possible, then verify sibling routes remain unchanged.`;
+        : group.batch
+          ? `This affects ${affectedPages} pages across ${group.families.size} template${group.families.size === 1 ? "" : "s"}: ${[...group.families].join(", ")}. Fix every affected template, not just the target URL. Verify sibling routes remain unchanged.`
+          : SITE_WIDE_ISSUES.has(group.type)
+            ? `This is a site-wide issue affecting ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"}.`
+            : `This affects ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"} in the ${group.label} group. Fix the shared template or component where possible, then verify sibling routes remain unchanged.`;
     const crawlDate = input.crawl.finishedAt
       ? new Date(input.crawl.finishedAt).toISOString().slice(0, 10)
       : null;
@@ -303,6 +322,8 @@ export function buildCrawlActionDrafts(input: {
       crawl_finished_at: input.crawl.finishedAt ? new Date(input.crawl.finishedAt).toISOString() : null,
       issue_type: group.orphan ? "ORPHAN_PAGE" : group.type,
       fix_mode: fixMode,
+      batch: group.batch,
+      route_families: [...group.families],
       issue_group: group.key,
       group_label: group.label,
       severity,
@@ -312,7 +333,7 @@ export function buildCrawlActionDrafts(input: {
       occurrences: group.occurrences,
       status_codes: [...group.statusCodes],
       sample_url: targetUrl,
-      urls: urls.slice(0, 20),
+      urls: urls.slice(0, group.batch ? 100 : 20),
       source_url: group.sourceUrl,
       broken_urls: [...group.brokenUrls],
       anchor_texts: [...group.anchors],
@@ -394,11 +415,17 @@ export async function syncCrawlIssuesToActions(siteId: string) {
 
   for (const draft of drafts) {
     const previous = byKey.get(draft.dedupeKey);
-    if (previous && ["DISMISSED", "VERIFIED", "FAILED"].includes(previous.status)) {
+    const previousEvidence = previous ? record(previous.evidence) : {};
+    const canReactivate = previous?.status === "DISMISSED" && previousEvidence.superseded === true;
+    if (previous && ["DISMISSED", "VERIFIED", "FAILED"].includes(previous.status) && !canReactivate) {
       existing += 1;
       continue;
     }
     const liveCheck = await verifyCrawlDraftLive(draft);
+    if (liveCheck?.reproduced_url) {
+      draft.targetUrl = liveCheck.reproduced_url;
+      draft.evidence = { ...draft.evidence, sample_url: liveCheck.reproduced_url };
+    }
     const evidence = liveCheck ? { ...draft.evidence, live_check: liveCheck } : draft.evidence;
     if (liveCheck?.issue_reproduced === false) {
       if (previous) {
@@ -423,6 +450,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       await db.researchAction.update({
         where: { id: previous.id },
         data: {
+          ...(canReactivate ? { status: "PROPOSED" } : {}),
           kind: draft.kind,
           format: "page_update",
           title: draft.title,

@@ -46,15 +46,15 @@ describe("crawl action generation", () => {
 
     const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages, links });
 
-    expect(drafts).toHaveLength(6);
+    expect(drafts).toHaveLength(5);
     expect(drafts.every((draft) => draft.dedupeKey.startsWith("crawl:"))).toBe(true);
 
-    const landingH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:landing");
-    expect(landingH1?.affectedPages).toBe(2);
-    expect(landingH1?.targetUrl).toMatch(/city-[ab]/);
-
-    const blogH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:blog-post");
-    expect(blogH1?.affectedPages).toBe(2);
+    const h1 = drafts.find((draft) => draft.issueType === "MISSING_H1");
+    expect(h1?.groupKey).toBe("MISSING_H1:all-pages");
+    expect(h1?.affectedPages).toBe(4);
+    expect(h1?.targetUrl).toMatch(/city-[ab]/);
+    expect(h1?.evidence.batch).toBe(true);
+    expect(h1?.evidence.route_families).toEqual(expect.arrayContaining(["landing pages", "blog post template"]));
 
     const broken404 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey.startsWith("BROKEN_LINK:broken:404:source:"));
     expect(broken404?.affectedPages).toBe(2);
@@ -84,7 +84,7 @@ describe("crawl action generation", () => {
     expect(drafts.some((draft) => draft.evidence.message === "On-page content score 40/100")).toBe(false);
   });
 
-  it("separates a listing index from listing detail pages", () => {
+  it("batches page-level H1 fixes into one action", () => {
     const indexUrl = "https://www.example.com/real-estate-listings";
     const detailUrl = "https://www.example.com/real-estate-listings/example-condo";
     const drafts = buildCrawlActionDrafts({
@@ -96,12 +96,12 @@ describe("crawl action generation", () => {
       ],
       pages: [page(indexUrl), { ...page(detailUrl), h1Count: 0 }],
     });
-    const index = drafts.find((draft) => draft.groupKey === "MISSING_H1:listing-index");
-    const detail = drafts.find((draft) => draft.groupKey === "MISSING_H1:listing-detail");
-    expect(index?.targetUrl).toBe(indexUrl);
-    expect(detail?.targetUrl).toBe(detailUrl);
-    expect(detail?.affectedPages).toBe(1);
-    expect(detail?.evidence.page).toMatchObject({ url: detailUrl, h1Count: 0 });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].groupKey).toBe("MISSING_H1:all-pages");
+    expect(drafts[0].affectedPages).toBe(2);
+    expect(drafts[0].targetUrl).toBe(indexUrl);
+    expect(drafts[0].evidence.batch).toBe(true);
+    expect(drafts[0].evidence.route_families).toEqual(["listing index", "listing detail template"]);
   });
 
   it("returns no actions when there is no crawl evidence", () => {

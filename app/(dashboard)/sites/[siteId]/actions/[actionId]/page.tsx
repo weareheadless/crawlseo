@@ -230,6 +230,23 @@ export default async function ActionDetailPage({ params }: Props) {
           <p className="mt-3 break-all font-data text-[10px] text-muted-foreground">
             Target: {action.targetUrl ?? "—"}
           </p>
+          {crawlEvidence.families.length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Templates: {crawlEvidence.families.join(", ")}
+            </p>
+          )}
+          {crawlEvidence.urls.length > 1 && (
+            <details className="mt-2 rounded border border-border/50 bg-background/50 p-2">
+              <summary className="cursor-pointer font-data text-[10px] uppercase text-muted-foreground">
+                Affected pages ({crawlEvidence.affectedPages ?? crawlEvidence.urls.length})
+              </summary>
+              <ul className="mt-2 max-h-40 space-y-0.5 overflow-auto font-data text-[10px] text-muted-foreground">
+                {crawlEvidence.urls.slice(0, 30).map((url) => (
+                  <li key={url} className="truncate" title={url}>{url}</li>
+                ))}
+              </ul>
+            </details>
+          )}
           {crawlEvidence.reason && (
             <p className="mt-1 text-xs text-muted-foreground">{crawlEvidence.reason}</p>
           )}
@@ -550,6 +567,8 @@ function crawlEvidenceFrom(evidence: unknown): {
   h1Count: number | null;
   reproduced: boolean | null;
   reason: string | null;
+  families: string[];
+  urls: string[];
 } | null {
   const root = record(evidence);
   if (root.kind !== "crawl_issue") return null;
@@ -564,6 +583,12 @@ function crawlEvidenceFrom(evidence: unknown): {
       : typeof page.h1Count === "number" ? page.h1Count : null,
     reproduced: typeof live.issue_reproduced === "boolean" ? live.issue_reproduced : null,
     reason: typeof live.reason === "string" ? live.reason : null,
+    families: Array.isArray(root.route_families)
+      ? root.route_families.filter((value): value is string => typeof value === "string")
+      : [],
+    urls: Array.isArray(root.urls)
+      ? root.urls.filter((value): value is string => typeof value === "string")
+      : [],
   };
 }
 

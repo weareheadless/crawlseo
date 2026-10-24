@@ -23,6 +23,8 @@ export type CrawlLiveCheck = {
   schema_present?: boolean;
   images_missing_alt?: number;
   image_count?: number;
+  reproduced_url?: string | null;
+  checked_urls?: string[];
   reason?: string;
 };
 
@@ -80,38 +82,78 @@ export async function verifyCrawlDraftLive(
 ): Promise<CrawlLiveCheck | null> {
   if (!LIVE_CHECKABLE.has(draft.issueType)) return null;
   const checkedAt = new Date().toISOString();
-  try {
-    const response = await (options.fetchImpl ?? fetch)(draft.targetUrl, {
-      redirect: "follow",
-      headers: {
-        "User-Agent": LIVE_UA,
-        Accept: "text/html,application/xhtml+xml",
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!response.ok) {
-      return {
+  const evidenceUrls = Array.isArray(draft.evidence.urls)
+    ? draft.evidence.urls.filter((url): url is string => typeof url === "string")
+    : [];
+  const urls = draft.evidence.batch === true
+    ? [...new Set([draft.targetUrl, ...evidenceUrls])].slice(0, 6)
+    : [draft.targetUrl];
+  let unverified: CrawlLiveCheck | null = null;
+
+  for (const url of urls) {
+    try {
+      const response = await (options.fetchImpl ?? fetch)(url, {
+        redirect: "follow",
+        headers: {
+          "User-Agent": LIVE_UA,
+          Accept: "text/html,application/xhtml+xml",
+        },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) {
+        unverified ??= {
+          checked_at: checkedAt,
+          status: response.status,
+          issue_type: draft.issueType,
+          issue_reproduced: null,
+          reproduced_url: null,
+          checked_urls: urls,
+          reason: `Live page returned HTTP ${response.status} for ${url}`,
+        };
+        continue;
+      }
+      const html = await response.text();
+      const check = liveCheckFromHtml(draft.issueType, html);
+      if (check.issue_reproduced === true) {
+        return {
+          checked_at: checkedAt,
+          status: response.status,
+          issue_type: draft.issueType,
+          reproduced_url: url,
+          checked_urls: urls,
+          ...check,
+        };
+      }
+      if (check.issue_reproduced === null) {
+        unverified ??= {
+          checked_at: checkedAt,
+          status: response.status,
+          issue_type: draft.issueType,
+          reproduced_url: null,
+          checked_urls: urls,
+          ...check,
+        };
+      }
+    } catch (error) {
+      unverified ??= {
         checked_at: checkedAt,
-        status: response.status,
+        status: null,
         issue_type: draft.issueType,
         issue_reproduced: null,
-        reason: `Live page returned HTTP ${response.status}`,
+        reproduced_url: null,
+        checked_urls: urls,
+        reason: error instanceof Error ? error.message.slice(0, 200) : "Live check failed",
       };
     }
-    const html = await response.text();
-    return {
-      checked_at: checkedAt,
-      status: response.status,
-      issue_type: draft.issueType,
-      ...liveCheckFromHtml(draft.issueType, html),
-    };
-  } catch (error) {
-    return {
-      checked_at: checkedAt,
-      status: null,
-      issue_type: draft.issueType,
-      issue_reproduced: null,
-      reason: error instanceof Error ? error.message.slice(0, 200) : "Live check failed",
-    };
   }
+
+  if (unverified) return unverified;
+  return {
+    checked_at: checkedAt,
+    status: 200,
+    issue_type: draft.issueType,
+    issue_reproduced: false,
+    reproduced_url: null,
+    checked_urls: urls,
+  };
 }

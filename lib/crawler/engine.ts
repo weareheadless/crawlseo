@@ -7,13 +7,16 @@ import { REMEDIATION } from "./remediation";
 import { computeHealthScore } from "./health";
 
 const ABSOLUTE_MAX_PAGES = 2000;
-const BATCH_SIZE = 15;
-const BATCH_DELAY_MS = 100;
+const BATCH_SIZE = 5;
+const BATCH_DELAY_MS = 750;
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
-const USER_AGENT =
-  "CrawlSEOBot/1.0 (+https://crawlseo.dev; self-hosted SEO audit)";
+// Audit what Google can index, not the bot-protection shell. Wix serves
+// different HTML to unknown crawlers; the Googlebot-compatible user agent
+// receives the prerendered page. Override with CRAWL_USER_AGENT if needed.
+const USER_AGENT = process.env.CRAWL_USER_AGENT?.trim()
+  || "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
 type IssueInput = {
   url: string;
@@ -393,6 +396,8 @@ async function fetchPage(url: string): Promise<{
         headers: {
           "User-Agent": USER_AGENT,
           Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Cache-Control": "no-cache",
         },
       });
       if (res.status >= 300 && res.status < 400) {
@@ -721,6 +726,7 @@ async function executeCrawl(
   }
 
   /* ---- Crawl loop with batch concurrency ---- */
+  let rateLimitedResponses = 0;
   while (queue.length > 0 && pages.length < maxPages) {
     // Collect the next batch of unvisited URLs
     const batch: string[] = [];
@@ -761,6 +767,7 @@ async function executeCrawl(
     for (const result of results) {
       if (result.status === "rejected") continue;
       const { url, res, error } = result.value;
+      if (res?.statusCode === 429) rateLimitedResponses += 1;
 
       if (error || !res) {
         issues.push({
@@ -825,6 +832,13 @@ async function executeCrawl(
           queue.push(link);
         }
       }
+    }
+
+    if (rateLimitedResponses > 0 && pages.length <= 1) {
+      throw new Error("Site rate-limited the crawler (HTTP 429) before any usable page was audited. The crawl was aborted; retry later.");
+    }
+    if (pages.length < 10 && rateLimitedResponses >= Math.ceil(pages.length / 2)) {
+      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
     }
 
     // Small delay between batches to avoid hammering the target
