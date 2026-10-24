@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Bot, ClipboardList, FileText, Inbox, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KeywordEvidenceSummary } from "@/lib/research/evidence";
+import { workCategory, workCategoryLabel, type WorkCategory } from "@/lib/work/categories";
 import {
   opportunitySignalLabel,
   type OpportunityPriority,
@@ -82,29 +83,57 @@ export function Workbench({
   agentTasks: TaskRow[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
-  const inboxActions = actions.filter((action) =>
+  const [category, setCategory] = useState<"all" | WorkCategory>("all");
+  const actionCategory = new Map(actions.map((action) => [action.id, workCategory(action)]));
+  const matchesCategory = (action: ActionRow) => category === "all" || workCategory(action) === category;
+  const matchesTask = (task: TaskRow) => category === "all"
+    || Boolean(task.actionId && actionCategory.get(task.actionId) === category);
+  const matchesDraft = (draft: DraftRow) => category === "all"
+    || Boolean(draft.actionId && actionCategory.get(draft.actionId) === category);
+
+  const visibleActions = actions.filter(matchesCategory);
+  const inboxActions = visibleActions.filter((action) =>
     ["PROPOSED", "DRAFT_READY", "APPROVED"].includes(action.status),
   );
   const inboxTasks = agentTasks.filter((task) =>
-    ["AWAITING_REVIEW", "CHANGES_REQUESTED", "READY"].includes(task.status),
+    matchesTask(task) && ["AWAITING_REVIEW", "CHANGES_REQUESTED", "READY"].includes(task.status),
   );
-  const opportunities = actions.filter((action) => action.opportunity);
+  const visibleTasks = agentTasks.filter(matchesTask);
+  const visibleDrafts = drafts.filter(matchesDraft);
+  const opportunities = visibleActions.filter((action) => action.opportunity);
+  const technicalCount = actions.filter((action) => workCategory(action) === "technical").length;
+  const contentCount = actions.length - technicalCount;
   const counts: Record<Tab, number> = {
     inbox: inboxActions.length + inboxTasks.length,
-    actions: actions.length,
+    actions: visibleActions.length,
     opportunities: opportunities.length,
-    drafts: drafts.length,
-    "agent tasks": agentTasks.length,
+    drafts: visibleDrafts.length,
+    "agent tasks": visibleTasks.length,
   };
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Summary label="Inbox" value={counts.inbox} icon={Inbox} />
-        <Summary label="Open actions" value={actions.filter((action) => !["DISMISSED", "VERIFIED", "FAILED"].includes(action.status)).length} icon={ClipboardList} />
+        <Summary label="Open actions" value={visibleActions.filter((action) => !["DISMISSED", "VERIFIED", "FAILED"].includes(action.status)).length} icon={ClipboardList} />
         <Summary label="Opportunities" value={counts.opportunities} icon={Target} />
-        <Summary label="Drafts" value={drafts.length} icon={FileText} />
-        <Summary label="Agent tasks" value={agentTasks.length} icon={Bot} />
+        <Summary label="Drafts" value={counts.drafts} icon={FileText} />
+        <Summary label="Agent tasks" value={counts["agent tasks"]} icon={Bot} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5">
+        <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Filter
+        </span>
+        <FilterButton active={category === "all"} onClick={() => setCategory("all")}>
+          All
+        </FilterButton>
+        <FilterButton active={category === "technical"} onClick={() => setCategory("technical")}>
+          Technical SEO <span className="ml-1 opacity-60">{technicalCount}</span>
+        </FilterButton>
+        <FilterButton active={category === "content"} onClick={() => setCategory("content")}>
+          Content creation <span className="ml-1 opacity-60">{contentCount}</span>
+        </FilterButton>
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-border/60 pb-2">
@@ -141,7 +170,7 @@ export function Workbench({
 
       {tab === "actions" && (
         <div className="space-y-2">
-          {actions.length === 0 ? <Empty text="No actions yet." /> : actions.map((action) => (
+          {visibleActions.length === 0 ? <Empty text={category === "all" ? "No actions yet." : "No actions in this filter."} /> : visibleActions.map((action) => (
             <ActionCard key={action.id} siteId={siteId} action={action} />
           ))}
         </div>
@@ -151,7 +180,7 @@ export function Workbench({
 
       {tab === "drafts" && (
         <div className="space-y-2">
-          {drafts.length === 0 ? <Empty text="No content drafts yet." /> : drafts.map((draft) => (
+          {visibleDrafts.length === 0 ? <Empty text={category === "all" ? "No content drafts yet." : "No drafts in this filter."} /> : visibleDrafts.map((draft) => (
             <Link
               key={draft.id}
               href={draft.actionId ? `/sites/${siteId}/actions/${draft.actionId}` : `/sites/${siteId}/content-studio`}
@@ -173,7 +202,7 @@ export function Workbench({
 
       {tab === "agent tasks" && (
         <div className="space-y-2">
-          {agentTasks.length === 0 ? <Empty text="No agent tasks yet." /> : agentTasks.map((task) => (
+          {visibleTasks.length === 0 ? <Empty text={category === "all" ? "No agent tasks yet." : "No agent tasks in this filter."} /> : visibleTasks.map((task) => (
             <TaskCard key={task.id} siteId={siteId} task={task} />
           ))}
         </div>
@@ -183,6 +212,7 @@ export function Workbench({
 }
 
 function ActionCard({ siteId, action }: { siteId: string; action: ActionRow }) {
+  const category = workCategory(action);
   return (
     <Link
       href={`/sites/${siteId}/actions/${action.id}`}
@@ -195,6 +225,12 @@ function ActionCard({ siteId, action }: { siteId: string; action: ActionRow }) {
         </span>
         <span className="font-data text-[10px] text-muted-foreground">priority {action.priority}</span>
         <span className="font-data text-[10px] text-muted-foreground">{action.source}</span>
+        <span className={cn(
+          "rounded px-1.5 py-0.5 font-data text-[10px]",
+          category === "technical" ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary",
+        )}>
+          {workCategoryLabel(category)}
+        </span>
         {action.editorialDecision && (
           <span className="rounded bg-primary/10 px-1.5 py-0.5 font-data text-[10px] text-primary">
             {action.editorialDecision.replaceAll("_", " ")}
