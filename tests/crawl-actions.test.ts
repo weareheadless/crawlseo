@@ -65,7 +65,7 @@ describe("crawl action generation", () => {
     expect(broken404?.evidence.technical).toBe(false);
     expect(broken404?.recommendation).toContain("Wix Blog");
 
-    const broken429 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:429:listing");
+    const broken429 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:429:listing-detail");
     expect(broken429?.severity).toBe("INFO");
     expect(broken429?.kind).toBe("fix_technical_issue");
     expect(broken429?.priority).toBe(35);
@@ -82,6 +82,26 @@ describe("crawl action generation", () => {
     expect(sitemap?.groupLabel).toBe("site-wide");
 
     expect(drafts.some((draft) => draft.evidence.message === "On-page content score 40/100")).toBe(false);
+  });
+
+  it("separates a listing index from listing detail pages", () => {
+    const indexUrl = "https://www.example.com/real-estate-listings";
+    const detailUrl = "https://www.example.com/real-estate-listings/example-condo";
+    const drafts = buildCrawlActionDrafts({
+      site,
+      crawl,
+      issues: [
+        { url: indexUrl, type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: {} },
+        { url: detailUrl, type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: {} },
+      ],
+      pages: [page(indexUrl), { ...page(detailUrl), h1Count: 0 }],
+    });
+    const index = drafts.find((draft) => draft.groupKey === "MISSING_H1:listing-index");
+    const detail = drafts.find((draft) => draft.groupKey === "MISSING_H1:listing-detail");
+    expect(index?.targetUrl).toBe(indexUrl);
+    expect(detail?.targetUrl).toBe(detailUrl);
+    expect(detail?.affectedPages).toBe(1);
+    expect(detail?.evidence.page).toMatchObject({ url: detailUrl, h1Count: 0 });
   });
 
   it("returns no actions when there is no crawl evidence", () => {

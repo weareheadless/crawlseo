@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { REMEDIATION } from "@/lib/crawler/remediation";
 import { createResearchAction } from "@/lib/research/service";
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { verifyCrawlDraftLive } from "@/lib/research/crawl-live-check";
 
 type CrawlIssueRow = {
   url: string;
@@ -32,7 +33,7 @@ type AuditPageRow = {
 
 type CrawlActionSite = { domain: string };
 
-type CrawlActionCrawl = { id: string; pagesFound: number };
+type CrawlActionCrawl = { id: string; pagesFound: number; finishedAt?: Date | null };
 
 export type CrawlActionDraft = {
   dedupeKey: string;
@@ -115,9 +116,16 @@ function pathFamily(url: string): { key: string; label: string } {
   const segments = path.split("/").filter(Boolean);
   const first = segments[0] ?? "";
   if (first === "post") return { key: "blog-post", label: "blog post template" };
-  if (first === "blog") return { key: "blog", label: "blog template" };
+  if (first === "blog") {
+    if (segments.length === 1) return { key: "blog-index", label: "blog index" };
+    if (segments[1] === "tags") return { key: "blog-tag", label: "blog tag template" };
+    if (segments[1] === "categories") return { key: "blog-category", label: "blog category template" };
+    return { key: "blog", label: "blog template" };
+  }
   if (first === "real-estate-listings" || first === "listings" || first === "properties") {
-    return { key: "listing", label: "listing template" };
+    return segments.length === 1
+      ? { key: "listing-index", label: "listing index" }
+      : { key: "listing-detail", label: "listing detail template" };
   }
   if (first === "profile" || first === "my-account") return { key: "profile", label: "profile template" };
   if (["category", "categories", "collections", "collection"].includes(first)) {
@@ -280,12 +288,19 @@ export function buildCrawlActionDrafts(input: {
         : SITE_WIDE_ISSUES.has(group.type)
           ? `This is a site-wide issue affecting ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"}.`
           : `This affects ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"} in the ${group.label} group. Fix the shared template or component where possible, then verify sibling routes remain unchanged.`;
-    const recommendation = [fix, rateLimit, scope].filter(Boolean).join("\n\n").slice(0, 4_000);
+    const crawlDate = input.crawl.finishedAt
+      ? new Date(input.crawl.finishedAt).toISOString().slice(0, 10)
+      : null;
+    const recommendation = [crawlDate ? `Crawl evidence from ${crawlDate}.` : "", fix, rateLimit, scope]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 4_000);
     const page = pageEvidence(pagesByUrl.get(targetUrl));
     const evidence = {
       kind: "crawl_issue",
       technical: fixMode === "site_code",
       crawl_id: input.crawl.id,
+      crawl_finished_at: input.crawl.finishedAt ? new Date(input.crawl.finishedAt).toISOString() : null,
       issue_type: group.orphan ? "ORPHAN_PAGE" : group.type,
       fix_mode: fixMode,
       issue_group: group.key,
@@ -333,7 +348,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
   const crawl = await db.crawl.findFirst({
     where: { siteId, status: "COMPLETED" },
     orderBy: { finishedAt: "desc" },
-    select: { id: true, pagesFound: true },
+    select: { id: true, pagesFound: true, finishedAt: true },
   });
   if (!crawl) return { created: 0, updated: 0, dismissed: 0, existing: 0, total: 0, crawlId: null };
 
@@ -356,7 +371,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
     }),
     db.researchAction.findMany({
       where: { siteId, source: "crawl_issue" },
-      select: { id: true, status: true, priority: true, dedupeKey: true },
+      select: { id: true, status: true, priority: true, dedupeKey: true, evidence: true },
     }),
   ]);
 
@@ -375,11 +390,33 @@ export async function syncCrawlIssuesToActions(siteId: string) {
   let created = 0;
   let updated = 0;
   let existing = 0;
+  let liveResolved = 0;
 
   for (const draft of drafts) {
     const previous = byKey.get(draft.dedupeKey);
     if (previous && ["DISMISSED", "VERIFIED", "FAILED"].includes(previous.status)) {
       existing += 1;
+      continue;
+    }
+    const liveCheck = await verifyCrawlDraftLive(draft);
+    const evidence = liveCheck ? { ...draft.evidence, live_check: liveCheck } : draft.evidence;
+    if (liveCheck?.issue_reproduced === false) {
+      if (previous) {
+        const previousEvidence = record(previous.evidence);
+        await db.researchAction.update({
+          where: { id: previous.id },
+          data: {
+            status: "DISMISSED",
+            evidence: json({
+              ...previousEvidence,
+              ...evidence,
+              superseded: true,
+              superseded_reason: `Live check found the issue no longer reproduces (H1 count ${liveCheck.h1_count ?? "unknown"}).`,
+            }),
+          },
+        });
+      }
+      liveResolved += 1;
       continue;
     }
     if (previous) {
@@ -392,7 +429,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
           targetUrl: draft.targetUrl,
           recommendation: draft.recommendation,
           priority: Math.max(previous.priority, draft.priority),
-          evidence: json(draft.evidence),
+          evidence: json(evidence),
         },
       });
       updated += 1;
@@ -410,7 +447,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
         priority: draft.priority,
         automationMode: "MANUAL",
         dedupeKey: draft.dedupeKey,
-        evidence: draft.evidence,
+        evidence,
       },
       "crawl-actions",
     );
@@ -418,10 +455,30 @@ export async function syncCrawlIssuesToActions(siteId: string) {
     else existing += 1;
   }
 
+  const draftKeys = new Set(drafts.map((draft) => draft.dedupeKey));
+  let staleDismissed = 0;
+  for (const action of current) {
+    if (draftKeys.has(action.dedupeKey) || action.status !== "PROPOSED") continue;
+    const evidence = record(action.evidence);
+    await db.researchAction.update({
+      where: { id: action.id },
+      data: {
+        status: "DISMISSED",
+        evidence: json({
+          ...evidence,
+          superseded: true,
+          superseded_reason: "Crawl grouping changed to a more specific route-family action.",
+        }),
+      },
+    });
+    staleDismissed += 1;
+  }
+
   return {
     created,
     updated,
-    dismissed: 0,
+    dismissed: staleDismissed,
+    liveResolved,
     existing,
     total: drafts.length,
     crawlId: crawl.id,

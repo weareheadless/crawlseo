@@ -18,6 +18,7 @@ import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
 import { isTechnicalSeoAction, isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
+import { cn } from "@/lib/utils";
 import { isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 
 interface Props {
@@ -41,6 +42,7 @@ export default async function ActionDetailPage({ params }: Props) {
   }
   const citedSources = action.evidenceSources;
   const editorial = editorialFromEvidence(action.evidence);
+  const crawlEvidence = crawlEvidenceFrom(action.evidence);
   const technicalAction = isTechnicalSeoAction(action);
   const blogTarget = !technicalAction && isWixBlogTarget(action.targetUrl);
   const blogDraft = blogTarget
@@ -201,6 +203,41 @@ export default async function ActionDetailPage({ params }: Props) {
           blogTarget={blogTarget}
         />
       </div>
+
+      {crawlEvidence && (
+        <section className="panel mb-5 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-heading text-lg font-semibold">Crawl verification</h2>
+            <span className={cn(
+              "rounded-md px-2 py-1 font-data text-[10px] font-semibold uppercase",
+              crawlEvidence.reproduced === false && "bg-signal/10 text-signal",
+              crawlEvidence.reproduced === true && "bg-warning/15 text-warning",
+              crawlEvidence.reproduced == null && "bg-muted text-muted-foreground",
+            )}>
+              {crawlEvidence.reproduced === false
+                ? "not reproduced live"
+                : crawlEvidence.reproduced === true
+                  ? "reproduced live"
+                  : "live check unavailable"}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Fact label="Crawl date" value={crawlEvidence.crawlDate ?? "unknown"} />
+            <Fact label="Issue" value={crawlEvidence.issueType?.replaceAll("_", " ").toLowerCase() ?? "—"} />
+            <Fact label="Affected pages" value={crawlEvidence.affectedPages != null ? String(crawlEvidence.affectedPages) : "—"} />
+            <Fact label="Target H1 count" value={crawlEvidence.h1Count != null ? String(crawlEvidence.h1Count) : "—"} />
+          </div>
+          <p className="mt-3 break-all font-data text-[10px] text-muted-foreground">
+            Target: {action.targetUrl ?? "—"}
+          </p>
+          {crawlEvidence.reason && (
+            <p className="mt-1 text-xs text-muted-foreground">{crawlEvidence.reason}</p>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            The crawl is a snapshot. A live check is run for page-level issues before the action is kept; a mismatch means the issue may already be fixed or the crawl may have received a different page.
+          </p>
+        </section>
+      )}
 
       <div className={blogTarget ? "grid gap-5" : "grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"}>
         <div className="space-y-5">
@@ -504,6 +541,30 @@ function hasSiteCodeChanges(
     : [];
   const files = resultFiles.length > 0 ? resultFiles : parseGitStatusFiles(status);
   return files.some((file) => file === targetSourcePath || isReleaseableSiteFile(file));
+}
+
+function crawlEvidenceFrom(evidence: unknown): {
+  crawlDate: string | null;
+  issueType: string | null;
+  affectedPages: number | null;
+  h1Count: number | null;
+  reproduced: boolean | null;
+  reason: string | null;
+} | null {
+  const root = record(evidence);
+  if (root.kind !== "crawl_issue") return null;
+  const live = record(root.live_check);
+  const page = record(root.page);
+  return {
+    crawlDate: typeof root.crawl_finished_at === "string" ? root.crawl_finished_at.slice(0, 10) : null,
+    issueType: typeof root.issue_type === "string" ? root.issue_type : null,
+    affectedPages: typeof root.affected_pages === "number" ? root.affected_pages : null,
+    h1Count: typeof live.h1_count === "number"
+      ? live.h1_count
+      : typeof page.h1Count === "number" ? page.h1Count : null,
+    reproduced: typeof live.issue_reproduced === "boolean" ? live.issue_reproduced : null,
+    reason: typeof live.reason === "string" ? live.reason : null,
+  };
 }
 
 function editorialFromEvidence(evidence: unknown): Record<string, unknown> | null {
