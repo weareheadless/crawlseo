@@ -5,13 +5,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { getWorkData } from "@/lib/work/service";
 import { Workbench } from "@/components/work/workbench";
+import { keywordEvidenceForAction, sourceIdsForAction } from "@/lib/research/evidence";
+import { opportunityPriorityForAction } from "@/lib/ai-seo/opportunity-priority";
 
 interface Props {
   params: Promise<{ siteId: string }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-const allowedTabs = new Set(["inbox", "actions", "drafts", "agent tasks"]);
+const allowedTabs = new Set(["inbox", "actions", "opportunities", "drafts", "agent tasks"]);
 
 export default async function WorkPage({ params, searchParams }: Props) {
   const userId = await getUserIdFromCookies();
@@ -19,7 +21,7 @@ export default async function WorkPage({ params, searchParams }: Props) {
   if (!userId) redirect("/login");
 
   const [data, query] = await Promise.all([getWorkData(siteId), searchParams]);
-  const tab = allowedTabs.has(query.tab ?? "") ? query.tab as "inbox" | "actions" | "drafts" | "agent tasks" : "inbox";
+  const tab = allowedTabs.has(query.tab ?? "") ? query.tab as "inbox" | "actions" | "opportunities" | "drafts" | "agent tasks" : "inbox";
 
   return (
     <div>
@@ -54,6 +56,12 @@ export default async function WorkPage({ params, searchParams }: Props) {
           primaryQuery: action.primaryQuery,
           recommendation: action.recommendation,
           createdAt: action.createdAt.toISOString(),
+          evidenceSources: sourceIdsForAction(action).length,
+          keyword: keywordEvidenceForAction(action.evidence),
+          opportunity: opportunityPriorityForAction(action),
+          editorialDecision: typeof (action.evidence as Record<string, unknown> | null)?.editorial === "object"
+            ? String(((action.evidence as Record<string, unknown>).editorial as Record<string, unknown>).decision ?? "")
+            : null,
           drafts: action._count.drafts,
           agentTasks: action._count.agentTasks,
           deliveries: action._count.deliveries,

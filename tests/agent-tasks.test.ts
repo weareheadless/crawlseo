@@ -43,7 +43,9 @@ describe("agent prompt", () => {
     expect(prompt).toContain("Add rental FAQ heading");
     expect(prompt).toContain("apartments for rent playa del carmen");
     expect(prompt).toContain("Do not run `wix publish`");
-    expect(prompt).toContain("dedicated branch or worktree");
+    expect(prompt).toContain("already created the dedicated worktree");
+    expect(prompt).toContain("Do not run `git worktree`");
+    expect(prompt).toContain("Do not edit the shared bridge repository");
     expect(prompt).toContain("Keep the existing design.");
   });
 });
@@ -60,6 +62,8 @@ describe("agent task transitions", () => {
     expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHING", "PUBLISHED")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHED", "CLOSED")).toBe(true);
+    expect(canTransitionAgentTask("PUBLISHED", "CHANGES_REQUESTED")).toBe(true);
+    expect(canTransitionAgentTask("CLOSED", "CHANGES_REQUESTED")).toBe(true);
   });
 
   it("rejects skipped states", async () => {

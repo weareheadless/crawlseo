@@ -34,7 +34,9 @@ export function KeywordResearchClient({
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [savingSet, setSavingSet] = useState<Set<string>>(new Set());
   const [queuedSet, setQueuedSet] = useState<Set<string>>(new Set());
+  const [queuedActionIds, setQueuedActionIds] = useState<Record<string, string>>({});
   const [queuingSet, setQueuingSet] = useState<Set<string>>(new Set());
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +62,7 @@ export function KeywordResearchClient({
 
   async function handleQueueAction(result: KeywordResult) {
     setQueuingSet((prev) => new Set(prev).add(result.keyword));
+    setQueueError(null);
     try {
       const response = await fetch(`/crawlseo/api/sites/${siteId}/keyword-research/actions`, {
         method: "POST",
@@ -72,11 +75,15 @@ export function KeywordResearchClient({
           competition: result.competition,
         }),
       });
-      if (response.ok) {
-        setQueuedSet((prev) => new Set(prev).add(result.keyword));
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? "Failed to queue keyword action");
+      const actionId = payload.action?.id;
+      setQueuedSet((prev) => new Set(prev).add(result.keyword));
+      if (typeof actionId === "string") {
+        setQueuedActionIds((prev) => ({ ...prev, [result.keyword]: actionId }));
       }
-    } catch {
-      // ignore
+    } catch (caught) {
+      setQueueError(caught instanceof Error ? caught.message : "Failed to queue keyword action");
     } finally {
       setQueuingSet((prev) => {
         const next = new Set(prev);
@@ -263,6 +270,14 @@ export function KeywordResearchClient({
                               </>
                             )}
                           </button>
+                          {queuedActionIds[result.keyword] && (
+                            <Link
+                              href={`/sites/${siteId}/actions/${queuedActionIds[result.keyword]}`}
+                              className="inline-flex items-center rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/10"
+                            >
+                              Open in Work
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -275,6 +290,11 @@ export function KeywordResearchClient({
             {results.length} keyword{results.length !== 1 ? "s" : ""} found
             {source === "dataforseo" ? " via DataForSEO" : " via Google Autocomplete"}
           </div>
+          {queueError && (
+            <div className="border-t border-danger/30 bg-danger/5 px-4 py-2 text-xs text-danger">
+              {queueError}
+            </div>
+          )}
         </div>
       )}
 

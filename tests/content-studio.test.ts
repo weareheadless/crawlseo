@@ -231,7 +231,7 @@ describe("writer provider", () => {
     expect(request.model).toBe("test-model");
     expect(request.response_format).toEqual({ type: "json_object" });
     expect(request.messages[0].content).toContain("only factual source");
-    expect(request.messages[0].content).toContain("exact name appears in EVIDENCE");
+    expect(request.messages[0].content).toContain("unless it appears in EVIDENCE");
     expect(request.messages[1].content).toContain("Keep it concise.");
   });
 

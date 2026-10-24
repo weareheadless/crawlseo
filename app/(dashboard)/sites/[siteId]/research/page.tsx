@@ -67,7 +67,11 @@ export default async function ResearchPage({ params }: { params: Promise<{ siteI
         ) : (
           <div className="divide-y divide-border/40">
             {runs.map((run) => (
-              <div key={run.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+              <Link
+                key={run.id}
+                href={`/sites/${siteId}/research/runs/${run.id}`}
+                className="flex flex-wrap items-start justify-between gap-3 px-5 py-4 transition hover:bg-muted/20"
+              >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium">{run.title}</p>
@@ -80,7 +84,8 @@ export default async function ResearchPage({ params }: { params: Promise<{ siteI
                   </p>
                   {run.errorCode && <p className="mt-1 text-xs text-warning">{run.errorCode.replaceAll("_", " ").toLowerCase()}</p>}
                 </div>
-              </div>
+                <span className="shrink-0 self-center text-xs font-medium text-primary">View sources →</span>
+              </Link>
             ))}
           </div>
         )}

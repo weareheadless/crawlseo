@@ -2,22 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Check, FileText, Loader2, X } from "lucide-react";
+import { Check, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 
 export function ActionControls({
   actionId,
   initialStatus,
-  format,
-  targetUrl,
   hasDraft,
+  blogTarget = false,
 }: {
   actionId: string;
   initialStatus: string;
-  format: string | null;
-  targetUrl: string | null;
   hasDraft: boolean;
+  blogTarget?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -39,10 +36,26 @@ export function ActionControls({
       if (!response.ok) throw new Error(payload.error ?? "Request failed");
       if (label === "approve" || label === "dismiss") {
         setStatus(payload.action?.status ?? status);
+        if (label === "approve") {
+          if (payload.agentTask?.id) {
+            setNotice("Approved. Agent task created — open Implementation below.");
+          } else if (payload.agentTaskError === "blog_target") {
+            setNotice("Approved. This is an existing Wix Blog post — use the Wix Blog update panel below.");
+          } else if (payload.agentTaskError) {
+            setNotice(`Approved. No agent task: ${String(payload.agentTaskError).replaceAll("_", " ")}.`);
+          } else {
+            setNotice("Approved.");
+          }
+        }
       } else if (label === "draft") {
-        setNotice(`Draft ready: ${payload.draft?.title ?? "content draft"}`);
-      } else if (label === "agent") {
-        setNotice(`Agent task ready: ${payload.task?.id ?? ""}`);
+        const suffix = payload.agentTask?.id
+          ? " Agent task created."
+          : payload.agentTaskError === "blog_target"
+            ? " This is a Wix Blog target, so use the Blog draft path."
+            : payload.agentTaskError
+              ? ` No agent task: ${String(payload.agentTaskError).replaceAll("_", " ")}.`
+              : "";
+        setNotice(`Draft ready: ${payload.draft?.title ?? "content draft"}.${suffix}`);
       }
       router.refresh();
     } catch (caught) {
@@ -52,35 +65,25 @@ export function ActionControls({
     }
   }
 
-  const canAgent = format !== "article" && !isWixBlogTarget(targetUrl);
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {status === "PROPOSED" && (
+        {status === "PROPOSED" && !blogTarget && (
           <>
             <Button size="sm" disabled={Boolean(busy)} onClick={() => call(`/crawlseo/api/actions/${actionId}`, { status: "APPROVED" }, "approve")}>
               {busy === "approve" ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-              Approve
+              Approve for implementation
             </Button>
             <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => call(`/crawlseo/api/actions/${actionId}`, { status: "DISMISSED" }, "dismiss")}>
-              <X className="size-4" /> Dismiss
+              <X className="size-4" /> Decline proposal
             </Button>
           </>
         )}
-        {status === "APPROVED" && (
-          <>
-            <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => call(`/crawlseo/api/actions/${actionId}/draft`, {}, "draft")}>
-              {busy === "draft" ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-              Write draft
-            </Button>
-            {canAgent && (
-              <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => call(`/crawlseo/api/actions/${actionId}/agent-task`, {}, "agent")}>
-                {busy === "agent" ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                Agent task
-              </Button>
-            )}
-          </>
+        {status === "APPROVED" && !blogTarget && (
+          <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => call(`/crawlseo/api/actions/${actionId}/draft`, {}, "draft")}>
+            {busy === "draft" ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+            Write draft
+          </Button>
         )}
         {hasDraft && <span className="self-center text-xs text-muted-foreground">Draft linked below</span>}
       </div>

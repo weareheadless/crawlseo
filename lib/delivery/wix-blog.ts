@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { findUnsplashCover, importUnsplashCover, type UnsplashCover } from "@/lib/delivery/unsplash";
 
 const API_BASE = "https://www.wixapis.com";
 
@@ -10,12 +12,48 @@ export class WixBlogDeliveryError extends Error {
   }
 }
 
-type WixConfig = { apiKey: string; siteId: string };
+type WixConfig = {
+  apiKey: string;
+  siteId: string;
+  alias: string;
+  language: string;
+  authorNickname: string;
+  categoryLabel: string;
+  hashtags: string[];
+};
 
-function config(): WixConfig | null {
+export async function configForSite(siteId: string): Promise<WixConfig | null> {
+  const delivery = await db.siteDeliveryConfig.findUnique({
+    where: { siteId },
+    select: { bridgeAlias: true },
+  });
+  const alias = delivery?.bridgeAlias?.trim() ?? "";
+  const prefix = alias ? `WIX_BLOG_${alias.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}` : "";
+  const legacySusi = alias === "susimacdonald";
   const apiKey = (process.env.WIX_BLOG_API_KEY || process.env.WIX_API_KEY || "").trim();
-  const siteId = (process.env.WIX_BLOG_SITE_ID || process.env.WIX_SITE_ID || "").trim();
-  return apiKey && siteId ? { apiKey, siteId } : null;
+  const wixSiteId = (prefix ? process.env[`${prefix}_SITE_ID`] : "")
+    || (legacySusi ? process.env.WIX_BLOG_SITE_ID || process.env.WIX_SITE_ID : "")
+    || (!alias ? process.env.WIX_BLOG_SITE_ID || process.env.WIX_SITE_ID : "")
+    || "";
+  if (!apiKey || !wixSiteId.trim()) return null;
+
+  const hashtags = (process.env[`${prefix}_HASHTAGS`]
+    || (legacySusi ? "RivieraMaya,RealEstate" : ""))
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  return {
+    apiKey,
+    siteId: wixSiteId.trim(),
+    alias,
+    language: (prefix ? process.env[`${prefix}_LANGUAGE`] : "")?.trim() || "en",
+    authorNickname: (prefix ? process.env[`${prefix}_AUTHOR_NICKNAME`] : "")?.trim()
+      || (legacySusi ? "Susi MacDonald" : ""),
+    categoryLabel: (prefix ? process.env[`${prefix}_CATEGORY_LABEL`] : "")?.trim()
+      || (legacySusi ? "Real Estate Market Updates" : ""),
+    hashtags,
+  };
 }
 
 async function wixRequest<T>(
@@ -44,13 +82,28 @@ async function wixRequest<T>(
   return response.json() as Promise<T>;
 }
 
-function textNode(value: string) {
+function textNode(value: string, decorations: unknown[] = []) {
   return {
     type: "TEXT",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
     nodes: [],
-    textData: { text: value, decorations: [] },
+    textData: { text: value, decorations },
   };
+}
+
+function inlineNodes(value: string): unknown[] {
+  const nodes: unknown[] = [];
+  const pattern = /\*\*(.+?)\*\*/g;
+  let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) nodes.push(textNode(value.slice(cursor, index)));
+    const bold = match[1]?.trim();
+    if (bold) nodes.push(textNode(bold, [{ type: "BOLD", fontWeightValue: 700 }]));
+    cursor = index + match[0].length;
+  }
+  if (cursor < value.length) nodes.push(textNode(value.slice(cursor)));
+  return nodes.length > 0 ? nodes : [textNode(value)];
 }
 
 function paragraph(value: string) {
@@ -58,7 +111,7 @@ function paragraph(value: string) {
     type: "PARAGRAPH",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
     style: { paddingBottom: "18px" },
-    nodes: [textNode(value)],
+    nodes: inlineNodes(value),
     paragraphData: { textStyle: { textAlignment: "AUTO" } },
   };
 }
@@ -68,7 +121,7 @@ function heading(value: string, level: number) {
     type: "HEADING",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
     style: { paddingTop: "24px", paddingBottom: "8px" },
-    nodes: [textNode(value)],
+    nodes: [textNode(value, [{ type: "BOLD", fontWeightValue: 700 }])],
     headingData: { level: Math.max(1, Math.min(6, level)), textStyle: { textAlignment: "AUTO" } },
   };
 }
@@ -122,7 +175,6 @@ export function markdownToRicos(markdown: string, title: string): { documentStyl
     const cleaned = line
       .replace(/^\s*>\s?/, "")
       .replace(/^\s*\d+\.\s+/, "")
-      .replace(/\*\*(.*?)\*\*/g, "$1")
       .replace(/`(.*?)`/g, "$1");
     nodes.push(paragraph(cleaned));
   }
@@ -151,26 +203,37 @@ function seoData(draft: { title: string; metaTitle: string; metaDescription: str
 }
 
 async function siteCmsConfig(cfg: WixConfig) {
-  const categories = await wixRequest<{ categories?: Array<{ id: string; label?: string; title?: string }> }>(
-    cfg, "GET", "/blog/v3/categories?language=en&paging.limit=100",
-  );
-  const category = (categories.categories ?? []).find((item) =>
-    /real estate market updates/i.test(item.label ?? item.title ?? ""),
-  );
-  if (!category?.id) throw new WixBlogDeliveryError("Wix category 'Real Estate Market Updates' was not found", 502);
+  let categoryId: string | null = null;
+  if (cfg.categoryLabel) {
+    const categories = await wixRequest<{ categories?: Array<{ id: string; label?: string; title?: string }> }>(
+      cfg, "GET", `/blog/v3/categories?language=${encodeURIComponent(cfg.language)}&paging.limit=100`,
+    );
+    const category = (categories.categories ?? []).find((item) =>
+      (item.label ?? item.title ?? "").toLowerCase() === cfg.categoryLabel.toLowerCase(),
+    );
+    if (!category?.id) {
+      throw new WixBlogDeliveryError(`Wix category '${cfg.categoryLabel}' was not found`, 502);
+    }
+    categoryId = category.id;
+  }
 
   const tags = await wixRequest<{ tags?: Array<{ id: string; label?: string }> }>(
-    cfg, "GET", "/blog/v3/tags?language=en&paging.limit=100",
+    cfg, "GET", `/blog/v3/tags?language=${encodeURIComponent(cfg.language)}&paging.limit=100`,
   );
+  if (!cfg.authorNickname) {
+    throw new WixBlogDeliveryError("Wix Blog author nickname is not configured for this site", 503);
+  }
   const members = await wixRequest<{ members?: Array<{ id: string; profile?: { nickname?: string } }> }>(
     cfg, "GET", "/members/v1/members?fieldsets=PUBLIC&paging.limit=100",
   );
   const member = (members.members ?? []).find((item) =>
-    (item.profile?.nickname ?? "").toLowerCase() === "susi macdonald",
+    (item.profile?.nickname ?? "").toLowerCase() === cfg.authorNickname.toLowerCase(),
   );
-  if (!member?.id) throw new WixBlogDeliveryError("Wix author member 'Susi MacDonald' was not found", 502);
+  if (!member?.id) {
+    throw new WixBlogDeliveryError(`Wix author member '${cfg.authorNickname}' was not found`, 502);
+  }
 
-  return { categoryId: category.id, tags: tags.tags ?? [], memberId: member.id };
+  return { categoryId, tags: tags.tags ?? [], memberId: member.id };
 }
 
 async function slugExists(cfg: WixConfig, slug: string) {
@@ -182,10 +245,49 @@ async function slugExists(cfg: WixConfig, slug: string) {
   return (result.dataItems?.length ?? 0) > 0;
 }
 
-export async function createWixBlogDraftForDraft(contentDraftId: string) {
-  const cfg = config();
-  if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured", 503);
+function withCoverCredit(
+  rich: { documentStyle: object; nodes: unknown[] },
+  cover: UnsplashCover,
+): { documentStyle: object; nodes: unknown[] } {
+  const nodes = rich.nodes.filter((node) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return true;
+    const row = node as Record<string, unknown>;
+    if (row.type !== "PARAGRAPH") return true;
+    const text = JSON.stringify(row.nodes ?? []);
+    return !/Cover photo by .* on Unsplash|Photo by .* on Unsplash/.test(text);
+  });
+  nodes.push({
+    type: "PARAGRAPH",
+    id: randomUUID().replace(/-/g, "").slice(0, 10),
+    style: { paddingBottom: "18px" },
+    nodes: [textNode(`Cover photo by ${cover.photographer} on Unsplash`, [
+      {
+        type: "LINK",
+        linkData: { link: { url: cover.photographerUrl, target: "BLANK", rel: { noreferrer: true } } },
+      },
+    ])],
+    paragraphData: { textStyle: { textAlignment: "AUTO" } },
+  });
+  return { documentStyle: rich.documentStyle, nodes };
+}
 
+function coverQuery(draft: { title: string; primaryQuery: string }): string {
+  return (draft.title || draft.primaryQuery).trim();
+}
+
+async function importCover(
+  cfg: WixConfig,
+  draft: { title: string; primaryQuery: string; slug: string },
+) {
+  const cover = await findUnsplashCover(coverQuery(draft));
+  return importUnsplashCover(
+    (method, path, body) => wixRequest(cfg, method, path, body),
+    cover,
+    draft.slug,
+  );
+}
+
+export async function createWixBlogDraftForDraft(contentDraftId: string) {
   const draft = await db.contentDraft.findUnique({
     where: { id: contentDraftId },
     include: {
@@ -194,6 +296,8 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     },
   });
   if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
+  const cfg = await configForSite(draft.siteId);
+  if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured for this site", 503);
   if (!draft.action || draft.format !== "article") {
     throw new WixBlogDeliveryError("Only article drafts linked to a ResearchAction can be delivered to Wix Blog", 409);
   }
@@ -218,6 +322,15 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
   }
 
   const cms = await siteCmsConfig(cfg);
+  let importedCover: Awaited<ReturnType<typeof importCover>>;
+  try {
+    importedCover = await importCover(cfg, draft);
+  } catch (error) {
+    throw new WixBlogDeliveryError(
+      `Cover image could not be prepared: ${error instanceof Error ? error.message : "Unsplash or Wix import failed"}`,
+      502,
+    );
+  }
   const searchable = `${draft.title} ${draft.primaryQuery} ${draft.metaTitle}`.toLowerCase();
   const tagIds = cms.tags
     .filter((tag) => tag.label && searchable.includes(tag.label.toLowerCase()))
@@ -229,13 +342,18 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     excerpt: draft.excerpt,
     seoSlug: draft.slug,
     memberId: cms.memberId,
-    language: "en",
-    categoryIds: [cms.categoryId],
+    language: cfg.language,
+    categoryIds: cms.categoryId ? [cms.categoryId] : [],
     tagIds,
-    hashtags: ["RivieraMaya", "RealEstate"],
+    hashtags: cfg.hashtags,
     commentingEnabled: true,
     featured: false,
-    richContent: markdownToRicos(draft.markdown, draft.title),
+    heroImage: {
+      id: importedCover.mediaId,
+      url: importedCover.url,
+      altText: importedCover.altText,
+    },
+    richContent: withCoverCredit(markdownToRicos(draft.markdown, draft.title), importedCover.cover),
     seoData: seoData(draft),
   };
 
@@ -267,9 +385,173 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
         draft_id: externalId,
         title: draft.title,
         slug: draft.slug,
-        language: "en",
+        language: cfg.language,
         readback_verified: true,
       },
     },
   });
+}
+
+function blogSlugFromUrl(url: string): string | null {
+  try {
+    const match = new URL(url).pathname.match(/\/post\/([^/?#]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readWixBlogPostBySlug(slug: string, cfg: WixConfig) {
+
+  const result = await wixRequest<{
+    dataItems?: Array<{ id?: string; data?: Record<string, unknown> }>;
+  }>(cfg, "POST", "/wix-data/v2/items/query", {
+    dataCollectionId: "Blog/Posts",
+    query: { filter: { slug }, paging: { limit: 1, offset: 0 } },
+    publishPluginOptions: { includeDraftItems: true },
+  });
+  const item = result.dataItems?.[0];
+  const data = item?.data ?? {};
+  const draftPostId = typeof data.uuid === "string" ? data.uuid : item?.id;
+  if (!draftPostId) throw new WixBlogDeliveryError(`Wix Blog post not found for slug ${slug}`, 404);
+
+  const saved = await wixRequest<{
+    draftPost?: {
+      id?: string;
+      title?: string;
+      seoSlug?: string;
+      status?: string;
+      richContent?: { nodes?: unknown[] };
+      seoData?: unknown;
+      excerpt?: string;
+    };
+  }>(cfg, "GET", `/blog/v3/draft-posts/${encodeURIComponent(draftPostId)}?fieldsets=RICH_CONTENT`);
+  const draftPost = saved.draftPost;
+  if (!draftPost?.id) throw new WixBlogDeliveryError("Wix Blog draft post could not be read", 502);
+
+  return {
+    id: draftPost.id,
+    title: draftPost.title ?? String(data.title ?? ""),
+    slug: draftPost.seoSlug ?? slug,
+    status: draftPost.status ?? null,
+    plainContent: String(data.plainContent ?? ""),
+    seoData: draftPost.seoData,
+    excerpt: draftPost.excerpt ?? String(data.excerpt ?? ""),
+  };
+}
+
+async function markActionVerified(actionId: string) {
+  const action = await db.researchAction.findUnique({
+    where: { id: actionId },
+    select: { id: true, status: true },
+  });
+  if (!action || ["VERIFIED", "DISMISSED", "FAILED"].includes(action.status)) return;
+  const pathByStatus: Record<string, ResearchActionStatus[]> = {
+    PROPOSED: ["APPROVED", "DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
+    APPROVED: ["DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
+    DRAFTING: ["DRAFT_READY", "DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
+    DRAFT_READY: ["DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
+    DELIVERY_APPROVED: ["DELIVERING", "DELIVERED", "VERIFIED"],
+    DELIVERING: ["DELIVERED", "VERIFIED"],
+    DELIVERED: ["VERIFIED"],
+  };
+  const { updateResearchAction } = await import("@/lib/research/service");
+  for (const status of pathByStatus[action.status] ?? []) {
+    await updateResearchAction(action.id, { status }, "wix-blog-publish");
+  }
+}
+
+export async function publishWixBlogUpdateForDraft(contentDraftId: string) {
+  const draft = await db.contentDraft.findUnique({
+    where: { id: contentDraftId },
+    include: {
+      site: { select: { id: true, domain: true } },
+      action: { select: { id: true, targetUrl: true, status: true } },
+    },
+  });
+  if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
+  const cfg = await configForSite(draft.siteId);
+  if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured for this site", 503);
+  if (!draft.action?.targetUrl) throw new WixBlogDeliveryError("This action has no Wix Blog target", 409);
+  const slug = blogSlugFromUrl(draft.action.targetUrl);
+  if (!slug) throw new WixBlogDeliveryError("The action target is not a Wix Blog post URL", 409);
+
+  const existing = await readWixBlogPostBySlug(slug, cfg);
+  const title = existing.title || draft.title;
+  let importedCover: Awaited<ReturnType<typeof importCover>>;
+  try {
+    importedCover = await importCover(cfg, draft);
+  } catch (error) {
+    throw new WixBlogDeliveryError(
+      `Cover image could not be prepared: ${error instanceof Error ? error.message : "Unsplash or Wix import failed"}`,
+      502,
+    );
+  }
+  const richContent = withCoverCredit(markdownToRicos(draft.markdown, title), importedCover.cover);
+  const updated = await wixRequest<{ draftPost?: { id?: string; title?: string; richContent?: { nodes?: unknown[] } } }>(
+    cfg,
+    "PATCH",
+    `/blog/v3/draft-posts/${encodeURIComponent(existing.id)}?fieldsets=RICH_CONTENT`,
+    {
+      draftPost: {
+        id: existing.id,
+        title,
+        excerpt: draft.excerpt,
+        heroImage: {
+          id: importedCover.mediaId,
+          url: importedCover.url,
+          altText: importedCover.altText,
+        },
+        richContent,
+        seoData: seoData({
+          title,
+          metaTitle: draft.metaTitle,
+          metaDescription: draft.metaDescription,
+          primaryQuery: draft.primaryQuery,
+        }),
+      },
+    },
+  );
+  const verifiedDraft = updated.draftPost;
+  if (!verifiedDraft?.id || verifiedDraft.title !== title || !verifiedDraft.richContent?.nodes?.length) {
+    throw new WixBlogDeliveryError("Wix Blog update did not pass readback verification", 502);
+  }
+
+  await wixRequest<{ draftPost?: { id?: string } }>(
+    cfg,
+    "POST",
+    `/blog/v3/draft-posts/${encodeURIComponent(existing.id)}/publish`,
+    { draftPostId: existing.id },
+  );
+  const published = await wixRequest<{ draftPost?: { id?: string; status?: string } }>(
+    cfg,
+    "GET",
+    `/blog/v3/draft-posts/${encodeURIComponent(existing.id)}`,
+  );
+  if (published.draftPost?.status && published.draftPost.status !== "PUBLISHED") {
+    throw new WixBlogDeliveryError(
+      `Wix Blog post did not report PUBLISHED (got ${published.draftPost.status})`,
+      502,
+    );
+  }
+
+  const delivery = await db.delivery.create({
+    data: {
+      actionId: draft.action.id,
+      draftId: draft.id,
+      platform: "wix_blog",
+      externalId: existing.id,
+      status: "PUBLISHED",
+      verifiedAt: new Date(),
+      payload: {
+        post_id: existing.id,
+        title,
+        slug,
+        live_url: draft.action.targetUrl,
+        readback_verified: true,
+      },
+    },
+  });
+  await markActionVerified(draft.action.id);
+  return delivery;
 }

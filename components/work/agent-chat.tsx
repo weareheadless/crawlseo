@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export function AgentChat({
   taskId: string;
   initialMessages: Message[];
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
@@ -37,8 +39,13 @@ export function AgentChat({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error ?? "Could not send message");
-      setMessages((current) => [...current, payload.message]);
+      setMessages((current) => [
+        ...current,
+        payload.message,
+        ...(payload.systemMessage ? [payload.systemMessage] : []),
+      ]);
       setContent("");
+      router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not send message");
     } finally {
@@ -50,7 +57,7 @@ export function AgentChat({
     <div className="space-y-3">
       <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-border/60 bg-muted/15 p-3">
         {messages.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No messages yet. Ask the agent to change the implementation.</p>
+          <p className="text-xs text-muted-foreground">No messages yet. Ask for a correction and the task will reopen for another run.</p>
         ) : messages.map((message) => (
           <div
             key={message.id}
@@ -76,7 +83,7 @@ export function AgentChat({
           value={content}
           onChange={(event) => setContent(event.target.value)}
           rows={2}
-          placeholder="Reply to the agent with corrections or approval notes…"
+          placeholder="Ask for a correction or follow-up…"
           className="min-h-[42px] flex-1 resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/55 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <Button type="submit" disabled={!content.trim() || sending}>

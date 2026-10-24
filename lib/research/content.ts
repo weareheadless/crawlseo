@@ -10,6 +10,9 @@ import {
 } from "@/lib/ai-seo/action-plan";
 import { briefForDraft, generateContentDraft } from "@/lib/ai-seo/writer";
 import { ResearchServiceError } from "@/lib/research/service";
+import { selectEvidenceSources, sourceIdsForAction, sourcePublisher } from "@/lib/research/evidence";
+import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { configForSite, readWixBlogPostBySlug } from "@/lib/delivery/wix-blog";
 
 const SIGNALS = new Set<OpportunitySignal>([
   "striking_distance",
@@ -106,26 +109,81 @@ export function contentActionFromResearchAction(action: ResearchAction): Content
 export async function generateDraftForAction(
   actionId: string,
   instructions?: string,
+  options: {
+    requireApproval?: boolean;
+    forceArticle?: boolean;
+    currentBody?: string;
+    currentTitle?: string;
+    factSource?: string;
+  } = {},
 ) {
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
-    include: { site: { select: { id: true, domain: true } } },
+    include: {
+      site: { select: { id: true, domain: true } },
+      finding: { select: { evidenceSourceIds: true } },
+      run: { select: { sources: { orderBy: { retrievedAt: "desc" }, take: 200 } } },
+    },
   });
   if (!action) throw new ResearchServiceError("Research action not found", 404);
-  if (action.status !== "APPROVED" && action.status !== "DRAFTING") {
+  const requireApproval = options.requireApproval !== false;
+  if (requireApproval && action.status !== "APPROVED" && action.status !== "DRAFTING") {
     throw new ResearchServiceError(
       "Approve the action before generating content",
       409,
     );
   }
+  if (!requireApproval && !["PROPOSED", "APPROVED", "DRAFTING", "DRAFT_READY"].includes(action.status)) {
+    throw new ResearchServiceError(
+      `Cannot auto-draft an action in ${action.status} status`,
+      409,
+    );
+  }
 
   const mapped = contentActionFromResearchAction(action);
+  if (options.forceArticle) {
+    mapped.format = "article";
+    mapped.kind = "create_article";
+  }
+  if (options.currentBody) {
+    mapped.evidence.current_body = options.currentBody.slice(0, 30_000);
+  }
+  if (options.currentTitle) {
+    mapped.evidence.current_title = options.currentTitle;
+  }
+  const citedSources = selectEvidenceSources(
+    action.run?.sources ?? [],
+    sourceIdsForAction(action),
+  ).slice(0, 12);
+  const writerAction = citedSources.length === 0
+    ? mapped
+    : {
+        ...mapped,
+        evidence: {
+          ...mapped.evidence,
+          research_sources: citedSources.map((source) => ({
+            title: source.title,
+            url: source.url,
+            provider: source.provider,
+            publisher: sourcePublisher(source),
+            published_at: source.publishedAt?.toISOString() ?? null,
+            excerpt: source.excerpt?.slice(0, 1_500) ?? null,
+          })),
+        } as unknown as typeof mapped.evidence,
+      };
   const generated = await generateContentDraft({
     domain: action.site.domain,
-    action: mapped,
+    action: writerAction,
     instructions,
   });
 
+  const title = options.currentTitle?.trim() || generated.title;
+  const withoutH1 = options.currentTitle
+    ? generated.markdown.replace(/^#\s+.*\r?\n+/, "")
+    : generated.markdown;
+  const markdown = options.factSource
+    ? stripUnsupportedNumericBlocks(withoutH1, options.factSource)
+    : withoutH1;
   const draft = await db.contentDraft.create({
     data: {
       siteId: action.siteId,
@@ -136,14 +194,14 @@ export async function generateDraftForAction(
       primaryQuery: action.primaryQuery ?? "",
       targetUrl: action.targetUrl,
       intent: mapped.intent,
-      title: generated.title,
+      title,
       slug: generated.slug,
       metaTitle: generated.metaTitle,
       metaDescription: generated.metaDescription,
       excerpt: generated.excerpt,
-      markdown: generated.markdown,
+      markdown,
       outline: generated.outline as Prisma.InputJsonValue,
-      brief: briefForDraft(mapped) as Prisma.InputJsonValue,
+      brief: briefForDraft(writerAction) as Prisma.InputJsonValue,
       model: generated.model,
       provider: generated.provider,
     },
@@ -155,4 +213,68 @@ export async function generateDraftForAction(
   });
 
   return draft;
+}
+
+
+export async function generateWixBlogUpdateDraftForAction(
+  actionId: string,
+  instructions?: string,
+) {
+  const action = await db.researchAction.findUnique({
+    where: { id: actionId },
+    select: { id: true, siteId: true, targetUrl: true, status: true },
+  });
+  if (!action) throw new ResearchServiceError("Research action not found", 404);
+  if (!action.targetUrl || !isWixBlogTarget(action.targetUrl)) {
+    throw new ResearchServiceError("This action is not a Wix Blog target", 409);
+  }
+  const slug = new URL(action.targetUrl).pathname.match(/\/post\/([^/?#]+)/i)?.[1];
+  if (!slug) throw new ResearchServiceError("Could not read the Wix Blog slug from the target", 409);
+
+  const cfg = await configForSite(action.siteId);
+  if (!cfg) throw new ResearchServiceError("Wix Blog credentials are not configured for this site", 503);
+  const existing = await readWixBlogPostBySlug(decodeURIComponent(slug), cfg);
+  return generateDraftForAction(
+    actionId,
+    instructions || "Make a targeted update to the existing Wix Blog post. Preserve its title, URL, introduction, established facts, structure, and useful detail. Only add or strengthen what the action requires. Do not add cost comparisons, statistics, or new FAQs unless they are already in the current post or evidence.",
+    {
+      requireApproval: false,
+      forceArticle: true,
+      currentBody: existing.plainContent,
+      currentTitle: existing.title,
+      factSource: existing.plainContent,
+    },
+  );
+}
+
+
+function numericTokens(value: string): Set<string> {
+  return new Set(
+    (value.match(/\d[\d,.]*/g) ?? [])
+      .map((token) => token.replace(/[.,]+$/, ""))
+      .filter((token) => token.length > 1),
+  );
+}
+
+/**
+ * The editorial model sometimes imports plausible but unsupported numbers.
+ * For existing blog posts, remove non-heading blocks whose figures cannot be
+ * found in the current post. This keeps a full rewrite from publishing invented
+ * statistics or cost comparisons.
+ */
+function stripUnsupportedNumericBlocks(markdown: string, source: string): string {
+  const allowed = numericTokens(source);
+  const blocks = markdown.split(/\n{2,}/);
+  const kept: string[] = [];
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed) continue;
+    if (/^#{1,6}\s/.test(trimmed)) {
+      kept.push(trimmed);
+      continue;
+    }
+    const unsupported = [...numericTokens(trimmed)].some((token) => !allowed.has(token));
+    if (!unsupported) kept.push(trimmed);
+  }
+  return kept.join("\n\n");
 }

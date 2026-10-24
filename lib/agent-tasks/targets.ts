@@ -18,6 +18,15 @@ const TARGETS: AgentTarget[] = [
     bridgeManifestPath: "/home/admin/wix-site-bridge/sites/susimacdonald/site.manifest.json",
     bridgeSiteRepoPath: "/home/admin/susimacdonald-wix",
   },
+  {
+    domain: "atelier-harmonie.com",
+    repoPath: "/home/admin/atelier-harmonie",
+    defaultBranch: "main",
+    bridgeRepoPath: "/home/admin/wix-site-bridge",
+    bridgeSite: "atelier-harmonie",
+    bridgeManifestPath: "/home/admin/wix-site-bridge/sites/atelier-harmonie/site.manifest.json",
+    bridgeSiteRepoPath: "/home/admin/atelier-harmonie",
+  },
 ];
 
 export function resolveAgentTarget(domain: string): AgentTarget | null {

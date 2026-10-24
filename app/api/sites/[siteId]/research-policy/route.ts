@@ -1,5 +1,9 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
-import { getResearchConfig, saveResearchConfig } from "@/lib/research/policy";
+import {
+  DEFAULT_RESEARCH_CADENCE,
+  getResearchConfig,
+  saveResearchConfig,
+} from "@/lib/research/policy";
 import { z } from "zod";
 import { ZodError } from "zod";
 
@@ -9,7 +13,7 @@ const schema = z.object({
   market: z.string().trim().max(120).optional().default(""),
   language: z.string().trim().min(2).max(16).default("en"),
   providers: z.array(z.enum(["reddit", "news"])).min(1).max(2).default(["reddit", "news"]),
-  cadence: z.enum(["daily", "weekly", "monthly", "manual"]).default("weekly"),
+  cadence: z.enum(["daily", "weekly", "monthly", "manual"]).default(DEFAULT_RESEARCH_CADENCE),
   enabled: z.boolean().default(true),
   maxSources: z.number().int().min(1).max(100).default(30),
   monthlyBudget: z.number().int().min(0).max(500).default(9),

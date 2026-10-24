@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { ResearchServiceError } from "@/lib/research/service";
+import { sourceIdsForAction } from "@/lib/research/evidence";
 
 export async function getWorkData(siteId: string) {
   const [site, actions, drafts, agentTasks, runs] = await Promise.all([
@@ -8,7 +9,10 @@ export async function getWorkData(siteId: string) {
       where: { siteId },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
       take: 200,
-      include: { _count: { select: { drafts: true, agentTasks: true, deliveries: true } } },
+      include: {
+        finding: { select: { evidenceSourceIds: true } },
+        _count: { select: { drafts: true, agentTasks: true, deliveries: true } },
+      },
     }),
     db.contentDraft.findMany({
       where: { siteId },
@@ -45,7 +49,14 @@ export async function getActionDetail(siteId: string, actionId: string) {
     where: { id: actionId, siteId },
     include: {
       site: { select: { id: true, domain: true } },
-      run: { select: { id: true, title: true, status: true } },
+      run: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+        },
+      },
       finding: true,
       drafts: { orderBy: { createdAt: "desc" } },
       deliveries: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -59,5 +70,13 @@ export async function getActionDetail(siteId: string, actionId: string) {
     },
   });
   if (!action) throw new ResearchServiceError("Action not found", 404);
-  return action;
+  const citedSourceIds = sourceIdsForAction(action);
+  const evidenceSources = citedSourceIds.length > 0
+    ? await db.researchSource.findMany({
+        where: { id: { in: citedSourceIds } },
+        orderBy: { retrievedAt: "desc" },
+        take: 200,
+      })
+    : [];
+  return { ...action, evidenceSources };
 }

@@ -6,8 +6,13 @@ import {
   createResearchAction,
   createResearchFinding,
   saveResearchSources,
+  updateResearchAction,
 } from "@/lib/research/service";
+import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
+import { generateDraftForAction } from "@/lib/research/content";
+import { autoAgentDecision } from "@/lib/research/automation";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
+import { researchCountry } from "@/lib/research/locale";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -19,11 +24,106 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
+async function automateRunActions(input: {
+  runId: string;
+  siteDomain: string;
+  autoDraft: boolean;
+  autoAgent: boolean;
+}) {
+  const actions = await db.researchAction.findMany({
+    where: {
+      runId: input.runId,
+      status: { notIn: ["DISMISSED", "VERIFIED", "FAILED"] },
+    },
+    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+    include: {
+      _count: { select: { drafts: true } },
+      agentTasks: {
+        where: { status: { notIn: ["CLOSED", "COMPLETED", "FAILED", "CANCELLED"] } },
+        select: { id: true, status: true },
+      },
+    },
+  });
+
+  const drafts: Array<{ actionId: string; status: string; draftId?: string; reason?: string; error?: string }> = [];
+  const agentTasks: Array<{ actionId: string; status: string; taskId?: string; reason?: string; error?: string }> = [];
+  const skipped: Array<{ actionId: string; reason: string }> = [];
+
+  for (const action of actions) {
+    let status = action.status;
+
+    if (input.autoDraft) {
+      if (action._count.drafts > 0) {
+        drafts.push({ actionId: action.id, status: "skipped", reason: "draft_exists" });
+      } else if (!["PROPOSED", "APPROVED", "DRAFTING"].includes(status)) {
+        drafts.push({ actionId: action.id, status: "skipped", reason: "not_ready" });
+      } else {
+        try {
+          const draft = await generateDraftForAction(
+            action.id,
+            "Generated automatically from the site research policy. Review the draft and its evidence before publishing.",
+            { requireApproval: false },
+          );
+          drafts.push({ actionId: action.id, status: "created", draftId: draft.id });
+          status = "DRAFT_READY";
+        } catch (error) {
+          drafts.push({
+            actionId: action.id,
+            status: "failed",
+            error: error instanceof Error ? error.message.slice(0, 240) : "draft generation failed",
+          });
+        }
+      }
+    }
+
+    if (!input.autoAgent) continue;
+
+    const decision = autoAgentDecision({
+      targetUrl: action.targetUrl,
+      format: action.format,
+      status,
+      siteDomain: input.siteDomain,
+      hasOpenTask: action.agentTasks.length > 0,
+    });
+    if (!decision.eligible) {
+      skipped.push({ actionId: action.id, reason: decision.reason });
+      continue;
+    }
+
+    try {
+      if (status === "PROPOSED") {
+        await updateResearchAction(action.id, { status: "APPROVED" }, "research-automation");
+        status = "APPROVED";
+      }
+      const task = await createAgentTaskForAction(
+        action.id,
+        "Created automatically by the site research policy. Review the evidence and run the agent when ready.",
+      );
+      agentTasks.push({ actionId: action.id, status: "created", taskId: task.id });
+    } catch (error) {
+      agentTasks.push({
+        actionId: action.id,
+        status: "failed",
+        error: error instanceof Error ? error.message.slice(0, 240) : "agent task creation failed",
+      });
+    }
+  }
+
+  return { drafts, agentTasks, skipped };
+}
+
 export async function runResearchRun(runId: string) {
   const run = await db.researchRun.findUnique({
     where: { id: runId },
     include: {
-      site: { select: { id: true, domain: true, projectId: true } },
+      site: {
+        select: {
+          id: true,
+          domain: true,
+          projectId: true,
+          researchPolicy: { select: { autoDraft: true, autoAgent: true } },
+        },
+      },
       findings: { select: { id: true } },
     },
   });
@@ -57,7 +157,7 @@ export async function runResearchRun(runId: string) {
     const sourceErrors: string[] = [];
     const language = typeof brief.language === "string" ? brief.language : "en";
     const market = typeof brief.market === "string" ? brief.market : "";
-    const country = /mexico|méxico/i.test(market) ? "MX" : "US";
+    const country = researchCountry(market, language);
     const topicsForRun = effectiveTopics.slice(0, 5);
     const requestCount = topicsForRun.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
     let requestIndex = 0;
@@ -186,6 +286,16 @@ export async function runResearchRun(runId: string) {
       }
     }
 
+    const policy = run.site.researchPolicy;
+    const automation = policy && (policy.autoDraft || policy.autoAgent)
+      ? await automateRunActions({
+          runId: run.id,
+          siteDomain: run.site.domain,
+          autoDraft: policy.autoDraft,
+          autoAgent: policy.autoAgent,
+        })
+      : null;
+
     const status = sourceErrors.length > 0 ? "PARTIAL" : "COMPLETED";
     const report = {
       schema_version: 1,
@@ -206,6 +316,7 @@ export async function runResearchRun(runId: string) {
           }
         : null,
       action_ids: actionIds,
+      automation,
     };
 
     return db.researchRun.update({

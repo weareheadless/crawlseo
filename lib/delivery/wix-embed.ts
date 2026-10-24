@@ -79,6 +79,16 @@ export function packetTags(html: string): string[] {
   return parseEntries(html).map(([tag]) => tag);
 }
 
+export function rebuildAtelierEarlyPacket(currentHtml: string, packetKey: string, source: string): string {
+  const encoded = gzipSync(Buffer.from(source, "utf8"), { level: 9 }).toString("base64");
+  const escaped = packetKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`("key":"${escaped}"[\\s\\S]*?"encoded":")[^"]+(")`);
+  if (!pattern.test(currentHtml)) {
+    throw new WixEmbedDeliveryError(`Atelier packet key ${packetKey} was not found in the snippet`, 409);
+  }
+  return currentHtml.replace(pattern, `$1${encoded}$2`);
+}
+
 export function packetSource(html: string, tag: string): string | null {
   const entry = parseEntries(html).find(([name]) => name === tag);
   if (!entry) return null;
@@ -114,6 +124,20 @@ async function loadTaskAndTarget(taskId: string, targetKey: string) {
   return { task, target, delivery };
 }
 
+function buildPacket(currentHtml: string, target: { componentTag: string | null; metadata: unknown }, source: string): string {
+  const metadata = target.metadata && typeof target.metadata === "object" && !Array.isArray(target.metadata)
+    ? target.metadata as Record<string, unknown>
+    : {};
+  const packetFormat = typeof metadata.packetFormat === "string" ? metadata.packetFormat : "";
+  const packetKey = typeof metadata.packetKey === "string" ? metadata.packetKey : target.componentTag;
+  if (!target.componentTag || !packetKey) {
+    throw new WixEmbedDeliveryError("Delivery target is missing its component tag or packet key", 409);
+  }
+  return packetFormat === "atelier-v51"
+    ? rebuildAtelierEarlyPacket(currentHtml, packetKey, source)
+    : rebuildSusiEarlyPacket(currentHtml, target.componentTag, source);
+}
+
 export async function planEmbedDelivery(taskId: string, targetKey: string) {
   const { task, target, delivery } = await loadTaskAndTarget(taskId, targetKey);
   const sourcePath = path.join(task.worktreePath!, target.sourcePath!);
@@ -122,7 +146,7 @@ export async function planEmbedDelivery(taskId: string, targetKey: string) {
     snippet?: { embedData?: { html?: string } };
   };
   const currentHtml = snippet.snippet?.embedData?.html ?? "";
-  const nextHtml = rebuildSusiEarlyPacket(currentHtml, target.componentTag!, source);
+  const nextHtml = buildPacket(currentHtml, target, source);
 
   const dir = path.join("/tmp/opencode", `embed-${task.id}`);
   await mkdir(dir, { recursive: true });
@@ -154,7 +178,7 @@ export async function applyEmbedDelivery(
   const snippet = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as {
     snippet?: { embedData?: { html?: string } };
   };
-  const nextHtml = rebuildSusiEarlyPacket(snippet.snippet?.embedData?.html ?? "", target.componentTag!, source);
+  const nextHtml = buildPacket(snippet.snippet?.embedData?.html ?? "", target, source);
   const dir = path.join("/tmp/opencode", `embed-${task.id}`);
   await mkdir(dir, { recursive: true });
   const htmlFile = path.join(dir, `${target.componentTag}.html`);
@@ -198,7 +222,7 @@ export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
     snippet?: { embedData?: { html?: string } };
   };
   const currentHtml = snippet.snippet?.embedData?.html ?? "";
-  const expectedHtml = rebuildSusiEarlyPacket(currentHtml, target.componentTag!, source);
+  const expectedHtml = buildPacket(currentHtml, target, source);
   const result = {
     verified: currentHtml === expectedHtml,
     target: target.key,

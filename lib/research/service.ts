@@ -49,7 +49,7 @@ const ACTION_TRANSITIONS: Record<string, string[]> = {
   PROPOSED: ["APPROVED", "DISMISSED", "FAILED"],
   APPROVED: ["DRAFTING", "DISMISSED", "FAILED"],
   DRAFTING: ["DRAFT_READY", "FAILED"],
-  DRAFT_READY: ["DELIVERY_APPROVED", "DRAFTING", "FAILED"],
+  DRAFT_READY: ["DELIVERY_APPROVED", "DRAFTING", "DISMISSED", "FAILED"],
   DELIVERY_APPROVED: ["DELIVERING", "FAILED"],
   DELIVERING: ["DELIVERED", "FAILED"],
   DELIVERED: ["VERIFIED", "FAILED"],
@@ -129,14 +129,18 @@ export async function listResearchRuns(siteId: string, limit = 20) {
   });
 }
 
-export async function getResearchRun(runId: string) {
-  const run = await db.researchRun.findUnique({
-    where: { id: runId },
+export async function getResearchRun(runId: string, siteId?: string) {
+  const run = await db.researchRun.findFirst({
+    where: { id: runId, ...(siteId ? { siteId } : {}) },
     include: {
       site: { select: { id: true, domain: true } },
       sources: { orderBy: { retrievedAt: "desc" }, take: 200 },
       findings: { orderBy: { createdAt: "asc" }, take: 200 },
-      actions: { orderBy: [{ priority: "desc" }, { createdAt: "desc" }], take: 200 },
+      actions: {
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+        take: 200,
+        include: { finding: { select: { evidenceSourceIds: true } } },
+      },
     },
   });
   if (!run) throw new ResearchServiceError("Research run not found", 404);

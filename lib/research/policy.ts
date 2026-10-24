@@ -11,13 +11,22 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
+export const DEFAULT_RESEARCH_CADENCE = "weekly" as const;
+export type ResearchCadence = "daily" | "weekly" | "monthly" | "manual";
+
+export function normalizeResearchCadence(value: unknown): ResearchCadence {
+  return value === "daily" || value === "weekly" || value === "monthly" || value === "manual"
+    ? value
+    : DEFAULT_RESEARCH_CADENCE;
+}
+
 export type ResearchConfigInput = {
   topics: string[];
   audience?: string;
   market?: string;
   language: string;
   providers: string[];
-  cadence: "daily" | "weekly" | "monthly" | "manual";
+  cadence: ResearchCadence;
   enabled: boolean;
   maxSources: number;
   monthlyBudget: number;
@@ -41,7 +50,7 @@ export async function getResearchConfig(siteId: string) {
     audience: typeof profile?.audience === "string" ? profile.audience : "",
     market: typeof constraints.market === "string" ? constraints.market : "",
     language: profile?.language ?? "en",
-    cadence: policy?.cadence ?? "weekly",
+    cadence: normalizeResearchCadence(policy?.cadence),
     enabled: policy?.enabled ?? true,
     maxSources: policy?.maxSources ?? 30,
     monthlyBudget: policy?.monthlyBudget ?? 9,

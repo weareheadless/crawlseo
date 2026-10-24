@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { generateDraftForAction } from "@/lib/research/content";
 import { ContentWriterError } from "@/lib/ai-seo/writer";
 import { ResearchServiceError } from "@/lib/research/service";
+import { createAgentTaskIfEligible } from "@/lib/agent-tasks/service";
 
 export async function POST(
   req: Request,
@@ -21,6 +22,18 @@ export async function POST(
 
   try {
     const draft = await generateDraftForAction(actionId, instructions || undefined);
+    let agentTask = null;
+    let agentTaskError: string | null = null;
+    try {
+      const result = await createAgentTaskIfEligible(
+        actionId,
+        "Created automatically after the content draft. Review the diff and evidence before updating.",
+      );
+      if (result.created) agentTask = result.task;
+      else agentTaskError = result.reason;
+    } catch (error) {
+      agentTaskError = error instanceof Error ? error.message : "agent task creation failed";
+    }
     return Response.json({
       draft: {
         id: draft.id,
@@ -29,6 +42,8 @@ export async function POST(
         format: draft.format,
         actionId: draft.actionId,
       },
+      agentTask,
+      agentTaskError,
     }, { status: 201 });
   } catch (error) {
     if (error instanceof ResearchServiceError) {

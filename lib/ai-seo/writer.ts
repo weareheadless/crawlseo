@@ -136,10 +136,11 @@ function formatInstruction(action: ContentAction): string {
     ].join(" ");
   }
   return [
-    "Produce a complete SEO article draft in Markdown.",
+    "Produce the requested article update in Markdown.",
+    "If CURRENT BODY is supplied, use it as the source for existing facts and build on it rather than starting over.",
     "Use one H1, clear H2 sections, a concise introduction, and a direct answer near the top.",
     "Aim for 1,000-1,600 words. Do not add a sources section unless the evidence contains sources.",
-    "Do not name local businesses, providers, or places unless they appear in EVIDENCE.",
+    "Write for the reader. The editorial scope in EVIDENCE defines what to change.",
   ].join(" ");
 }
 
@@ -147,10 +148,11 @@ function systemPrompt(): string {
   return [
     "You are a senior SEO editor inside CrawlSEO Content Studio.",
     "You write reviewable drafts for a human editor; you never publish and you never claim a change is live.",
-    "The EVIDENCE block is the only factual source. Treat it as closed-world and do not use prior knowledge.",
+    "The EVIDENCE block, including CURRENT BODY, is the only factual source. Treat it as closed-world and do not use prior knowledge.",
     "If a fact is not in the evidence, omit it or describe it as a recommendation.",
+    "Write naturally. Do not force exact-match keywords, keyword-stuff, or add generic filler.",
     "Do not invent statistics, prices, dates, local facts, testimonials, credentials, guarantees, contact details, or third-party claims.",
-    "Do not name a hospital, clinic, business, place, person, product, or service unless that exact name appears in EVIDENCE.",
+    "Do not name a business, place, person, product, or service unless it appears in EVIDENCE.",
     "When the current page body is not supplied, do not claim what the page covers and do not list entities from it.",
     "Do not mention Search Console, CrawlSEO, prompts, models, or that the draft was AI-generated.",
     "Avoid generic filler, keyword stuffing, and absolute claims.",
@@ -170,8 +172,12 @@ export async function generateContentDraft(input: {
     );
   }
 
+  const currentBody = typeof input.action.evidence.current_body === "string"
+    ? input.action.evidence.current_body.slice(0, 30_000)
+    : null;
   const evidence = {
     site: input.domain,
+    current_body: currentBody,
     action: {
       kind: input.action.kind,
       format: input.action.format,

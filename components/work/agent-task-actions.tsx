@@ -9,10 +9,12 @@ export function AgentTaskActions({
   taskId,
   status,
   commitSha,
+  hasEmbedDeploy = false,
 }: {
   taskId: string;
   status: string;
   commitSha: string | null;
+  hasEmbedDeploy?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,14 +45,17 @@ export function AgentTaskActions({
     <div className="flex flex-wrap items-center gap-2">
       {status === "AWAITING_REVIEW" && (
         <>
-          <Button size="xs" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "APPROVED" }, "approve")} disabled={Boolean(busy)}>
-            {busy === "approve" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-            Approve
-          </Button>
+          {!hasEmbedDeploy && (
+            <Button size="xs" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "APPROVED" }, "approve")} disabled={Boolean(busy)}>
+              {busy === "approve" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              Approve
+            </Button>
+          )}
           <Button variant="outline" size="xs" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "CHANGES_REQUESTED" }, "changes")} disabled={Boolean(busy)}>
             {busy === "changes" ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />}
             Request changes
           </Button>
+          {hasEmbedDeploy && <span className="text-[11px] text-muted-foreground">Use “Approve &amp; deploy” below.</span>}
         </>
       )}
       {status === "APPROVED" && (

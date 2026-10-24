@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Network, Upload } from "lucide-react";
+import { Check, Loader2, Network, Rocket, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Target = {
@@ -17,17 +17,20 @@ export function EmbedDeliveryControls({
   status,
   hasWorktree,
   targets,
+  initialTargetKey,
 }: {
   taskId: string;
   status: string;
   hasWorktree: boolean;
   targets: Target[];
+  initialTargetKey?: string;
 }) {
   const router = useRouter();
-  const [targetKey, setTargetKey] = useState(targets[0]?.key ?? "");
+  const [targetKey, setTargetKey] = useState(initialTargetKey || targets[0]?.key || "");
   const [busy, setBusy] = useState<string | null>(null);
   const [plan, setPlan] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function call(path: string, body: Record<string, unknown>, label: string) {
     setBusy(label);
@@ -43,6 +46,11 @@ export function EmbedDeliveryControls({
       if (label === "plan") setPlan(payload.plan ?? payload);
       if (label === "apply") {
         setPlan(payload.receipt ?? payload);
+        router.refresh();
+      }
+      if (label === "deploy") {
+        setPlan(payload);
+        setNotice("Approved, committed, applied, and verified. Task closed.");
         router.refresh();
       }
     } catch (caught) {
@@ -71,6 +79,16 @@ export function EmbedDeliveryControls({
         ))}
       </select>
       <div className="flex flex-wrap gap-2">
+        {status === "AWAITING_REVIEW" && (
+          <Button
+            size="xs"
+            disabled={!targetKey || !hasWorktree || Boolean(busy)}
+            onClick={() => call(`/crawlseo/api/agent-tasks/${taskId}/approve-deploy`, { targetKey }, "deploy")}
+          >
+            {busy === "deploy" ? <Loader2 className="size-3 animate-spin" /> : <Rocket className="size-3" />}
+            Approve &amp; deploy to Wix
+          </Button>
+        )}
         <Button
           variant="outline"
           size="xs"
@@ -104,7 +122,13 @@ export function EmbedDeliveryControls({
           Apply embed
         </Button>
       </div>
+      {status === "AWAITING_REVIEW" && (
+        <p className="text-[11px] text-muted-foreground">
+          Approving commits the diff, applies the selected embed, verifies the live snippet, and closes the task.
+        </p>
+      )}
       {!hasWorktree && <p className="text-[11px] text-muted-foreground">Run the agent first to create a worktree.</p>}
+      {notice && <p className="text-[11px] text-signal">{notice}</p>}
       {error && <p className="text-[11px] text-danger">{error}</p>}
       {plan !== null && (
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-3 text-[10px] leading-5">

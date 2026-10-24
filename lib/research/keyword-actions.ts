@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { createResearchAction } from "@/lib/research/service";
+import { keywordPriorityFor } from "@/lib/ai-seo/opportunity-priority";
 
 export type KeywordActionInput = {
   keyword: string;
@@ -9,13 +10,6 @@ export type KeywordActionInput = {
   competition?: number | null;
   intent?: string | null;
 };
-
-function priorityFor(input: KeywordActionInput): number {
-  const volume = Math.max(0, Number(input.volume ?? 0));
-  const difficulty = Math.max(0, Math.min(100, Number(input.difficulty ?? 50)));
-  const demand = Math.min(70, Math.round(Math.log10(volume + 1) * 18));
-  return Math.max(20, Math.min(95, 35 + demand - Math.round(difficulty * 0.2)));
-}
 
 export async function queueKeywordAction(
   siteId: string,
@@ -40,7 +34,7 @@ export async function queueKeywordAction(
       queued_at: new Date().toISOString(),
     },
   };
-  const priority = priorityFor(input);
+  const priority = keywordPriorityFor(input.volume, input.difficulty);
 
   // Attach demand evidence to an existing open Action for the same query
   // instead of creating a second queue item for the same reader need.

@@ -1,6 +1,7 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { updateResearchAction, ResearchServiceError } from "@/lib/research/service";
 import { updateResearchActionSchema } from "@/lib/research/types";
+import { createAgentTaskIfEligible } from "@/lib/agent-tasks/service";
 import { ZodError } from "zod";
 
 export async function PATCH(
@@ -14,7 +15,23 @@ export async function PATCH(
   try {
     const input = updateResearchActionSchema.parse(await req.json());
     const action = await updateResearchAction(actionId, input, userId);
-    return Response.json({ action });
+
+    let agentTask = null;
+    let agentTaskError: string | null = null;
+    if (input.status === "APPROVED") {
+      try {
+        const result = await createAgentTaskIfEligible(
+          actionId,
+          "Created automatically when the action was approved. Review the evidence, then run the agent.",
+        );
+        if (result.created) agentTask = result.task;
+        else agentTaskError = result.reason;
+      } catch (error) {
+        agentTaskError = error instanceof Error ? error.message : "agent task creation failed";
+      }
+    }
+
+    return Response.json({ action, agentTask, agentTaskError });
   } catch (error) {
     if (error instanceof ZodError) {
       return Response.json({ error: error.issues[0]?.message ?? "Invalid action update" }, { status: 400 });

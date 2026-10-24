@@ -1,6 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 import { db } from "@/lib/db";
 import { createResearchRun } from "@/lib/research/service";
+import { normalizeResearchCadence } from "@/lib/research/policy";
 
 loadEnvConfig(process.cwd());
 
@@ -39,7 +40,7 @@ async function main() {
     const policy = site.researchPolicy;
     const profile = site.siteProfile;
     if (!policy || !profile) continue;
-    const cadenceMs = intervalMs(policy.cadence);
+    const cadenceMs = intervalMs(normalizeResearchCadence(policy.cadence));
     const topics = stringList(profile.topics);
     if (!cadenceMs || topics.length === 0) {
       results.push({ site: site.domain, status: "skipped", reason: "manual cadence or no topics" });

@@ -3,6 +3,7 @@ import { buildAgentPrompt } from "@/lib/agent-tasks/prompt";
 import { isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
 import { ResearchServiceError } from "@/lib/research/service";
 import { canTransitionAgentTask } from "@/lib/agent-tasks/transitions";
+import { autoAgentDecision } from "@/lib/research/automation";
 
 export async function createAgentTaskForAction(
   actionId: string,
@@ -77,6 +78,43 @@ export async function createAgentTaskForAction(
       branch: `agent/${action.id}`,
     },
   });
+}
+
+export async function createAgentTaskIfEligible(
+  actionId: string,
+  operatorInstructions?: string,
+): Promise<
+  | { created: true; task: Awaited<ReturnType<typeof createAgentTaskForAction>> }
+  | { created: false; reason: string }
+> {
+  const action = await db.researchAction.findUnique({
+    where: { id: actionId },
+    select: {
+      targetUrl: true,
+      format: true,
+      status: true,
+      site: { select: { domain: true } },
+      agentTasks: {
+        where: { status: { notIn: ["CLOSED", "COMPLETED", "FAILED", "CANCELLED"] } },
+        select: { id: true },
+      },
+    },
+  });
+  if (!action) return { created: false, reason: "action_not_found" };
+
+  const decision = autoAgentDecision({
+    targetUrl: action.targetUrl,
+    format: action.format,
+    status: action.status,
+    siteDomain: action.site.domain,
+    hasOpenTask: action.agentTasks.length > 0,
+  });
+  if (!decision.eligible) return { created: false, reason: decision.reason };
+
+  return {
+    created: true,
+    task: await createAgentTaskForAction(actionId, operatorInstructions),
+  };
 }
 
 export async function listAgentTasks(siteId: string, limit = 50) {
