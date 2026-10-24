@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { db } from "@/lib/db";
 import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
 import { agentChangeOutcome, isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
+import { captureTaskScreenshots, selectScreenshotUrls, type AgentScreenshot } from "@/lib/agent-tasks/screenshots";
 
 const execFileAsync = promisify(execFile);
 
@@ -222,6 +223,7 @@ export async function runAgentTask(taskId: string) {
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
     include: {
+      action: { select: { evidence: true, kind: true, title: true } },
       messages: {
         where: { role: "HUMAN" },
         orderBy: { createdAt: "asc" },
@@ -270,21 +272,47 @@ export async function runAgentTask(taskId: string) {
       await flushProgress(task.id, progress).catch(() => undefined);
     }
   };
+  let screenshots: AgentScreenshot[] = [];
+  const screenshotUrls = selectScreenshotUrls({
+    route: task.route,
+    evidence: task.action?.evidence,
+  });
+  if (screenshotUrls.length > 0) {
+    await addProgress("Capturing page screenshots for visual review.", "Capturing screenshots", true);
+    screenshots = await captureTaskScreenshots(task.id, screenshotUrls).catch(() => []);
+    for (const screenshot of screenshots) {
+      await addAgentArtifact(task.id, { kind: "screenshot", content: JSON.stringify(screenshot) });
+    }
+    if (screenshots.length > 0) {
+      await addProgress(`Captured ${screenshots.length} page screenshot(s).`, "Screenshots ready", true);
+    }
+  }
+  const screenshotNote = screenshots.length > 0
+    ? [
+        "",
+        "SCREENSHOTS",
+        `Attached rendered screenshots: ${screenshots.map((screenshot) => screenshot.url).join(", ")}.`,
+        "Use the screenshots to inspect the actual page and image content. For alt text, describe what is visible and apply it to the matching <img> element in the DOM. Do not infer alt text from filenames alone. Use alt=\"\" for decorative images.",
+      ].join("\n")
+    : "";
+  const agentPrompt = `${prompt}${screenshotNote}`;
   await addProgress("Starting OpenCode agent.", "Starting agent", true);
   try {
     await new Promise<void>((resolve, reject) => {
+      const args = [
+        "run",
+        "--dir", worktreePath,
+        "--agent", "build",
+        "--model", process.env.OPENCODE_AGENT_MODEL?.trim() || "openrouter/deepseek/deepseek-v4.1-flash-1017",
+        "--format", "json",
+        "--auto",
+        "--title", `CrawlSEO ${task.id}`,
+        agentPrompt,
+      ];
+      for (const screenshot of screenshots) args.push("-f", screenshot.file);
       const child = spawn(
         "opencode",
-        [
-          "run",
-          "--dir", worktreePath,
-          "--agent", "build",
-          "--model", process.env.OPENCODE_AGENT_MODEL?.trim() || "openrouter/deepseek/deepseek-v4.1-flash-1017",
-          "--format", "json",
-          "--auto",
-          "--title", `CrawlSEO ${task.id}`,
-          prompt,
-        ],
+        args,
         {
           cwd: worktreePath,
           stdio: ["ignore", "pipe", "pipe"],
@@ -396,6 +424,7 @@ export async function runAgentTask(taskId: string) {
             releaseableFiles,
             outcome: "escaped_worktree",
             summary,
+            screenshots,
             repoBefore,
             repoAfter,
             progress: { ...progress, stage: "Agent escaped the worktree" },
@@ -425,6 +454,7 @@ export async function runAgentTask(taskId: string) {
             releaseableFiles,
             outcome: "no_changes",
             summary,
+            screenshots,
             progress: { ...progress, stage: "No changes produced" },
           },
           completedAt: null,
@@ -446,6 +476,7 @@ export async function runAgentTask(taskId: string) {
           releaseableFiles,
           outcome,
           summary,
+          screenshots,
           progress: { ...progress, stage: "Review ready" },
         },
         completedAt: null,
