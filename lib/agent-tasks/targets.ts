@@ -44,3 +44,7 @@ export function isWixBlogTarget(url: string | null | undefined): boolean {
     return /\/(?:post|blog)(?:\/|$)/i.test(url);
   }
 }
+
+export function isTechnicalSeoAction(action: { source?: string | null; kind?: string | null }): boolean {
+  return action.source === "crawl_issue" && action.kind === "fix_technical_issue";
+}

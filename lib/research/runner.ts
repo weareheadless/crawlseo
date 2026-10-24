@@ -83,6 +83,8 @@ async function automateRunActions(input: {
       targetUrl: action.targetUrl,
       format: action.format,
       status,
+      source: action.source,
+      kind: action.kind,
       siteDomain: input.siteDomain,
       hasOpenTask: action.agentTasks.length > 0,
     });

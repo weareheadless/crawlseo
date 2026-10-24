@@ -16,7 +16,7 @@ import { EmbedDeliveryControls } from "@/components/work/embed-delivery-controls
 import { SourceList } from "@/components/research/source-evidence";
 import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
-import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { isTechnicalSeoAction, isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 
 interface Props {
@@ -40,7 +40,8 @@ export default async function ActionDetailPage({ params }: Props) {
   }
   const citedSources = action.evidenceSources;
   const editorial = editorialFromEvidence(action.evidence);
-  const blogTarget = isWixBlogTarget(action.targetUrl);
+  const technicalAction = isTechnicalSeoAction(action);
+  const blogTarget = !technicalAction && isWixBlogTarget(action.targetUrl);
   const blogDraft = blogTarget
     ? action.drafts.find((candidate) => candidate.format === "article" && candidate.status !== "ARCHIVED") ?? null
     : null;
@@ -109,9 +110,11 @@ export default async function ActionDetailPage({ params }: Props) {
           description="Verify these original sources before approving the action or the generated content. The excerpt is the text stored when the source was retrieved."
           emptyText={action.source === "seo_opportunity"
             ? "This action is based on Search Console and crawl evidence in the structured evidence panel below, not an external article."
-            : action.source === "keyword_research"
-              ? "This action is based on keyword demand evidence in the structured evidence panel below, not an external article."
-              : "No source links were stored for this action. Treat it as unverified until evidence is attached."}
+            : action.source === "crawl_issue"
+              ? "This action is based on crawl evidence in the structured evidence panel below, not an external article."
+              : action.source === "keyword_research"
+                ? "This action is based on keyword demand evidence in the structured evidence panel below, not an external article."
+                : "No source links were stored for this action. Treat it as unverified until evidence is attached."}
         />
       </div>
 

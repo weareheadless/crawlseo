@@ -17,6 +17,7 @@ import { syncGSCDataForProject, syncGSCDataForSite } from "@/lib/workers/gsc-syn
 import { syncGA4DataForProject } from "@/lib/workers/ga4-sync";
 import { syncVitalsForProject, syncVitalsForSite } from "@/lib/workers/vitals-sync";
 import { runSiteCrawl } from "@/lib/crawler/engine";
+import { syncCrawlIssuesToActions } from "@/lib/research/crawl-actions";
 import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
@@ -92,6 +93,11 @@ async function executeJob(
       if (!site) throw new JobExecutionError("SITE_NOT_FOUND");
       const crawlId = typeof payload.crawlId === "string" ? payload.crawlId : undefined;
       await runSiteCrawl(job.siteId, site.domain, integer(payload.maxPages, 200), crawlId);
+      try {
+        await syncCrawlIssuesToActions(job.siteId);
+      } catch (error) {
+        console.error("[CrawlSEO worker] crawl action sync failed", error);
+      }
       return;
     }
     case JobKind.VITALS_SYNC:

@@ -1,4 +1,4 @@
-import { isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
+import { isTechnicalSeoAction, isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
 
 export type AutoAgentDecision =
   | { eligible: true }
@@ -25,6 +25,8 @@ export function autoAgentDecision(input: {
   status: string;
   siteDomain: string;
   hasOpenTask: boolean;
+  source?: string | null;
+  kind?: string | null;
 }): AutoAgentDecision {
   if (["DISMISSED", "VERIFIED", "FAILED"].includes(input.status)) {
     return { eligible: false, reason: "terminal_status" };
@@ -41,7 +43,7 @@ export function autoAgentDecision(input: {
   if (!input.targetUrl) {
     return { eligible: false, reason: "no_target" };
   }
-  if (isWixBlogTarget(input.targetUrl)) {
+  if (isWixBlogTarget(input.targetUrl) && !isTechnicalSeoAction(input)) {
     return { eligible: false, reason: "blog_target" };
   }
   if (!resolveAgentTarget(input.siteDomain)) {

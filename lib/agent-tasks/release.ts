@@ -7,6 +7,7 @@ import { markActionVerified } from "@/lib/agent-tasks/deploy";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
+import { isTechnicalSeoAction } from "@/lib/agent-tasks/targets";
 import { publishWixSite, readWixConfig } from "@/lib/delivery/wix-publish";
 import {
   applyEmbedDelivery,
@@ -81,6 +82,8 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
           title: true,
           recommendation: true,
           targetUrl: true,
+          source: true,
+          kind: true,
           site: { select: { domain: true } },
         },
       },
@@ -94,28 +97,49 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     throw new ResearchServiceError("The task is missing its worktree or target route", 409);
   }
 
-  const delivery = await getSiteDeliveryConfig(task.siteId);
-  if (!delivery?.enabled || !Array.isArray(delivery.adapters) || !delivery.adapters.includes("wix_embed")) {
-    throw new ResearchServiceError("Wix embed delivery is not enabled for this site", 409);
-  }
-  const targets = await db.deliveryTarget.findMany({
-    where: {
-      siteId: task.siteId,
-      enabled: true,
-      adapter: "wix_embed",
-      snippetId: { not: null },
-      sourcePath: { not: null },
-      componentTag: { not: null },
-    },
-    select: { key: true, sourcePath: true, snippetId: true, componentTag: true, route: true },
+  const technical = isTechnicalSeoAction({
+    source: task.action?.source,
+    kind: task.action?.kind,
   });
-  const targetKey = requestedTargetKey ?? selectEmbedTargetKey(targets, {
-    title: task.action?.title ?? task.title,
-    targetUrl: task.action?.targetUrl ?? task.route,
-  });
-  const target = targetKey ? targets.find((item) => item.key === targetKey) : null;
-  if (!target || !target.sourcePath || !target.snippetId) {
-    throw new ResearchServiceError("Could not determine a unique embed target for this release", 409);
+  let target: {
+    key: string;
+    sourcePath: string;
+    snippetId: string;
+    componentTag: string | null;
+    route: string | null;
+  } | null = null;
+
+  if (!technical) {
+    const delivery = await getSiteDeliveryConfig(task.siteId);
+    if (!delivery?.enabled || !Array.isArray(delivery.adapters) || !delivery.adapters.includes("wix_embed")) {
+      throw new ResearchServiceError("Wix embed delivery is not enabled for this site", 409);
+    }
+    const targets = await db.deliveryTarget.findMany({
+      where: {
+        siteId: task.siteId,
+        enabled: true,
+        adapter: "wix_embed",
+        snippetId: { not: null },
+        sourcePath: { not: null },
+        componentTag: { not: null },
+      },
+      select: { key: true, sourcePath: true, snippetId: true, componentTag: true, route: true },
+    });
+    const targetKey = requestedTargetKey ?? selectEmbedTargetKey(targets, {
+      title: task.action?.title ?? task.title,
+      targetUrl: task.action?.targetUrl ?? task.route,
+    });
+    const selected = targetKey ? targets.find((item) => item.key === targetKey) : null;
+    if (!selected || !selected.sourcePath || !selected.snippetId) {
+      throw new ResearchServiceError("Could not determine a unique embed target for this release", 409);
+    }
+    target = {
+      key: selected.key,
+      sourcePath: selected.sourcePath,
+      snippetId: selected.snippetId,
+      componentTag: selected.componentTag,
+      route: selected.route,
+    };
   }
 
   const worktreeFiles = await changedFiles(task.worktreePath);
@@ -143,7 +167,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
-  const disallowed = files.filter((file) => !isAllowedSiteCode(file, target.sourcePath!));
+  const disallowed = files.filter((file) => !isAllowedSiteCode(file, target?.sourcePath ?? ""));
   if (disallowed.length > 0) {
     throw new ResearchServiceError(
       `This task changes files outside the allowed site-code and embed scope: ${disallowed.join(", ")}`,
@@ -187,15 +211,17 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     );
   }
 
-  let embedPlan;
-  let embedReceipt;
-  let verification;
+  let embedPlan = null;
+  let embedReceipt = null;
+  let verification = null;
   try {
-    const planned = await planEmbedDelivery(task.id, target.key);
-    embedPlan = planned.plan;
-    const applied = await applyEmbedDelivery(task.id, target.key, `apply-embed:${task.id}:${target.key}`);
-    embedReceipt = applied.receipt;
-    verification = await verifyEmbedDelivery(task.id, target.key);
+    if (target) {
+      const planned = await planEmbedDelivery(task.id, target.key);
+      embedPlan = planned.plan;
+      const applied = await applyEmbedDelivery(task.id, target.key, `apply-embed:${task.id}:${target.key}`);
+      embedReceipt = applied.receipt;
+      verification = await verifyEmbedDelivery(task.id, target.key);
+    }
   } catch (error) {
     await updateAgentTask(task.id, {
       status: "CHANGES_REQUESTED",
@@ -213,7 +239,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     );
   }
 
-  if (!verification.verified) {
+  if (verification && !verification.verified) {
     await updateAgentTask(task.id, {
       status: "CHANGES_REQUESTED",
       errorCode: "EMBED_VERIFY_FAILED",
@@ -230,33 +256,35 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     );
   }
 
-  const releaseId = (embedReceipt as { operationId?: string; releaseId?: string }).operationId
-    ?? (embedReceipt as { releaseId?: string }).releaseId
-    ?? null;
+  const releaseId = embedReceipt
+    ? (embedReceipt as { operationId?: string; releaseId?: string }).operationId
+      ?? (embedReceipt as { releaseId?: string }).releaseId
+      ?? null
+    : null;
   await markActionVerified(task.actionId);
   const closed = await updateAgentTask(task.id, {
     status: "CLOSED",
-    publishedUrl: target.route ?? task.route,
+    publishedUrl: target?.route ?? task.route,
     bridgeReceiptId: releaseId,
     result: {
       commitSha: committed.commitSha,
       releaseSha: publication.releaseSha,
       mergedSha: releaseHead,
       publication,
-      embed: {
+      embed: target ? {
         target: target.key,
         snippetId: target.snippetId,
         plan: embedPlan,
         receipt: embedReceipt,
         verification,
-      },
+      } : null,
     },
   });
   return {
     task: closed,
     commitSha: committed.commitSha,
     releaseSha: publication.releaseSha,
-    target: target.key,
+    target: target?.key ?? null,
     publication,
     plan: embedPlan,
     receipt: embedReceipt,

@@ -227,9 +227,11 @@ function ActionCard({ siteId, action }: { siteId: string; action: ActionRow }) {
           ? ` · ${action.evidenceSources} linked source${action.evidenceSources === 1 ? "" : "s"}`
           : action.source === "seo_opportunity"
             ? " · metric evidence in detail"
-            : action.source === "keyword_research"
-              ? " · keyword evidence in detail"
-              : " · no linked sources"}
+            : action.source === "crawl_issue"
+              ? " · crawl evidence in detail"
+              : action.source === "keyword_research"
+                ? " · keyword evidence in detail"
+                : " · no linked sources"}
         {action.drafts > 0 ? ` · ${action.drafts} draft${action.drafts === 1 ? "" : "s"}` : ""}
         {action.agentTasks > 0 ? ` · ${action.agentTasks} task${action.agentTasks === 1 ? "" : "s"}` : ""}
       </p>

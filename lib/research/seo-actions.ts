@@ -9,6 +9,7 @@ import {
   type EditorialReview,
 } from "@/lib/editorial/review";
 import { isDurableEditorialTarget } from "@/lib/editorial/targets";
+import { syncCrawlIssuesToActions } from "@/lib/research/crawl-actions";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -166,5 +167,13 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
     else existing += 1;
   }
 
-  return { created, updated, dismissed, existing, total: plan.actions.length };
+  let crawl;
+  try {
+    crawl = await syncCrawlIssuesToActions(siteId);
+  } catch (error) {
+    console.error("Crawl action sync error:", error);
+    crawl = { error: error instanceof Error ? error.message : "crawl action sync failed" };
+  }
+
+  return { created, updated, dismissed, existing, total: plan.actions.length, crawl };
 }

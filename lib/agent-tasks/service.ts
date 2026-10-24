@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { buildAgentPrompt } from "@/lib/agent-tasks/prompt";
-import { isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
+import { isTechnicalSeoAction, isWixBlogTarget, resolveAgentTarget } from "@/lib/agent-tasks/targets";
 import { ResearchServiceError } from "@/lib/research/service";
 import { canTransitionAgentTask } from "@/lib/agent-tasks/transitions";
 import { autoAgentDecision } from "@/lib/research/automation";
@@ -21,7 +21,7 @@ export async function createAgentTaskForAction(
   if (action.status !== "APPROVED" && action.status !== "DRAFT_READY") {
     throw new ResearchServiceError("Approve the action before creating an agent task", 409);
   }
-  if (action.format === "article" || isWixBlogTarget(action.targetUrl)) {
+  if (action.format === "article" || (!isTechnicalSeoAction(action) && isWixBlogTarget(action.targetUrl))) {
     throw new ResearchServiceError(
       "This target is a Wix Blog post. Use the Wix Blog delivery path, not the embed agent task path.",
       409,
@@ -93,6 +93,8 @@ export async function createAgentTaskIfEligible(
       targetUrl: true,
       format: true,
       status: true,
+      source: true,
+      kind: true,
       site: { select: { domain: true } },
       agentTasks: {
         where: { status: { notIn: ["CLOSED", "COMPLETED", "FAILED", "CANCELLED"] } },
@@ -106,6 +108,8 @@ export async function createAgentTaskIfEligible(
     targetUrl: action.targetUrl,
     format: action.format,
     status: action.status,
+    source: action.source,
+    kind: action.kind,
     siteDomain: action.site.domain,
     hasOpenTask: action.agentTasks.length > 0,
   });

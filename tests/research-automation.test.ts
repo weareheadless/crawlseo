@@ -22,6 +22,18 @@ describe("research automation", () => {
     })).toEqual({ eligible: false, reason: "blog_target" });
   });
 
+  it("allows a technical crawl fix even when the target is a blog URL", () => {
+    expect(autoAgentDecision({
+      targetUrl: "https://www.susimacdonald.com/post/can-americans-buy-property-in-mexico",
+      format: "page_update",
+      status: "DRAFT_READY",
+      source: "crawl_issue",
+      kind: "fix_technical_issue",
+      siteDomain: "www.susimacdonald.com",
+      hasOpenTask: false,
+    })).toEqual({ eligible: true });
+  });
+
   it("does not create an agent task without a configured site target", () => {
     expect(autoAgentDecision({
       targetUrl: "https://www.atelier-harmonie.com/",

@@ -1,0 +1,80 @@
+import { describe, expect, it } from "vitest";
+import { buildCrawlActionDrafts } from "@/lib/research/crawl-actions";
+
+const site = { domain: "www.example.com" };
+const crawl = { id: "crawl-1", pagesFound: 100 };
+
+function page(url: string, statusCode = 200) {
+  return {
+    url,
+    title: `Title ${url}`,
+    description: `Description ${url}`,
+    wordCount: 500,
+    contentScore: 70,
+    h1Count: 1,
+    statusCode,
+  };
+}
+
+describe("crawl action generation", () => {
+  it("groups crawl issues into actionable technical work", () => {
+    const duplicateUrls = [
+      "https://www.example.com/blog",
+      "https://www.example.com/blog/hashtags/1",
+      "https://www.example.com/blog/hashtags/2",
+    ];
+    const issues = [
+      { url: "https://www.example.com/city-a", type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: { howToFix: "Add an H1." } },
+      { url: "https://www.example.com/city-b", type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: { howToFix: "Add an H1." } },
+      { url: "https://www.example.com/post/a", type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: {} },
+      { url: "https://www.example.com/post/b", type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: {} },
+      { url: "https://www.example.com/blog/hashtags/1", type: "BROKEN_LINK", severity: "CRITICAL", message: "HTTP 404", details: { statusCode: 404 } },
+      { url: "https://www.example.com/blog/hashtags/2", type: "BROKEN_LINK", severity: "CRITICAL", message: "HTTP 404", details: { statusCode: 404 } },
+      { url: "https://www.example.com/real-estate-listings/a", type: "BROKEN_LINK", severity: "CRITICAL", message: "HTTP 429", details: { statusCode: 429 } },
+      { url: duplicateUrls[0], type: "DUPLICATE_TITLE", severity: "WARNING", message: "Duplicate title shared by 3 pages", details: { urls: duplicateUrls } },
+      { url: duplicateUrls[1], type: "DUPLICATE_TITLE", severity: "WARNING", message: "Duplicate title shared by 3 pages", details: { urls: duplicateUrls } },
+      { url: "https://www.example.com/blog/tags/a", type: "MISSING_SITEMAP", severity: "INFO", message: "Crawled page not listed in sitemap", details: { kind: "not_in_sitemap" } },
+      { url: "https://www.example.com/blog/tags/b", type: "MISSING_SITEMAP", severity: "INFO", message: "Crawled page not listed in sitemap", details: { kind: "not_in_sitemap" } },
+      { url: "https://www.example.com/post/a", type: "MISSING_DESCRIPTION", severity: "INFO", message: "On-page content score 40/100", details: { kind: "content_score" } },
+    ];
+    const pages = [...new Set(issues.map((issue) => issue.url))].map((url) => page(url));
+
+    const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages });
+
+    expect(drafts).toHaveLength(6);
+    expect(drafts.every((draft) => draft.evidence.technical === true)).toBe(true);
+    expect(drafts.every((draft) => draft.dedupeKey.startsWith("crawl:"))).toBe(true);
+
+    const landingH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:landing");
+    expect(landingH1?.affectedPages).toBe(2);
+    expect(landingH1?.targetUrl).toMatch(/city-[ab]/);
+
+    const blogH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:blog-post");
+    expect(blogH1?.affectedPages).toBe(2);
+
+    const broken404 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:404:blog");
+    expect(broken404?.affectedPages).toBe(2);
+    expect(broken404?.priority).toBeGreaterThan(70);
+
+    const broken429 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:429:listing");
+    expect(broken429?.severity).toBe("INFO");
+    expect(broken429?.priority).toBe(35);
+    expect(broken429?.recommendation).toContain("HTTP 429");
+    expect(broken429?.recommendation).toContain("throttling");
+
+    const duplicate = drafts.find((draft) => draft.issueType === "DUPLICATE_TITLE");
+    expect(duplicate?.affectedPages).toBe(3);
+    expect(duplicate?.evidence.urls).toEqual(duplicateUrls);
+    expect(duplicate?.dedupeKey).toMatch(/^crawl:DUPLICATE_TITLE:duplicate:/);
+
+    const sitemap = drafts.find((draft) => draft.issueType === "MISSING_SITEMAP");
+    expect(sitemap?.affectedPages).toBe(2);
+    expect(sitemap?.groupLabel).toBe("site-wide");
+
+    expect(drafts.some((draft) => draft.evidence.message === "On-page content score 40/100")).toBe(false);
+  });
+
+  it("returns no actions when there is no crawl evidence", () => {
+    expect(buildCrawlActionDrafts({ site, crawl, issues: [], pages: [] })).toEqual([]);
+  });
+});
