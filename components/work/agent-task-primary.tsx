@@ -11,6 +11,7 @@ export function AgentTaskPrimary({
   status,
   hasEmbedTarget,
   requiresSiteRelease = false,
+  hasReleaseableChange = true,
   targetComponentTag,
   publishedUrl,
 }: {
@@ -18,6 +19,7 @@ export function AgentTaskPrimary({
   status: string;
   hasEmbedTarget: boolean;
   requiresSiteRelease?: boolean;
+  hasReleaseableChange?: boolean;
   targetComponentTag?: string | null;
   publishedUrl: string | null;
 }) {
@@ -76,6 +78,23 @@ export function AgentTaskPrimary({
   }
 
   if (status === "AWAITING_REVIEW") {
+    if (!hasReleaseableChange) {
+      return (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "CHANGES_REQUESTED" })} disabled={busy}>
+              {spinner ?? <Check className="size-3" />}
+              Request changes
+            </Button>
+            <span className="text-[11px] font-medium text-warning">No releaseable site-code change</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            The run produced only non-code or out-of-scope files. Review the outcome and request a different approach; the site release pipeline cannot publish this.
+          </p>
+          {error && <p className="text-[11px] text-danger">{error}</p>}
+        </div>
+      );
+    }
     if (!hasEmbedTarget) {
       return (
         <div className="flex flex-wrap items-center gap-2">

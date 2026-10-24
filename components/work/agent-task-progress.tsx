@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ProgressLine = { at: string; message: string };
 type ProgressState = {
@@ -17,6 +18,74 @@ type TaskPayload = {
   startedAt: string | null;
   result: unknown;
 };
+
+type TaskResult = {
+  outcome?: string;
+  files?: string[];
+  releaseableFiles?: string[];
+  diffBytes?: number;
+  summary?: string;
+  progress?: ProgressState;
+};
+
+function taskResultFrom(value: unknown): TaskResult {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as TaskResult
+    : {};
+}
+
+function formatBytes(bytes: number | undefined): string {
+  if (typeof bytes !== "number") return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function outcomeCopy(status: string, result: TaskResult, errorCode?: string | null): { title: string; detail: string; tone: string } | null {
+  if (status === "FAILED") {
+    return {
+      title: "Agent failed",
+      detail: errorCode || "The agent did not complete. Open the notes below for the error.",
+      tone: "border-danger/30 bg-danger/10 text-danger",
+    };
+  }
+  if (status === "AWAITING_REVIEW" && result.outcome === "non_code_changes") {
+    return {
+      title: "Changes ready — non-code only",
+      detail: `${result.files?.length ?? 0} file(s) changed, but none are releaseable site-code files. The site release pipeline will not apply these. Review the files or request a different approach. Nothing is committed or pushed.`,
+      tone: "border-warning/30 bg-warning/10 text-warning",
+    };
+  }
+  if (status === "AWAITING_REVIEW" && result.outcome === "changes_ready") {
+    return {
+      title: "Changes ready for review",
+      detail: `${result.files?.length ?? 0} file(s) changed · ${formatBytes(result.diffBytes)} diff. Nothing is committed or pushed yet.`,
+      tone: "border-signal/30 bg-signal/10 text-signal",
+    };
+  }
+  if (status === "AWAITING_REVIEW") {
+    return {
+      title: "Changes ready for review",
+      detail: `${result.files?.length ?? 0} file(s) changed. Review the notes and diff before approving.`,
+      tone: "border-primary/30 bg-primary/10 text-primary",
+    };
+  }
+  if (status === "CHANGES_REQUESTED" && result.outcome === "no_changes") {
+    return {
+      title: "No changes produced",
+      detail: "The agent could not make a safe code change. Read the final summary for the reason, then request a different approach or rerun with more specific instructions.",
+      tone: "border-warning/30 bg-warning/10 text-warning",
+    };
+  }
+  if (status === "CHANGES_REQUESTED") {
+    return {
+      title: "Changes requested",
+      detail: errorCode ? `The last run stopped with ${errorCode}.` : "Review the notes below before rerunning.",
+      tone: "border-warning/30 bg-warning/10 text-warning",
+    };
+  }
+  return null;
+}
 
 function progressFrom(result: unknown): ProgressState | null {
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
@@ -39,11 +108,13 @@ export function AgentTaskProgress({
   status,
   startedAt,
   result,
+  errorCode,
 }: {
   taskId: string;
   status: string;
   startedAt: string | null;
   result: unknown;
+  errorCode?: string | null;
 }) {
   const router = useRouter();
   const [task, setTask] = useState<TaskPayload>({ status, startedAt, result });
@@ -84,9 +155,12 @@ export function AgentTaskProgress({
   }, [task.status]);
 
   const progress = progressFrom(task.result);
+  const resultState = taskResultFrom(task.result);
   const lines = useMemo(() => (progress?.lines ?? []).slice(-40), [progress?.lines]);
+  const outcome = outcomeCopy(task.status, resultState, errorCode);
+  const files = Array.isArray(resultState.files) ? resultState.files : [];
 
-  if (task.status !== "RUNNING" && !progress) return null;
+  if (task.status !== "RUNNING" && !progress && !outcome) return null;
 
   return (
     <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
@@ -102,6 +176,25 @@ export function AgentTaskProgress({
           {elapsedLabel(progress?.startedAt ?? task.startedAt, now)}
         </span>
       </div>
+      {outcome && (
+        <div className={cn("mt-2 rounded-md border px-3 py-2", outcome.tone)}>
+          <p className="text-[11px] font-semibold">{outcome.title}</p>
+          <p className="mt-0.5 text-[11px] leading-5 opacity-90">{outcome.detail}</p>
+          {files.length > 0 && (
+            <p className="mt-1 break-all font-data text-[10px] opacity-80">
+              {files.slice(0, 8).join(", ")}{files.length > 8 ? ` +${files.length - 8} more` : ""}
+            </p>
+          )}
+        </div>
+      )}
+      {resultState.summary && (
+        <details className="mt-2 rounded border border-border/50 bg-background/60 px-2 py-1.5">
+          <summary className="cursor-pointer font-data text-[10px] uppercase text-muted-foreground">Final agent summary</summary>
+          <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap text-[10px] leading-5 text-foreground/80">
+            {resultState.summary}
+          </pre>
+        </details>
+      )}
       <div className="mt-2 max-h-44 overflow-y-auto rounded border border-border/50 bg-background/60 p-2">
         {lines.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">Waiting for agent output…</p>

@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { db } from "@/lib/db";
 import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
+import { agentChangeOutcome, isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +30,12 @@ function agentTextFromOutput(output: string): string {
     }
   }
   return parts.join("\n\n").trim();
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 type AgentProgressLine = { at: string; message: string };
@@ -326,10 +333,27 @@ export async function runAgentTask(taskId: string) {
     }
     await addProgress("Agent process finished. Capturing diff.", "Capturing diff", true);
 
+    // Include new files in the review diff. Without this, an agent that only
+    // creates a script appears to have made no changes.
+    await execFileAsync("git", ["-C", worktreePath, "add", "--intent-to-add", "-A"], {
+      timeout: 60_000,
+      maxBuffer: 2 * 1024 * 1024,
+    }).catch(() => undefined);
+
     const [diff, status] = await Promise.all([
       execFileAsync("git", ["-C", worktreePath, "diff", "--", "."], { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 }),
-      execFileAsync("git", ["-C", worktreePath, "status", "--short"], { timeout: 60_000, maxBuffer: 2 * 1024 * 1024 }),
+      execFileAsync("git", ["-C", worktreePath, "status", "--short", "--untracked-files=all"], { timeout: 60_000, maxBuffer: 2 * 1024 * 1024 }),
     ]);
+
+    const files = parseGitStatusFiles(status.stdout);
+    const releaseableFiles = files.filter(isReleaseableSiteFile);
+    const outcome = agentChangeOutcome(files);
+    const diffBytes = Buffer.byteLength(diff.stdout);
+    const agentText = agentTextFromOutput(agentOutput);
+    const summary = agentText.slice(0, 20_000);
+    const outcomeMessage = outcome === "no_changes"
+      ? "No files changed. The agent did not produce a reviewable change."
+      : `${files.length} file${files.length === 1 ? "" : "s"} changed (${releaseableFiles.length} releaseable site-code file${releaseableFiles.length === 1 ? "" : "s"}, ${formatBytes(diffBytes)} diff). Not committed or pushed.`;
 
     await addAgentArtifact(task.id, { kind: "diff", content: diff.stdout });
     await addAgentArtifact(task.id, { kind: "git_status", content: status.stdout });
@@ -340,10 +364,10 @@ export async function runAgentTask(taskId: string) {
       await addAgentArtifact(task.id, { kind: "agent_stderr", content: agentErrorOutput.slice(0, 100_000) });
     }
     await createPreviewArtifact(task.id, worktreePath, status.stdout, task.route).catch(() => undefined);
-    const agentText = agentTextFromOutput(agentOutput);
     if (agentText) {
-      await addAgentMessage(task.id, agentText.slice(0, 4_000), "AGENT");
+      await addAgentMessage(task.id, agentText.slice(0, 12_000), "AGENT");
     }
+    await addProgress(outcomeMessage, "Review ready", true);
 
     const repoAfter = await repoState(task.repoPath).catch(() => null);
     const escaped = Boolean(
@@ -366,7 +390,12 @@ export async function runAgentTask(taskId: string) {
           result: {
             worktreePath,
             branch,
-            diffBytes: Buffer.byteLength(diff.stdout),
+            diffBytes,
+            changedFiles: files.length,
+            files,
+            releaseableFiles,
+            outcome: "escaped_worktree",
+            summary,
             repoBefore,
             repoAfter,
             progress: { ...progress, stage: "Agent escaped the worktree" },
@@ -376,7 +405,7 @@ export async function runAgentTask(taskId: string) {
       });
     }
 
-    if (!diff.stdout.trim() && !status.stdout.trim()) {
+    if (outcome === "no_changes" && !diff.stdout.trim()) {
       await addAgentMessage(
         task.id,
         "Agent run completed without changing any files. Add more specific instructions or verify the target route before rerunning.",
@@ -390,8 +419,12 @@ export async function runAgentTask(taskId: string) {
           result: {
             worktreePath,
             branch,
-            diffBytes: 0,
-            changedFiles: 0,
+            diffBytes,
+            changedFiles: files.length,
+            files,
+            releaseableFiles,
+            outcome: "no_changes",
+            summary,
             progress: { ...progress, stage: "No changes produced" },
           },
           completedAt: null,
@@ -407,8 +440,12 @@ export async function runAgentTask(taskId: string) {
         result: {
           worktreePath,
           branch,
-          diffBytes: Buffer.byteLength(diff.stdout),
-          changedFiles: status.stdout.split(/\r?\n/).filter(Boolean).length,
+          diffBytes,
+          changedFiles: files.length,
+          files,
+          releaseableFiles,
+          outcome,
+          summary,
           progress: { ...progress, stage: "Review ready" },
         },
         completedAt: null,

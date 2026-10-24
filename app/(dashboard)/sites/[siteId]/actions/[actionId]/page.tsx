@@ -18,6 +18,7 @@ import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
 import { isTechnicalSeoAction, isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
+import { isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -315,6 +316,7 @@ export default async function ActionDetailPage({ params }: Props) {
                           status={task.status}
                           hasEmbedTarget={deliveryTargets.length > 0}
                           requiresSiteRelease={hasSiteCodeChanges(task, preferredTarget?.sourcePath ?? null)}
+                          hasReleaseableChange={hasSiteCodeChanges(task, preferredTarget?.sourcePath ?? null)}
                           targetComponentTag={preferredTarget?.componentTag ?? null}
                           publishedUrl={task.publishedUrl}
                         />
@@ -336,9 +338,10 @@ export default async function ActionDetailPage({ params }: Props) {
                       status={task.status}
                       startedAt={task.startedAt?.toISOString() ?? null}
                       result={task.result}
+                      errorCode={task.errorCode}
                     />
 
-                    <TaskChange task={task} />
+                    <TaskChange task={task} result={task.result} errorCode={task.errorCode} />
 
                     <div className="mt-4">
                       <p className="mb-2 font-data text-[10px] uppercase tracking-wide text-muted-foreground">Corrections</p>
@@ -416,24 +419,42 @@ export default async function ActionDetailPage({ params }: Props) {
 
 function TaskChange({
   task,
+  result,
+  errorCode,
 }: {
   task: {
     goal: string;
     artifacts: Array<{ kind: string; content: string | null }>;
   };
+  result: unknown;
+  errorCode: string | null;
 }) {
   const gitStatus = task.artifacts.find((artifact) => artifact.kind === "git_status")?.content ?? "";
   const diff = task.artifacts.find((artifact) => artifact.kind === "diff")?.content ?? "";
   const agentOutput = task.artifacts.find((artifact) => artifact.kind === "agent_output")?.content ?? "";
-  const files = gitStatus
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[A-Z?]{1,2}\s+/, ""))
-    .filter(Boolean);
+  const resultState = result && typeof result === "object" && !Array.isArray(result)
+    ? result as { outcome?: unknown; files?: unknown; summary?: unknown }
+    : {};
+  const resultFiles = Array.isArray(resultState.files)
+    ? resultState.files.filter((file): file is string => typeof file === "string")
+    : [];
+  const files = resultFiles.length > 0 ? resultFiles : parseGitStatusFiles(gitStatus);
+  const outcome = typeof resultState.outcome === "string" ? resultState.outcome : null;
+  const outcomeLabel = outcome === "changes_ready"
+    ? "Reviewable site-code changes — not committed or pushed."
+    : outcome === "non_code_changes"
+      ? "Non-code changes only — not releaseable through the site-code pipeline."
+      : outcome === "no_changes"
+        ? "No files changed."
+        : errorCode
+          ? `Task stopped with ${errorCode}.`
+          : null;
 
   return (
     <div className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3">
       <p className="font-data text-[10px] uppercase tracking-wide text-muted-foreground">Change</p>
       <p className="mt-1 text-sm leading-6 text-foreground/90">{task.goal}</p>
+      {outcomeLabel && <p className="mt-1 text-[11px] font-medium text-muted-foreground">{outcomeLabel}</p>}
       {files.length > 0 && (
         <p className="mt-2 break-all font-data text-[10px] text-muted-foreground">
           Files: {files.join(", ")}
@@ -470,17 +491,19 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function hasSiteCodeChanges(
-  task: { artifacts: Array<{ kind: string; content: string | null }> },
+  task: { artifacts: Array<{ kind: string; content: string | null }>; result?: unknown },
   targetSourcePath: string | null,
 ): boolean {
   const status = task.artifacts
     .find((artifact) => artifact.kind === "git_status" && artifact.content)?.content ?? "";
-  const files = status
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /^[A-Z?]{1,2}\s+/.test(line))
-    .map((line) => line.replace(/^[A-Z?]{1,2}\s+/, "").replace(/^"|"$/g, ""));
-  return files.some((file) => targetSourcePath ? file !== targetSourcePath : true);
+  const result = task.result && typeof task.result === "object" && !Array.isArray(task.result)
+    ? task.result as { files?: unknown }
+    : {};
+  const resultFiles = Array.isArray(result.files)
+    ? result.files.filter((file): file is string => typeof file === "string")
+    : [];
+  const files = resultFiles.length > 0 ? resultFiles : parseGitStatusFiles(status);
+  return files.some((file) => file === targetSourcePath || isReleaseableSiteFile(file));
 }
 
 function editorialFromEvidence(evidence: unknown): Record<string, unknown> | null {
