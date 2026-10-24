@@ -9,6 +9,7 @@ import { ActionControls } from "@/components/work/action-controls";
 import { AgentChat } from "@/components/work/agent-chat";
 import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
 import { AgentTaskPrimary } from "@/components/work/agent-task-primary";
+import { AgentTaskProgress } from "@/components/work/agent-task-progress";
 import { AgentTaskBridgePlanButton } from "@/components/work/agent-task-bridge-plan-button";
 import { WixBlogUpdateControls } from "@/components/work/wix-blog-update-controls";
 import { EmbedDeliveryControls } from "@/components/work/embed-delivery-controls";
@@ -16,6 +17,7 @@ import { SourceList } from "@/components/research/source-evidence";
 import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -53,10 +55,10 @@ export default async function ActionDetailPage({ params }: Props) {
     select: { key: true, componentTag: true, snippetId: true, sourcePath: true },
   });
 
-  const preferredEmbedTargetKey = preferredEmbedTarget(
-    deliveryTargets,
-    `${action.title} ${action.recommendation}`,
-  );
+  const preferredEmbedTargetKey = selectEmbedTargetKey(deliveryTargets, {
+    title: action.title,
+    targetUrl: action.targetUrl,
+  }) ?? undefined;
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
 
   return (
@@ -304,14 +306,34 @@ export default async function ActionDetailPage({ params }: Props) {
                         <p className="text-base font-semibold">{task.title}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{task.goal}</p>
                       </div>
-                      <AgentTaskPrimary
-                        taskId={task.id}
-                        status={task.status}
-                        hasEmbedTarget={deliveryTargets.length > 0}
-                        targetComponentTag={preferredTarget?.componentTag ?? null}
-                        publishedUrl={task.publishedUrl}
-                      />
+                      <div className="flex flex-col items-end gap-1">
+                        <AgentTaskPrimary
+                          taskId={task.id}
+                          status={task.status}
+                          hasEmbedTarget={deliveryTargets.length > 0}
+                          requiresSiteRelease={hasSiteCodeChanges(task, preferredTarget?.sourcePath ?? null)}
+                          targetComponentTag={preferredTarget?.componentTag ?? null}
+                          publishedUrl={task.publishedUrl}
+                        />
+                        {task.artifacts.some((artifact) => artifact.kind === "preview_html") && (
+                          <a
+                            href={`/crawlseo/api/agent-tasks/${task.id}/preview`}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-xs text-primary underline underline-offset-2"
+                          >
+                            Preview change
+                          </a>
+                        )}
+                      </div>
                     </div>
+
+                    <AgentTaskProgress
+                      taskId={task.id}
+                      status={task.status}
+                      startedAt={task.startedAt?.toISOString() ?? null}
+                      result={task.result}
+                    />
 
                     <TaskChange task={task} />
 
@@ -444,23 +466,23 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+function hasSiteCodeChanges(
+  task: { artifacts: Array<{ kind: string; content: string | null }> },
+  targetSourcePath: string | null,
+): boolean {
+  const status = task.artifacts
+    .find((artifact) => artifact.kind === "git_status" && artifact.content)?.content ?? "";
+  const files = status
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[A-Z?]{1,2}\s+/.test(line))
+    .map((line) => line.replace(/^[A-Z?]{1,2}\s+/, "").replace(/^"|"$/g, ""));
+  return files.some((file) => targetSourcePath ? file !== targetSourcePath : true);
+}
+
 function editorialFromEvidence(evidence: unknown): Record<string, unknown> | null {
   const editorial = record(record(evidence).editorial);
   return Object.keys(editorial).length > 0 ? editorial : null;
-}
-
-function preferredEmbedTarget(
-  targets: Array<{ key: string; componentTag: string | null }>,
-  text: string,
-): string | undefined {
-  const lower = text.toLowerCase();
-  const hints = ["faq", "slider", "hero", "listing", "guide", "cta"];
-  for (const hint of hints) {
-    if (!lower.includes(hint)) continue;
-    const target = targets.find((candidate) => candidate.componentTag?.toLowerCase().includes(hint));
-    if (target) return target.key;
-  }
-  return targets[0]?.key;
 }
 
 function record(value: unknown): Record<string, unknown> {

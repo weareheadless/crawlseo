@@ -47,6 +47,8 @@ describe("agent prompt", () => {
     expect(prompt).toContain("Do not run `git worktree`");
     expect(prompt).toContain("Do not edit the shared bridge repository");
     expect(prompt).toContain("Keep the existing design.");
+    expect(prompt).toContain("gate every content, SEO, and rendering change to that exact key or slug");
+    expect(prompt).toContain("verify that at least two sibling routes remain unchanged");
   });
 });
 
@@ -57,6 +59,7 @@ describe("agent task transitions", () => {
     expect(canTransitionAgentTask("RUNNING", "AWAITING_REVIEW")).toBe(true);
     expect(canTransitionAgentTask("AWAITING_REVIEW", "CHANGES_REQUESTED")).toBe(true);
     expect(canTransitionAgentTask("CHANGES_REQUESTED", "RUNNING")).toBe(true);
+    expect(canTransitionAgentTask("CHANGES_REQUESTED", "APPROVED")).toBe(true);
     expect(canTransitionAgentTask("AWAITING_REVIEW", "APPROVED")).toBe(true);
     expect(canTransitionAgentTask("APPROVED", "COMMITTED")).toBe(true);
     expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);

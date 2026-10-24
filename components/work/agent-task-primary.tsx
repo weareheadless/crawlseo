@@ -10,12 +10,14 @@ export function AgentTaskPrimary({
   taskId,
   status,
   hasEmbedTarget,
+  requiresSiteRelease = false,
   targetComponentTag,
   publishedUrl,
 }: {
   taskId: string;
   status: string;
   hasEmbedTarget: boolean;
+  requiresSiteRelease?: boolean;
   targetComponentTag?: string | null;
   publishedUrl: string | null;
 }) {
@@ -82,6 +84,23 @@ export function AgentTaskPrimary({
             Approve
           </Button>
           {error && <span className="text-[11px] text-danger">{error}</span>}
+        </div>
+      );
+    }
+    if (requiresSiteRelease) {
+      return (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}/approve-release`, "POST", {})} disabled={busy}>
+              {spinner ?? <Rocket className="size-3" />}
+              Approve &amp; release
+            </Button>
+            {targetComponentTag && <span className="text-[11px] text-muted-foreground">Updates {targetComponentTag}</span>}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Publishes the Velo site code, updates the embed, verifies translations, and closes this task.
+          </p>
+          {error && <p className="text-[11px] text-danger">{error}</p>}
         </div>
       );
     }

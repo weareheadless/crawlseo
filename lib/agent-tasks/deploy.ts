@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ResearchServiceError } from "@/lib/research/service";
@@ -9,21 +11,9 @@ import {
   planEmbedDelivery,
   verifyEmbedDelivery,
 } from "@/lib/delivery/wix-embed";
+import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 
-type EmbedTarget = {
-  key: string;
-  componentTag: string | null;
-};
-
-function targetScore(target: EmbedTarget, text: string): number {
-  if (!target.componentTag) return 0;
-  const terms = target.componentTag
-    .toLowerCase()
-    .replace(/-v\d+$/, "")
-    .split("-")
-    .filter((term) => term.length > 2);
-  return terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
-}
+const execFileAsync = promisify(execFile);
 
 async function resolveEmbedTarget(
   siteId: string,
@@ -48,24 +38,18 @@ async function resolveEmbedTarget(
     throw new ResearchServiceError("No enabled embed target is mapped for this site", 409);
   }
 
-  const text = [action?.title, action?.recommendation, action?.targetUrl]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  const scored = targets
-    .map((target) => ({ key: target.key, score: targetScore(target, text) }))
-    .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
-
-  if (scored[0].score > 0 && (scored.length === 1 || scored[0].score > scored[1].score)) {
-    return scored[0].key;
-  }
+  const key = selectEmbedTargetKey(targets, {
+    title: action?.title,
+    targetUrl: action?.targetUrl,
+  });
+  if (key) return key;
   throw new ResearchServiceError(
     "Could not determine a unique embed target. Select the target manually.",
     409,
   );
 }
 
-async function markActionVerified(actionId: string | null) {
+export async function markActionVerified(actionId: string | null) {
   if (!actionId) return;
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
@@ -118,7 +102,30 @@ export async function approveAndDeployAgentTask(taskId: string, requestedTargetK
 
   let commitSha = task.commitSha;
   if (task.status === "AWAITING_REVIEW") {
-    await updateAgentTask(task.id, { status: "APPROVED", errorCode: null });
+    const taskDetail = await db.agentTask.findUnique({
+    where: { id: task.id },
+    select: { worktreePath: true },
+  });
+  if (!taskDetail?.worktreePath) {
+    throw new ResearchServiceError("Agent worktree is missing", 409);
+  }
+  const status = await execFileAsync("git", ["-C", taskDetail.worktreePath, "status", "--porcelain"], {
+    timeout: 30_000,
+    maxBuffer: 2 * 1024 * 1024,
+  });
+  const changedFiles = status.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[A-Z?]{1,2}\s+/, "").replace(/^"|"$/g, ""))
+    .filter(Boolean);
+  const outsideTarget = changedFiles.filter((file) => file !== target.sourcePath);
+  if (outsideTarget.length > 0) {
+    throw new ResearchServiceError(
+      `This task also changes site code that the embed bridge cannot deploy: ${outsideTarget.join(", ")}. Publish the site source separately or restrict the task to ${target.sourcePath}.`,
+      409,
+    );
+  }
+
+  await updateAgentTask(task.id, { status: "APPROVED", errorCode: null });
     commitSha = (await commitAgentTask(task.id)).commitSha;
   } else if (task.status === "APPROVED") {
     commitSha = (await commitAgentTask(task.id)).commitSha;

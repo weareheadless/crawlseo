@@ -30,7 +30,7 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan" | "deploy" | "verify" | "snippet" | "update-snippet",
+  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "update-snippet",
   options: { siteRepo?: string; apply?: boolean; snippetId?: string; htmlFile?: string; preserveScope?: boolean; extraArgs?: string[] } = {},
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -54,7 +54,7 @@ function runBridge(
         {
           cwd: BRIDGE_ROOT,
           env: { ...process.env, ...fileEnv },
-          timeout: 90_000,
+          timeout: command === "release" ? 300_000 : 90_000,
           maxBuffer: 4 * 1024 * 1024,
         },
         (error, stdout, stderr) => {
@@ -88,6 +88,14 @@ export function bridgeRoot(): string {
 
 export async function deployBridgeSite(alias: string, siteRepo: string, apply = false) {
   return runBridge(alias, "deploy", { siteRepo, apply });
+}
+
+export async function releaseBridgeSite(alias: string, siteRepo: string) {
+  return runBridge(alias, "release", {
+    siteRepo,
+    apply: true,
+    extraArgs: ["--non-interactive"],
+  });
 }
 
 export async function verifyBridgeSite(alias: string, siteRepo: string) {

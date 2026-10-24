@@ -11,6 +11,7 @@ import {
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { generateDraftForAction } from "@/lib/research/content";
 import { autoAgentDecision } from "@/lib/research/automation";
+import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
 import { researchCountry } from "@/lib/research/locale";
 
@@ -286,6 +287,8 @@ export async function runResearchRun(runId: string) {
       }
     }
 
+    const reclassified = await reclassifyUnstableActionTargets(run.siteId, { runId: run.id });
+
     const policy = run.site.researchPolicy;
     const automation = policy && (policy.autoDraft || policy.autoAgent)
       ? await automateRunActions({
@@ -316,6 +319,7 @@ export async function runResearchRun(runId: string) {
           }
         : null,
       action_ids: actionIds,
+      reclassified,
       automation,
     };
 

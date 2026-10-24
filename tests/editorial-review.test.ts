@@ -87,3 +87,77 @@ describe("editorial review", () => {
     expect(editorialFingerprint(action())).not.toBe(editorialFingerprint(action({ expectedClicks: 5 })));
   });
 });
+
+describe("editorial target classes", () => {
+  it("moves a product-page action to a durable category landing page", () => {
+    const review = deterministicEditorialReview(action({
+      title: "Bloc « seconde vie » sur la lampe upcyclée",
+      primaryQuery: "lampe upcyclée seconde vie",
+      targetUrl: "https://www.atelier-harmonie.com/product-page/lampe-upcyclee-les-singulieres-coquelicot",
+      page: {
+        ...action().page!,
+        url: "https://www.atelier-harmonie.com/product-page/lampe-upcyclee-les-singulieres-coquelicot",
+        title: "Lampe upcyclée Les Singulières Coquelicot",
+      },
+    }), {
+      landingPages: [
+        { url: "https://www.atelier-harmonie.com/lampes/lampes-upcycling", title: "Créations Upcyclées & Luminaires Uniques" },
+        { url: "https://www.atelier-harmonie.com/lampes", title: "Lampes artisanales" },
+      ],
+    });
+
+    expect(review.decision).toBe("add_section");
+    expect(review.targetUrl).toBe("https://www.atelier-harmonie.com/lampes/lampes-upcycling");
+    expect(review.targetClass).toBe("category");
+    expect(review.originalTargetUrl).toContain("/product-page/");
+  });
+
+  it("moves a real-estate listing action to a durable city page", () => {
+    const review = deterministicEditorialReview(action({
+      title: "Improve listing copy for Tulum",
+      primaryQuery: "tulum real estate",
+      targetUrl: "https://www.susimacdonald.com/real-estate-listings/example",
+      page: {
+        ...action().page!,
+        url: "https://www.susimacdonald.com/real-estate-listings/example",
+        title: "Example Tulum listing",
+      },
+    }), {
+      landingPages: [
+        { url: "https://www.susimacdonald.com/tulum-real-estate", title: "Tulum Real Estate" },
+        { url: "https://www.susimacdonald.com/homes-for-sale-in-tulum", title: "Homes for Sale in Tulum" },
+      ],
+    });
+
+    expect(review.decision).toBe("add_section");
+    expect(review.targetUrl).toBe("https://www.susimacdonald.com/tulum-real-estate");
+    expect(review.targetClass).toBe("landing");
+  });
+
+  it("recognizes localized product and category paths", () => {
+    const review = deterministicEditorialReview(action({
+      title: "Bloc « seconde vie » sur la lampe upcyclée",
+      primaryQuery: "lampe upcyclée seconde vie",
+      targetUrl: "https://www.atelier-harmonie.com/en/product-page/lampe-upcyclee-les-singulieres-coquelicot",
+      page: null,
+    }), {
+      landingPages: [
+        { url: "https://www.atelier-harmonie.com/lampes/lampes-upcycling", title: "Créations Upcyclées & Luminaires Uniques" },
+      ],
+    });
+    expect(review.decision).toBe("add_section");
+    expect(review.targetUrl).toBe("https://www.atelier-harmonie.com/lampes/lampes-upcycling");
+  });
+
+  it("does not update a product page when no durable target exists", () => {
+    const review = deterministicEditorialReview(action({
+      primaryQuery: "limited edition lamp",
+      targetUrl: "https://www.example.com/product-page/limited-lamp",
+      page: null,
+      expectedClicks: 0,
+    }));
+    expect(review.decision).toBe("dismiss");
+    expect(review.targetUrl).toBeNull();
+    expect(review.targetClass).toBe("unknown");
+  });
+});

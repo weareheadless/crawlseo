@@ -115,6 +115,7 @@ describe("action transitions", () => {
   it("allows the normal workflow", () => {
     expect(canTransitionActionStatus("PROPOSED", "APPROVED")).toBe(true);
     expect(canTransitionActionStatus("APPROVED", "DRAFTING")).toBe(true);
+    expect(canTransitionActionStatus("APPROVED", "DELIVERY_APPROVED")).toBe(true);
     expect(canTransitionActionStatus("DRAFTING", "DRAFT_READY")).toBe(true);
     expect(canTransitionActionStatus("DRAFT_READY", "DELIVERY_APPROVED")).toBe(true);
     expect(canTransitionActionStatus("DELIVERY_APPROVED", "DELIVERING")).toBe(true);
