@@ -242,7 +242,7 @@ export function buildCrawlActionDrafts(input: {
       const status = brokenStatusCode(issue);
       if (status) existing.statusCodes.add(status);
       if (!existing.sourceUrl && sourceUrl) existing.sourceUrl = sourceUrl;
-      existing.brokenUrls.add(issue.url);
+      if (issue.type === "BROKEN_LINK") existing.brokenUrls.add(issue.url);
       existing.families.add(family);
       for (const link of sourceLinks) {
         if (link.anchorText) existing.anchors.add(link.anchorText);

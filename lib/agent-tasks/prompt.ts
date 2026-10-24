@@ -30,7 +30,37 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
   const affectedUrls = Array.isArray(evidenceRecord.urls)
     ? evidenceRecord.urls.filter((url): url is string => typeof url === "string")
     : [];
-  const evidence = JSON.stringify(input.action.evidence, null, 2).slice(0, 12_000);
+  const issueType = typeof evidenceRecord.issue_type === "string" ? evidenceRecord.issue_type : "";
+  const representativeUrls: string[] = [];
+  const families = new Set<string>();
+  for (const url of [input.action.targetUrl, ...affectedUrls].filter((value): value is string => Boolean(value))) {
+    if (representativeUrls.includes(url)) continue;
+    let family = url;
+    try {
+      const parts = new URL(url).pathname.split("/").filter(Boolean);
+      family = parts.slice(0, 2).join("/") || "home";
+    } catch {
+      // Keep the raw URL as the family key.
+    }
+    if (families.has(family)) continue;
+    families.add(family);
+    representativeUrls.push(url);
+    if (representativeUrls.length >= 12) break;
+  }
+  const promptEvidence = {
+    ...evidenceRecord,
+    urls: representativeUrls,
+    ...(issueType !== "BROKEN_LINK" ? { broken_urls: undefined } : {}),
+    ...(evidenceRecord.live_check && typeof evidenceRecord.live_check === "object" && !Array.isArray(evidenceRecord.live_check)
+      ? {
+          live_check: {
+            ...(evidenceRecord.live_check as Record<string, unknown>),
+            checked_urls: representativeUrls.slice(0, 6),
+          },
+        }
+      : {}),
+  };
+  const evidence = JSON.stringify(promptEvidence, null, 2).slice(0, 12_000);
   const draft = input.draft
     ? [
         "CURRENT CONTENT DRAFT",
@@ -58,6 +88,16 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
     "RECOMMENDATION",
     input.action.recommendation,
     "",
+    ...(issueType === "MISSING_ALT"
+      ? [
+          "VISUAL SCOPE",
+          "Attached screenshots are the source of truth for image content.",
+          "Do not fetch or audit every affected URL. Use the screenshots and the shared template code.",
+          "Identify the shared image-rendering code for the affected templates and add alt text there.",
+          "Use alt=\"\" for decorative images. Do not infer alt text from filenames alone.",
+          "",
+        ]
+      : []),
     ...(batch
       ? [
           "BATCH SCOPE",
@@ -66,8 +106,8 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
           "Do not add a one-page special case. Apply the fix at the shared component, page-code, or template level.",
           "Verify sibling routes in each affected family remain unchanged and state the families you changed in your final summary.",
           "",
-          "AFFECTED URLS",
-          affectedUrls.slice(0, 100).join("\n") || "(see evidence)",
+          `AFFECTED URLS (${affectedUrls.length} total; representative sample)`,
+          representativeUrls.join("\n") || "(see evidence)",
           "",
         ]
       : [

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
 import { agentChangeOutcome, isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 import { captureTaskScreenshots, selectScreenshotUrls, type AgentScreenshot } from "@/lib/agent-tasks/screenshots";
+import { agentTimeouts } from "@/lib/agent-tasks/timeouts";
 
 const execFileAsync = promisify(execFile);
 
@@ -287,6 +288,10 @@ export async function runAgentTask(taskId: string) {
       await addProgress(`Captured ${screenshots.length} page screenshot(s).`, "Screenshots ready", true);
     }
   }
+  const batch = task.action?.evidence && typeof task.action.evidence === "object" && !Array.isArray(task.action.evidence)
+    ? (task.action.evidence as Record<string, unknown>).batch === true
+    : false;
+  const timeouts = agentTimeouts({ batch });
   const screenshotNote = screenshots.length > 0
     ? [
         "",
@@ -326,7 +331,41 @@ export async function runAgentTask(taskId: string) {
           },
         },
       );
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+      let maxRuntimeTimer: ReturnType<typeof setTimeout> | null = null;
+      let finished = false;
+      const clearTimers = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        if (maxRuntimeTimer) clearTimeout(maxRuntimeTimer);
+        inactivityTimer = null;
+        maxRuntimeTimer = null;
+      };
+      const finish = (fn: () => void) => {
+        if (finished) return;
+        finished = true;
+        clearTimers();
+        fn();
+      };
+      const resetInactivity = () => {
+        if (finished) return;
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+          child.kill("SIGTERM");
+          finish(() => reject(new Error(
+            `Agent produced no output for ${Math.round(timeouts.inactivityMs / 60_000)} minutes; stopped as inactive.`,
+          )));
+        }, timeouts.inactivityMs);
+      };
+      resetInactivity();
+      maxRuntimeTimer = setTimeout(() => {
+        child.kill("SIGTERM");
+        finish(() => reject(new Error(
+          `Agent exceeded the maximum runtime of ${Math.round(timeouts.maxRuntimeMs / 60_000)} minutes.`,
+        )));
+      }, timeouts.maxRuntimeMs);
+      child.once("error", (error) => finish(() => reject(error)));
       child.stdout?.on("data", (chunk: Buffer) => {
+        resetInactivity();
         const text = chunk.toString("utf8");
         agentOutput = (agentOutput + text).slice(-1_000_000);
         outputBuffer += text;
@@ -338,21 +377,13 @@ export async function runAgentTask(taskId: string) {
         }
       });
       child.stderr?.on("data", (chunk: Buffer) => {
+        resetInactivity();
         agentErrorOutput = (agentErrorOutput + chunk.toString("utf8")).slice(-200_000);
       });
-      const timer = setTimeout(() => {
-        child.kill("SIGTERM");
-        reject(new Error("Agent run timed out after 15 minutes"));
-      }, 15 * 60 * 1000);
-      child.once("error", (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.once("close", (code) => {
-        clearTimeout(timer);
+      child.once("close", (code) => finish(() => {
         if (code === 0) resolve();
         else reject(new Error(`Agent process exited with code ${code ?? "unknown"}`));
-      });
+      }));
     });
 
     if (outputBuffer.trim()) {
