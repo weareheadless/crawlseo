@@ -37,12 +37,16 @@ describe("crawl action generation", () => {
       { url: "https://www.example.com/blog/tags/b", type: "MISSING_SITEMAP", severity: "INFO", message: "Crawled page not listed in sitemap", details: { kind: "not_in_sitemap" } },
       { url: "https://www.example.com/post/a", type: "MISSING_DESCRIPTION", severity: "INFO", message: "On-page content score 40/100", details: { kind: "content_score" } },
     ];
-    const pages = [...new Set(issues.map((issue) => issue.url))].map((url) => page(url));
+    const sourcePost = "https://www.example.com/post/riviera-maya-real-estate-analysis";
+    const pages = [...new Set([...issues.map((issue) => issue.url), sourcePost])].map((url) => page(url));
+    const links = [
+      { sourceUrl: sourcePost, targetUrl: "https://www.example.com/blog/hashtags/1", anchorText: "#1", statusCode: null },
+      { sourceUrl: sourcePost, targetUrl: "https://www.example.com/blog/hashtags/2", anchorText: "#2", statusCode: null },
+    ];
 
-    const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages });
+    const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages, links });
 
     expect(drafts).toHaveLength(6);
-    expect(drafts.every((draft) => draft.evidence.technical === true)).toBe(true);
     expect(drafts.every((draft) => draft.dedupeKey.startsWith("crawl:"))).toBe(true);
 
     const landingH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:landing");
@@ -52,12 +56,18 @@ describe("crawl action generation", () => {
     const blogH1 = drafts.find((draft) => draft.issueType === "MISSING_H1" && draft.groupKey === "MISSING_H1:blog-post");
     expect(blogH1?.affectedPages).toBe(2);
 
-    const broken404 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:404:blog");
+    const broken404 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey.startsWith("BROKEN_LINK:broken:404:source:"));
     expect(broken404?.affectedPages).toBe(2);
     expect(broken404?.priority).toBeGreaterThan(70);
+    expect(broken404?.targetUrl).toBe(sourcePost);
+    expect(broken404?.kind).toBe("fix_broken_link");
+    expect(broken404?.fixMode).toBe("blog_content");
+    expect(broken404?.evidence.technical).toBe(false);
+    expect(broken404?.recommendation).toContain("Wix Blog");
 
     const broken429 = drafts.find((draft) => draft.issueType === "BROKEN_LINK" && draft.groupKey === "BROKEN_LINK:broken:429:listing");
     expect(broken429?.severity).toBe("INFO");
+    expect(broken429?.kind).toBe("fix_technical_issue");
     expect(broken429?.priority).toBe(35);
     expect(broken429?.recommendation).toContain("HTTP 429");
     expect(broken429?.recommendation).toContain("throttling");

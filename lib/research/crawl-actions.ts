@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { REMEDIATION } from "@/lib/crawler/remediation";
 import { createResearchAction } from "@/lib/research/service";
+import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 
 type CrawlIssueRow = {
   url: string;
@@ -10,6 +11,13 @@ type CrawlIssueRow = {
   severity: string;
   message: string;
   details: unknown;
+};
+
+type AuditLinkRow = {
+  sourceUrl: string;
+  targetUrl: string;
+  anchorText: string | null;
+  statusCode: number | null;
 };
 
 type AuditPageRow = {
@@ -33,6 +41,8 @@ export type CrawlActionDraft = {
   recommendation: string;
   priority: number;
   issueType: string;
+  kind: "fix_technical_issue" | "fix_broken_link";
+  fixMode: "site_code" | "blog_content";
   severity: string;
   groupKey: string;
   groupLabel: string;
@@ -50,6 +60,9 @@ type IssueGroup = {
   occurrences: number;
   sampleUrl: string;
   orphan: boolean;
+  sourceUrl: string | null;
+  brokenUrls: Set<string>;
+  anchors: Set<string>;
 };
 
 const SITE_WIDE_ISSUES = new Set(["MISSING_ROBOTS", "MISSING_SITEMAP"]);
@@ -117,7 +130,7 @@ function pathFamily(url: string): { key: string; label: string } {
   return { key: first, label: `${first.replace(/[-_]+/g, " ")} pages` };
 }
 
-function groupForIssue(issue: CrawlIssueRow): { key: string; label: string } | null {
+function groupForIssue(issue: CrawlIssueRow, linksByTarget: Map<string, AuditLinkRow[]>): { key: string; label: string } | null {
   const details = record(issue.details);
   if (EXCLUDED_DETAIL_KINDS.has(String(details.kind ?? ""))) return null;
   if (!validUrl(issue.url)) return null;
@@ -134,7 +147,15 @@ function groupForIssue(issue: CrawlIssueRow): { key: string; label: string } | n
   }
   if (issue.type === "BROKEN_LINK") {
     const status = brokenStatusCode(issue);
-    const family = pathFamily(issue.url);
+    const source = linksByTarget.get(issue.url)?.[0]?.sourceUrl;
+    const family = pathFamily(source ?? issue.url);
+    if (source) {
+      const signature = createHash("sha256").update(source).digest("hex").slice(0, 16);
+      return {
+        key: `broken:${status ?? "unknown"}:source:${signature}`,
+        label: `${family.label} source`,
+      };
+    }
     return {
       key: status ? `broken:${status}:${family.key}` : `broken:${family.key}`,
       label: status ? `${family.label} · HTTP ${status}` : family.label,
@@ -168,14 +189,23 @@ export function buildCrawlActionDrafts(input: {
   crawl: CrawlActionCrawl;
   issues: CrawlIssueRow[];
   pages: AuditPageRow[];
+  links?: AuditLinkRow[];
 }): CrawlActionDraft[] {
   const pagesByUrl = new Map(input.pages.map((page) => [page.url, page]));
+  const linksByTarget = new Map<string, AuditLinkRow[]>();
+  for (const link of input.links ?? []) {
+    const list = linksByTarget.get(link.targetUrl) ?? [];
+    list.push(link);
+    linksByTarget.set(link.targetUrl, list);
+  }
   const groups = new Map<string, IssueGroup>();
 
   for (const issue of input.issues) {
-    const group = groupForIssue(issue);
+    const group = groupForIssue(issue, linksByTarget);
     if (!group) continue;
     const orphan = issue.type === "MISSING_CANONICAL" && record(issue.details).kind === "orphan";
+    const sourceLinks = issue.type === "BROKEN_LINK" ? linksByTarget.get(issue.url) ?? [] : [];
+    const sourceUrl = sourceLinks[0]?.sourceUrl ?? null;
     const urls = issue.type === "DUPLICATE_TITLE" || issue.type === "DUPLICATE_DESCRIPTION"
       ? duplicateUrls(issue)
       : [issue.url];
@@ -191,6 +221,11 @@ export function buildCrawlActionDrafts(input: {
       }
       const status = brokenStatusCode(issue);
       if (status) existing.statusCodes.add(status);
+      if (!existing.sourceUrl && sourceUrl) existing.sourceUrl = sourceUrl;
+      existing.brokenUrls.add(issue.url);
+      for (const link of sourceLinks) {
+        if (link.anchorText) existing.anchors.add(link.anchorText);
+      }
     } else {
       const status = brokenStatusCode(issue);
       groups.set(key, {
@@ -203,6 +238,9 @@ export function buildCrawlActionDrafts(input: {
         occurrences: 1,
         sampleUrl: urls[0],
         orphan,
+        sourceUrl,
+        brokenUrls: new Set(issue.type === "BROKEN_LINK" ? [issue.url] : []),
+        anchors: new Set(sourceLinks.map((link) => link.anchorText).filter((value): value is string => Boolean(value))),
       });
     }
   }
@@ -212,35 +250,44 @@ export function buildCrawlActionDrafts(input: {
     const urls = [...group.urls].filter(validUrl);
     if (urls.length === 0) continue;
     const representative = urls.find((url) => pagesByUrl.get(url)?.statusCode === 200) ?? urls[0];
-    const affectedPages = urls.length;
-    const affectedPct = Math.round((affectedPages / Math.max(1, input.crawl.pagesFound)) * 1000) / 10;
+    const targetUrl = group.sourceUrl ?? representative;
     const statusCode = group.statusCodes.size === 1 ? [...group.statusCodes][0] : null;
+    const blogContent = group.type === "BROKEN_LINK" && isWixBlogTarget(targetUrl);
+    const kind = blogContent ? "fix_broken_link" : "fix_technical_issue";
+    const fixMode = blogContent ? "blog_content" : "site_code";
+    const affectedPages = group.type === "BROKEN_LINK" && group.brokenUrls.size > 0 ? group.brokenUrls.size : urls.length;
+    const affectedPct = Math.round((affectedPages / Math.max(1, input.crawl.pagesFound)) * 1000) / 10;
     const severity = statusCode === 429 ? "INFO" : group.severity;
     const remediation = REMEDIATION[group.type];
     const issueTitle = group.orphan
       ? "Orphaned page"
       : remediation?.title ?? group.type.replaceAll("_", " ").toLowerCase();
-    const title = SITE_WIDE_ISSUES.has(group.type)
-      ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
-      : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
+    const title = group.type === "BROKEN_LINK" && group.sourceUrl
+      ? `Broken links in ${group.label.replace(/ source$/, "")} (${affectedPages} link${affectedPages === 1 ? "" : "s"})`
+      : SITE_WIDE_ISSUES.has(group.type)
+        ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
+        : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
     const fix = group.orphan
       ? "Add internal links from relevant pages to this orphan page, or remove or redirect it if it should not be indexed."
       : remediation?.howToFix ?? "Review the affected pages and fix the underlying template or content issue.";
     const rateLimit = statusCode === 429
       ? "The crawler received HTTP 429 on these URLs. Confirm manually before changing content; this may be crawl throttling rather than a broken page."
       : "";
-    const scope = group.orphan
-      ? `This affects ${affectedPages} orphaned page${affectedPages === 1 ? "" : "s"} with no internal inlinks. Add contextual internal links from relevant pages, or remove/redirect the page.`
-      : SITE_WIDE_ISSUES.has(group.type)
-        ? `This is a site-wide issue affecting ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"}.`
-        : `This affects ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"} in the ${group.label} group. Fix the shared template or component where possible, then verify sibling routes remain unchanged.`;
+    const scope = group.type === "BROKEN_LINK" && group.sourceUrl
+      ? `The broken URLs are linked from ${group.sourceUrl}: ${[...group.brokenUrls].join(", ")}.${group.anchors.size ? ` Anchor text: ${[...group.anchors].join(", ")}.` : ""} ${blogContent ? "Update the Wix Blog post content to remove or correct these links. This is a content update, not a repo code change." : "Update the source page content to remove or correct these links."}`
+      : group.orphan
+        ? `This affects ${affectedPages} orphaned page${affectedPages === 1 ? "" : "s"} with no internal inlinks. Add contextual internal links from relevant pages, or remove/redirect the page.`
+        : SITE_WIDE_ISSUES.has(group.type)
+          ? `This is a site-wide issue affecting ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"}.`
+          : `This affects ${affectedPages} crawled page${affectedPages === 1 ? "" : "s"} in the ${group.label} group. Fix the shared template or component where possible, then verify sibling routes remain unchanged.`;
     const recommendation = [fix, rateLimit, scope].filter(Boolean).join("\n\n").slice(0, 4_000);
-    const page = pageEvidence(pagesByUrl.get(representative));
+    const page = pageEvidence(pagesByUrl.get(targetUrl));
     const evidence = {
       kind: "crawl_issue",
-      technical: true,
+      technical: fixMode === "site_code",
       crawl_id: input.crawl.id,
       issue_type: group.orphan ? "ORPHAN_PAGE" : group.type,
+      fix_mode: fixMode,
       issue_group: group.key,
       group_label: group.label,
       severity,
@@ -249,18 +296,23 @@ export function buildCrawlActionDrafts(input: {
       affected_pct: affectedPct,
       occurrences: group.occurrences,
       status_codes: [...group.statusCodes],
-      sample_url: representative,
+      sample_url: targetUrl,
       urls: urls.slice(0, 20),
+      source_url: group.sourceUrl,
+      broken_urls: [...group.brokenUrls],
+      anchor_texts: [...group.anchors],
       how_to_fix: fix,
       ...(page ? { page } : {}),
     };
     drafts.push({
       dedupeKey: `crawl:${group.key}`,
       title: title.slice(0, 240),
-      targetUrl: representative,
+      targetUrl,
       recommendation,
       priority: actionPriority(severity, affectedPct, statusCode),
       issueType: group.type,
+      kind,
+      fixMode,
       severity,
       groupKey: group.key,
       groupLabel: group.label,
@@ -308,7 +360,17 @@ export async function syncCrawlIssuesToActions(siteId: string) {
     }),
   ]);
 
-  const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages });
+  const brokenTargets = issues
+    .filter((issue) => issue.type === "BROKEN_LINK")
+    .map((issue) => issue.url);
+  const links = brokenTargets.length > 0
+    ? await db.auditLink.findMany({
+        where: { crawlId: crawl.id, targetUrl: { in: brokenTargets } },
+        select: { sourceUrl: true, targetUrl: true, anchorText: true, statusCode: true },
+      })
+    : [];
+
+  const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages, links });
   const byKey = new Map(current.map((action) => [action.dedupeKey, action]));
   let created = 0;
   let updated = 0;
@@ -324,7 +386,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       await db.researchAction.update({
         where: { id: previous.id },
         data: {
-          kind: "fix_technical_issue",
+          kind: draft.kind,
           format: "page_update",
           title: draft.title,
           targetUrl: draft.targetUrl,
@@ -340,7 +402,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       siteId,
       {
         source: "crawl_issue",
-        kind: "fix_technical_issue",
+        kind: draft.kind,
         format: "page_update",
         title: draft.title,
         targetUrl: draft.targetUrl,

@@ -25,6 +25,7 @@ type TaskResult = {
   releaseableFiles?: string[];
   diffBytes?: number;
   summary?: string;
+  resolution?: { status?: string; method?: string; removed_labels?: number; live_verified?: boolean };
   progress?: ProgressState;
 };
 
@@ -68,6 +69,13 @@ function outcomeCopy(status: string, result: TaskResult, errorCode?: string | nu
       title: "Changes ready for review",
       detail: `${result.files?.length ?? 0} file(s) changed. Review the notes and diff before approving.`,
       tone: "border-primary/30 bg-primary/10 text-primary",
+    };
+  }
+  if (status === "CHANGES_REQUESTED" && (errorCode === "SUPERSEDED_BY_BLOG_UPDATE" || result.resolution?.status === "fixed")) {
+    return {
+      title: "Resolved — fixed in Wix Blog",
+      detail: "The broken hashtag links were removed from the live post by a surgical Wix Blog content update. The repo scripts were not published.",
+      tone: "border-signal/30 bg-signal/10 text-signal",
     };
   }
   if (status === "CHANGES_REQUESTED" && result.outcome === "no_changes") {

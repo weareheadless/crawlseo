@@ -4,7 +4,7 @@ export function workCategory(action: {
   source?: string | null;
   kind?: string | null;
 }): WorkCategory {
-  return action.source === "crawl_issue" || action.kind === "fix_technical_issue"
+  return action.kind === "fix_technical_issue"
     ? "technical"
     : "content";
 }
