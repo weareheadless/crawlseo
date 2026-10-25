@@ -9,6 +9,7 @@ import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 import { isTechnicalSeoAction } from "@/lib/agent-tasks/targets";
 import { publishWixSite, readWixConfig } from "@/lib/delivery/wix-publish";
+import { verifyReleaseOutcome } from "@/lib/research/release-verification";
 import {
   applyEmbedDelivery,
   planEmbedDelivery,
@@ -84,6 +85,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
           targetUrl: true,
           source: true,
           kind: true,
+          evidence: true,
           site: { select: { domain: true } },
         },
       },
@@ -256,6 +258,30 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     );
   }
 
+  const outcomeVerification = await verifyReleaseOutcome({
+    targetUrl: target?.route ?? task.route,
+    evidence: task.action?.evidence,
+  });
+  if (outcomeVerification.supported && outcomeVerification.verified !== true) {
+    const errorCode = outcomeVerification.verified === false
+      ? "RELEASE_OUTCOME_NOT_VERIFIED"
+      : "RELEASE_VERIFICATION_UNAVAILABLE";
+    await updateAgentTask(task.id, {
+      status: "CHANGES_REQUESTED",
+      errorCode,
+      result: {
+        commitSha: committed.commitSha,
+        mergedSha: releaseHead,
+        publication,
+        outcomeVerification,
+      },
+    });
+    throw new ResearchServiceError(
+      `Wix code was published, but the issue was not verified after release: ${outcomeVerification.reason ?? "unknown verification failure"}`,
+      502,
+    );
+  }
+
   const releaseId = embedReceipt
     ? (embedReceipt as { operationId?: string; releaseId?: string }).operationId
       ?? (embedReceipt as { releaseId?: string }).releaseId
@@ -271,6 +297,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       releaseSha: publication.releaseSha,
       mergedSha: releaseHead,
       publication,
+      outcomeVerification,
       embed: target ? {
         target: target.key,
         snippetId: target.snippetId,
