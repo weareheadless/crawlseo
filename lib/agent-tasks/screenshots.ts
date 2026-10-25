@@ -38,7 +38,19 @@ export function selectScreenshotUrls(input: {
 }): string[] {
   const evidence = record(input.evidence);
   const issueType = typeof evidence.issue_type === "string" ? evidence.issue_type : "";
-  if (!["MISSING_ALT", "MIXED_CONTENT"].includes(issueType)) return [];
+  const pageIssues = new Set([
+    "MISSING_H1",
+    "MULTIPLE_H1",
+    "MISSING_TITLE",
+    "MISSING_DESCRIPTION",
+    "MISSING_CANONICAL",
+    "MISSING_SCHEMA",
+    "MISSING_ALT",
+    "MIXED_CONTENT",
+    "DUPLICATE_TITLE",
+    "DUPLICATE_DESCRIPTION",
+  ]);
+  if (!pageIssues.has(issueType)) return [];
   const limit = Math.max(1, Math.min(input.limit ?? 3, 6));
   const urls = [
     input.route,

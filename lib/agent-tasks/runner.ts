@@ -297,7 +297,8 @@ export async function runAgentTask(taskId: string) {
         "",
         "SCREENSHOTS",
         `Attached rendered screenshots: ${screenshots.map((screenshot) => screenshot.url).join(", ")}.`,
-        "Use the screenshots to inspect the actual page and image content. For alt text, describe what is visible and apply it to the matching <img> element in the DOM. Do not infer alt text from filenames alone. Use alt=\"\" for decorative images.",
+        "Use the screenshots to inspect the rendered page, its language, and visible content. Do not infer user-facing text from URLs or slugs alone.",
+        "For alt text, apply the description to the matching <img> element in the DOM and use alt=\"\" for decorative images.",
       ].join("\n")
     : "";
   const agentPrompt = `${prompt}${screenshotNote}`;

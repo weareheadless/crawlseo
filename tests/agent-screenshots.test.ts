@@ -22,10 +22,17 @@ describe("agent screenshots", () => {
     ]);
   });
 
-  it("does not capture screenshots for non-visual issues", () => {
+  it("captures screenshots for page-level title issues", () => {
     expect(selectScreenshotUrls({
       route: "https://www.example.com/",
       evidence: { issue_type: "MISSING_TITLE", urls: ["https://www.example.com/"] },
+    })).toEqual(["https://www.example.com/"]);
+  });
+
+  it("does not capture screenshots for non-page issues", () => {
+    expect(selectScreenshotUrls({
+      route: "https://www.example.com/",
+      evidence: { issue_type: "BROKEN_LINK", urls: ["https://www.example.com/"] },
     })).toEqual([]);
   });
 });
