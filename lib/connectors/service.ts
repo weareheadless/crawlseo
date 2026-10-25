@@ -495,7 +495,8 @@ async function envelope(action: Awaited<ReturnType<typeof actionRow>>) {
         researchPolicyRevision: source.run.policyRevision,
         currentPolicyRevision: currentPolicy?.revision ?? 0 };
     }),
-    evidenceComplete: sourceIds.length > 0 && invalidEvidenceReferences.length === 0 && sources.length === sourceIds.length,
+    evidenceComplete: (sourceIds.length > 0 && invalidEvidenceReferences.length === 0 && sources.length === sourceIds.length)
+      || technicalEvidenceComplete,
     unavailableEvidenceSourceIds: sourceIds.filter((id) => !sources.some((source) => source.id === id)),
     invalidEvidenceReferences,
     technicalEvidence,

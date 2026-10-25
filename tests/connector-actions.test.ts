@@ -86,7 +86,7 @@ describe("connector Action envelope and pagination scope", () => {
     expect(result.technicalEvidence?.issueRefs).toHaveLength(1);
     expect(result.technicalEvidence?.pageRefs[0].id).toBe("page-1");
     expect(result.evidence).toEqual([]);
-    expect(result.evidenceComplete).toBe(false);
+    expect(result.evidenceComplete).toBe(true);
   });
 
   it("marks altered or unavailable crawl references invalid instead of completing them", async () => {
