@@ -3,7 +3,8 @@ import { updateResearchAction, ResearchServiceError } from "@/lib/research/servi
 import { updateResearchActionSchema } from "@/lib/research/types";
 import { createAgentTaskIfEligible } from "@/lib/agent-tasks/service";
 import { ZodError } from "zod";
-import { userOwnsResearchAction } from "@/lib/auth/research-action-access";
+import { researchActionAccess } from "@/lib/auth/research-action-access";
+import { EXTERNAL_EXECUTION_MESSAGE } from "@/lib/research/execution-authority";
 
 export async function PATCH(
   req: Request,
@@ -13,8 +14,12 @@ export async function PATCH(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { actionId } = await params;
-  if (!(await userOwnsResearchAction(actionId, userId))) {
+  const access = await researchActionAccess(actionId, userId);
+  if (access === "missing") {
     return Response.json({ error: "Action not found" }, { status: 404 });
+  }
+  if (access === "external") {
+    return Response.json({ error: EXTERNAL_EXECUTION_MESSAGE }, { status: 409 });
   }
   try {
     const input = updateResearchActionSchema.parse(await req.json());

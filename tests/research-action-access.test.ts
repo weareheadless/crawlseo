@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = vi.hoisted(() => ({
   researchAction: { findFirst: vi.fn() },
-  site: { findFirst: vi.fn() },
+  site: { findFirst: vi.fn(), findMany: vi.fn() },
   researchRun: { findFirst: vi.fn() },
   delivery: { findFirst: vi.fn() },
   agentTask: { findFirst: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
-import { userOwnsAgentTask, userOwnsDelivery, userOwnsResearchAction, userOwnsResearchRun, userOwnsSite } from "@/lib/auth/research-action-access";
+import { researchActionAccess, userOwnsAgentTask, userOwnsDelivery, userOwnsResearchAction, userOwnsResearchRun, userOwnsSite } from "@/lib/auth/research-action-access";
 
 describe("research Action cookie ownership", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -56,5 +56,37 @@ describe("research Action cookie ownership", () => {
     expect(mockDb.agentTask.findFirst).toHaveBeenCalledWith({
       where: { id: "task-1", site: { userId: "user-2" } }, select: { id: true },
     });
+  });
+
+  it("reports an owner-visible Action on an externally managed site as external", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({
+      site: { userId: "user-1", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+    });
+    await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("external");
+  });
+
+  it("keeps Actions on a locally executed site mutable", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({
+      site: { userId: "user-1", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
+    });
+    await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("owner");
+  });
+
+  it("treats an Action on an unbound duplicate site as external when a bound sibling owns the domain", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({
+      site: { id: "site-legacy", domain: "oceanicvibes.com", userId: "user-1", connectorBinding: null },
+    });
+    mockDb.site.findMany.mockResolvedValue([
+      { domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" },
+        connectorContext: { capabilities: {} } },
+    ]);
+    await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("external");
+  });
+
+  it("does not reveal an external Action to a different user", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({
+      site: { userId: "user-1", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+    });
+    await expect(researchActionAccess("action-1", "user-2")).resolves.toBe("missing");
   });
 });

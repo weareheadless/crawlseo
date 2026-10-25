@@ -12,6 +12,7 @@ import type {
   UpdateResearchActionInput,
 } from "@/lib/research/types";
 import { emitConnectorEvent } from "@/lib/connectors/events";
+import { isExternallyManaged, isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
 
 export class ResearchServiceError extends Error {
   constructor(
@@ -464,6 +465,12 @@ export async function createResearchAction(
     select: { id: true, projectId: true },
   });
   if (!site) throw new ResearchServiceError("Site not found", 404);
+  if (await isSupersededByExternalAuthority(siteId)) {
+    throw new ResearchServiceError(
+      "This site is superseded by a HelloAda-managed site for the same domain; owner work belongs there",
+      409,
+    );
+  }
 
   if (input.runId) {
     const run = await db.researchRun.findFirst({
@@ -662,9 +669,11 @@ export async function updateResearchAction(
   });
   if (!action) throw new ResearchServiceError("Research action not found", 404);
 
-  if (action.site.connectorBinding?.status === "ACTIVE" && action.site.connectorBinding.executor === "helloada"
-    && ["APPROVED", "DELIVERY_APPROVED"].includes(input.status ?? "")) {
-    throw new ResearchServiceError("HelloAda owns exact owner approval for this site", 409);
+  if (isExternallyManaged(action.site.connectorBinding)) {
+    if (["APPROVED", "DELIVERY_APPROVED"].includes(input.status ?? "")) {
+      throw new ResearchServiceError("HelloAda owns exact owner approval for this site", 409);
+    }
+    throw new ResearchServiceError("This Action is managed in HelloAda and cannot be changed here", 409);
   }
 
   if (input.status && !canTransitionActionStatus(action.status, input.status)) {

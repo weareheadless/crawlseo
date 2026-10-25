@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getContentActionPlan } from "@/lib/ai-seo/content-plan";
 import { createResearchAction } from "@/lib/research/service";
+import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
 import {
   editorialFingerprint,
   reviewSeoOpportunity,
@@ -31,6 +32,13 @@ function existingEditorial(evidence: unknown, fingerprint: string): EditorialRev
  * it to a new article, or dismiss a bad page/query match.
  */
 export async function syncSeoOpportunitiesToActions(siteId: string) {
+  if (await isSupersededByExternalAuthority(siteId)) {
+    return {
+      created: 0, updated: 0, dismissed: 0, existing: 0, total: 0,
+      skipped: "superseded_by_external_authority",
+    };
+  }
+
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { id: true, domain: true },

@@ -9,6 +9,7 @@ import {
   saveResearchSources,
 } from "@/lib/research/service";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
+import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
 import { generateDraftForAction } from "@/lib/research/content";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
@@ -365,6 +366,9 @@ export async function runResearchRun(runId: string) {
       select: { id: true },
     });
 
+    // A site that handed owner work to an external executor through a sibling
+    // site for the same domain must not emit a second set of Actions.
+    const supersededByExternalAuthority = await isSupersededByExternalAuthority(run.siteId);
     let synthesis: Awaited<ReturnType<typeof synthesizeResearch>> | null = null;
     const actionIds: string[] = [];
     if (existingFindings.length === 0 && savedSources.length > 0) {
@@ -405,7 +409,7 @@ export async function runResearchRun(runId: string) {
         sourceIdsByFindingIndex.set(index, sourceIds);
       }
 
-      for (const action of synthesis.actions) {
+      for (const action of supersededByExternalAuthority ? [] : synthesis.actions) {
         const findingId = findingIdByIndex.get(action.findingIndex);
         const result = await createResearchAction(
           run.siteId,

@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({ db: {
   researchFinding: mocks.researchFinding,
   crawl: { findFirst: vi.fn() },
   auditPage: { findMany: vi.fn() },
+  site: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
 } }));
 vi.mock("@/lib/research/providers/reddit-rss", () => ({ fetchRedditRssSearch: vi.fn() }));
 vi.mock("@/lib/research/providers/google-news-rss", () => ({ fetchGoogleNewsRssSearch: mocks.fetchGoogleNewsRssSearch }));

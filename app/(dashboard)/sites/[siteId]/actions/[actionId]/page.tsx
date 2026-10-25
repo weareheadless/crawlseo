@@ -16,6 +16,8 @@ import { SourceList } from "@/components/research/source-evidence";
 import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { getSiteExecutionAuthority } from "@/lib/research/execution-authority";
+import { ExternalExecutionNotice } from "@/components/work/external-execution-notice";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -58,6 +60,8 @@ export default async function ActionDetailPage({ params }: Props) {
     `${action.title} ${action.recommendation}`,
   );
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
+  const authority = await getSiteExecutionAuthority(siteId);
+  const externallyManaged = authority?.managed ?? false;
 
   return (
     <div>
@@ -188,12 +192,16 @@ export default async function ActionDetailPage({ params }: Props) {
       )}
 
       <div className="mb-5">
-        <ActionControls
-          actionId={action.id}
-          initialStatus={action.status}
-          hasDraft={action.drafts.length > 0}
-          blogTarget={blogTarget}
-        />
+        {externallyManaged ? (
+          <ExternalExecutionNotice executor={authority?.executor ?? null} reviewOrigin={authority?.reviewOrigin ?? null} />
+        ) : (
+          <ActionControls
+            actionId={action.id}
+            initialStatus={action.status}
+            hasDraft={action.drafts.length > 0}
+            blogTarget={blogTarget}
+          />
+        )}
       </div>
 
       <div className={blogTarget ? "grid gap-5" : "grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"}>
@@ -246,13 +254,19 @@ export default async function ActionDetailPage({ params }: Props) {
                   </a>
                 )}
               </div>
-              <WixBlogUpdateControls
-                actionId={action.id}
-                draftId={blogDraft?.id}
-          approved={Boolean(blogDraft?.wixApprovalHash && blogDraft.wixApprovedBy === userId && blogDraft.wixApprovedRevision === action.revision)}
-                publishedUrl={blogPublished ? action.targetUrl : null}
-                status={action.status}
-              />
+              {externallyManaged ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  This Wix Blog update is approved and published in {authority?.executor === "helloada" ? "HelloAda" : "the connected review workspace"}.
+                </p>
+              ) : (
+                <WixBlogUpdateControls
+                  actionId={action.id}
+                  draftId={blogDraft?.id}
+            approved={Boolean(blogDraft?.wixApprovalHash && blogDraft.wixApprovedBy === userId && blogDraft.wixApprovedRevision === action.revision)}
+                  publishedUrl={blogPublished ? action.targetUrl : null}
+                  status={action.status}
+                />
+              )}
             </section>
           )}
 
@@ -274,7 +288,7 @@ export default async function ActionDetailPage({ params }: Props) {
                     <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 text-foreground/80">
                       {draft.markdown}
                     </pre>
-                    {!blogTarget && draft.format === "article" && (
+                    {!blogTarget && draft.format === "article" && !externallyManaged && (
                       <WixBlogDraftButton
                         draftId={draft.id}
                         existingExternalId={action.deliveries.find((delivery) =>
@@ -292,7 +306,11 @@ export default async function ActionDetailPage({ params }: Props) {
         <section className="panel overflow-hidden">
             <div className="border-b border-border/60 p-5">
               <h2 className="font-heading text-lg font-semibold">Implementation</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Review the change, approve it, and update the site.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {externallyManaged
+                  ? "Implementation is owned by the connected review workspace. This section is a read-only record."
+                  : "Review the change, approve it, and update the site."}
+              </p>
             </div>
             {action.agentTasks.length === 0 ? (
               <p className="px-5 py-8 text-sm text-muted-foreground">No agent task yet.</p>
@@ -305,19 +323,30 @@ export default async function ActionDetailPage({ params }: Props) {
                         <p className="text-base font-semibold">{task.title}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{task.goal}</p>
                       </div>
-                      <AgentTaskPrimary
-                        taskId={task.id}
-                        status={task.status}
-                        hasEmbedTarget={deliveryTargets.length > 0}
-                        targetComponentTag={preferredTarget?.componentTag ?? null}
-                        publishedUrl={task.publishedUrl}
-                      />
+                      {externallyManaged ? (
+                        <span className="rounded-md border border-border/60 bg-muted/20 px-2 py-1 font-data text-[10px] uppercase text-muted-foreground">
+                          {task.status.toLowerCase().replaceAll("_", " ")}
+                        </span>
+                      ) : (
+                        <AgentTaskPrimary
+                          taskId={task.id}
+                          status={task.status}
+                          hasEmbedTarget={deliveryTargets.length > 0}
+                          targetComponentTag={preferredTarget?.componentTag ?? null}
+                          publishedUrl={task.publishedUrl}
+                        />
+                      )}
                     </div>
 
                     <TaskChange task={task} />
 
                     <div className="mt-4">
                       <p className="mb-2 font-data text-[10px] uppercase tracking-wide text-muted-foreground">Corrections</p>
+                      {externallyManaged ? (
+                        <p className="text-xs text-muted-foreground">
+                          Corrections are requested from the owner review surface in {authority?.executor === "helloada" ? "HelloAda" : "the connected review workspace"}.
+                        </p>
+                      ) : (
                       <AgentChat
                         taskId={task.id}
                         initialMessages={task.messages.map((message) => ({
@@ -327,9 +356,12 @@ export default async function ActionDetailPage({ params }: Props) {
                           createdAt: message.createdAt.toISOString(),
                         }))}
                       />
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Sending a message reopens a closed task for a follow-up run.
-                      </p>
+                      )}
+                      {!externallyManaged && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Sending a message reopens a closed task for a follow-up run.
+                        </p>
+                      )}
                     </div>
 
                     <details className="mt-4 rounded-lg border border-border/60 bg-muted/10 p-3">
@@ -367,16 +399,20 @@ export default async function ActionDetailPage({ params }: Props) {
                             ))}
                           </div>
                         )}
-                        <div className="flex flex-wrap gap-2">
-                          <AgentTaskBridgePlanButton taskId={task.id} disabled={!task.worktreePath} />
-                        </div>
-                        <EmbedDeliveryControls
-                          taskId={task.id}
-                          status={task.status}
-                          hasWorktree={Boolean(task.worktreePath)}
-                          targets={deliveryTargets}
-                          initialTargetKey={preferredEmbedTargetKey}
-                        />
+                        {!externallyManaged && (
+                          <>
+                            <div className="flex flex-wrap gap-2">
+                              <AgentTaskBridgePlanButton taskId={task.id} disabled={!task.worktreePath} />
+                            </div>
+                            <EmbedDeliveryControls
+                              taskId={task.id}
+                              status={task.status}
+                              hasWorktree={Boolean(task.worktreePath)}
+                              targets={deliveryTargets}
+                              initialTargetKey={preferredEmbedTargetKey}
+                            />
+                          </>
+                        )}
                       </div>
                     </details>
                   </div>

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { resolveSiteAuthority } from "@/lib/research/execution-authority";
 
 /** Cookie-authenticated actions are accessible only through their owning site. */
 export async function userOwnsResearchAction(actionId: string, userId: string): Promise<boolean> {
@@ -40,4 +41,31 @@ export async function userOwnsAgentTask(taskId: string, userId: string): Promise
     select: { id: true },
   });
   return Boolean(task);
+}
+
+export type ResearchActionAccess = "owner" | "external" | "missing";
+
+/**
+ * Resolve what a signed-in owner may do with an Action. An Action on a site
+ * whose active executor is external is readable, but its owner decisions belong
+ * to that executor's review surface, so the local UI must not mutate it.
+ */
+export async function researchActionAccess(actionId: string, userId: string): Promise<ResearchActionAccess> {
+  const action = await db.researchAction.findFirst({
+    where: { id: actionId },
+    select: {
+      site: {
+        select: {
+          id: true,
+          domain: true,
+          userId: true,
+          connectorBinding: { select: { executor: true, status: true } },
+        },
+      },
+    },
+  });
+  if (!action) return "missing";
+  if (action.site.userId !== userId) return "missing";
+  const authority = await resolveSiteAuthority(action.site);
+  return authority.managed ? "external" : "owner";
 }

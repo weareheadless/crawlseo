@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { createResearchRun } from "@/lib/research/service";
 import { normalizeResearchCadence } from "@/lib/research/policy";
 import { researchCadenceWindow } from "@/lib/research/schedule";
+import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
 
 loadEnvConfig(process.cwd());
 
@@ -33,6 +34,10 @@ async function main() {
     const policy = site.researchPolicy;
     const profile = site.siteProfile;
     if (!policy || !profile) continue;
+    if (await isSupersededByExternalAuthority(site.id)) {
+      results.push({ site: site.domain, status: "skipped", reason: "superseded_by_external_authority" });
+      continue;
+    }
     const cadence = normalizeResearchCadence(policy.cadence);
     const topics = stringList(profile.topics);
     if (cadence === "manual" || topics.length === 0) {
