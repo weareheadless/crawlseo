@@ -4,10 +4,18 @@ import { isTechnicalSeoAction, isWixBlogTarget, resolveAgentTarget } from "@/lib
 import { ResearchServiceError } from "@/lib/research/service";
 import { canTransitionAgentTask } from "@/lib/agent-tasks/transitions";
 import { autoAgentDecision } from "@/lib/research/automation";
+import { preflightTechnicalTarget, type TargetPreflight } from "@/lib/delivery/preflight";
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
 
 export async function createAgentTaskForAction(
   actionId: string,
   operatorInstructions?: string,
+  options: { preflight?: TargetPreflight } = {},
 ) {
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
@@ -20,6 +28,18 @@ export async function createAgentTaskForAction(
   if (!action) throw new ResearchServiceError("Research action not found", 404);
   if (action.status !== "APPROVED" && action.status !== "DRAFT_READY") {
     throw new ResearchServiceError("Approve the action before creating an agent task", 409);
+  }
+  const evidence = record(action.evidence);
+  const preflight = options.preflight ?? await preflightTechnicalTarget({
+    siteId: action.siteId,
+    targetUrl: action.targetUrl,
+    issueType: typeof evidence.issue_type === "string" ? evidence.issue_type : null,
+  });
+  if (preflight.supported && !preflight.deliverable) {
+    throw new ResearchServiceError(
+      preflight.reason ?? "The target page has no editable content embed; a code-only fix cannot render there.",
+      409,
+    );
   }
   if (action.format === "article" || (!isTechnicalSeoAction(action) && isWixBlogTarget(action.targetUrl))) {
     throw new ResearchServiceError(
@@ -90,11 +110,13 @@ export async function createAgentTaskIfEligible(
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
     select: {
+      siteId: true,
       targetUrl: true,
       format: true,
       status: true,
       source: true,
       kind: true,
+      evidence: true,
       site: { select: { domain: true } },
       agentTasks: {
         where: { status: { notIn: ["CLOSED", "COMPLETED", "FAILED", "CANCELLED"] } },
@@ -103,6 +125,28 @@ export async function createAgentTaskIfEligible(
     },
   });
   if (!action) return { created: false, reason: "action_not_found" };
+  const evidence = record(action.evidence);
+  const preflight = await preflightTechnicalTarget({
+    siteId: action.siteId,
+    targetUrl: action.targetUrl,
+    issueType: typeof evidence.issue_type === "string" ? evidence.issue_type : null,
+  });
+  if (preflight.supported && !preflight.deliverable) {
+    await db.researchAction.update({
+      where: { id: actionId },
+      data: {
+        status: "DISMISSED",
+        evidence: { ...evidence, preflight } as never,
+      },
+    });
+    return { created: false, reason: `target_not_deliverable: ${preflight.reason ?? "no content embed"}` };
+  }
+  if (preflight.supported) {
+    await db.researchAction.update({
+      where: { id: actionId },
+      data: { evidence: { ...evidence, preflight } as never },
+    });
+  }
 
   const decision = autoAgentDecision({
     targetUrl: action.targetUrl,
@@ -117,7 +161,7 @@ export async function createAgentTaskIfEligible(
 
   return {
     created: true,
-    task: await createAgentTaskForAction(actionId, operatorInstructions),
+    task: await createAgentTaskForAction(actionId, operatorInstructions, { preflight }),
   };
 }
 
