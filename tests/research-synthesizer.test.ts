@@ -103,6 +103,47 @@ describe("research synthesis", () => {
     expect(result.actions[0].targetUrl).toBeUndefined();
   });
 
+  it("keeps Action finding links aligned when earlier model findings are rejected", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({
+      findings: [
+        { type: "INVALID", theme: "bad", summary: "Rejected finding with a source reference.", source_indexes: [0] },
+        { type: "CONCERN", theme: "Ownership", summary: "Buyers repeatedly ask whether foreign owners can hold title.", source_indexes: [0] },
+      ],
+      actions: [
+        { finding_index: 0, source: "market_research", kind: "update_page", title: "Wrong finding", recommendation: "This action must be dropped because finding zero was invalid." },
+        { finding_index: 1, source: "market_research", kind: "update_page", title: "Ownership explanation", recommendation: "Clarify title ownership using the cited buyer evidence." },
+      ],
+    })));
+    const result = await synthesizeResearch({
+      siteDomain: "casamigo.net", title: "Buyer concerns", topics: ["ownership"], questions: [], sources, candidatePages: [],
+    });
+    expect(result.findings).toHaveLength(1);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0].findingIndex).toBe(0);
+    expect(result.actions[0].title).toBe("Ownership explanation");
+  });
+
+  it("drops model actions outside the documented capability set", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({
+      findings: [{
+        type: "CONCERN", theme: "Ownership", summary: "Buyers repeatedly ask about foreign ownership rules.",
+        source_indexes: [0],
+      }],
+      actions: [{
+        finding_index: 0, source: "market_research", kind: "publish_site_wide_script",
+        title: "Install a new script", recommendation: "Add a site-wide script based on the source.",
+      }],
+    })));
+
+    const result = await synthesizeResearch({
+      siteDomain: "casamigo.net", title: "Buyer concerns", topics: ["ownership"], questions: [], sources, candidatePages: [],
+    });
+    expect(result.findings).toHaveLength(1);
+    expect(result.actions).toEqual([]);
+  });
+
   it("rejects a response with no valid findings", async () => {
     vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({ findings: [], actions: [] })));

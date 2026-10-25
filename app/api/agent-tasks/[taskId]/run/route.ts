@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { JobKind } from "@prisma/client";
+import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 
 export async function POST(
   _req: Request,
@@ -10,6 +11,7 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { taskId } = await params;
+  if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
     select: { id: true, siteId: true, status: true },

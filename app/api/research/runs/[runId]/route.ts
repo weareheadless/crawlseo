@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { getResearchRun, ResearchServiceError } from "@/lib/research/service";
+import { userOwnsResearchRun } from "@/lib/auth/research-action-access";
 
 export async function GET(
   _req: Request,
@@ -9,6 +10,9 @@ export async function GET(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { runId } = await params;
+  if (!(await userOwnsResearchRun(runId, userId))) {
+    return Response.json({ error: "Research run not found" }, { status: 404 });
+  }
   try {
     return Response.json({ run: await getResearchRun(runId) });
   } catch (error) {

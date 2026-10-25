@@ -249,6 +249,7 @@ export default async function ActionDetailPage({ params }: Props) {
               <WixBlogUpdateControls
                 actionId={action.id}
                 draftId={blogDraft?.id}
+          approved={Boolean(blogDraft?.wixApprovalHash && blogDraft.wixApprovedBy === userId && blogDraft.wixApprovedRevision === action.revision)}
                 publishedUrl={blogPublished ? action.targetUrl : null}
                 status={action.status}
               />

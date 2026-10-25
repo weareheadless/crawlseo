@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = vi.hoisted(() => ({
+  site: { findUnique: vi.fn() },
   servicePrincipal: { upsert: vi.fn() },
   serviceCredential: {
     create: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock("@/lib/db", () => ({ db: mockDb }));
 
 import {
   authenticateServiceToken,
+  createMigrationReadCredential,
   createServiceCredential,
   hashServiceToken,
   requireProjectScope,
@@ -50,11 +52,46 @@ describe("service credentials", () => {
     expect(stored?.scopes).toEqual(["seo:read", "crawl:run"]);
   });
 
+  it("issues a read-only migration credential additively without revoking the existing MCP credential", async () => {
+    mockDb.site.findUnique.mockResolvedValue({
+      projectId: "project-1",
+      project: { id: "project-1", status: "ACTIVE", workspace: { status: "ACTIVE" } },
+    });
+    mockDb.servicePrincipal.upsert.mockResolvedValue({ id: "migration-principal", status: "ACTIVE" });
+    mockDb.serviceCredential.findUnique.mockResolvedValue(null);
+    mockDb.serviceCredential.create.mockResolvedValue({ id: "migration-credential" });
+
+    const result = await createMigrationReadCredential("site-1", "oceanic-inventory-2026-10-25");
+
+    expect(result.token).toMatch(/^cseo_/);
+    expect(mockDb.servicePrincipal.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { projectId_name: { projectId: "project-1", name: "helloada-migration-read" } },
+    }));
+    expect(mockDb.serviceCredential.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ scopes: ["connector:read"], issuanceIdempotencyKey: "oceanic-inventory-2026-10-25",
+        expiresAt: expect.any(Date) }),
+    }));
+    expect(mockDb.serviceCredential.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not issue a migration credential for an inactive project", async () => {
+    mockDb.site.findUnique.mockResolvedValue({
+      projectId: "project-1",
+      project: { id: "project-1", status: "INACTIVE", workspace: { status: "ACTIVE" } },
+    });
+    await expect(createMigrationReadCredential("site-1", "inventory-inactive"))
+      .rejects.toThrow("Project is not active");
+    expect(mockDb.servicePrincipal.upsert).not.toHaveBeenCalled();
+  });
+
   it("does not issue a second plaintext token for an idempotent retry", async () => {
     mockDb.servicePrincipal.upsert.mockResolvedValue({ id: "principal-1", status: "ACTIVE" });
     mockDb.serviceCredential.findUnique.mockResolvedValue({
       id: "credential-1",
       servicePrincipalId: "principal-1",
+      scopes: ["seo:read"],
+      expiresAt: null,
+      revokedAt: null,
     });
 
     const result = await createServiceCredential(
@@ -95,6 +132,23 @@ describe("service credentials", () => {
         data: expect.objectContaining({ tokenHash: hashServiceToken(result.token as string) }),
       })
     );
+  });
+
+  it("rejects reuse of an idempotency key with different scopes or an inactive credential", async () => {
+    mockDb.servicePrincipal.upsert.mockResolvedValue({ id: "principal-1", status: "ACTIVE" });
+    mockDb.serviceCredential.findUnique.mockResolvedValue({
+      id: "credential-1", servicePrincipalId: "principal-1", scopes: ["seo:read"],
+      expiresAt: null, revokedAt: null,
+    });
+    await expect(createServiceCredential("project-1", ["connector:read"], { idempotencyKey: "issue-1" }))
+      .rejects.toThrow("different scopes");
+
+    mockDb.serviceCredential.findUnique.mockResolvedValue({
+      id: "credential-1", servicePrincipalId: "principal-1", scopes: ["seo:read"],
+      expiresAt: null, revokedAt: new Date(),
+    });
+    await expect(createServiceCredential("project-1", ["seo:read"], { idempotencyKey: "issue-1" }))
+      .rejects.toThrow("no longer active");
   });
 
   it("resolves a valid token to its project and rejects unknown tokens", async () => {

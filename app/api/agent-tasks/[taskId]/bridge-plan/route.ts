@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { planBridgeSite } from "@/lib/bridge/client";
 import { addAgentArtifact } from "@/lib/agent-tasks/chat";
+import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 
 export async function POST(
   _req: Request,
@@ -11,6 +12,7 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { taskId } = await params;
+  if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
     select: { id: true, siteId: true, worktreePath: true },

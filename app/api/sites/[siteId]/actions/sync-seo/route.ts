@@ -1,6 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
-import { db } from "@/lib/db";
 import { syncSeoOpportunitiesToActions } from "@/lib/research/seo-actions";
+import { userOwnsSite } from "@/lib/auth/research-action-access";
 
 export async function POST(
   _req: Request,
@@ -10,8 +10,7 @@ export async function POST(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { siteId } = await params;
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
-  if (!site) return Response.json({ error: "Site not found" }, { status: 404 });
+  if (!(await userOwnsSite(siteId, userId))) return Response.json({ error: "Site not found" }, { status: 404 });
 
   try {
     return Response.json(await syncSeoOpportunitiesToActions(siteId));

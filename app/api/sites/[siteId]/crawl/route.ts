@@ -13,8 +13,8 @@ export async function POST(
     if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true, projectId: true },
     });
     if (!site) {
@@ -89,7 +89,7 @@ export async function GET(
     if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true } });
+    const site = await db.site.findFirst({ where: { id: siteId, userId }, select: { userId: true } });
     if (!site) return Response.json({ error: "Not found" }, { status: 404 });
 
     const crawls = await db.crawl.findMany({

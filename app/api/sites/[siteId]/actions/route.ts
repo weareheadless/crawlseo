@@ -1,13 +1,8 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
-import { db } from "@/lib/db";
 import { createResearchAction, listResearchActions, ResearchServiceError } from "@/lib/research/service";
 import { createResearchActionSchema, researchActionStatusSchema } from "@/lib/research/types";
 import { ZodError } from "zod";
-
-async function siteExists(siteId: string): Promise<boolean> {
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
-  return Boolean(site);
-}
+import { userOwnsSite } from "@/lib/auth/research-action-access";
 
 export async function GET(
   req: Request,
@@ -17,7 +12,7 @@ export async function GET(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { siteId } = await params;
-  if (!(await siteExists(siteId))) {
+  if (!(await userOwnsSite(siteId, userId))) {
     return Response.json({ error: "Site not found" }, { status: 404 });
   }
 
@@ -46,6 +41,9 @@ export async function POST(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { siteId } = await params;
+  if (!(await userOwnsSite(siteId, userId))) {
+    return Response.json({ error: "Site not found" }, { status: 404 });
+  }
   try {
     const input = createResearchActionSchema.parse(await req.json());
     const result = await createResearchAction(siteId, input, userId);

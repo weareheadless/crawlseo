@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { queueKeywordAction } from "@/lib/research/keyword-actions";
 import { z } from "zod";
 import { ZodError } from "zod";
+import { userOwnsSite } from "@/lib/auth/research-action-access";
 
 const schema = z.object({
   keyword: z.string().trim().min(2).max(300),
@@ -20,6 +21,7 @@ export async function POST(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { siteId } = await params;
+  if (!(await userOwnsSite(siteId, userId))) return Response.json({ error: "Site not found" }, { status: 404 });
   try {
     const input = schema.parse(await req.json());
     const result = await queueKeywordAction(siteId, input, userId);

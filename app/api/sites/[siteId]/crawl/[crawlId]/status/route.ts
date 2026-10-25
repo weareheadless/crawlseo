@@ -13,8 +13,8 @@ export async function GET(
 
     const { siteId, crawlId } = await params;
 
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true },
     });
     if (!site) {

@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 export function WixBlogUpdateControls({
   actionId,
   draftId,
+  approved,
   publishedUrl,
   status,
 }: {
   actionId: string;
   draftId?: string;
+  approved: boolean;
   publishedUrl?: string | null;
   status: string;
 }) {
@@ -70,15 +72,23 @@ export function WixBlogUpdateControls({
         </>
       ) : (
         <>
-          <Button
-            size="sm"
-            onClick={() => call(`/crawlseo/api/content-drafts/${draftId}/wix-blog-publish`, "publish")}
-            disabled={Boolean(busy)}
-          >
-            {busy === "publish" ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
-            Publish update
-          </Button>
-          <span className="text-[11px] text-muted-foreground">Publishes the draft shown below to the existing post.</span>
+          {!approved ? (
+            <>
+              <Button size="sm" onClick={() => call(`/crawlseo/api/content-drafts/${draftId}/wix-blog-approve`, "approve")} disabled={Boolean(busy)}>
+                {busy === "approve" ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+                Approve exact update
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Approval is bound to this draft and Action revision. Review the full candidate below first.</span>
+            </>
+          ) : (
+            <>
+              <Button size="sm" onClick={() => call(`/crawlseo/api/content-drafts/${draftId}/wix-blog-publish`, "publish")} disabled={Boolean(busy)}>
+                {busy === "publish" ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+                Publish approved update
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Publishes only the exact candidate you approved.</span>
+            </>
+          )}
         </>
       )}
       {status !== "DISMISSED" && (

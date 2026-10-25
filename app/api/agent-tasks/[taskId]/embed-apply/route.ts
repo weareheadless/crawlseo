@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { applyEmbedDelivery, WixEmbedDeliveryError } from "@/lib/delivery/wix-embed";
+import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 
 export async function POST(
   req: Request,
@@ -8,6 +9,7 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { taskId } = await params;
+  if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   try {
     const body = await req.json() as { targetKey?: unknown; confirmation?: unknown };
     if (typeof body.targetKey !== "string" || typeof body.confirmation !== "string") {

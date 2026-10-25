@@ -14,8 +14,8 @@ export async function GET(
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: {
         id: true,
         domain: true,
@@ -75,14 +75,12 @@ export async function PUT(
     }
 
     // Verify ownership
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true },
     });
 
-    if (!site) {
-      return Response.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    if (!site) return Response.json({ error: "Site not found" }, { status: 404 });
 
     const { domain, gscProperty } = (await req.json()) as {
       domain?: string;
@@ -130,14 +128,12 @@ export async function DELETE(
     }
 
     // Verify ownership
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true },
     });
 
-    if (!site) {
-      return Response.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    if (!site) return Response.json({ error: "Site not found" }, { status: 404 });
 
     // Delete site and cascade deletes keywords, pages, crawls, vitals, alerts
     await db.site.delete({

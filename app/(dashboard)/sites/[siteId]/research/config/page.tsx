@@ -30,7 +30,7 @@ export default async function ResearchConfigPage({ params }: { params: Promise<{
       <PageHeader
         eyebrow="Research configuration"
         title="Guide the research"
-        description="Set what the AI should investigate. It chooses the sources, queries, and subreddits."
+        description="Set research topics, audience, market, and supported sources. The engine creates a bounded query plan from this configuration."
         actions={
           <Link href={`/sites/${siteId}/research`} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
             Back to Research

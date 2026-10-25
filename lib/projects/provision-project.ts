@@ -24,6 +24,7 @@ export type ProvisionProjectInput = {
   /** Optional least-privilege service identity for a project-specific agent. */
   serviceCredentialName?: string;
   serviceCredentialScopes?: string[];
+  connectorExecutor?: "helloada" | "crawlseo-agent" | "wix" | "webflow";
   googleOAuthUserEmail?: string;
   googleImpersonatedUserEmail?: string;
   operatorUserEmail?: string;
@@ -168,6 +169,13 @@ export async function provisionProject(
   if (!externalOrganizationId || !externalProjectId) {
     throw new Error("External organization and project IDs are required");
   }
+  const connectorExecutor = input.connectorExecutor ?? "helloada";
+  if (!["helloada", "crawlseo-agent", "wix", "webflow"].includes(connectorExecutor)) {
+    throw new Error("Connector executor is invalid");
+  }
+  if (connectorExecutor !== "helloada" && connectorExecutor !== "crawlseo-agent") {
+    throw new Error(`The ${connectorExecutor} execution adapter is not implemented and cannot be provisioned`);
+  }
 
   // Always apply the crawler's existing DNS/SSRF guard before provisioning a
   // site. The explicit override only covers ownership evidence for the pilot.
@@ -299,6 +307,14 @@ export async function provisionProject(
         select: { id: true },
       });
     }
+
+    // A tenant begins with one declared executor. Repeated provisioning never
+    // silently transfers work or increments the fencing generation.
+    await tx.connectorBinding.upsert({
+      where: { siteId: site.id },
+      create: { projectId: project.id, siteId: site.id, executor: connectorExecutor, generation: 1, status: "ACTIVE" },
+      update: {},
+    });
 
     let serviceConnectionId: string | null = null;
     if (credentials && encryptedCredentials) {
@@ -561,6 +577,8 @@ export async function provisionProject(
       "analytics:read",
       "crawl:read",
       "crawl:run",
+      "connector:read",
+      "connector:write",
     ]),
   ], {
     idempotencyKey: input.serviceCredentialIdempotencyKey,

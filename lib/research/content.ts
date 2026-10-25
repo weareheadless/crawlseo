@@ -120,12 +120,15 @@ export async function generateDraftForAction(
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
     include: {
-      site: { select: { id: true, domain: true } },
+      site: { select: { id: true, domain: true, connectorBinding: { select: { executor: true, status: true } } } },
       finding: { select: { evidenceSourceIds: true } },
       run: { select: { sources: { orderBy: { retrievedAt: "desc" }, take: 200 } } },
     },
   });
   if (!action) throw new ResearchServiceError("Research action not found", 404);
+  if (action.site.connectorBinding?.status === "ACTIVE" && action.site.connectorBinding.executor !== "crawlseo-agent") {
+    throw new ResearchServiceError("This site is owned by another execution connector", 409);
+  }
   const requireApproval = options.requireApproval !== false;
   if (requireApproval && action.status !== "APPROVED" && action.status !== "DRAFTING") {
     throw new ResearchServiceError(
@@ -222,9 +225,13 @@ export async function generateWixBlogUpdateDraftForAction(
 ) {
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
-    select: { id: true, siteId: true, targetUrl: true, status: true },
+    select: { id: true, siteId: true, targetUrl: true, status: true,
+      site: { select: { connectorBinding: { select: { executor: true, status: true } } } } },
   });
   if (!action) throw new ResearchServiceError("Research action not found", 404);
+  if (action.site.connectorBinding?.status === "ACTIVE" && action.site.connectorBinding.executor !== "crawlseo-agent") {
+    throw new ResearchServiceError("This site is owned by another execution connector", 409);
+  }
   if (!action.targetUrl || !isWixBlogTarget(action.targetUrl)) {
     throw new ResearchServiceError("This action is not a Wix Blog target", 409);
   }
