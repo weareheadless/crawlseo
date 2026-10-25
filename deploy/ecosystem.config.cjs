@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "crawlseo-web",
+      name: "crawlseo",
       cwd: "/SEO",
       script: "scripts/start-production.sh",
       interpreter: "/bin/bash",
