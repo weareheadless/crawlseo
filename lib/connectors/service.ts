@@ -408,7 +408,11 @@ async function envelope(action: Awaited<ReturnType<typeof actionRow>>) {
   const inline = envelopeEvidenceIds(evidence.source_ids);
   const findingIds = finding.ids;
   const inlineIds = inline.ids;
-  const duplicateReferences = new Set(findingIds).size !== findingIds.length || new Set(inlineIds).size !== inlineIds.length;
+  const duplicateIds = [
+    ...new Set(findingIds.filter((id, index, all) => all.indexOf(id) !== index)),
+    ...new Set(inlineIds.filter((id, index, all) => all.indexOf(id) !== index)),
+  ];
+  const invalidEvidenceReferences = [...new Set([...finding.invalidIds, ...inline.invalidIds, ...duplicateIds])];
   const sourceIds = [...new Set([...findingIds, ...inlineIds])];
   const sources = await db.researchSource.findMany({
     where: { id: { in: sourceIds }, run: { projectId: action.projectId, siteId: action.siteId } },
@@ -491,17 +495,20 @@ async function envelope(action: Awaited<ReturnType<typeof actionRow>>) {
         researchPolicyRevision: source.run.policyRevision,
         currentPolicyRevision: currentPolicy?.revision ?? 0 };
     }),
-    evidenceComplete: sourceIds.length > 0 && !finding.invalid && !inline.invalid && !duplicateReferences && sources.length === sourceIds.length,
+    evidenceComplete: sourceIds.length > 0 && invalidEvidenceReferences.length === 0 && sources.length === sourceIds.length,
     unavailableEvidenceSourceIds: sourceIds.filter((id) => !sources.some((source) => source.id === id)),
-    invalidEvidenceReferences: finding.invalid || inline.invalid || duplicateReferences,
+    invalidEvidenceReferences,
     technicalEvidence,
     technicalEvidenceComplete,
     technicalEvidenceStale,
     unavailableTechnicalEvidenceIds: [...new Set(unavailableTechnicalEvidenceIds)],
     invalidTechnicalEvidenceReferences,
-    contextRevisions: { businessFacts: context?.revision ?? null, websiteInventory: context?.revision ?? null,
-      canonicalOrigin: context?.revision ?? null,
-      researchPolicy: [...new Set(sources.map((source) => source.run.policyRevision).filter((revision): revision is number => revision !== null))].sort((a, b) => a - b),
+    contextRevisions: { businessFacts: context?.revision ?? "0", websiteInventory: context?.revision ?? "0",
+      canonicalOrigin: context?.revision ?? "0",
+      researchPolicy: (() => {
+        const revisions = [...new Set(sources.map((source) => source.run.policyRevision).filter((revision): revision is number => revision !== null))].sort((a, b) => a - b);
+        return revisions.length ? revisions[revisions.length - 1] : currentPolicy?.revision ?? 0;
+      })(),
       currentResearchPolicy: currentPolicy?.revision ?? 0 },
     requiredCapabilities: action.requiredCapabilities ?? [], acceptanceCriteria: action.acceptanceCriteria ?? [],
     dependencies: action.dependencies ?? [], reassessmentConditions: action.reassessmentConditions ?? [],
@@ -623,11 +630,19 @@ function evidenceIds(value: unknown, label: string): string[] {
   return value;
 }
 
-function envelopeEvidenceIds(value: unknown): { ids: string[]; invalid: boolean } {
-  if (value === undefined || value === null) return { ids: [], invalid: false };
-  if (!Array.isArray(value)) return { ids: [], invalid: true };
-  const invalid = value.some((id) => typeof id !== "string" || !id.trim() || id !== id.trim());
-  return { ids: value.filter((id): id is string => typeof id === "string" && Boolean(id.trim()) && id === id.trim()), invalid };
+function envelopeEvidenceIds(value: unknown): { ids: string[]; invalid: boolean; invalidIds: string[] } {
+  if (value === undefined || value === null) return { ids: [], invalid: false, invalidIds: [] };
+  if (!Array.isArray(value)) return { ids: [], invalid: true, invalidIds: ["invalid-evidence-reference"] };
+  const ids: string[] = [];
+  const invalidIds: string[] = [];
+  for (const id of value) {
+    if (typeof id !== "string" || !id.trim() || id !== id.trim()) {
+      invalidIds.push(typeof id === "string" ? id : "invalid-evidence-reference");
+      continue;
+    }
+    ids.push(id);
+  }
+  return { ids, invalid: invalidIds.length > 0, invalidIds };
 }
 
 async function assertPreparationEvidence(tx: Prisma.TransactionClient, action: {

@@ -52,7 +52,8 @@ describe("connector Action envelope and pagination scope", () => {
     expect(result.evidence[0].recencyLimitDays).toBe(14);
     expect(result.evidence[0].researchPolicyRevision).toBe(4);
     expect(result.evidence[0].currentPolicyRevision).toBe(5);
-    expect(result.contextRevisions.researchPolicy).toEqual([4]);
+    expect(result.contextRevisions.researchPolicy).toBe(4);
+    expect(result.invalidEvidenceReferences).toEqual([]);
     expect(result.contextRevisions.currentResearchPolicy).toBe(5);
   });
 
