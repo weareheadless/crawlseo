@@ -45,6 +45,8 @@ describe("agent prompt", () => {
     expect(prompt).toContain("Do not run `wix publish`");
     expect(prompt).toContain("already created the dedicated worktree");
     expect(prompt).toContain("Do not run `git worktree`");
+    expect(prompt).toContain("LOCALIZED DATA");
+    expect(prompt).toContain("Do not derive user-facing titles from URL slugs");
     expect(prompt).toContain("Do not edit the shared bridge repository");
     expect(prompt).toContain("Keep the existing design.");
     expect(prompt).toContain("gate every content, SEO, and rendering change to that exact key or slug");
