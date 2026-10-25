@@ -10,6 +10,11 @@ Provision one service credential for the project with `connector:read` and
 `connector:write`. Send it as `Authorization: Bearer <token>` to
 `/api/connector/v1/*`. Credentials are project-scoped, stored as hashes, and
 must not be exposed in browser code or logs. The provisioned connector binding
+is returned alongside `credentialScopes`, the exact scopes of the authenticated
+credential. Backend `capabilities` describe available operations; they do not
+prove that a read-only migration credential may execute writes. Authority-mode
+preflight must require both `connector:read` and `connector:write` in
+`credentialScopes` before selecting a runtime credential. The binding itself
 contains the active executor and a monotonically increasing generation; every
 write carries that generation so a transferred or stale executor is rejected.
 

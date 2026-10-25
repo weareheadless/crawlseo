@@ -108,7 +108,9 @@ export async function stage({ source, buildDir, releaseDir, envFile }) {
     // Next standalone output may include a traced build-time .env. Replace it
     // only in the new staging directory with the explicitly supplied runtime
     // env file; never touch the source build or an existing release.
-    await rm(envPath, { force: true });
+    for (const name of [".env", ".env.local", ".env.production", ".env.production.local"]) {
+      await rm(path.join(tempDir, name), { force: true });
+    }
     const envHandle = await open(envPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
     try {
       await envHandle.close();
