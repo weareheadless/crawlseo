@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 const TOKEN_PREFIX = "cseo_";
@@ -61,6 +62,8 @@ export async function createServiceCredential(
     expiresAt?: Date;
     revokeExisting?: boolean;
     reissueIfReused?: boolean;
+    requestHash?: string;
+    transaction?: Prisma.TransactionClient;
   }
 ): Promise<{
   credentialId: string;
@@ -74,8 +77,9 @@ export async function createServiceCredential(
   }
   const normalizedScopes = normalizeScopes(scopes);
   const principalName = options.principalName?.trim() || "site-agent";
+  const client = options.transaction ?? db;
 
-  const principal = await db.servicePrincipal.upsert({
+  const principal = await client.servicePrincipal.upsert({
     where: { projectId_name: { projectId, name: principalName } },
     create: { projectId, name: principalName },
     update: {},
@@ -86,17 +90,20 @@ export async function createServiceCredential(
     throw new ServiceAuthError("Service principal is revoked", 403);
   }
 
-  const existing = await db.serviceCredential.findUnique({
+  const existing = await client.serviceCredential.findUnique({
     where: { issuanceIdempotencyKey: idempotencyKey },
-    select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true },
+    select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true, issuanceRequestHash: true },
   });
   if (existing) {
     if (existing.servicePrincipalId !== principal.id) {
       throw new Error("Credential idempotency key is already in use");
     }
+    if (options.requestHash !== undefined && existing.issuanceRequestHash !== options.requestHash) {
+      throw new Error("Credential idempotency key was already used for different request inputs");
+    }
     if (options.reissueIfReused === true) {
       const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
-      await db.serviceCredential.update({
+      await client.serviceCredential.update({
         where: { id: existing.id },
         data: {
           tokenPrefix: token.slice(0, 12),
@@ -135,19 +142,20 @@ export async function createServiceCredential(
   const now = new Date();
 
   if (options.revokeExisting !== false) {
-    await db.serviceCredential.updateMany({
+    await client.serviceCredential.updateMany({
       where: { servicePrincipalId: principal.id, revokedAt: null },
       data: { revokedAt: now },
     });
   }
 
   try {
-    const credential = await db.serviceCredential.create({
+    const credential = await client.serviceCredential.create({
       data: {
         servicePrincipalId: principal.id,
         tokenPrefix: token.slice(0, 12),
         tokenHash: hashServiceToken(token),
         issuanceIdempotencyKey: idempotencyKey,
+        issuanceRequestHash: options.requestHash,
         scopes: normalizedScopes,
         expiresAt: options.expiresAt,
         secretDeliveredAt: now,
@@ -164,11 +172,14 @@ export async function createServiceCredential(
   } catch (error) {
     // A concurrent retry may have won the unique idempotency key race.
     if ((error as { code?: string }).code === "P2002") {
-      const winner = await db.serviceCredential.findUnique({
+      const winner = await client.serviceCredential.findUnique({
         where: { issuanceIdempotencyKey: idempotencyKey },
-        select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true },
+        select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true, issuanceRequestHash: true },
       });
       if (winner?.servicePrincipalId === principal.id) {
+        if (options.requestHash !== undefined && winner.issuanceRequestHash !== options.requestHash) {
+          throw new Error("Credential idempotency key was already used for different request inputs");
+        }
         const winnerScopes = normalizeScopes(parseScopes(winner.scopes)).sort();
         const requestedScopes = [...normalizedScopes].sort();
         if (winnerScopes.length !== requestedScopes.length
@@ -209,6 +220,71 @@ export async function createMigrationReadCredential(siteId: string, idempotencyK
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     revokeExisting: false,
   });
+}
+
+const RUNTIME_CONNECTOR_SCOPES = ["connector:read", "connector:write"] as const;
+
+export class RuntimeConnectorCredentialError extends Error {
+  constructor(message: string, readonly statusCode: 403 | 404 | 409) {
+    super(message);
+    this.name = "RuntimeConnectorCredentialError";
+  }
+}
+
+export async function createRuntimeConnectorCredential(input: {
+  siteId: string;
+  expectedGeneration: number;
+  activationPlanHash: string;
+  idempotencyKey: string;
+}) {
+  const siteId = input.siteId.trim();
+  const idempotencyKey = input.idempotencyKey.trim();
+  if (!siteId || !idempotencyKey || idempotencyKey.length > 200 || !Number.isSafeInteger(input.expectedGeneration)
+      || input.expectedGeneration < 1 || !/^[a-f0-9]{64}$/i.test(input.activationPlanHash)) {
+    throw new RuntimeConnectorCredentialError("Runtime connector credential request is invalid", 409);
+  }
+  const activationPlanHash = input.activationPlanHash.toLowerCase();
+  const issuanceIdempotencyKey = `helloada-runtime:${idempotencyKey}`;
+  const requestHash = createHash("sha256").update(JSON.stringify({
+    siteId,
+    expectedGeneration: input.expectedGeneration,
+    activationPlanHash,
+    scopes: RUNTIME_CONNECTOR_SCOPES,
+  })).digest("hex");
+
+  return db.$transaction(async (tx) => {
+    // Serialize a repeated global key before looking up or creating its exact
+    // request record. The binding row then fences against a concurrent transfer.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${issuanceIdempotencyKey}, 0))`;
+    await tx.$queryRaw`SELECT "id" FROM "ConnectorBinding" WHERE "siteId" = ${siteId} FOR UPDATE`;
+    const site = await tx.site.findUnique({
+      where: { id: siteId },
+      select: {
+        id: true,
+        projectId: true,
+        project: { select: { status: true, workspace: { select: { status: true } } } },
+      },
+    });
+    if (!site?.projectId || !site.project) throw new RuntimeConnectorCredentialError("Project site not found", 404);
+    if (site.project.status !== "ACTIVE" || site.project.workspace.status !== "ACTIVE") {
+      throw new RuntimeConnectorCredentialError("Project is not active", 403);
+    }
+    const binding = await tx.connectorBinding.findUnique({
+      where: { siteId },
+      select: { projectId: true, executor: true, generation: true, status: true },
+    });
+    if (!binding || binding.projectId !== site.projectId || binding.status !== "ACTIVE"
+        || binding.executor !== "helloada" || binding.generation !== input.expectedGeneration) {
+      throw new RuntimeConnectorCredentialError("Active HelloAda connector binding changed; refresh before issuing", 409);
+    }
+    return createServiceCredential(site.projectId, [...RUNTIME_CONNECTOR_SCOPES], {
+      idempotencyKey: issuanceIdempotencyKey,
+      principalName: "helloada-runtime",
+      revokeExisting: false,
+      requestHash,
+      transaction: tx,
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function authenticateServiceToken(
