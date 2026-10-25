@@ -61,6 +61,7 @@ type IssueGroup = {
   occurrences: number;
   sampleUrl: string;
   orphan: boolean;
+  duplicateValue: string | null;
   sourceUrl: string | null;
   brokenUrls: Set<string>;
   anchors: Set<string>;
@@ -214,6 +215,7 @@ export function buildCrawlActionDrafts(input: {
     const details = record(issue.details);
     if (EXCLUDED_DETAIL_KINDS.has(String(details.kind ?? ""))) continue;
     if (!validUrl(issue.url)) continue;
+    if (issue.type !== "BROKEN_LINK" && (pagesByUrl.get(issue.url)?.statusCode ?? 200) >= 400) continue;
     const sourceLinks = issue.type === "BROKEN_LINK" ? linksByTarget.get(issue.url) ?? [] : [];
     const sourceUrl = sourceLinks[0]?.sourceUrl ?? null;
     const blogContentIssue = issue.type === "BROKEN_LINK" && Boolean(sourceUrl) && isWixBlogTarget(sourceUrl!);
@@ -225,6 +227,12 @@ export function buildCrawlActionDrafts(input: {
       : groupForIssue(issue, linksByTarget);
     if (!group) continue;
     const orphan = issue.type === "MISSING_CANONICAL" && record(issue.details).kind === "orphan";
+    const detailsRecord = record(issue.details);
+    const duplicateValue = issue.type === "DUPLICATE_TITLE"
+      ? (typeof detailsRecord.title === "string" ? detailsRecord.title : null)
+      : issue.type === "DUPLICATE_DESCRIPTION"
+        ? (typeof detailsRecord.description === "string" ? detailsRecord.description : null)
+        : null;
     const family = pathFamily(sourceUrl ?? issue.url).label;
     const urls = issue.type === "DUPLICATE_TITLE" || issue.type === "DUPLICATE_DESCRIPTION"
       ? duplicateUrls(issue)
@@ -236,6 +244,7 @@ export function buildCrawlActionDrafts(input: {
       for (const url of urls) existing.urls.add(url);
       existing.occurrences += 1;
       existing.orphan = existing.orphan || orphan;
+      if (!existing.duplicateValue && duplicateValue) existing.duplicateValue = duplicateValue;
       if ((SEVERITY_RANK[issue.severity] ?? 3) < (SEVERITY_RANK[existing.severity] ?? 3)) {
         existing.severity = issue.severity;
       }
@@ -259,6 +268,7 @@ export function buildCrawlActionDrafts(input: {
         occurrences: 1,
         sampleUrl: urls[0],
         orphan,
+        duplicateValue,
         sourceUrl,
         brokenUrls: new Set(issue.type === "BROKEN_LINK" ? [issue.url] : []),
         anchors: new Set(sourceLinks.map((link) => link.anchorText).filter((value): value is string => Boolean(value))),
@@ -321,6 +331,17 @@ export function buildCrawlActionDrafts(input: {
       crawl_id: input.crawl.id,
       crawl_finished_at: input.crawl.finishedAt ? new Date(input.crawl.finishedAt).toISOString() : null,
       issue_type: group.orphan ? "ORPHAN_PAGE" : group.type,
+      duplicate_value: group.duplicateValue,
+      examples: urls.slice(0, 5).map((url) => {
+        const page = pagesByUrl.get(url);
+        return {
+          url,
+          title: page?.title ?? null,
+          description: page?.description ?? null,
+          statusCode: page?.statusCode ?? null,
+          h1Count: page?.h1Count ?? null,
+        };
+      }),
       fix_mode: fixMode,
       batch: group.batch,
       route_families: [...group.families],

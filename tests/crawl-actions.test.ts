@@ -104,6 +104,20 @@ describe("crawl action generation", () => {
     expect(drafts[0].evidence.route_families).toEqual(["listing index", "listing detail template"]);
   });
 
+  it("ignores content issues recorded on rate-limit pages", () => {
+    const url = "https://www.example.com/post/rate-limited";
+    const drafts = buildCrawlActionDrafts({
+      site,
+      crawl,
+      issues: [
+        { url, type: "DUPLICATE_TITLE", severity: "WARNING", message: "Duplicate title shared by 155 pages", details: { title: "Checking Your Request", urls: [url] } },
+        { url, type: "MISSING_H1", severity: "WARNING", message: "No H1 heading found", details: {} },
+      ],
+      pages: [page(url, 429)],
+    });
+    expect(drafts).toEqual([]);
+  });
+
   it("returns no actions when there is no crawl evidence", () => {
     expect(buildCrawlActionDrafts({ site, crawl, issues: [], pages: [] })).toEqual([]);
   });

@@ -15,6 +15,12 @@ interface Props {
 
 const allowedTabs = new Set(["inbox", "actions", "opportunities", "drafts", "agent tasks"]);
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 export default async function WorkPage({ params, searchParams }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
@@ -62,6 +68,17 @@ export default async function WorkPage({ params, searchParams }: Props) {
           editorialDecision: typeof (action.evidence as Record<string, unknown> | null)?.editorial === "object"
             ? String(((action.evidence as Record<string, unknown>).editorial as Record<string, unknown>).decision ?? "")
             : null,
+          examples: Array.isArray(record(action.evidence).examples)
+            ? (record(action.evidence).examples as unknown[])
+              .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+              .map((value) => ({
+                url: typeof value.url === "string" ? value.url : "",
+                title: typeof value.title === "string" ? value.title : null,
+                statusCode: typeof value.statusCode === "number" ? value.statusCode : null,
+              }))
+              .filter((value) => value.url)
+              .slice(0, 3)
+            : [],
           drafts: action._count.drafts,
           agentTasks: action._count.agentTasks,
           deliveries: action._count.deliveries,

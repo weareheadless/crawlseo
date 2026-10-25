@@ -235,6 +235,26 @@ export default async function ActionDetailPage({ params }: Props) {
               Templates: {crawlEvidence.families.join(", ")}
             </p>
           )}
+          {crawlEvidence.duplicateValue && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Duplicate value: <span className="font-medium text-foreground">{crawlEvidence.duplicateValue}</span>
+            </p>
+          )}
+          {crawlEvidence.examples.length > 0 && (
+            <div className="mt-2 rounded border border-border/50 bg-background/50 p-2">
+              <p className="font-data text-[10px] uppercase text-muted-foreground">Examples</p>
+              <ul className="mt-1 space-y-1">
+                {crawlEvidence.examples.map((example) => (
+                  <li key={example.url} className="text-[10px] leading-4 text-muted-foreground">
+                    <span className="font-data">{example.statusCode ?? "—"}</span>
+                    {" · "}
+                    <span className="break-all">{example.url}</span>
+                    {example.title && <span className="block pl-8 text-foreground/80">Title: {example.title}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {crawlEvidence.urls.length > 1 && (
             <details className="mt-2 rounded border border-border/50 bg-background/50 p-2">
               <summary className="cursor-pointer font-data text-[10px] uppercase text-muted-foreground">
@@ -569,6 +589,8 @@ function crawlEvidenceFrom(evidence: unknown): {
   reason: string | null;
   families: string[];
   urls: string[];
+  duplicateValue: string | null;
+  examples: Array<{ url: string; title: string | null; statusCode: number | null }>;
 } | null {
   const root = record(evidence);
   if (root.kind !== "crawl_issue") return null;
@@ -588,6 +610,18 @@ function crawlEvidenceFrom(evidence: unknown): {
       : [],
     urls: Array.isArray(root.urls)
       ? root.urls.filter((value): value is string => typeof value === "string")
+      : [],
+    duplicateValue: typeof root.duplicate_value === "string" ? root.duplicate_value : null,
+    examples: Array.isArray(root.examples)
+      ? root.examples
+        .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+        .map((value) => ({
+          url: typeof value.url === "string" ? value.url : "",
+          title: typeof value.title === "string" ? value.title : null,
+          statusCode: typeof value.statusCode === "number" ? value.statusCode : null,
+        }))
+        .filter((value) => value.url)
+        .slice(0, 5)
       : [],
   };
 }

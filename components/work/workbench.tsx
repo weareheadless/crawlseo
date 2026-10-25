@@ -27,6 +27,7 @@ type ActionRow = {
   keyword: KeywordEvidenceSummary | null;
   opportunity: OpportunityPriority | null;
   editorialDecision: string | null;
+  examples: Array<{ url: string; title: string | null; statusCode: number | null }>;
   drafts: number;
   agentTasks: number;
   deliveries: number;
@@ -238,6 +239,18 @@ function ActionCard({ siteId, action }: { siteId: string; action: ActionRow }) {
         )}
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{action.recommendation}</p>
+      {action.examples.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {action.examples.map((example) => (
+            <p key={example.url} className="truncate font-data text-[10px] text-muted-foreground" title={example.url}>
+              <span className="opacity-60">{example.statusCode ?? "—"}</span>
+              {" · "}
+              {example.title ? `${example.title} — ` : ""}
+              {example.url}
+            </p>
+          ))}
+        </div>
+      )}
       {action.opportunity && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1.5 font-data text-[10px] text-muted-foreground">
           {action.opportunity.signals.map((signal) => (

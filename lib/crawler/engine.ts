@@ -840,6 +840,9 @@ async function executeCrawl(
     if (pages.length < 10 && rateLimitedResponses >= Math.ceil(pages.length / 2)) {
       throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
     }
+    if (pages.length >= 10 && rateLimitedResponses / pages.length > 0.2) {
+      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
+    }
 
     // Small delay between batches to avoid hammering the target
     if (queue.length > 0 && pages.length < maxPages) {
@@ -848,9 +851,12 @@ async function executeCrawl(
   }
 
   /* ---- Duplicate titles / descriptions ---- */
+  // Error/rate-limit pages all share the same challenge title. They are not
+  // real duplicate content and must never become editorial work.
+  const successfulPages = pages.filter((p) => p.statusCode < 400);
   const byTitle = new Map<string, string[]>();
   const byDesc = new Map<string, string[]>();
-  for (const p of pages) {
+  for (const p of successfulPages) {
     if (p.title) {
       const list = byTitle.get(p.title) || [];
       list.push(p.url);
@@ -898,19 +904,19 @@ async function executeCrawl(
   }
 
   /* ---- Sitemap coverage & orphan detection ---- */
-  const crawledSet = new Set(pages.map((p) => p.url));
+  const crawledSet = new Set(successfulPages.map((p) => p.url));
   const sitemapSet = new Set(sitemapUrls);
   const missingFromSitemap = [...crawledSet].filter(
     (u) => sitemapSet.size > 0 && !sitemapSet.has(u)
   );
 
   const inlinkCount = new Map<string, number>();
-  for (const p of pages) {
+  for (const p of successfulPages) {
     for (const out of p.internalOutlinks) {
       inlinkCount.set(out, (inlinkCount.get(out) || 0) + 1);
     }
   }
-  const orphans = pages.filter((p) => {
+  const orphans = successfulPages.filter((p) => {
     const isHome = new URL(p.url).pathname === "/" || p.url === seedUrl;
     return !isHome && (inlinkCount.get(p.url) || 0) === 0;
   });
@@ -941,9 +947,9 @@ async function executeCrawl(
   /* ---- Compute scores ---- */
   const healthScore = computeHealthScore(issues, pages.length);
   const avgContentScore =
-    pages.length > 0
+    successfulPages.length > 0
       ? Math.round(
-          pages.reduce((s, p) => s + p.contentScore, 0) / pages.length
+          successfulPages.reduce((s, p) => s + p.contentScore, 0) / successfulPages.length
         )
       : 0;
 
@@ -1019,7 +1025,7 @@ async function executeCrawl(
   }
 
   // Thin content pages as INFO issues
-  const thin = pages.filter((p) => p.contentScore < 60);
+  const thin = successfulPages.filter((p) => p.contentScore < 60);
   if (thin.length) {
     await db.crawlIssue.createMany({
       data: thin.slice(0, 50).map((p) => ({
