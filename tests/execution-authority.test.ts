@@ -13,6 +13,7 @@ import {
   isExternallyManaged,
   isSupersededByExternalAuthority,
   normalizeSiteDomain,
+  supersededSiteIds,
 } from "@/lib/research/execution-authority";
 
 describe("external execution authority", () => {
@@ -104,5 +105,38 @@ describe("external execution authority", () => {
     });
     mockDb.researchAction.findUnique.mockResolvedValue(null);
     await expect(getActionExecutionAuthority("missing")).resolves.toBeNull();
+  });
+});
+
+describe("superseded duplicate sites", () => {
+  const local = (id: string, domain: string) => ({ id, domain, connectorBinding: null });
+  const bound = (id: string, domain: string) => ({
+    id,
+    domain,
+    connectorBinding: { status: "ACTIVE", executor: "helloada" },
+  });
+
+  it("supersedes every same-domain local row when an external binding exists", () => {
+    const superseded = supersededSiteIds([
+      local("legacy", "https://www.oceanicvibes.com/"),
+      bound("canonical", "oceanicvibes.com"),
+      local("unrelated", "example.com"),
+    ]);
+    expect([...superseded]).toEqual(["legacy"]);
+  });
+
+  it("keeps rows when no binding exists or when the binding is local", () => {
+    expect(supersededSiteIds([
+      local("a", "oceanicvibes.com"),
+      { id: "b", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
+      { id: "c", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
+    ]).size).toBe(0);
+  });
+
+  it("does not pick a winner between two externally bound rows", () => {
+    expect(supersededSiteIds([
+      bound("one", "oceanicvibes.com"),
+      bound("two", "oceanicvibes.com"),
+    ]).size).toBe(0);
   });
 });

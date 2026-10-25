@@ -1,5 +1,6 @@
 import { IntegrationProvider } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getSupersededSiteIds } from "@/lib/research/execution-authority";
 import {
   fetchPageAnalytics,
   fetchSearchAnalytics,
@@ -260,10 +261,14 @@ export async function syncGSCDataForProject(
 export async function syncAllUserSites(userId: string): Promise<
   Array<{ siteId: string; domain: string; result: SyncResult }>
 > {
-  const sites = await db.site.findMany({
-    where: { userId },
-    select: { id: true, domain: true },
-  });
+  const [queriedSites, superseded] = await Promise.all([
+    db.site.findMany({
+      where: { userId },
+      select: { id: true, domain: true },
+    }),
+    getSupersededSiteIds(),
+  ]);
+  const sites = queriedSites.filter((site) => !superseded.has(site.id));
   const results: Array<{ siteId: string; domain: string; result: SyncResult }> = [];
   for (const site of sites) {
     results.push({

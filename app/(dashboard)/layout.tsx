@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { getSupersededSiteIds } from "@/lib/research/execution-authority";
 
 export default async function DashboardLayout({
   children,
@@ -22,10 +23,14 @@ export default async function DashboardLayout({
 
   // Single-operator CrawlSEO: authenticated users see every site,
   // including project-provisioned sites with no userId.
-  const sites = await db.site.findMany({
-    select: { id: true, domain: true },
-    orderBy: { domain: "asc" },
-  });
+  const [allSites, superseded] = await Promise.all([
+    db.site.findMany({
+      select: { id: true, domain: true },
+      orderBy: { domain: "asc" },
+    }),
+    getSupersededSiteIds(),
+  ]);
+  const sites = allSites.filter((site) => !superseded.has(site.id));
 
   return (
     <AppShell

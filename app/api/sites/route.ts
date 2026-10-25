@@ -4,6 +4,7 @@ import { assertPublicDomain } from "@/lib/crawler/engine";
 import { JobKind } from "@prisma/client";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { ensureDefaultAlerts } from "@/lib/alerts/evaluate";
+import { getSupersededSiteIds } from "@/lib/research/execution-authority";
 
 export async function GET() {
   try {
@@ -13,25 +14,28 @@ export async function GET() {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const sites = await db.site.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        domain: true,
-        gscProperty: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            keywords: true,
-            crawls: true,
+    const [queriedSites, superseded] = await Promise.all([
+      db.site.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          domain: true,
+          gscProperty: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              keywords: true,
+              crawls: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        orderBy: { createdAt: "desc" },
+      }),
+      getSupersededSiteIds(),
+    ]);
 
-    return Response.json(sites);
+    return Response.json(queriedSites.filter((site) => !superseded.has(site.id)));
   } catch (error) {
     console.error("Error fetching sites:", error);
 

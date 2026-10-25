@@ -165,3 +165,47 @@ export async function isSupersededByExternalAuthority(siteId: string): Promise<b
   return siblings.some((sibling) =>
     normalizeSiteDomain(sibling.domain) === domain && isExternallyManaged(sibling.connectorBinding));
 }
+
+export type SiteBindingRow = {
+  id: string;
+  domain: string;
+  connectorBinding: ConnectorAuthority;
+};
+
+/**
+ * A same-domain row is superseded when another row for that domain has an
+ * active external executor. Superseded rows stay in the database as immutable
+ * audit anchors (for example legacy budget-transfer receipts), but they are
+ * not separate sites to show or act on.
+ */
+export function supersededSiteIds(sites: readonly SiteBindingRow[]): Set<string> {
+  const groups = new Map<string, SiteBindingRow[]>();
+  for (const site of sites) {
+    const domain = normalizeSiteDomain(site.domain);
+    if (!domain) continue;
+    const group = groups.get(domain) ?? [];
+    group.push(site);
+    groups.set(domain, group);
+  }
+
+  const superseded = new Set<string>();
+  for (const group of groups.values()) {
+    const managed = group.filter((site) => isExternallyManaged(site.connectorBinding));
+    if (managed.length === 0) continue;
+    for (const site of group) {
+      if (!managed.includes(site)) superseded.add(site.id);
+    }
+  }
+  return superseded;
+}
+
+export async function getSupersededSiteIds(): Promise<Set<string>> {
+  const sites = await db.site.findMany({
+    select: {
+      id: true,
+      domain: true,
+      connectorBinding: { select: { executor: true, status: true } },
+    },
+  });
+  return supersededSiteIds(sites);
+}

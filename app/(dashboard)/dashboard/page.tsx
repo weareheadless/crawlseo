@@ -10,6 +10,7 @@ import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { formatDeltaPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { getSupersededSiteIds } from "@/lib/research/execution-authority";
 
 export default async function DashboardPage({
   searchParams,
@@ -21,15 +22,19 @@ export default async function DashboardPage({
   const showAll = (await searchParams).all === "1";
 
   // Single-operator CrawlSEO: show all sites regardless of provisioning path.
-  const allSites = await db.site.findMany({
-    select: {
-      id: true,
-      domain: true,
-      gscProperty: true,
-      _count: { select: { keywords: true, pages: true, crawls: true } },
-    },
-    orderBy: { domain: "asc" },
-  });
+  const [queriedSites, superseded] = await Promise.all([
+    db.site.findMany({
+      select: {
+        id: true,
+        domain: true,
+        gscProperty: true,
+        _count: { select: { keywords: true, pages: true, crawls: true } },
+      },
+      orderBy: { domain: "asc" },
+    }),
+    getSupersededSiteIds(),
+  ]);
+  const allSites = queriedSites.filter((site) => !superseded.has(site.id));
   const sites = showAll
     ? allSites
     : allSites.filter((site) =>

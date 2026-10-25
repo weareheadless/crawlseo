@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AddSiteModal } from "@/components/sites/add-site-modal";
 import { SyncButton } from "@/components/sites/sync-button";
 import { formatCompact } from "@/lib/seo-metrics";
+import { getSupersededSiteIds } from "@/lib/research/execution-authority";
 
 export default async function SitesPage({
   searchParams,
@@ -18,22 +19,26 @@ export default async function SitesPage({
   const showAll = (await searchParams).all === "1";
 
   // Single-operator CrawlSEO: show all sites regardless of provisioning path.
-  const allSites = await db.site.findMany({
-    select: {
-      id: true,
-      domain: true,
-      gscProperty: true,
-      createdAt: true,
-      _count: {
-        select: {
-          keywords: true,
-          pages: true,
-          crawls: true,
+  const [queriedSites, superseded] = await Promise.all([
+    db.site.findMany({
+      select: {
+        id: true,
+        domain: true,
+        gscProperty: true,
+        createdAt: true,
+        _count: {
+          select: {
+            keywords: true,
+            pages: true,
+            crawls: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    getSupersededSiteIds(),
+  ]);
+  const allSites = queriedSites.filter((site) => !superseded.has(site.id));
   const sites = showAll
     ? allSites
     : allSites.filter((site) =>
