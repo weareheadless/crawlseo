@@ -9,6 +9,10 @@ function makeHarness() {
   let credential: Record<string, any> | null = null;
   const sqlCalls: string[] = [];
   const tx = {
+    $executeRaw: vi.fn(async (parts: TemplateStringsArray) => {
+      sqlCalls.push(parts.join("?"));
+      return 0;
+    }),
     $queryRaw: vi.fn(async (parts: TemplateStringsArray) => {
       sqlCalls.push(parts.join("?"));
       return [];
@@ -62,6 +66,8 @@ describe("runtime connector credential helper", () => {
       where: { projectId_name: { projectId: "project-1", name: "helloada-runtime" } },
     }));
     expect(h.tx.serviceCredential.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(h.tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(h.sqlCalls[0]).toContain("pg_advisory_xact_lock");
     expect(h.sqlCalls[1]).toContain('"ConnectorBinding"');
     expect(h.sqlCalls[1]).toContain("FOR UPDATE");

@@ -255,7 +255,7 @@ export async function createRuntimeConnectorCredential(input: {
   return db.$transaction(async (tx) => {
     // Serialize a repeated global key before looking up or creating its exact
     // request record. The binding row then fences against a concurrent transfer.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${issuanceIdempotencyKey}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${issuanceIdempotencyKey}, 0))`;
     await tx.$queryRaw`SELECT "id" FROM "ConnectorBinding" WHERE "siteId" = ${siteId} FOR UPDATE`;
     const site = await tx.site.findUnique({
       where: { id: siteId },
