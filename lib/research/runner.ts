@@ -250,15 +250,25 @@ export async function runResearchRun(runId: string) {
         : "Research policy changed before this queued run could be dispatched; create a fresh run");
   }
 
-  await db.researchRun.update({
-    where: { id: run.id },
-    data: {
-      status: "RUNNING",
-      startedAt: run.startedAt ?? new Date(),
-      errorCode: null,
-      completedAt: null,
-    },
-  });
+  const dispatchAllowed = await db.$transaction(async (tx) => {
+    if (run.site.projectId) await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${run.site.projectId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${run.siteId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "ResearchPolicy" WHERE "siteId" = ${run.siteId} FOR UPDATE`;
+    const latestPolicy = await tx.researchPolicy.findUnique({ where: { siteId: run.siteId }, select: { enabled: true } });
+    if (latestPolicy?.enabled === false) {
+      await tx.researchRun.updateMany({
+        where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } },
+        data: { status: "FAILED", errorCode: "RESEARCH_POLICY_DISABLED", completedAt: new Date() },
+      });
+      return false;
+    }
+    const claimed = await tx.researchRun.updateMany({
+      where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } },
+      data: { status: "RUNNING", startedAt: run.startedAt ?? new Date(), errorCode: null, completedAt: null },
+    });
+    return claimed.count === 1;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (!dispatchAllowed) return (await db.researchRun.findUnique({ where: { id: run.id } })) ?? run;
 
   try {
     const brief = run.brief as Record<string, unknown>;

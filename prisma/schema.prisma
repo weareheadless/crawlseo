@@ -75,6 +75,10 @@ model Project {
   connectorExecutionStates   ConnectorExecutionState[]
   connectorEventCounter      ConnectorEventCounter?
   researchBudgetReservations ResearchBudgetReservation[]
+  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportSourceProject")
+  legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetProject")
+  legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceProject")
+  legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetProject")
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -629,6 +633,50 @@ model ResearchAction {
   @@index([siteId, createdAt])
 }
 
+model LegacyBudgetImportReceipt {
+  id                 String   @id
+  sourceProjectId    String
+  sourceSiteId       String
+  targetProjectId    String
+  targetSiteId       String
+  idempotencyKey     String
+  requestHash        String
+  sourceEvidenceHash String
+  reservationIds    Json
+  snapshot           Json
+  createdAt          DateTime @default(now())
+
+  sourceProject Project @relation("LegacyBudgetImportSourceProject", fields: [sourceProjectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceSite    Site    @relation("LegacyBudgetImportSourceSite", fields: [sourceSiteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  targetProject Project @relation("LegacyBudgetImportTargetProject", fields: [targetProjectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  targetSite    Site    @relation("LegacyBudgetImportTargetSite", fields: [targetSiteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([targetProjectId, idempotencyKey])
+  @@index([sourceProjectId, createdAt])
+}
+
+model LegacyBudgetSourceFreezeReceipt {
+  id               String   @id
+  sourceProjectId  String
+  sourceSiteId     String
+  targetProjectId  String
+  targetSiteId     String
+  idempotencyKey   String
+  reason           String
+  requestHash      String
+  sourcePolicyHash String
+  snapshot         Json
+  createdAt        DateTime @default(now())
+
+  sourceProject Project @relation("LegacyBudgetFreezeSourceProject", fields: [sourceProjectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceSite    Site    @relation("LegacyBudgetFreezeSourceSite", fields: [sourceSiteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  targetProject Project @relation("LegacyBudgetFreezeTargetProject", fields: [targetProjectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  targetSite    Site    @relation("LegacyBudgetFreezeTargetSite", fields: [targetSiteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([sourceProjectId, idempotencyKey])
+  @@index([sourceProjectId, createdAt])
+}
+
 model Delivery {
   id                String    @id @default(cuid())
   actionId          String
@@ -931,6 +979,10 @@ model Site {
   connectorOperationReceipts ConnectorOperationReceipt[]
   connectorExecutionStates   ConnectorExecutionState[]
   researchBudgetReservations ResearchBudgetReservation[]
+  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportSourceSite")
+  legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetSite")
+  legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceSite")
+  legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetSite")
 
   @@unique([userId, domain])
   @@unique([projectId, domain])

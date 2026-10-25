@@ -436,8 +436,14 @@ export async function requestResearchReport(input: {
   const briefJson = jsonValue({ ...brief, package: packageVersion });
   let run;
   try {
-    run = await db.seoResearchRun.create({
-      data: {
+    run = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${input.projectId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${site.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${site.id} FOR UPDATE`;
+      const currentPolicy = await tx.seoResearchPolicy.findUnique({ where: { siteId: site.id }, select: { enabled: true } });
+      if (!currentPolicy?.enabled) throw new ResearchValidationError("SEO research was disabled before this run could be queued");
+      return tx.seoResearchRun.create({
+        data: {
         projectId: input.projectId,
         siteId: site.id,
         periodStart: period,
@@ -458,8 +464,9 @@ export async function requestResearchReport(input: {
         status: true,
         taskLimit: true,
         taskCount: true,
-      },
-    });
+        },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
     const winner = await db.seoResearchRun.findFirst({
@@ -1098,10 +1105,25 @@ export async function runSeoResearch(projectId: string, siteId: string, research
   const prerequisites = await ensureSourcePrerequisites(projectId, siteId, brief.period);
   if (!prerequisites.ready) return waitingForSources(run.id, prerequisites);
 
-  await db.seoResearchRun.update({
-    where: { id: run.id },
-    data: { status: SeoResearchRunStatus.RUNNING_PAID_RESEARCH, startedAt: run.startedAt ?? new Date() },
-  });
+  const dispatchAllowed = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${siteId} FOR UPDATE`;
+    const currentPolicy = await tx.seoResearchPolicy.findUnique({ where: { siteId }, select: { enabled: true } });
+    if (!currentPolicy?.enabled) {
+      await tx.seoResearchRun.updateMany({
+        where: { id: run.id, status: { in: [SeoResearchRunStatus.REQUESTED, SeoResearchRunStatus.WAITING_FOR_SOURCES, SeoResearchRunStatus.RUNNING_PAID_RESEARCH] } },
+        data: { status: SeoResearchRunStatus.FAILED, errorCode: "SEO_RESEARCH_DISABLED", completedAt: new Date() },
+      });
+      return false;
+    }
+    const claimed = await tx.seoResearchRun.updateMany({
+      where: { id: run.id, status: { in: [SeoResearchRunStatus.REQUESTED, SeoResearchRunStatus.WAITING_FOR_SOURCES, SeoResearchRunStatus.RUNNING_PAID_RESEARCH] } },
+      data: { status: SeoResearchRunStatus.RUNNING_PAID_RESEARCH, startedAt: run.startedAt ?? new Date() },
+    });
+    return claimed.count === 1;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (!dispatchAllowed) return (await db.seoResearchRun.findUnique({ where: { id: run.id } })) ?? run;
 
   for (const task of run.tasks) {
     if (task.status === SeoResearchTaskStatus.RESERVED) {
