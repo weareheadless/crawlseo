@@ -196,6 +196,18 @@ async function projectSite(projectId: string) {
   return site;
 }
 
+async function lockArticleDispatchPolicy(tx: Prisma.TransactionClient, projectId: string, siteId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${siteId} FOR UPDATE`;
+  const policy = await tx.seoResearchPolicy.findUnique({
+    where: { siteId }, select: { articleResearchEnabled: true },
+  });
+  if (!policy?.articleResearchEnabled) {
+    throw new ArticleResearchValidationError("Article keyword research is disabled for this site");
+  }
+}
+
 async function assertDataForSeoGrant(projectId: string): Promise<void> {
   const grant = await db.projectApiKeyGrant.findFirst({
     where: {
@@ -276,6 +288,7 @@ export async function requestArticleKeywordResearch(input: {
   let run;
   try {
     run = await db.$transaction(async (tx) => {
+      await lockArticleDispatchPolicy(tx, input.projectId, site.id);
       // Serialize allowance checks per site so concurrent MCP calls cannot
       // reserve two paid ideas inside the same interval or monthly allowance.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`article-research:${site.id}`}))`;
@@ -387,8 +400,10 @@ export async function requestArticleSerpResearch(input: {
 
   let run;
   try {
-    run = await db.articleKeywordResearchRun.create({
-      data: {
+    run = await db.$transaction(async (tx) => {
+      await lockArticleDispatchPolicy(tx, input.projectId, parent.siteId);
+      return tx.articleKeywordResearchRun.create({
+        data: {
         projectId: input.projectId,
         siteId: parent.siteId,
         ideaKey: parent.ideaKey,
@@ -403,7 +418,8 @@ export async function requestArticleSerpResearch(input: {
         providerLanguageCode: parent.providerLanguageCode,
         providerLocationCode: parent.providerLocationCode,
         status: ArticleKeywordResearchStatus.REQUESTED,
-      },
+        },
+      });
     });
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
@@ -470,11 +486,25 @@ export async function runArticleKeywordResearch(projectId: string, siteId: strin
   if (!run) throw new ArticleResearchNotFoundError();
   if (run.status !== ArticleKeywordResearchStatus.REQUESTED) return run;
 
-  const claimed = await db.articleKeywordResearchRun.updateMany({
-    where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
-    data: { status: ArticleKeywordResearchStatus.ATTEMPTING, attemptedAt: new Date() },
+  const claimedCount = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${siteId} FOR UPDATE`;
+    const policy = await tx.seoResearchPolicy.findUnique({ where: { siteId }, select: { articleResearchEnabled: true } });
+    if (!policy?.articleResearchEnabled) {
+      await tx.articleKeywordResearchRun.updateMany({
+        where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
+        data: { status: ArticleKeywordResearchStatus.FAILED, errorCode: "ARTICLE_RESEARCH_DISABLED", completedAt: new Date() },
+      });
+      return 0;
+    }
+    const claimed = await tx.articleKeywordResearchRun.updateMany({
+      where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
+      data: { status: ArticleKeywordResearchStatus.ATTEMPTING, attemptedAt: new Date() },
+    });
+    return claimed.count;
   });
-  if (claimed.count !== 1) return projectRun(projectId, runId);
+  if (claimedCount !== 1) return projectRun(projectId, runId);
 
   try {
     const locale = run.providerLanguageCode && run.providerLocationCode

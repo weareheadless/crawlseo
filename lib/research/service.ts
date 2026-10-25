@@ -130,6 +130,9 @@ export async function createResearchRun(
   let run: Awaited<ReturnType<typeof db.researchRun.create>>;
   try {
     run = await db.$transaction(async (tx) => {
+      if (site.projectId) await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${site.projectId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "ResearchPolicy" WHERE "siteId" = ${siteId} FOR UPDATE`;
       const [policy, project] = await Promise.all([
         tx.researchPolicy.findUnique({ where: { siteId }, select: {
           monthlyBudget: true, revision: true, enabled: true, providers: true, recencyDays: true,
@@ -149,8 +152,6 @@ export async function createResearchRun(
       const now = new Date();
       const timeZone = project?.researchBudgetTimeZone ?? "UTC";
       const { start: monthStart, end: monthEnd } = researchMonthBounds(now, timeZone);
-      // Lock the site row so concurrent manual/API requests cannot both pass the cap.
-      await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
       if (scheduleKey) {
         const existing = await tx.researchRun.findUnique({ where: { siteId_scheduleKey: { siteId, scheduleKey } } });
         if (existing) return existing;

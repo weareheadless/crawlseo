@@ -52,7 +52,11 @@ describe("monthly research task budget", () => {
 
   it("locks the site and queues a run while under the cap", async () => {
     await expect(createResearchRun("site-1", input, "user-1")).resolves.toEqual({ id: "run-1" });
-    expect(mockDb.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(mockDb.$queryRaw).toHaveBeenCalledTimes(3);
+    const lockSql = mockDb.$queryRaw.mock.calls.map(([parts]) => parts.join("?"));
+    expect(lockSql[0]).toContain('FROM "Project"');
+    expect(lockSql[1]).toContain('FROM "Site"');
+    expect(lockSql[2]).toContain('FROM "ResearchPolicy"');
     expect(mockDb.researchRun.create).toHaveBeenCalledTimes(1);
     expect(mockDb.job.create).toHaveBeenCalledTimes(1);
     const range = mockDb.researchRun.count.mock.calls[0][0].where.createdAt;

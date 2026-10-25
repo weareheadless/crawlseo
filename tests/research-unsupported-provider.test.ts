@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  researchRun: { findUnique: vi.fn(), count: vi.fn(), update: vi.fn() },
+  researchRun: { findUnique: vi.fn(), count: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  researchPolicy: { findUnique: vi.fn() },
+  $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
   researchFinding: { findMany: vi.fn() },
   saveResearchSources: vi.fn(),
   fetchGoogleNewsRssSearch: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ db: {
+  $transaction: mocks.$transaction,
+  $queryRaw: mocks.$queryRaw,
+  researchPolicy: mocks.researchPolicy,
   researchRun: mocks.researchRun,
   researchFinding: mocks.researchFinding,
   crawl: { findFirst: vi.fn() },
@@ -44,6 +50,13 @@ describe("research provider capability reporting", () => {
       findings: [],
     });
     mocks.researchRun.count.mockResolvedValue(1);
+    mocks.researchRun.updateMany.mockResolvedValue({ count: 1 });
+    mocks.researchPolicy.findUnique.mockResolvedValue({ enabled: true });
+    mocks.$transaction.mockImplementation(async (callback) => callback({
+      $queryRaw: mocks.$queryRaw,
+      researchPolicy: mocks.researchPolicy,
+      researchRun: mocks.researchRun,
+    }));
     mocks.researchFinding.findMany.mockResolvedValue([]);
     mocks.saveResearchSources.mockResolvedValue([]);
     mocks.fetchGoogleNewsRssSearch.mockResolvedValue([]);
