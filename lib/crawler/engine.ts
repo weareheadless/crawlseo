@@ -7,8 +7,8 @@ import { REMEDIATION } from "./remediation";
 import { computeHealthScore } from "./health";
 
 const ABSOLUTE_MAX_PAGES = 2000;
-const BATCH_SIZE = 5;
-const BATCH_DELAY_MS = 750;
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 1500;
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -434,6 +434,18 @@ async function fetchPage(url: string): Promise<{
   }
 }
 
+async function fetchPageWithRetry(url: string): Promise<Awaited<ReturnType<typeof fetchPage>>> {
+  let last: Awaited<ReturnType<typeof fetchPage>> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    last = await fetchPage(url);
+    if (last.statusCode !== 429) return last;
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000 * (attempt + 1)));
+    }
+  }
+  return last!;
+}
+
 async function fetchText(url: string): Promise<string | null> {
   try {
     await assertPublicUrl(url);
@@ -756,7 +768,7 @@ async function executeCrawl(
     const results = await Promise.allSettled(
       batch.map(async (url) => {
         try {
-          const res = await fetchPage(url);
+          const res = await fetchPageWithRetry(url);
           return { url, res, error: null };
         } catch (err) {
           return { url, res: null, error: err };
@@ -840,7 +852,7 @@ async function executeCrawl(
     if (pages.length < 10 && rateLimitedResponses >= Math.ceil(pages.length / 2)) {
       throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
     }
-    if (pages.length >= 10 && rateLimitedResponses / pages.length > 0.2) {
+    if (pages.length >= 10 && rateLimitedResponses / pages.length > 0.1) {
       throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
     }
 
