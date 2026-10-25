@@ -1,13 +1,45 @@
 # CrawlSEO deployment
 
 The web app, authenticated MCP endpoint, and durable job worker run as separate
-PM2 processes. Build first, then start or reload the checked-in ecosystem:
+PM2 processes. The web process uses immutable release slots. Build from an
+isolated checkout, stage a new release, atomically move the `current` symlink,
+then reload only the web process:
 
 ```bash
+# In an isolated official source checkout, not /SEO while its server is live:
+npm ci
+npx prisma generate
 npm run build
-pm2 startOrReload deploy/ecosystem.config.cjs
+
+RELEASE_DIR="/SEO/.releases/web/$(git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)"
+node scripts/stage-production-web.mjs \
+  --source "$PWD" \
+  --build-dir "$PWD/.next" \
+  --release-dir "$RELEASE_DIR" \
+  --env-file "/SEO/.env.local"
+
+ln -s "$RELEASE_DIR" /SEO/.releases/web/current.next
+mv -Tf /SEO/.releases/web/current.next /SEO/.releases/web/current
+pm2 reload deploy/ecosystem.config.cjs --only crawlseo
 pm2 save
 ```
+
+The staging command requires explicit source, build, release, and runtime env
+paths. It copies the standalone server, `.next/static`, and `public` into a new
+release directory, copies the runtime env file as `.env` with mode `0600`,
+validates the staged server and build ID, and refuses any pre-existing release
+path. It does not print env contents or build with the runtime env file. The
+startup script resolves the configured slot and launches `server.js` from that
+directory without copying or changing release assets. If
+`CRAWLSEO_WEB_RELEASE_DIR` is set but invalid, startup fails closed. If it is
+unset, the old in-place startup path remains available for backwards
+compatibility.
+
+Do not run `npm run build` in `/SEO` while the web server is live: Next may
+replace `.next` files while the active process is reading them. Keep old
+release directories until the new slot is verified and rollback is no longer
+needed. To roll back, atomically point `current` at the prior release and
+reload only `crawlseo` again.
 
 Required environment values include `DATABASE_URL`, `CREDENTIAL_ENCRYPTION_KEY`,
 and the existing application/auth configuration. For zero-touch DataForSEO
