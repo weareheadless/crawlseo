@@ -28,6 +28,7 @@ import {
   requireProjectScope,
   type ServicePrincipalContext,
 } from "@/lib/auth/service-credentials";
+import { projectSite } from "@/lib/projects/project-site";
 
 type ToolData = Record<string, unknown>;
 
@@ -53,15 +54,6 @@ function failure(error: unknown) {
   };
 }
 
-async function projectSite(projectId: string) {
-  const site = await db.site.findFirst({
-    where: { projectId },
-    select: { id: true, domain: true, gscProperty: true, userId: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!site) throw new Error("Project has no site");
-  return site;
-}
 
 export function createProjectMcpServer(principal: ServicePrincipalContext): McpServer {
   const server = new McpServer({ name: "CrawlSEO project data", version: "1.0.0" });
@@ -83,11 +75,6 @@ export function createProjectMcpServer(principal: ServicePrincipalContext): McpS
             name: true,
             status: true,
             workspace: { select: { id: true, status: true } },
-            sites: {
-              take: 1,
-              orderBy: { createdAt: "asc" },
-              select: { id: true, domain: true, gscProperty: true },
-            },
             integrationGrants: {
               select: {
                 provider: true,
@@ -110,6 +97,7 @@ export function createProjectMcpServer(principal: ServicePrincipalContext): McpS
           },
         });
         if (!project) throw new Error("Project not found");
+        const site = await projectSite(projectId);
         const grants = Object.fromEntries(
           project.integrationGrants.map((grant) => [
             grant.provider === IntegrationProvider.GOOGLE_SEARCH_CONSOLE ? "gsc" : "ga4",
@@ -128,9 +116,7 @@ export function createProjectMcpServer(principal: ServicePrincipalContext): McpS
           name: project.name,
           status: project.status.toLowerCase(),
           workspace_id: project.workspace.id,
-          site: project.sites[0]
-            ? { domain: project.sites[0].domain, url: `https://${project.sites[0].domain}/` }
-            : null,
+          site: site ? { domain: site.domain, url: `https://${site.domain}/` } : null,
           connections: {
             gsc: grants.gsc ?? { status: "unverified", property: null },
             ga4: grants.ga4 ?? { status: "unverified", property: null },
