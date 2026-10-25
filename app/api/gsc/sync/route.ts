@@ -16,11 +16,13 @@ export async function POST(req: Request) {
     const syncDays = Number.isFinite(requestedDays)
       ? Math.min(365, Math.max(7, Math.round(requestedDays)))
       : 90;
-    const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+    // Single-operator dashboard: a signed-in operator may sync project-owned
+    // sites as well as their own. Another user's owned site stays private.
+    const site = await db.site.findUnique({
+      where: { id: siteId },
       select: { userId: true, projectId: true },
     });
-    if (!site) {
+    if (!site || (site.userId !== null && site.userId !== userId)) {
       return Response.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
