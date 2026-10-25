@@ -36,6 +36,14 @@ export type ProvisionProjectInput = {
 
 type DomainVerificationMethod = "helloada_dns" | "verified_gsc" | "operator_override";
 
+export const DEFAULT_PROVISIONING_SERVICE_SCOPES = [
+  "seo:read",
+  "seo:research:request",
+  "analytics:read",
+  "crawl:read",
+  "crawl:run",
+] as const;
+
 const DOMAIN_VERIFICATION_METHODS = new Set<DomainVerificationMethod>([
   "helloada_dns",
   "verified_gsc",
@@ -571,15 +579,7 @@ export async function provisionProject(
   });
 
   const credential = await createServiceCredential(records.projectId, [
-    ...(input.serviceCredentialScopes ?? [
-      "seo:read",
-      "seo:research:request",
-      "analytics:read",
-      "crawl:read",
-      "crawl:run",
-      "connector:read",
-      "connector:write",
-    ]),
+    ...(input.serviceCredentialScopes ?? DEFAULT_PROVISIONING_SERVICE_SCOPES),
   ], {
     idempotencyKey: input.serviceCredentialIdempotencyKey,
     principalName: input.serviceCredentialName?.trim() || "site-agent",

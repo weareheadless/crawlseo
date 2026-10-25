@@ -1028,6 +1028,7 @@ model ServiceCredential {
   tokenPrefix            String
   tokenHash              String    @unique
   issuanceIdempotencyKey String    @unique
+  issuanceRequestHash    String?
   scopes                 Json
   expiresAt              DateTime?
   lastUsedAt             DateTime?
