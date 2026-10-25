@@ -4,6 +4,47 @@ const boundedJson = z.unknown().refine((value) => {
   try { return Buffer.byteLength(JSON.stringify(value)) <= 100_000; } catch { return false; }
 }, "JSON payload is too large or invalid");
 
+export const technicalEvidenceIssueSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  url: z.string().url().max(2000),
+  type: z.enum(["BROKEN_LINK", "REDIRECT", "MISSING_TITLE", "MISSING_DESCRIPTION", "DUPLICATE_TITLE",
+    "DUPLICATE_DESCRIPTION", "MISSING_H1", "MULTIPLE_H1", "MISSING_ALT", "MISSING_CANONICAL",
+    "MISSING_ROBOTS", "MISSING_SITEMAP", "MISSING_SCHEMA", "SLOW_PAGE", "MIXED_CONTENT", "LARGE_PAGE"]),
+  severity: z.enum(["CRITICAL", "WARNING", "INFO"]),
+  message: z.string().trim().min(1).max(1000),
+}).strict();
+
+export const technicalEvidencePageSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  url: z.string().url().max(2000),
+  statusCode: z.number().int().min(0).max(999),
+  title: z.string().max(500).nullable(),
+  description: z.string().max(2000).nullable(),
+  canonical: z.string().max(2000).nullable(),
+  h1Count: z.number().int().nonnegative(),
+  wordCount: z.number().int().nonnegative(),
+  contentScore: z.number().int().min(0).max(100),
+  hasSchema: z.boolean(),
+  indexable: z.boolean(),
+}).strict();
+
+export const technicalEvidenceSchema = z.object({
+  schemaVersion: z.literal("1.0"),
+  sourceKind: z.literal("crawl"),
+  siteId: z.string().trim().min(1).max(120),
+  canonicalContextRevision: z.string().trim().min(1).max(200),
+  canonicalOrigin: z.string().url().max(500).refine((value) => {
+    try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password
+      && (url.pathname === "/" || url.pathname === "") && !url.search && !url.hash; } catch { return false; }
+  }, "canonicalOrigin must be a bare HTTPS origin"),
+  crawlId: z.string().trim().min(1).max(120),
+  completedAt: z.string().datetime(),
+  recencyLimitDays: z.literal(7),
+  sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  issueRefs: z.array(technicalEvidenceIssueSchema).min(1).max(500),
+  pageRefs: z.array(technicalEvidencePageSchema).max(500),
+}).strict();
+
 export const contextSnapshotSchema = z.object({
   siteId: z.string().trim().min(1).max(120),
   revision: z.string().trim().min(1).max(200),

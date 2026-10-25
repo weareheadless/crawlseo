@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 import { db } from "@/lib/db";
 import { emitConnectorEvent } from "@/lib/connectors/events";
-import type { bindingTransferSchema, connectorResearchPolicySchema } from "@/lib/connectors/types";
+import { technicalEvidenceSchema, type bindingTransferSchema, type connectorResearchPolicySchema } from "@/lib/connectors/types";
 import type { z } from "zod";
 
 export class ConnectorError extends Error {
@@ -17,6 +17,9 @@ const stableJson = (value: unknown): unknown => Array.isArray(value) ? value.map
     ? Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stableJson(item)]))
     : value;
 const budgetFingerprint = (value: unknown) => sha(stableJson(value));
+const technicalFingerprint = (siteId: string, crawlId: string, issueIds: string[]) => sha({
+  siteId, crawlId, issueIds: [...issueIds].sort(),
+});
 const safeFailure = (value: string) => value.replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
   .replace(/(token|secret|password|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]").slice(0, 500);
 const IMPLEMENTED_EXECUTORS = new Set(["helloada", "crawlseo-agent"]);
@@ -279,11 +282,62 @@ async function envelope(action: Awaited<ReturnType<typeof actionRow>>) {
     select: { id: true, provider: true, url: true, title: true, publishedAt: true, retrievedAt: true, language: true, metadata: true, run: { select: { brief: true, recencyDays: true, policyRevision: true } } },
   });
   const [context, currentPolicy] = await Promise.all([
-    db.connectorContextSnapshot.findFirst({ where: { projectId: action.projectId!, siteId: action.siteId }, select: { revision: true } }),
+    db.connectorContextSnapshot.findFirst({ where: { projectId: action.projectId!, siteId: action.siteId }, select: { revision: true, canonicalOrigin: true } }),
     db.researchPolicy.findUnique({ where: { siteId: action.siteId }, select: { revision: true, recencyDays: true } }),
   ]);
   const project = await db.project.findUnique({ where: { id: action.projectId! }, select: { externalProjectId: true } });
   const execution = await db.connectorExecutionState.findUnique({ where: { actionId_actionRevision: { actionId: action.id, actionRevision: action.revision } } });
+  const rawTechnical = evidence.technicalEvidence;
+  const parsedTechnical = technicalEvidenceSchema.safeParse(rawTechnical);
+  const technicalEvidence = parsedTechnical.success ? parsedTechnical.data : null;
+  let technicalEvidenceComplete = false;
+  let technicalEvidenceStale = false;
+  let invalidTechnicalEvidenceReferences = Boolean(rawTechnical !== undefined && !parsedTechnical.success);
+  const unavailableTechnicalEvidenceIds: string[] = [];
+  if (technicalEvidence) {
+    const issueIds = technicalEvidence.issueRefs.map((row) => row.id);
+    const pageIds = technicalEvidence.pageRefs.map((row) => row.id);
+    const shapeInvalid = technicalEvidence.siteId !== action.siteId
+      || technicalEvidence.canonicalContextRevision !== context?.revision
+      || technicalEvidence.canonicalOrigin !== context?.canonicalOrigin
+      || technicalEvidence.sourceFingerprint !== technicalFingerprint(action.siteId, technicalEvidence.crawlId, issueIds)
+      || new Set(issueIds).size !== issueIds.length || new Set(pageIds).size !== pageIds.length;
+    const crawl = !shapeInvalid ? await db.crawl.findFirst({ where: {
+      id: technicalEvidence.crawlId, siteId: action.siteId, status: "COMPLETED",
+    }, select: { id: true, siteId: true, status: true, finishedAt: true } }) : null;
+    const [issueRows, pageRows] = crawl ? await Promise.all([
+      db.crawlIssue.findMany({ where: { id: { in: issueIds }, crawlId: crawl.id },
+        select: { id: true, crawlId: true, url: true, type: true, severity: true, message: true } }),
+      db.auditPage.findMany({ where: { id: { in: pageIds }, crawlId: crawl.id },
+        select: { id: true, crawlId: true, url: true, statusCode: true, title: true, description: true, canonical: true,
+          h1Count: true, wordCount: true, contentScore: true, hasSchema: true, indexable: true } }),
+    ]) : [[], []];
+    const issuesById = new Map(issueRows.map((row) => [row.id, row]));
+    const pagesById = new Map(pageRows.map((row) => [row.id, row]));
+    for (const ref of technicalEvidence.issueRefs) {
+      const row = issuesById.get(ref.id);
+      if (!row) unavailableTechnicalEvidenceIds.push(ref.id);
+      else if (row.url !== ref.url || row.type !== ref.type || row.severity !== ref.severity || row.message !== ref.message) {
+        invalidTechnicalEvidenceReferences = true;
+      }
+    }
+    for (const ref of technicalEvidence.pageRefs) {
+      const row = pagesById.get(ref.id);
+      if (!row) unavailableTechnicalEvidenceIds.push(ref.id);
+      else if (row.url !== ref.url || row.statusCode !== ref.statusCode || row.title !== ref.title
+          || row.description !== ref.description || row.canonical !== ref.canonical || row.h1Count !== ref.h1Count
+          || row.wordCount !== ref.wordCount || row.contentScore !== ref.contentScore || row.hasSchema !== ref.hasSchema
+          || row.indexable !== ref.indexable) invalidTechnicalEvidenceReferences = true;
+    }
+    if (shapeInvalid || !crawl || crawl.finishedAt?.toISOString() !== technicalEvidence.completedAt) {
+      invalidTechnicalEvidenceReferences = true;
+    }
+    const crawlAgeMs = crawl?.finishedAt ? Date.now() - crawl.finishedAt.getTime() : Number.POSITIVE_INFINITY;
+    technicalEvidenceStale = crawlAgeMs < 0 || crawlAgeMs > technicalEvidence.recencyLimitDays * 86_400_000;
+    technicalEvidenceComplete = Boolean(crawl && !shapeInvalid && !invalidTechnicalEvidenceReferences
+      && unavailableTechnicalEvidenceIds.length === 0 && !technicalEvidenceStale
+      && issueRows.length === issueIds.length && pageRows.length === pageIds.length);
+  }
   return {
     schemaVersion: "1.0", project: { id: action.projectId, externalId: project?.externalProjectId ?? null },
     site: { id: action.siteId, canonicalOrigin: `https://${action.site.domain}/` },
@@ -307,6 +361,11 @@ async function envelope(action: Awaited<ReturnType<typeof actionRow>>) {
     evidenceComplete: sourceIds.length > 0 && !finding.invalid && !inline.invalid && !duplicateReferences && sources.length === sourceIds.length,
     unavailableEvidenceSourceIds: sourceIds.filter((id) => !sources.some((source) => source.id === id)),
     invalidEvidenceReferences: finding.invalid || inline.invalid || duplicateReferences,
+    technicalEvidence,
+    technicalEvidenceComplete,
+    technicalEvidenceStale,
+    unavailableTechnicalEvidenceIds: [...new Set(unavailableTechnicalEvidenceIds)],
+    invalidTechnicalEvidenceReferences,
     contextRevisions: { businessFacts: context?.revision ?? null, websiteInventory: context?.revision ?? null,
       canonicalOrigin: context?.revision ?? null,
       researchPolicy: [...new Set(sources.map((source) => source.run.policyRevision).filter((revision): revision is number => revision !== null))].sort((a, b) => a - b),
