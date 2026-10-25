@@ -106,7 +106,14 @@ export async function updateConnectorResearchProfile(
   input: ConnectorResearchProfileInput,
 ) {
   const site = await activeSite(principal.projectId, input.siteId);
-  const requestHash = sha(input);
+  // A retry may observe an advanced revision but the same profile content.
+  // Bind idempotency to content, not to the revision it was first written at.
+  const requestHash = sha({
+    siteId: input.siteId,
+    profile: input.profile,
+    researchPolicy: input.researchPolicy,
+    seoResearch: input.seoResearch,
+  });
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${site.id} FOR UPDATE`;

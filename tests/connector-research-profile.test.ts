@@ -103,10 +103,15 @@ describe("atomic research profile contract", () => {
     expect(mockDb.seoResearchPolicy.upsert).not.toHaveBeenCalled();
   });
 
-  it("replays the exact same idempotent request without rewriting", async () => {
-    const requestHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  it("replays the exact same content after the revision advances", async () => {
+    const requestHash = createHash("sha256").update(JSON.stringify({
+      siteId: input.siteId,
+      profile: input.profile,
+      researchPolicy: input.researchPolicy,
+      seoResearch: input.seoResearch,
+    })).digest("hex");
     mockDb.connectorOperationReceipt.findUnique.mockResolvedValue({ requestHash, result: { revision: 1, replayed: true } });
-    await expect(updateConnectorResearchProfile(principal, input)).resolves.toEqual({ revision: 1, replayed: true });
+    await expect(updateConnectorResearchProfile(principal, { ...input, expectedRevision: 1 })).resolves.toEqual({ revision: 1, replayed: true });
     expect(mockDb.siteProfile.upsert).not.toHaveBeenCalled();
     expect(mockDb.researchPolicy.create).not.toHaveBeenCalled();
     expect(mockDb.seoResearchPolicy.upsert).not.toHaveBeenCalled();
