@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
+import { projectSite as resolveProjectSite } from "@/lib/projects/project-site";
 import {
   closedPeriod,
   ensureSourcePrerequisites,
@@ -132,12 +133,12 @@ export async function prepareMonthlySiteEvidence(input: {
   if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 240) {
     throw new MonthlyEvidenceValidationError("idempotency_key is invalid");
   }
-  const site = await db.site.findFirst({
-    where: { projectId: input.projectId },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!site) throw new MonthlyEvidenceValidationError("Project has no site");
+  let site;
+  try {
+    site = await resolveProjectSite(input.projectId);
+  } catch {
+    throw new MonthlyEvidenceValidationError("Project has no site");
+  }
   const prerequisites = await ensureSourcePrerequisites(
     input.projectId,
     site.id,
@@ -160,12 +161,12 @@ export async function prepareMonthlySiteEvidence(input: {
 
 export async function getMonthlySiteEvidence(projectId: string, period: string) {
   validatePeriod(period);
-  const site = await db.site.findFirst({
-    where: { projectId },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!site) throw new MonthlyEvidenceValidationError("Project has no site");
+  let site;
+  try {
+    site = await resolveProjectSite(projectId);
+  } catch {
+    throw new MonthlyEvidenceValidationError("Project has no site");
+  }
   const prerequisites = await sourcePrerequisites(projectId, site.id, period);
   if (!prerequisites.ready) {
     return {

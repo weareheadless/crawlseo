@@ -11,6 +11,7 @@ import {
   SeoResearchTaskStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import { projectSite as resolveProjectSite } from "@/lib/projects/project-site";
 import { ConnectorError, connectorBudget, reserveConnectorBudget, settleConnectorBudget } from "@/lib/connectors/service";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 import { getTopKeywords, getTopPages, getSitePeriodMetrics, seoMetricsDateRange } from "@/lib/seo-metrics";
@@ -347,12 +348,12 @@ export async function requestResearchReport(input: {
 }): Promise<ResearchRequestResult> {
   const brief = validateResearchBrief(input.brief);
   const idempotencyKey = text(input.idempotencyKey, "idempotency_key", 240);
-  const site = await db.site.findFirst({
-    where: { projectId: input.projectId },
-    select: { id: true, domain: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!site) throw new ResearchNotFoundError("Project has no site");
+  let site;
+  try {
+    site = await resolveProjectSite(input.projectId);
+  } catch {
+    throw new ResearchNotFoundError("Project has no site");
+  }
 
   const period = periodStart(brief.period);
   const policy = await db.seoResearchPolicy.findUnique({

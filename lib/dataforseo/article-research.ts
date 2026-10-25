@@ -7,6 +7,7 @@ import {
   ProjectApiKeyGrantStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import { projectSite as resolveProjectSite } from "@/lib/projects/project-site";
 import { enqueueJob } from "@/lib/jobs/queue";
 import {
   connectorBudget,
@@ -214,13 +215,11 @@ async function ensureArticleResearchJob(projectId: string, siteId: string, runId
 }
 
 async function projectSite(projectId: string) {
-  const site = await db.site.findFirst({
-    where: { projectId },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!site) throw new ArticleResearchNotFoundError("Project has no site");
-  return site;
+  try {
+    return await resolveProjectSite(projectId);
+  } catch {
+    throw new ArticleResearchNotFoundError("Project has no site");
+  }
 }
 
 async function lockArticleDispatchPolicy(tx: Prisma.TransactionClient, projectId: string, siteId: string) {
