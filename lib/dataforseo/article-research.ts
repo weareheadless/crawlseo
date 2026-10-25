@@ -9,6 +9,12 @@ import {
 import { db } from "@/lib/db";
 import { enqueueJob } from "@/lib/jobs/queue";
 import {
+  connectorBudget,
+  reserveConnectorBudget,
+  settleConnectorBudget,
+} from "@/lib/connectors/service";
+import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
+import {
   executeDataForSeoKeywordOverview,
   executeDataForSeoOrganicSerp,
   executeDataForSeoRelatedKeywords,
@@ -18,6 +24,8 @@ import {
 export const ARTICLE_TASK_LIMIT_MAX = 5;
 export const ARTICLE_MIN_INTERVAL_DAYS = 0;
 export const ARTICLE_RESEARCH_SCHEMA_VERSION = 1;
+// Bounded quote for each live article keyword or SERP operation ($0.10).
+// Reservations remain held if the provider response does not establish cost.
 
 export class ArticleResearchValidationError extends Error {
   constructor(message: string) {
@@ -80,6 +88,25 @@ function isUncertain(error: unknown): boolean {
 
 function monthStart(date = new Date()): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+async function requireArticleBudget(projectId: string, siteId: string, checkAvailability = false) {
+  const budget = await connectorBudget({ projectId } as ServicePrincipalContext, siteId);
+  if (!budget.configured || !budget.allowanceMicros || !budget.maxOperationMicros
+      || BigInt(budget.allowanceMicros) <= BigInt(0) || BigInt(budget.maxOperationMicros) <= BigInt(0)) {
+    throw new ArticleResearchValidationError("A positive monthly monetary allowance and per-operation ceiling are required for paid article research");
+  }
+  if (budget.currency !== "USD") {
+    throw new ArticleResearchValidationError("Paid article research requires a USD monetary budget");
+  }
+  if (BigInt(budget.maxOperationMicros) > BigInt(budget.allowanceMicros)) {
+    throw new ArticleResearchValidationError("Per-operation ceiling exceeds the monthly monetary allowance");
+  }
+  if (checkAvailability && (budget.remainingMicros === null
+      || BigInt(budget.remainingMicros) < BigInt(budget.maxOperationMicros))) {
+    throw new ArticleResearchValidationError("Monetary research allowance is exhausted for this period");
+  }
+  return budget;
 }
 
 type ArticleResearchInput = {
@@ -275,6 +302,8 @@ export async function requestArticleKeywordResearch(input: {
     };
   }
 
+  await requireArticleBudget(input.projectId, site.id, true);
+
   const locale = await resolveDataForSeoLocale(
     input.projectId,
     normalized.language,
@@ -398,6 +427,8 @@ export async function requestArticleSerpResearch(input: {
     };
   }
 
+  await requireArticleBudget(input.projectId, parent.siteId, true);
+
   let run;
   try {
     run = await db.$transaction(async (tx) => {
@@ -486,26 +517,84 @@ export async function runArticleKeywordResearch(projectId: string, siteId: strin
   if (!run) throw new ArticleResearchNotFoundError();
   if (run.status !== ArticleKeywordResearchStatus.REQUESTED) return run;
 
-  const claimedCount = await db.$transaction(async (tx) => {
+  const principal = { projectId } as ServicePrincipalContext;
+  let budget: Awaited<ReturnType<typeof connectorBudget>>;
+  try {
+    budget = await requireArticleBudget(projectId, siteId);
+  } catch (error) {
+    await db.articleKeywordResearchRun.updateMany({
+      where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
+      data: { status: ArticleKeywordResearchStatus.FAILED, errorCode: safeError(error).toUpperCase().replace(/[^A-Z0-9_]+/g, "_").slice(0, 120), completedAt: new Date() },
+    });
+    return projectRun(projectId, runId);
+  }
+  let reservation;
+  try {
+    reservation = await reserveConnectorBudget(principal, {
+      siteId,
+      period: budget.period,
+      policyRevision: budget.policyRevision,
+      idempotencyKey: `article-research:${run.id}:${run.kind.toLowerCase()}`,
+      amountMicros: budget.maxOperationMicros!,
+      currency: "USD",
+      operation: `dataforseo:article_${run.kind.toLowerCase()}`,
+      detail: { articleResearchRunId: run.id, kind: run.kind.toLowerCase(), ceilingMicros: budget.maxOperationMicros },
+    });
+  } catch (error) {
+    // A budget-policy or allowance failure happens before dispatch. Persist it
+    // terminally so the one-attempt queue cannot repeatedly inspect it.
+    await db.articleKeywordResearchRun.updateMany({
+      where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
+      data: { status: ArticleKeywordResearchStatus.FAILED, errorCode: safeError(error).toUpperCase().replace(/[^A-Z0-9_]+/g, "_").slice(0, 120), completedAt: new Date() },
+    });
+    return projectRun(projectId, runId);
+  }
+  if (reservation.status !== "RESERVED") {
+    await db.articleKeywordResearchRun.updateMany({
+      where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
+      data: {
+        status: ArticleKeywordResearchStatus.UNCERTAIN,
+        providerTaskId: reservation.providerTaskId,
+        costMicros: reservation.actualCostMicros === null ? undefined : Number(reservation.actualCostMicros),
+        errorCode: "ARTICLE_BUDGET_RESERVATION_REQUIRES_RECONCILIATION",
+        completedAt: new Date(),
+      },
+    });
+    return projectRun(projectId, runId);
+  }
+
+  const claim = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${siteId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${siteId} FOR UPDATE`;
     const policy = await tx.seoResearchPolicy.findUnique({ where: { siteId }, select: { articleResearchEnabled: true } });
     if (!policy?.articleResearchEnabled) {
-      await tx.articleKeywordResearchRun.updateMany({
+      const disabled = await tx.articleKeywordResearchRun.updateMany({
         where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
         data: { status: ArticleKeywordResearchStatus.FAILED, errorCode: "ARTICLE_RESEARCH_DISABLED", completedAt: new Date() },
       });
-      return 0;
+      return { claimedCount: 0, disabledBeforeDispatch: disabled.count === 1 };
     }
     const claimed = await tx.articleKeywordResearchRun.updateMany({
       where: { id: run.id, status: ArticleKeywordResearchStatus.REQUESTED },
       data: { status: ArticleKeywordResearchStatus.ATTEMPTING, attemptedAt: new Date() },
     });
-    return claimed.count;
+    return { claimedCount: claimed.count, disabledBeforeDispatch: false };
   });
-  if (claimedCount !== 1) return projectRun(projectId, runId);
+  if (claim.claimedCount !== 1) {
+    const latest = await projectRun(projectId, runId);
+    if (claim.disabledBeforeDispatch) {
+      await settleConnectorBudget(principal, reservation.id, {
+        status: "released",
+        detail: { articleResearchRunId: run.id, reason: "policy_disabled_before_dispatch" },
+      });
+    }
+    return latest;
+  }
 
+  let settlementSucceeded = false;
+  let dispatchedResult: Awaited<ReturnType<typeof executeDataForSeoKeywordOverview
+    | typeof executeDataForSeoOrganicSerp | typeof executeDataForSeoRelatedKeywords>> | null = null;
   try {
     const locale = run.providerLanguageCode && run.providerLocationCode
       ? {
@@ -533,6 +622,23 @@ export async function runArticleKeywordResearch(projectId: string, siteId: strin
             languageCode: locale.languageCode,
             locationCode: locale.locationCode,
           });
+    dispatchedResult = result;
+    await settleConnectorBudget(principal, reservation.id, {
+      status: result.costMicros === null ? "uncertain" : "settled",
+      ...(result.costMicros === null ? {} : { actualCostMicros: String(result.costMicros) }),
+      providerTaskId: result.providerTaskId,
+      detail: { articleResearchRunId: run.id, kind: run.kind.toLowerCase(), reason: result.costMicros === null ? "provider_cost_missing" : undefined },
+    });
+    settlementSucceeded = result.costMicros !== null;
+    if (result.costMicros === null) {
+      await db.articleKeywordResearchRun.update({ where: { id: run.id }, data: {
+        status: ArticleKeywordResearchStatus.UNCERTAIN,
+        providerTaskId: result.providerTaskId,
+        errorCode: "DATAFORSEO_COST_UNKNOWN",
+        completedAt: new Date(),
+      } });
+      return projectRun(projectId, runId);
+    }
     if (JSON.stringify(result.result).length > 200_000) {
       throw new Error("DATAFORSEO_ARTICLE_RESULT_TOO_LARGE");
     }
@@ -548,13 +654,38 @@ export async function runArticleKeywordResearch(projectId: string, siteId: strin
       },
     });
   } catch (error) {
+    // Once provider dispatch begins, exceptions cannot prove that no charge
+    // occurred. Keep the reservation committed and prevent redispatch.
+    if (dispatchedResult?.costMicros !== null && dispatchedResult !== null && !settlementSucceeded) {
+      try {
+        await settleConnectorBudget(principal, reservation.id, {
+          status: "settled",
+          actualCostMicros: String(dispatchedResult.costMicros),
+          providerTaskId: dispatchedResult.providerTaskId,
+          detail: { articleResearchRunId: run.id, kind: run.kind.toLowerCase(), settlementRetry: true },
+        });
+        settlementSucceeded = true;
+      } catch {
+        // Preserve a held reservation and persist the known receipt for later reconciliation.
+      }
+    } else if (!dispatchedResult || dispatchedResult.costMicros === null) {
+      await settleConnectorBudget(principal, reservation.id, {
+        status: "uncertain",
+        providerTaskId: dispatchedResult?.providerTaskId,
+        detail: { articleResearchRunId: run.id, kind: run.kind.toLowerCase(), reason: safeError(error) },
+      });
+    }
     return db.articleKeywordResearchRun.update({
       where: { id: run.id },
       data: {
-        status: isUncertain(error)
-          ? ArticleKeywordResearchStatus.UNCERTAIN
-          : ArticleKeywordResearchStatus.FAILED,
-        errorCode: (isUncertain(error) ? "DATAFORSEO_DISPATCH_UNCERTAIN" : safeError(error))
+        status: dispatchedResult?.costMicros !== null && dispatchedResult !== null && settlementSucceeded
+          ? ArticleKeywordResearchStatus.FAILED
+          : ArticleKeywordResearchStatus.UNCERTAIN,
+        providerTaskId: dispatchedResult?.providerTaskId,
+        costMicros: dispatchedResult?.costMicros,
+        errorCode: (dispatchedResult?.costMicros !== null && dispatchedResult !== null
+          ? safeError(error)
+          : isUncertain(error) ? "DATAFORSEO_DISPATCH_UNCERTAIN" : "DATAFORSEO_COST_UNKNOWN")
           .toUpperCase()
           .replace(/[^A-Z0-9_]+/g, "_")
           .slice(0, 120),
