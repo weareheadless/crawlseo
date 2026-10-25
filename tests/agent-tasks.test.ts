@@ -42,14 +42,12 @@ describe("agent prompt", () => {
     expect(prompt).toContain("/home/admin/susimacdonald-wix");
     expect(prompt).toContain("Add rental FAQ heading");
     expect(prompt).toContain("apartments for rent playa del carmen");
-    expect(prompt).toContain("Do not run `wix publish`");
-    expect(prompt).toContain("already created the dedicated worktree");
-    expect(prompt).toContain("Do not run `git worktree`");
-    expect(prompt).not.toContain("LOCALIZED DATA");
-    expect(prompt).toContain("Do not edit the shared bridge repository");
+    expect(prompt).toContain("Work only in the current worktree");
+    expect(prompt).toContain("release pipeline handles publication");
+    expect(prompt).toContain("Verify sibling routes remain unchanged");
     expect(prompt).toContain("Keep the existing design.");
-    expect(prompt).toContain("gate every content, SEO, and rendering change to that exact key or slug");
-    expect(prompt).toContain("verify that at least two sibling routes remain unchanged");
+    expect(prompt).not.toContain("LOCALIZED DATA");
+    expect(prompt).not.toContain("BRIDGE PLAN");
   });
 });
 
