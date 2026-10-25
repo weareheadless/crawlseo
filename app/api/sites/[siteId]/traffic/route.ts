@@ -13,9 +13,12 @@ export async function GET(
     }
 
     const { siteId } = await params;
-    const site = await db.site.findFirst({
-      where: { id: siteId, userId },
-      select: { userId: true },
+    // The dashboard is single-operator and exposes both user-owned sites and
+    // project-provisioned sites (which have no userId). Match the overview
+    // page's access model after requiring an authenticated session.
+    const site = await db.site.findUnique({
+      where: { id: siteId },
+      select: { id: true },
     });
 
     if (!site) {

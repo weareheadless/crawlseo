@@ -5,7 +5,11 @@ module.exports = {
       cwd: "/SEO",
       script: "scripts/start-production.sh",
       interpreter: "/bin/bash",
-      env: { NODE_ENV: "production", PORT: "3001" },
+      env: {
+        NODE_ENV: "production",
+        PORT: "3001",
+        CRAWLSEO_WEB_RELEASE_DIR: "/SEO/.releases/web/current",
+      },
       kill_timeout: 10000,
       listen_timeout: 10000,
     },

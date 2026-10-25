@@ -13,9 +13,9 @@ export async function GET(
 
     const { siteId, crawlId } = await params;
 
-    const site = await db.site.findFirst({
-      where: { id: siteId, userId },
-      select: { userId: true },
+    const site = await db.site.findUnique({
+      where: { id: siteId },
+      select: { id: true },
     });
     if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
