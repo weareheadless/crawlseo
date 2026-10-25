@@ -269,10 +269,11 @@ export async function runResearchRun(runId: string) {
     const providers = stringList(run.providerSet);
     const useReddit = providers.length === 0 || providers.includes("reddit");
     const useNews = providers.includes("news");
-    const useWeb = providers.includes("web");
-    const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news" && provider !== "web");
+    const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news");
     const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
-    const sourceErrors: string[] = unsupportedProviders.map((provider) => `${provider}: provider is not implemented; no results were reported for this capability`);
+    const sourceErrors: string[] = unsupportedProviders.map((provider) => provider === "web"
+      ? "web: general web search is not implemented; Google News RSS is available through the news provider"
+      : `${provider}: provider is not implemented; no results were reported for this capability`);
     const language = typeof brief.language === "string" ? brief.language : "en";
     const market = typeof brief.market === "string" ? brief.market : "";
     const country = researchCountry(market, language);
@@ -282,7 +283,9 @@ export async function runResearchRun(runId: string) {
     const excludedDomains = stringList(constraints.excludedDomains).slice(0, 100);
     const queryPlan = boundedQueryPlan({ topics: effectiveTopics, questions: stringList(brief.questions), exclusions, limit: 5 });
     if (!queryPlan.length) throw new Error("Research policy exclusions removed all bounded query candidates");
-    const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0) + (useWeb ? 1 : 0));
+    // `web` is explicitly reported unsupported above; never relabel news RSS
+    // results as general web research.
+    const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
     let requestIndex = 0;
 
     for (const plan of queryPlan) {
@@ -315,17 +318,6 @@ export async function runResearchRun(runId: string) {
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis } });
         } catch (error) {
           sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
-        }
-        requestIndex += 1;
-        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
-      }
-      if (useWeb) {
-        try {
-          const sources = await fetchGoogleNewsRssSearch({ query: topic, language, country, limit: 10 });
-          for (const source of sources) collected.set(source.contentHash, { ...source, provider: "web_news_rss",
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, capability: "web" } });
-        } catch (error) {
-          sourceErrors.push(`web: ${error instanceof Error ? error.message : "Web RSS search failed"}`);
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -453,7 +445,6 @@ export async function runResearchRun(runId: string) {
       providers: [
         ...(useReddit ? ["reddit_rss"] : []),
         ...(providers.includes("news") ? ["google_news_rss"] : []),
-        ...(useWeb ? ["web_news_rss"] : []),
       ],
       requested_providers: providers,
       unsupported_providers: unsupportedProviders,

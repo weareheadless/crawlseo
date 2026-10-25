@@ -49,7 +49,7 @@ describe("research provider capability reporting", () => {
     mocks.fetchGoogleNewsRssSearch.mockResolvedValue([]);
   });
 
-  it("reports competitor as unsupported while running the implemented web provider", async () => {
+  it("reports unimplemented providers without substituting news RSS", async () => {
     await runResearchRun("run-web-only");
 
     expect(mocks.researchRun.update).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -57,15 +57,16 @@ describe("research provider capability reporting", () => {
       data: expect.objectContaining({
         status: "PARTIAL",
         report: expect.objectContaining({
-          providers: ["web_news_rss"],
+          providers: [],
           requested_providers: ["web", "competitor"],
-          unsupported_providers: ["competitor"],
+          unsupported_providers: ["web", "competitor"],
           source_errors: expect.arrayContaining([
+            expect.stringContaining("web: general web search is not implemented"),
             expect.stringContaining("quality: no sources passed"),
           ]),
         }),
       }),
     }));
-    expect(mocks.fetchGoogleNewsRssSearch).toHaveBeenCalled();
+    expect(mocks.fetchGoogleNewsRssSearch).not.toHaveBeenCalled();
   });
 });

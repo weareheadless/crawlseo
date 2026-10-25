@@ -55,15 +55,15 @@ describe("connector Action envelope and pagination scope", () => {
     expect(result.evidenceComplete).toBe(false);
   });
 
-  it("advertises implemented web RSS truthfully and keeps competitor research unsupported", async () => {
+  it("reports web and competitor research as unsupported", async () => {
     mockDb.site.findFirst.mockResolvedValue({ id: "site-1", projectId: "project-1",
       project: { id: "project-1", externalProjectId: "external-1", workspaceId: "workspace" },
       connectorBinding: { executor: "helloada", generation: 2, status: "ACTIVE" } });
     const result = await connectorCapabilities(principal, "site-1");
     expect(result.capabilities).toContain("findings.read");
-    expect(result.capabilities).toContain("providers.web-news-rss");
-    expect(result.researchProviders).toContainEqual({ id: "web", implementation: "web_news_rss", billable: false,
-      limitations: ["RSS search results only; does not fetch or crawl full web pages"] });
+    expect(result.capabilities).not.toContain("providers.web-news-rss");
+    expect(result.researchProviders).toContainEqual({ id: "web", supported: false,
+      reason: "General web search is not implemented; Google News RSS is available through the news provider" });
     expect(result.researchProviders).toContainEqual({ id: "competitor", supported: false,
       reason: "Competitor research requires a domain-specific, budget-reserved provider operation" });
   });
