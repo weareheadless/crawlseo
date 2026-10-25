@@ -30,6 +30,8 @@ write carries that generation so a transferred or stale executor is rejected.
 | POST | `/actions/{actionId}/operations` | Accept/decline preparation, request correction, or cancel preparation with expected revision, generation and idempotency key. |
 | POST | `/actions/{actionId}/execution` | Record preparation, owner-decision, publication and outcome states. |
 | GET, POST | `/events?siteId=…` | Poll the selected site's at-least-once event outbox, acknowledge durable local receipts, or schedule retry with backoff. |
+| GET, PUT | `/policy?siteId=…` | Read or compare-and-swap the market research policy and business profile (`SiteProfile` + `ResearchPolicy`). |
+| PUT | `/research-profile` | Atomically write the business profile, research policy and paid SEO research policy (`SiteProfile` + `ResearchPolicy` + `SeoResearchPolicy`) with revision and idempotency guards. Does not change research authority or spend money. |
 | GET, PUT | `/budget` | Read the project allowance or compare-and-swap its monetary cap, currency and IANA timezone. |
 | POST | `/budget/reservations` | Reserve a bounded amount before billable provider dispatch. |
 | POST | `/budget/reservations/{reservationId}` | Settle actual cost, release a proven pre-dispatch reservation, or hold an uncertain outcome. |

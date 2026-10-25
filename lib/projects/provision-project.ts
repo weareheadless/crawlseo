@@ -58,6 +58,9 @@ export type ProvisionProjectResult = {
   credentialId: string;
   credentialToken: string | null;
   credentialReused: boolean;
+  connectorCredentialId: string;
+  connectorCredentialToken: string | null;
+  connectorCredentialReused: boolean;
   dataforseoGrantSource: "platform" | "operator" | null;
   jobs: { gsc: string; ga4: string };
 };
@@ -586,6 +589,15 @@ export async function provisionProject(
     reissueIfReused: input.reissueCredential === true,
   });
 
+  const connectorCredential = await createServiceCredential(records.projectId, [
+    "connector:read",
+    "connector:write",
+  ], {
+    idempotencyKey: `provision:${input.serviceCredentialIdempotencyKey}:connector-runtime`,
+    principalName: "helloada-runtime",
+    reissueIfReused: input.reissueCredential === true,
+  });
+
   const gscJob = await enqueueJob({
     projectId: records.projectId,
     siteId: records.siteId,
@@ -609,6 +621,9 @@ export async function provisionProject(
     credentialId: credential.credentialId,
     credentialToken: credential.token,
     credentialReused: credential.reused,
+    connectorCredentialId: connectorCredential.credentialId,
+    connectorCredentialToken: connectorCredential.token,
+    connectorCredentialReused: connectorCredential.reused,
     dataforseoGrantSource: records.dataforseoGrantSource,
     jobs: { gsc: gscJob.id, ga4: ga4Job.id },
   };

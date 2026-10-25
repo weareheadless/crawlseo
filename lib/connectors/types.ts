@@ -160,3 +160,40 @@ export const connectorResearchPolicySchema = z.object({
   autoDraft: z.boolean(),
   autoAgent: z.boolean(),
 });
+
+const profileText = z.string().trim().min(1);
+
+export const connectorResearchProfileSchema = z.object({
+  siteId: z.string().trim().min(1).max(120),
+  expectedRevision: z.number().int().min(0),
+  idempotencyKey: z.string().trim().min(1).max(240),
+  profile: z.object({
+    topics: z.array(profileText.max(120)).max(12),
+    audience: z.string().trim().max(300).nullable(),
+    market: z.string().trim().max(120).nullable(),
+    language: z.string().trim().min(2).max(16),
+    goals: z.array(profileText.max(300)).max(12),
+    exclusions: z.array(profileText.max(200)).max(30),
+  }),
+  researchPolicy: z.object({
+    enabled: z.boolean(),
+    cadence: z.enum(["daily", "weekly", "monthly", "manual"]),
+    providers: z.array(z.enum(["reddit", "news", "web", "competitor"])).min(1).max(4),
+    maxSources: z.number().int().min(1).max(100),
+    monthlyBudget: z.number().int().min(0).max(500),
+    recencyDays: z.number().int().min(1).max(3650),
+    autoDraft: z.boolean(),
+    autoAgent: z.boolean(),
+  }),
+  seoResearch: z.object({
+    enabled: z.boolean(),
+    monthlyTaskLimit: z.number().int().min(1).max(50),
+    keywordSeedLimit: z.number().int().min(1).max(20),
+    competitorLimit: z.number().int().min(0).max(10),
+    packageVersion: z.string().trim().min(1).max(60),
+    articleResearchEnabled: z.boolean(),
+    articleTaskLimitPerMonth: z.number().int().min(0).max(50),
+    articleMinIntervalDays: z.number().int().min(0).max(365),
+  }),
+});
+export type ConnectorResearchProfileInput = z.infer<typeof connectorResearchProfileSchema>;

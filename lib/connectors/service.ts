@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
+import type { ConnectorResearchProfileInput } from "@/lib/connectors/types";
 import { db } from "@/lib/db";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { technicalEvidenceSchema, type bindingTransferSchema, type connectorResearchPolicySchema } from "@/lib/connectors/types";
@@ -96,6 +97,131 @@ export async function updateConnectorResearchPolicy(principal: ServicePrincipalC
   } catch (error) {
     if (error instanceof ConnectorError) throw error;
     if ((error as { code?: string }).code === "P2034") throw new ConnectorError("Research policy changed concurrently; refresh before retrying", 409);
+    throw error;
+  }
+}
+
+export async function updateConnectorResearchProfile(
+  principal: ServicePrincipalContext,
+  input: ConnectorResearchProfileInput,
+) {
+  const site = await activeSite(principal.projectId, input.siteId);
+  const requestHash = sha(input);
+  try {
+    return await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${site.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "SiteProfile" WHERE "siteId" = ${site.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "ResearchPolicy" WHERE "siteId" = ${site.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "SeoResearchPolicy" WHERE "siteId" = ${site.id} FOR UPDATE`;
+
+      const prior = await tx.connectorOperationReceipt.findUnique({
+        where: {
+          projectId_operation_idempotencyKey: {
+            projectId: principal.projectId,
+            operation: "research_profile",
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+        select: { requestHash: true, result: true },
+      });
+      if (prior) {
+        if (prior.requestHash !== requestHash) {
+          throw new ConnectorError("Idempotency key was reused for a different research profile", 409);
+        }
+        return prior.result;
+      }
+
+      const current = await tx.researchPolicy.findUnique({
+        where: { siteId: site.id },
+        select: { revision: true },
+      });
+      const revision = current?.revision ?? 0;
+      if (revision !== input.expectedRevision) {
+        throw new ConnectorError("Research profile changed; refresh before retrying", 409);
+      }
+
+      const constraints = {
+        market: input.profile.market,
+        goals: input.profile.goals,
+        exclusions: input.profile.exclusions,
+      };
+      await tx.siteProfile.upsert({
+        where: { siteId: site.id },
+        create: {
+          siteId: site.id,
+          projectId: principal.projectId,
+          language: input.profile.language,
+          topics: input.profile.topics,
+          audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
+          constraints,
+        },
+        update: {
+          language: input.profile.language,
+          topics: input.profile.topics,
+          audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
+          constraints,
+        },
+      });
+
+      const policyData = {
+        enabled: input.researchPolicy.enabled,
+        cadence: input.researchPolicy.cadence,
+        providers: input.researchPolicy.providers,
+        goals: input.profile.goals,
+        exclusions: input.profile.exclusions,
+        recencyDays: input.researchPolicy.recencyDays,
+        maxSources: input.researchPolicy.maxSources,
+        monthlyBudget: input.researchPolicy.monthlyBudget,
+        autoDraft: input.researchPolicy.autoDraft,
+        autoAgent: input.researchPolicy.autoAgent,
+      };
+      const policy = current
+        ? await tx.researchPolicy.update({
+            where: { siteId: site.id },
+            data: { ...policyData, revision: { increment: 1 } },
+          })
+        : await tx.researchPolicy.create({
+            data: { siteId: site.id, ...policyData, revision: 1 },
+          });
+
+      await tx.seoResearchPolicy.upsert({
+        where: { siteId: site.id },
+        create: {
+          projectId: principal.projectId,
+          siteId: site.id,
+          ...input.seoResearch,
+        },
+        update: { ...input.seoResearch },
+      });
+
+      const result = {
+        schemaVersion: "1.0",
+        projectId: principal.projectId,
+        siteId: site.id,
+        revision: policy.revision,
+        profile: input.profile,
+        researchPolicy: input.researchPolicy,
+        seoResearch: input.seoResearch,
+      };
+      await tx.connectorOperationReceipt.create({
+        data: {
+          projectId: principal.projectId,
+          siteId: site.id,
+          actionId: "config:research-profile",
+          actionRevision: 0,
+          operation: "research_profile",
+          idempotencyKey: input.idempotencyKey,
+          requestHash,
+          result,
+        },
+      });
+      return result;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    if (error instanceof ConnectorError) throw error;
+    if ((error as { code?: string }).code === "P2034") {
+      throw new ConnectorError("Research profile changed concurrently; refresh and retry", 409);
+    }
     throw error;
   }
 }

@@ -44,6 +44,9 @@ export async function POST(req: Request) {
       credential_id: result.credentialId,
       credential_token: result.credentialToken,
       credential_reused: result.credentialReused,
+      connector_credential_id: result.connectorCredentialId,
+      connector_credential_token: result.connectorCredentialToken,
+      connector_credential_reused: result.connectorCredentialReused,
       dataforseo_grant_source: result.dataforseoGrantSource,
       jobs: result.jobs,
     });
