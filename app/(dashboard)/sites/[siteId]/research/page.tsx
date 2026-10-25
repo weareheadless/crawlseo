@@ -53,7 +53,7 @@ export default async function ResearchPage({ params }: { params: Promise<{ siteI
           <Fact label="Providers" value={config.providers.join(", ")} />
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          The AI chooses the queries, subreddits, news sources, and web sources from this configuration. Manual prompt entry is no longer the primary workflow.
+          Research currently searches Reddit and Google News RSS. General web and competitor providers are not available yet; runs that request them record that limitation instead of implying those sources were searched.
         </p>
       </section>
 

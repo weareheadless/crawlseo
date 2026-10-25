@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { measureDeliveryOutcome } from "@/lib/delivery/outcomes";
+import { userOwnsDelivery } from "@/lib/auth/research-action-access";
 
 export async function POST(
   _req: Request,
@@ -8,6 +9,9 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { deliveryId } = await params;
+  if (!(await userOwnsDelivery(deliveryId, userId))) {
+    return Response.json({ error: "Delivery not found" }, { status: 404 });
+  }
   try {
     return Response.json({ delivery: await measureDeliveryOutcome(deliveryId) });
   } catch (error) {

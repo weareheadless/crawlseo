@@ -17,8 +17,8 @@ export async function POST(
     }
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true, projectId: true },
     });
     if (!site) {
@@ -59,8 +59,8 @@ export async function GET(
     }
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true },
     });
     if (!site) {

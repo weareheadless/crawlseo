@@ -35,8 +35,8 @@ export async function POST(req: Request) {
     };
 
     if (body.action === "ensure" && body.siteId) {
-      const site = await db.site.findUnique({
-        where: { id: body.siteId },
+      const site = await db.site.findFirst({
+        where: { id: body.siteId, userId },
         select: { userId: true },
       });
       if (!site) {

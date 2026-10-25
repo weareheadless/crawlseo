@@ -42,13 +42,18 @@ model Workspace {
 }
 
 model Project {
-  id                String        @id @default(cuid())
-  workspaceId       String
-  externalProjectId String
-  name              String
-  status            ProjectStatus @default(ACTIVE)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                             String        @id @default(cuid())
+  workspaceId                    String
+  externalProjectId              String
+  name                           String
+  status                         ProjectStatus @default(ACTIVE)
+  createdAt                      DateTime      @default(now())
+  updatedAt                      DateTime      @updatedAt
+  monthlyResearchAllowanceMicros BigInt?
+  maxResearchOperationMicros     BigInt?
+  researchBudgetCurrency         String        @default("USD")
+  researchBudgetTimeZone         String        @default("UTC")
+  researchBudgetRevision         Int           @default(1)
 
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sites                      Site[]
@@ -61,9 +66,160 @@ model Project {
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
   siteProfiles               SiteProfile[]
   researchRuns               ResearchRun[]
+  researchActions            ResearchAction[]
+  connectorBindings          ConnectorBinding[]
+  connectorBindingTransfers  ConnectorBindingTransfer[]
+  connectorContexts          ConnectorContextSnapshot[]
+  connectorEvents            ConnectorEvent[]
+  connectorOperationReceipts ConnectorOperationReceipt[]
+  connectorExecutionStates   ConnectorExecutionState[]
+  connectorEventCounter      ConnectorEventCounter?
+  researchBudgetReservations ResearchBudgetReservation[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
+}
+
+enum ConnectorBindingStatus {
+  ACTIVE
+  PAUSED
+  TRANSFERRING
+}
+
+// Exactly one active executor can own a site. Generation fences stale workers
+// and status callbacks when an installation is deliberately transferred.
+model ConnectorBinding {
+  id         String                 @id @default(cuid())
+  projectId  String
+  siteId     String                 @unique
+  executor   String
+  generation Int                    @default(1)
+  status     ConnectorBindingStatus @default(ACTIVE)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+}
+
+model ConnectorBindingTransfer {
+  id             String   @id @default(cuid())
+  projectId      String
+  siteId         String
+  idempotencyKey String
+  requestHash    String
+  fromExecutor   String
+  toExecutor     String
+  fromGeneration Int
+  toGeneration   Int
+  reason         String
+  createdAt      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, siteId, createdAt])
+}
+
+// The connector pushes a revisioned snapshot; CrawlSEO never treats a crawl
+// as canonical inventory or owner-confirmed business context.
+model ConnectorContextSnapshot {
+  id               String   @id @default(cuid())
+  projectId        String
+  siteId           String   @unique
+  revision         String
+  websiteInventory Json
+  businessFacts    Json
+  capabilities     Json
+  canonicalOrigin  String
+  observedAt       DateTime
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model ConnectorEventCounter {
+  projectId String @id
+  sequence  Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// Durable pull-based outbox. Acknowledgement means receipt only; publication
+// success is a separate verified event carrying its receipt.
+model ConnectorEvent {
+  id             String    @id
+  projectId      String
+  siteId         String
+  sequence       Int
+  actionId       String?
+  actionRevision Int?
+  type           String
+  payload        Json
+  occurredAt     DateTime  @default(now())
+  acknowledgedAt DateTime?
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now())
+  lastError      String?
+  createdAt      DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sequence])
+  @@index([projectId, acknowledgedAt, sequence])
+  @@index([siteId, actionId, actionRevision])
+}
+
+model ConnectorOperationReceipt {
+  id             String   @id @default(cuid())
+  projectId      String
+  siteId         String
+  actionId       String
+  actionRevision Int
+  operation      String
+  idempotencyKey String
+  requestHash    String
+  result         Json
+  createdAt      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, operation, idempotencyKey])
+  @@index([projectId, actionId, actionRevision])
+}
+
+model ConnectorExecutionState {
+  id                 String    @id @default(cuid())
+  projectId          String
+  siteId             String
+  actionId           String
+  actionRevision     Int
+  generation         Int
+  status             String
+  candidateRef       String?
+  reviewUrl          String?
+  reviewPackageHash  String?
+  ownerDecision      String?
+  publicationReceipt Json?
+  verifiedAt         DateTime?
+  observedAt         DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([actionId, actionRevision])
+  @@index([projectId, siteId, observedAt])
 }
 
 model Account {
@@ -298,6 +454,10 @@ model ContentDraft {
   model           String
   provider        String
   status          ContentDraftStatus @default(READY)
+  wixApprovalHash String?
+  wixApprovedBy   String?
+  wixApprovedAt   DateTime?
+  wixApprovedRevision Int?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -344,6 +504,7 @@ model ResearchRun {
   id            String            @id @default(cuid())
   siteId        String
   projectId     String?
+  scheduleKey   String?
   kind          ResearchRunKind   @default(MARKET)
   trigger       ResearchTrigger   @default(MANUAL)
   status        ResearchRunStatus @default(QUEUED)
@@ -351,6 +512,7 @@ model ResearchRun {
   brief         Json
   topics        Json?
   recencyDays   Int               @default(90)
+  policyRevision Int?
   providerSet   Json?
   promptVersion String            @default("research-v1")
   model         String?
@@ -375,6 +537,7 @@ model ResearchRun {
   @@index([siteId, createdAt])
   @@index([siteId, status])
   @@index([projectId, createdAt])
+  @@unique([siteId, scheduleKey])
 }
 
 model ResearchSource {
@@ -419,31 +582,41 @@ model ResearchFinding {
 }
 
 model ResearchAction {
-  id             String               @id @default(cuid())
-  siteId         String
-  runId          String?
-  findingId      String?
-  source         String
-  kind           String
-  format         String?
-  title          String
-  primaryQuery   String?
-  targetUrl      String?
-  recommendation String
-  evidence       Json?
-  priority       Int                  @default(50)
-  status         ResearchActionStatus @default(PROPOSED)
-  automationMode AutomationMode       @default(MANUAL)
-  dedupeKey      String
-  owner          String?
-  approvedBy     String?
-  approvedAt     DateTime?
-  deliveredAt    DateTime?
-  verifiedAt     DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                     String               @id @default(cuid())
+  siteId                 String
+  projectId              String?
+  revision               Int                  @default(1)
+  runId                  String?
+  findingId              String?
+  source                 String
+  kind                   String
+  format                 String?
+  title                  String
+  primaryQuery           String?
+  targetUrl              String?
+  recommendation         String
+  priorityRationale      String?
+  evidence               Json?
+  requiredCapabilities   Json?
+  acceptanceCriteria     Json?
+  dependencies           Json?
+  reassessmentConditions Json?
+  priority               Int                  @default(50)
+  preparationStatus      PreparationStatus    @default(NONE)
+  preparationRequestId   String?
+  status                 ResearchActionStatus @default(PROPOSED)
+  automationMode         AutomationMode       @default(MANUAL)
+  dedupeKey              String
+  owner                  String?
+  approvedBy             String?
+  approvedAt             DateTime?
+  deliveredAt            DateTime?
+  verifiedAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
   site       Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project    Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   run        ResearchRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
   finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
   drafts     ContentDraft[]
@@ -452,6 +625,7 @@ model ResearchAction {
 
   @@unique([siteId, dedupeKey])
   @@index([siteId, status, priority])
+  @@index([projectId, status, priority])
   @@index([siteId, createdAt])
 }
 
@@ -520,6 +694,15 @@ enum ResearchActionStatus {
   FAILED
 }
 
+enum PreparationStatus {
+  NONE
+  ELIGIBLE
+  QUEUED
+  READY
+  BLOCKED
+  CANCELLED
+}
+
 enum AutomationMode {
   MANUAL
   ASSISTED
@@ -529,31 +712,33 @@ enum AutomationMode {
 // ============ AGENT TASKS ============
 
 model AgentTask {
-  id                String          @id @default(cuid())
-  siteId            String
-  actionId          String?
-  draftId           String?
-  kind              String
-  status            AgentTaskStatus @default(READY)
-  title             String
-  goal              String
-  prompt            String
-  repoPath          String
-  route             String?
-  branch            String?
-  worktreePath      String?
-  agent             String          @default("opencode")
-  opencodeSessionId String?
-  commitSha         String?
-  bridgeReceiptId   String?
-  publishedUrl      String?
-  result            Json?
-  errorCode         String?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  closedAt          DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id                  String          @id @default(cuid())
+  siteId              String
+  actionId            String?
+  actionRevision      Int?
+  connectorGeneration Int?
+  draftId             String?
+  kind                String
+  status              AgentTaskStatus @default(READY)
+  title               String
+  goal                String
+  prompt              String
+  repoPath            String
+  route               String?
+  branch              String?
+  worktreePath        String?
+  agent               String          @default("opencode")
+  opencodeSessionId   String?
+  commitSha           String?
+  bridgeReceiptId     String?
+  publishedUrl        String?
+  result              Json?
+  errorCode           String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   site      Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
   action    ResearchAction?     @relation(fields: [actionId], references: [id], onDelete: SetNull)
@@ -561,6 +746,7 @@ model AgentTask {
   messages  AgentTaskMessage[]
   artifacts AgentTaskArtifact[]
 
+  @@unique([actionId, actionRevision])
   @@index([siteId, createdAt])
   @@index([actionId])
   @@index([status, createdAt])
@@ -595,14 +781,52 @@ model ResearchPolicy {
   enabled       Boolean  @default(true)
   cadence       String   @default("weekly")
   providers     Json?
+  goals         Json?
+  exclusions    Json?
+  recencyDays   Int      @default(90)
   maxSources    Int      @default(30)
   monthlyBudget Int      @default(9)
   autoDraft     Boolean  @default(false)
   autoAgent     Boolean  @default(false)
+  revision      Int      @default(1)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+enum ResearchBudgetReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+  UNCERTAIN
+}
+
+model ResearchBudgetReservation {
+  id               String                          @id @default(cuid())
+  projectId        String
+  siteId           String
+  idempotencyKey   String
+  period           String
+  timeZone         String
+  policyRevision   Int
+  amountMicros     BigInt
+  actualCostMicros BigInt?
+  currency         String
+  operation        String
+  status           ResearchBudgetReservationStatus @default(RESERVED)
+  providerTaskId   String?
+  detail           Json?
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
+  settledAt        DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, period, status])
+  @@index([siteId, createdAt])
 }
 
 model SiteDeliveryConfig {
@@ -700,6 +924,13 @@ model Site {
   researchPolicy             ResearchPolicy?
   siteDeliveryConfig         SiteDeliveryConfig?
   deliveryTargets            DeliveryTarget[]
+  connectorBinding           ConnectorBinding?
+  connectorBindingTransfers  ConnectorBindingTransfer[]
+  connectorContext           ConnectorContextSnapshot?
+  connectorEvents            ConnectorEvent[]
+  connectorOperationReceipts ConnectorOperationReceipt[]
+  connectorExecutionStates   ConnectorExecutionState[]
+  researchBudgetReservations ResearchBudgetReservation[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])

@@ -91,6 +91,14 @@ describe("research actions", () => {
     }));
   });
 
+  it("keeps the same issue identity when an action title is reworded", () => {
+    const first = researchActionDedupeKey({ source: "market_research", kind: "add_faq",
+      targetUrl: "https://example.com/tulum", primaryQuery: "foreign ownership rules", title: "Add an ownership FAQ" });
+    const revised = researchActionDedupeKey({ source: "technical_seo", kind: "add_faq",
+      targetUrl: "https://example.com/tulum", primaryQuery: "foreign ownership rules", title: "Clarify buyer title questions" });
+    expect(revised).toBe(first);
+  });
+
   it("validates action priority and URLs", () => {
     expect(createResearchActionSchema.parse({
       source: "market_research",
@@ -133,7 +141,9 @@ describe("action transitions", () => {
 describe("research action to content action", () => {
   const action = {
     id: "action-1",
+    projectId: null,
     siteId: "site-1",
+    revision: 1,
     runId: null,
     findingId: null,
     source: "market_research",
@@ -143,6 +153,11 @@ describe("research action to content action", () => {
     primaryQuery: "can foreigners own property in mexico",
     targetUrl: null,
     recommendation: "Add a source-grounded FAQ to the existing ownership page.",
+    priorityRationale: null,
+    requiredCapabilities: null,
+    acceptanceCriteria: null,
+    dependencies: null,
+    reassessmentConditions: null,
     evidence: {
       signals: ["striking_distance"],
       confidence: 0.72,
@@ -150,6 +165,8 @@ describe("research action to content action", () => {
     },
     priority: 78,
     status: "APPROVED",
+    preparationStatus: "NONE",
+    preparationRequestId: null,
     automationMode: "MANUAL",
     dedupeKey: "dedupe-1",
     owner: null,

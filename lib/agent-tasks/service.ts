@@ -12,14 +12,17 @@ export async function createAgentTaskForAction(
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
     include: {
-      site: { select: { id: true, domain: true } },
+      site: { select: { id: true, domain: true, connectorBinding: { select: { executor: true, status: true, generation: true } } } },
       drafts: { orderBy: { createdAt: "desc" }, take: 1 },
       agentTasks: { where: { status: { in: ["READY", "RUNNING"] } }, take: 1 },
     },
   });
   if (!action) throw new ResearchServiceError("Research action not found", 404);
-  if (action.status !== "APPROVED" && action.status !== "DRAFT_READY") {
-    throw new ResearchServiceError("Approve the action before creating an agent task", 409);
+  if (action.site.connectorBinding?.status === "ACTIVE" && action.site.connectorBinding.executor !== "crawlseo-agent") {
+    throw new ResearchServiceError("This site is owned by another execution connector", 409);
+  }
+  if (action.status !== "APPROVED" && action.status !== "DRAFT_READY" && !["ELIGIBLE", "QUEUED"].includes(action.preparationStatus)) {
+    throw new ResearchServiceError("The action is not eligible for preparation", 409);
   }
   if (action.format === "article" || isWixBlogTarget(action.targetUrl)) {
     throw new ResearchServiceError(
@@ -68,6 +71,8 @@ export async function createAgentTaskForAction(
     data: {
       siteId: action.siteId,
       actionId: action.id,
+      actionRevision: action.revision,
+      connectorGeneration: action.site.connectorBinding?.generation ?? null,
       draftId: draft?.id,
       kind: "embed_update",
       title: action.title,

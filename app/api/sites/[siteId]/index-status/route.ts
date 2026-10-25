@@ -16,8 +16,8 @@ export async function POST(
     }
 
     const { siteId } = await params;
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true, domain: true, gscProperty: true },
     });
 

@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { ingestResearchFinding, ResearchServiceError } from "@/lib/research/service";
 import { ingestResearchFindingSchema } from "@/lib/research/types";
 import { ZodError } from "zod";
+import { userOwnsResearchRun } from "@/lib/auth/research-action-access";
 
 export async function POST(
   req: Request,
@@ -11,6 +12,9 @@ export async function POST(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { runId } = await params;
+  if (!(await userOwnsResearchRun(runId, userId))) {
+    return Response.json({ error: "Research run not found" }, { status: 404 });
+  }
   try {
     const input = ingestResearchFindingSchema.parse(await req.json());
     const finding = await ingestResearchFinding(runId, input);

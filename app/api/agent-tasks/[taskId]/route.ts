@@ -3,6 +3,7 @@ import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { ResearchServiceError } from "@/lib/research/service";
 import { z } from "zod";
 import { ZodError } from "zod";
+import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 
 const schema = z.object({
   status: z.enum(["READY", "RUNNING", "AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "COMMITTED", "PUBLISHING", "PUBLISHED", "CLOSED", "COMPLETED", "FAILED", "CANCELLED"]).optional(),
@@ -23,6 +24,7 @@ export async function PATCH(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { taskId } = await params;
+  if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   try {
     const input = schema.parse(await req.json());
     return Response.json({ task: await updateAgentTask(taskId, input) });

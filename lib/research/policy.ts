@@ -22,6 +22,9 @@ export function normalizeResearchCadence(value: unknown): ResearchCadence {
 
 export type ResearchConfigInput = {
   topics: string[];
+  goals?: string[];
+  exclusions?: string[];
+  recencyDays?: number;
   audience?: string;
   market?: string;
   language: string;
@@ -46,7 +49,10 @@ export async function getResearchConfig(siteId: string) {
     profile,
     policy,
     topics: stringList(profile?.topics),
-    providers: stringList(policy?.providers).length > 0 ? stringList(policy?.providers) : ["reddit", "news"],
+    goals: stringList(policy?.goals),
+    exclusions: stringList(policy?.exclusions),
+    recencyDays: policy?.recencyDays ?? 90,
+    providers: stringList(policy?.providers).length > 0 ? stringList(policy?.providers) : ["reddit", "news", "web"],
     audience: typeof profile?.audience === "string" ? profile.audience : "",
     market: typeof constraints.market === "string" ? constraints.market : "",
     language: profile?.language ?? "en",
@@ -60,6 +66,9 @@ export async function getResearchConfig(siteId: string) {
 }
 
 export async function saveResearchConfig(siteId: string, input: ResearchConfigInput) {
+  if (input.providers.some((provider) => !["reddit", "news", "web", "competitor"].includes(provider))) {
+    throw new Error("Research configuration contains an unsupported provider");
+  }
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, projectId: true } });
   if (!site) throw new Error("Site not found");
 
@@ -71,13 +80,13 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
       language: input.language,
       topics: json(input.topics),
       audience: input.audience ? json(input.audience) : undefined,
-      constraints: input.market ? json({ market: input.market }) : undefined,
+      constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
     },
     update: {
       language: input.language,
       topics: json(input.topics),
       audience: input.audience ? json(input.audience) : Prisma.JsonNull,
-      constraints: input.market ? json({ market: input.market }) : Prisma.JsonNull,
+      constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
     },
   });
 
@@ -88,6 +97,9 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
       enabled: input.enabled,
       cadence: input.cadence,
       providers: json(input.providers),
+      goals: json(input.goals ?? []),
+      exclusions: json(input.exclusions ?? []),
+      recencyDays: input.recencyDays ?? 90,
       maxSources: input.maxSources,
       monthlyBudget: input.monthlyBudget,
       autoDraft: input.autoDraft,
@@ -97,10 +109,14 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
       enabled: input.enabled,
       cadence: input.cadence,
       providers: json(input.providers),
+      goals: json(input.goals ?? []),
+      exclusions: json(input.exclusions ?? []),
+      recencyDays: input.recencyDays ?? 90,
       maxSources: input.maxSources,
       monthlyBudget: input.monthlyBudget,
       autoDraft: input.autoDraft,
       autoAgent: input.autoAgent,
+      revision: { increment: 1 },
     },
   });
 }

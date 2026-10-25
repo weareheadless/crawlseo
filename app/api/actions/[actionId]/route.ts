@@ -3,6 +3,7 @@ import { updateResearchAction, ResearchServiceError } from "@/lib/research/servi
 import { updateResearchActionSchema } from "@/lib/research/types";
 import { createAgentTaskIfEligible } from "@/lib/agent-tasks/service";
 import { ZodError } from "zod";
+import { userOwnsResearchAction } from "@/lib/auth/research-action-access";
 
 export async function PATCH(
   req: Request,
@@ -12,13 +13,16 @@ export async function PATCH(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { actionId } = await params;
+  if (!(await userOwnsResearchAction(actionId, userId))) {
+    return Response.json({ error: "Action not found" }, { status: 404 });
+  }
   try {
     const input = updateResearchActionSchema.parse(await req.json());
     const action = await updateResearchAction(actionId, input, userId);
 
     let agentTask = null;
     let agentTaskError: string | null = null;
-    if (input.status === "APPROVED") {
+    if (input.status === "APPROVED" && action.automationMode !== "MANUAL") {
       try {
         const result = await createAgentTaskIfEligible(
           actionId,

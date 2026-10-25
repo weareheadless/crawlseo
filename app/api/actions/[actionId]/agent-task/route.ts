@@ -1,6 +1,7 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { ResearchServiceError } from "@/lib/research/service";
+import { userOwnsResearchAction } from "@/lib/auth/research-action-access";
 
 export async function POST(
   req: Request,
@@ -10,6 +11,9 @@ export async function POST(
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { actionId } = await params;
+  if (!(await userOwnsResearchAction(actionId, userId))) {
+    return Response.json({ error: "Action not found" }, { status: 404 });
+  }
   let instructions = "";
   try {
     const body = await req.json() as { instructions?: unknown };

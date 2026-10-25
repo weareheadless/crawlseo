@@ -12,8 +12,8 @@ export async function POST(req: Request) {
 
     const { siteId } = (await req.json()) as { siteId?: string };
     if (!siteId) return Response.json({ error: "Missing siteId" }, { status: 400 });
-    const site = await db.site.findUnique({
-      where: { id: siteId },
+    const site = await db.site.findFirst({
+      where: { id: siteId, userId },
       select: { userId: true, projectId: true },
     });
     if (!site) {

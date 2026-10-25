@@ -11,6 +11,8 @@ const KNOWN_SCOPES = new Set([
   "analytics:read",
   "crawl:read",
   "crawl:run",
+  "connector:read",
+  "connector:write",
 ]);
 
 export type ServicePrincipalContext = {
@@ -86,7 +88,7 @@ export async function createServiceCredential(
 
   const existing = await db.serviceCredential.findUnique({
     where: { issuanceIdempotencyKey: idempotencyKey },
-    select: { id: true, servicePrincipalId: true },
+    select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true },
   });
   if (existing) {
     if (existing.servicePrincipalId !== principal.id) {
@@ -111,6 +113,15 @@ export async function createServiceCredential(
         token,
         reused: true,
       };
+    }
+    const existingScopes = normalizeScopes(parseScopes(existing.scopes)).sort();
+    const requestedScopes = [...normalizedScopes].sort();
+    if (existingScopes.length !== requestedScopes.length
+        || existingScopes.some((scope, index) => scope !== requestedScopes[index])) {
+      throw new Error("Credential idempotency key was already used with different scopes");
+    }
+    if (existing.revokedAt || (existing.expiresAt && existing.expiresAt <= new Date())) {
+      throw new ServiceAuthError("Service credential for this idempotency key is no longer active", 403);
     }
     return {
       credentialId: existing.id,
@@ -155,9 +166,18 @@ export async function createServiceCredential(
     if ((error as { code?: string }).code === "P2002") {
       const winner = await db.serviceCredential.findUnique({
         where: { issuanceIdempotencyKey: idempotencyKey },
-        select: { id: true, servicePrincipalId: true },
+        select: { id: true, servicePrincipalId: true, scopes: true, expiresAt: true, revokedAt: true },
       });
       if (winner?.servicePrincipalId === principal.id) {
+        const winnerScopes = normalizeScopes(parseScopes(winner.scopes)).sort();
+        const requestedScopes = [...normalizedScopes].sort();
+        if (winnerScopes.length !== requestedScopes.length
+            || winnerScopes.some((scope, index) => scope !== requestedScopes[index])) {
+          throw new Error("Credential idempotency key was already used with different scopes");
+        }
+        if (winner.revokedAt || (winner.expiresAt && winner.expiresAt <= new Date())) {
+          throw new ServiceAuthError("Service credential for this idempotency key is no longer active", 403);
+        }
         return {
           credentialId: winner.id,
           servicePrincipalId: principal.id,
@@ -168,6 +188,27 @@ export async function createServiceCredential(
     }
     throw error;
   }
+}
+
+/**
+ * Issue an additive, read-only credential for capturing a migration inventory.
+ * It uses its own principal and never revokes the tenant's existing MCP token.
+ */
+export async function createMigrationReadCredential(siteId: string, idempotencyKey: string) {
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { projectId: true, project: { select: { id: true, status: true, workspace: { select: { status: true } } } } },
+  });
+  if (!site?.projectId || !site.project) throw new ServiceAuthError("Project site not found", 403);
+  if (site.project.status !== "ACTIVE" || site.project.workspace.status !== "ACTIVE") {
+    throw new ServiceAuthError("Project is not active", 403);
+  }
+  return createServiceCredential(site.projectId, ["connector:read"], {
+    idempotencyKey,
+    principalName: "helloada-migration-read",
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    revokeExisting: false,
+  });
 }
 
 export async function authenticateServiceToken(

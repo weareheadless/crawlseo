@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { createWixBlogDraftForDraft, WixBlogDeliveryError } from "@/lib/delivery/wix-blog";
+import { db } from "@/lib/db";
 
 export async function POST(
   _req: Request,
@@ -8,6 +9,8 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { draftId } = await params;
+  const draft = await db.contentDraft.findUnique({ where: { id: draftId }, select: { site: { select: { userId: true } } } });
+  if (!draft || draft.site.userId !== userId) return Response.json({ error: "Draft not found" }, { status: 404 });
   try {
     const delivery = await createWixBlogDraftForDraft(draftId);
     return Response.json({ delivery }, { status: 201 });

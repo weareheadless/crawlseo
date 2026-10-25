@@ -84,12 +84,13 @@ export function ResearchConfigForm({ siteId, initial }: { siteId: string; initia
         </Field>
         <Field label="Monthly task budget">
           <input type="number" min={0} max={500} value={config.monthlyBudget} onChange={(event) => setConfig({ ...config, monthlyBudget: Number(event.target.value) })} className={inputClass} />
+          <p className="mt-1 text-xs text-muted-foreground">Maximum research runs created in the project timezone calendar month, including scheduled and failed runs.</p>
         </Field>
       </div>
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Sources</p>
         <div className="flex flex-wrap gap-4">
-          {(["reddit", "news"] as const).map((provider) => (
+          {(["reddit", "news", "web"] as const).map((provider) => (
             <Toggle
               key={provider}
               label={provider.charAt(0).toUpperCase() + provider.slice(1)}

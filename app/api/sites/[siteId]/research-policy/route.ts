@@ -6,6 +6,7 @@ import {
 } from "@/lib/research/policy";
 import { z } from "zod";
 import { ZodError } from "zod";
+import { userOwnsSite } from "@/lib/auth/research-action-access";
 
 const schema = z.object({
   topics: z.array(z.string().trim().min(1).max(120)).min(1).max(12),
@@ -28,6 +29,7 @@ export async function GET(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { siteId } = await params;
+  if (!(await userOwnsSite(siteId, userId))) return Response.json({ error: "Site not found" }, { status: 404 });
   try {
     return Response.json(await getResearchConfig(siteId));
   } catch {
@@ -42,6 +44,7 @@ export async function PUT(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { siteId } = await params;
+  if (!(await userOwnsSite(siteId, userId))) return Response.json({ error: "Site not found" }, { status: 404 });
   try {
     const input = schema.parse(await req.json());
     const policy = await saveResearchConfig(siteId, input);

@@ -2,17 +2,9 @@ import { loadEnvConfig } from "@next/env";
 import { db } from "@/lib/db";
 import { createResearchRun } from "@/lib/research/service";
 import { normalizeResearchCadence } from "@/lib/research/policy";
+import { researchCadenceWindow } from "@/lib/research/schedule";
 
 loadEnvConfig(process.cwd());
-
-const DAY = 24 * 60 * 60 * 1000;
-
-function intervalMs(cadence: string): number | null {
-  if (cadence === "daily") return DAY;
-  if (cadence === "weekly") return 7 * DAY;
-  if (cadence === "monthly") return 30 * DAY;
-  return null;
-}
 
 function stringList(value: unknown): string[] {
   return Array.isArray(value)
@@ -30,6 +22,7 @@ async function main() {
       id: true,
       domain: true,
       userId: true,
+      project: { select: { researchBudgetTimeZone: true } },
       researchPolicy: true,
       siteProfile: true,
     },
@@ -40,18 +33,20 @@ async function main() {
     const policy = site.researchPolicy;
     const profile = site.siteProfile;
     if (!policy || !profile) continue;
-    const cadenceMs = intervalMs(normalizeResearchCadence(policy.cadence));
+    const cadence = normalizeResearchCadence(policy.cadence);
     const topics = stringList(profile.topics);
-    if (!cadenceMs || topics.length === 0) {
+    if (cadence === "manual" || topics.length === 0) {
       results.push({ site: site.domain, status: "skipped", reason: "manual cadence or no topics" });
       continue;
     }
+    const timeZone = site.project?.researchBudgetTimeZone ?? "UTC";
+    const window = researchCadenceWindow(cadence, new Date(), timeZone);
     const latest = await db.researchRun.findFirst({
-      where: { siteId: site.id },
+      where: { siteId: site.id, createdAt: { gte: window.start, lt: window.end } },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
-    if (latest && Date.now() - latest.createdAt.getTime() < cadenceMs) {
+    if (latest) {
       results.push({ site: site.domain, status: "skipped", reason: "within cadence" });
       continue;
     }
@@ -69,14 +64,15 @@ async function main() {
             : undefined,
           language: profile.language || "en",
           questions: [],
-          recencyDays: 90,
+          recencyDays: policy.recencyDays ?? 90,
           providers: stringList(policy.providers).length > 0
             ? stringList(policy.providers) as Array<"reddit" | "news" | "web">
             : ["reddit", "news"],
         },
         site.userId ?? "research-scheduler",
+        window.key,
       );
-      results.push({ site: site.domain, status: "queued", runId: run.id });
+      results.push({ site: site.domain, status: run.status.toLowerCase(), runId: run.id });
     } catch (error) {
       results.push({ site: site.domain, status: "failed", error: error instanceof Error ? error.message : "failed" });
     }

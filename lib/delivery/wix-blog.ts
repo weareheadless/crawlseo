@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { findUnsplashCover, importUnsplashCover, type UnsplashCover } from "@/lib/delivery/unsplash";
@@ -10,6 +10,58 @@ export class WixBlogDeliveryError extends Error {
     super(message);
     this.name = "WixBlogDeliveryError";
   }
+}
+
+async function assertWixBlogExecutor(siteId: string): Promise<void> {
+  const binding = await db.connectorBinding.findUnique({
+    where: { siteId },
+    select: { executor: true, status: true },
+  });
+  // Legacy sites without a connector binding keep their existing Wix owner
+  // flow. Once a binding exists, Wix delivery belongs only to the CrawlSEO
+  // adapter; HelloAda and unsupported/transferring bindings must not be
+  // bypassed through the legacy Wix routes.
+  if (binding && (binding.status !== "ACTIVE" || binding.executor !== "crawlseo-agent")) {
+    throw new WixBlogDeliveryError("The active execution connector does not own Wix Blog delivery for this site", 409);
+  }
+}
+
+function wixCandidateHash(draft: {
+  id: string; siteId: string; actionId: string | null; title: string; slug: string;
+  metaTitle: string; metaDescription: string; excerpt: string; markdown: string;
+  action: { id: string; revision: number; targetUrl: string | null } | null;
+}) {
+  return createHash("sha256").update(JSON.stringify({
+    id: draft.id, siteId: draft.siteId, actionId: draft.actionId,
+    title: draft.title, slug: draft.slug, metaTitle: draft.metaTitle,
+    metaDescription: draft.metaDescription, excerpt: draft.excerpt,
+    markdown: draft.markdown,
+    action: draft.action && { id: draft.action.id, revision: draft.action.revision, targetUrl: draft.action.targetUrl },
+  })).digest("hex");
+}
+
+export async function approveWixBlogUpdateForDraft(contentDraftId: string, userId: string) {
+  const draft = await db.contentDraft.findUnique({
+    where: { id: contentDraftId },
+    include: { action: { select: { id: true, revision: true, targetUrl: true } } },
+  });
+  if (!draft?.action) throw new WixBlogDeliveryError("A linked ResearchAction is required", 404);
+  await assertWixBlogExecutor(draft.siteId);
+  if (!draft.action.targetUrl || !blogSlugFromUrl(draft.action.targetUrl)) {
+    throw new WixBlogDeliveryError("This action is not a Wix Blog target", 409);
+  }
+  const hash = wixCandidateHash(draft);
+  const saved = await db.contentDraft.updateMany({
+    where: { id: draft.id, updatedAt: draft.updatedAt, action: { is: { revision: draft.action.revision } } },
+    data: {
+      wixApprovalHash: hash,
+      wixApprovedBy: userId,
+      wixApprovedAt: new Date(),
+      wixApprovedRevision: draft.action.revision,
+    },
+  });
+  if (saved.count !== 1) throw new WixBlogDeliveryError("The candidate changed during approval; review it again", 409);
+  return { draftId: draft.id, candidateHash: hash, actionRevision: draft.action.revision };
 }
 
 type WixConfig = {
@@ -296,6 +348,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     },
   });
   if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
+  await assertWixBlogExecutor(draft.siteId);
   const cfg = await configForSite(draft.siteId);
   if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured for this site", 503);
   if (!draft.action || draft.format !== "article") {
@@ -461,15 +514,23 @@ async function markActionVerified(actionId: string) {
   }
 }
 
-export async function publishWixBlogUpdateForDraft(contentDraftId: string) {
+export async function publishWixBlogUpdateForDraft(contentDraftId: string, userId: string) {
   const draft = await db.contentDraft.findUnique({
     where: { id: contentDraftId },
     include: {
       site: { select: { id: true, domain: true } },
-      action: { select: { id: true, targetUrl: true, status: true } },
+      action: { select: { id: true, revision: true, targetUrl: true, status: true } },
     },
   });
   if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
+  await assertWixBlogExecutor(draft.siteId);
+  const approvedHash = wixCandidateHash(draft);
+  if (!draft.wixApprovalHash || draft.wixApprovalHash !== approvedHash
+    || draft.wixApprovedBy !== userId
+    || draft.wixApprovedRevision !== draft.action?.revision
+    || !draft.wixApprovedAt) {
+    throw new WixBlogDeliveryError("This exact candidate has not been approved by the current owner; review and approve it first", 409);
+  }
   const cfg = await configForSite(draft.siteId);
   if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured for this site", 503);
   if (!draft.action?.targetUrl) throw new WixBlogDeliveryError("This action has no Wix Blog target", 409);

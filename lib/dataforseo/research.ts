@@ -11,6 +11,8 @@ import {
   SeoResearchTaskStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
+import { ConnectorError, connectorBudget, reserveConnectorBudget, settleConnectorBudget } from "@/lib/connectors/service";
+import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 import { getTopKeywords, getTopPages, getSitePeriodMetrics, seoMetricsDateRange } from "@/lib/seo-metrics";
 import { enqueueJob } from "@/lib/jobs/queue";
 import {
@@ -414,6 +416,12 @@ export async function requestResearchReport(input: {
     void job;
     return runResult(existing, true);
   }
+
+  const budget = await connectorBudget({ projectId: input.projectId } as ServicePrincipalContext, site.id);
+  if (budget.configured !== true || !budget.maxOperationMicros || BigInt(budget.maxOperationMicros) <= BigInt(0)) {
+    throw new ResearchValidationError("Paid SEO research requires an owner-configured USD monthly allowance and per-operation ceiling");
+  }
+  if (budget.currency !== "USD") throw new ResearchValidationError("DataForSEO research requires a USD budget policy to reconcile provider costs accurately");
 
   const locale = await resolveDataForSeoLocale(
     input.projectId,
@@ -1003,17 +1011,30 @@ function operationFromTask(task: {
   return { kind: "BACKLINKS_OVERVIEW", domain: input.domain };
 }
 
-async function executeReservedTask(taskId: string, projectId: string): Promise<void> {
-  const claimed = await db.seoResearchTask.updateMany({
-    where: { id: taskId, status: SeoResearchTaskStatus.RESERVED },
-    data: { status: SeoResearchTaskStatus.ATTEMPTING, attemptedAt: new Date() },
-  });
-  if (claimed.count !== 1) return;
+export async function executeReservedTask(taskId: string, projectId: string, siteId: string): Promise<void> {
   const task = await db.seoResearchTask.findUnique({
     where: { id: taskId },
     select: { id: true, kind: true, input: true, researchRunId: true },
   });
   if (!task) return;
+  const operation = operationFromTask(task);
+  const principal = { projectId } as ServicePrincipalContext;
+  const budget = await connectorBudget(principal, siteId);
+  if (budget.configured !== true || !budget.maxOperationMicros || BigInt(budget.maxOperationMicros) <= BigInt(0)) {
+    throw new ConnectorError("A monthly allowance and positive per-operation ceiling are required before paid SEO research", 409);
+  }
+  if (budget.currency !== "USD") throw new ConnectorError("DataForSEO costs require a USD budget policy", 409);
+  const reservation = await reserveConnectorBudget(principal, {
+    siteId, period: budget.period, policyRevision: budget.policyRevision,
+    idempotencyKey: `dataforseo-task:${task.id}`, amountMicros: budget.maxOperationMicros,
+    currency: budget.currency, operation: `dataforseo:${task.kind.toLowerCase()}`,
+    detail: { researchRunId: task.researchRunId, taskId: task.id, ceilingMicros: budget.maxOperationMicros },
+  });
+  const claimed = await db.seoResearchTask.updateMany({
+    where: { id: taskId, status: SeoResearchTaskStatus.RESERVED },
+    data: { status: SeoResearchTaskStatus.ATTEMPTING, attemptedAt: new Date() },
+  });
+  if (claimed.count !== 1) return;
 
   let result: DataForSeoOperationResult | null = null;
   let errorCode: string | null = null;
@@ -1023,11 +1044,24 @@ async function executeReservedTask(taskId: string, projectId: string): Promise<v
       projectId,
       researchRunId: task.researchRunId,
       taskId: task.id,
-      operation: operationFromTask(task),
+      operation,
     });
   } catch (error) {
     errorCode = safeError(error).toUpperCase().replace(/[^A-Z0-9_]+/g, "_").slice(0, 120);
     uncertain = error instanceof Error && /timeout|timed out|fetch failed|network/i.test(error.message);
+  }
+
+  if (result?.costMicros !== null && result?.costMicros !== undefined) {
+    await settleConnectorBudget(principal, reservation.id, { status: "settled", actualCostMicros: String(result.costMicros),
+      providerTaskId: result.providerTaskId, detail: { researchRunId: task.researchRunId, taskId: task.id } });
+  } else if (result || uncertain) {
+    await settleConnectorBudget(principal, reservation.id, { status: "uncertain", providerTaskId: result?.providerTaskId,
+      detail: { researchRunId: task.researchRunId, taskId: task.id, reason: result ? "provider_cost_missing" : errorCode } });
+    uncertain = true;
+  } else {
+    await settleConnectorBudget(principal, reservation.id, { status: "released", detail: {
+      researchRunId: task.researchRunId, taskId: task.id, reason: errorCode || "provider_rejected_before_dispatch",
+    } });
   }
 
   await db.seoResearchTask.update({
@@ -1073,7 +1107,7 @@ export async function runSeoResearch(projectId: string, siteId: string, research
     if (task.status === SeoResearchTaskStatus.RESERVED) {
       // Sequential execution makes the nine-task allowance auditable and avoids
       // bursting a provider account with simultaneous paid calls.
-      await executeReservedTask(task.id, projectId);
+      await executeReservedTask(task.id, projectId, siteId);
     }
   }
 

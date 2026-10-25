@@ -3,6 +3,7 @@ import { generateWixBlogUpdateDraftForAction } from "@/lib/research/content";
 import { ContentWriterError } from "@/lib/ai-seo/writer";
 import { ResearchServiceError } from "@/lib/research/service";
 import { WixBlogDeliveryError } from "@/lib/delivery/wix-blog";
+import { userOwnsResearchAction } from "@/lib/auth/research-action-access";
 
 export async function POST(
   _req: Request,
@@ -11,6 +12,9 @@ export async function POST(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { actionId } = await params;
+  if (!(await userOwnsResearchAction(actionId, userId))) {
+    return Response.json({ error: "Action not found" }, { status: 404 });
+  }
   try {
     const draft = await generateWixBlogUpdateDraftForAction(actionId);
     return Response.json({
