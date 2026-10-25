@@ -1,9 +1,35 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
+import { db } from "@/lib/db";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { ResearchServiceError } from "@/lib/research/service";
 import { z } from "zod";
 import { ZodError } from "zod";
 import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ taskId: string }> },
+) {
+  const userId = await getUserIdFromCookies();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { taskId } = await params;
+  const task = await db.agentTask.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true,
+      status: true,
+      startedAt: true,
+      completedAt: true,
+      closedAt: true,
+      errorCode: true,
+      result: true,
+      publishedUrl: true,
+      commitSha: true,
+    },
+  });
+  if (!task) return Response.json({ error: "Agent task not found" }, { status: 404 });
+  return Response.json({ task });
+}
 
 const schema = z.object({
   status: z.enum(["READY", "RUNNING", "AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "COMMITTED", "PUBLISHING", "PUBLISHED", "CLOSED", "COMPLETED", "FAILED", "CANCELLED"]).optional(),

@@ -7,13 +7,16 @@ import { REMEDIATION } from "./remediation";
 import { computeHealthScore } from "./health";
 
 const ABSOLUTE_MAX_PAGES = 2000;
-const BATCH_SIZE = 15;
-const BATCH_DELAY_MS = 100;
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 1500;
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
-const USER_AGENT =
-  "CrawlSEOBot/1.0 (+https://crawlseo.dev; self-hosted SEO audit)";
+// Audit what Google can index, not the bot-protection shell. Wix serves
+// different HTML to unknown crawlers; the Googlebot-compatible user agent
+// receives the prerendered page. Override with CRAWL_USER_AGENT if needed.
+const USER_AGENT = process.env.CRAWL_USER_AGENT?.trim()
+  || "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
 type IssueInput = {
   url: string;
@@ -393,6 +396,8 @@ async function fetchPage(url: string): Promise<{
         headers: {
           "User-Agent": USER_AGENT,
           Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Cache-Control": "no-cache",
         },
       });
       if (res.status >= 300 && res.status < 400) {
@@ -427,6 +432,18 @@ async function fetchPage(url: string): Promise<{
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchPageWithRetry(url: string): Promise<Awaited<ReturnType<typeof fetchPage>>> {
+  let last: Awaited<ReturnType<typeof fetchPage>> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    last = await fetchPage(url);
+    if (last.statusCode !== 429) return last;
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000 * (attempt + 1)));
+    }
+  }
+  return last!;
 }
 
 async function fetchText(url: string): Promise<string | null> {
@@ -721,6 +738,7 @@ async function executeCrawl(
   }
 
   /* ---- Crawl loop with batch concurrency ---- */
+  let rateLimitedResponses = 0;
   while (queue.length > 0 && pages.length < maxPages) {
     // Collect the next batch of unvisited URLs
     const batch: string[] = [];
@@ -750,7 +768,7 @@ async function executeCrawl(
     const results = await Promise.allSettled(
       batch.map(async (url) => {
         try {
-          const res = await fetchPage(url);
+          const res = await fetchPageWithRetry(url);
           return { url, res, error: null };
         } catch (err) {
           return { url, res: null, error: err };
@@ -761,6 +779,7 @@ async function executeCrawl(
     for (const result of results) {
       if (result.status === "rejected") continue;
       const { url, res, error } = result.value;
+      if (res?.statusCode === 429) rateLimitedResponses += 1;
 
       if (error || !res) {
         issues.push({
@@ -827,6 +846,16 @@ async function executeCrawl(
       }
     }
 
+    if (rateLimitedResponses > 0 && pages.length <= 1) {
+      throw new Error("Site rate-limited the crawler (HTTP 429) before any usable page was audited. The crawl was aborted; retry later.");
+    }
+    if (pages.length < 10 && rateLimitedResponses >= Math.ceil(pages.length / 2)) {
+      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
+    }
+    if (pages.length >= 10 && rateLimitedResponses / pages.length > 0.1) {
+      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
+    }
+
     // Small delay between batches to avoid hammering the target
     if (queue.length > 0 && pages.length < maxPages) {
       await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
@@ -834,9 +863,12 @@ async function executeCrawl(
   }
 
   /* ---- Duplicate titles / descriptions ---- */
+  // Error/rate-limit pages all share the same challenge title. They are not
+  // real duplicate content and must never become editorial work.
+  const successfulPages = pages.filter((p) => p.statusCode < 400);
   const byTitle = new Map<string, string[]>();
   const byDesc = new Map<string, string[]>();
-  for (const p of pages) {
+  for (const p of successfulPages) {
     if (p.title) {
       const list = byTitle.get(p.title) || [];
       list.push(p.url);
@@ -884,19 +916,19 @@ async function executeCrawl(
   }
 
   /* ---- Sitemap coverage & orphan detection ---- */
-  const crawledSet = new Set(pages.map((p) => p.url));
+  const crawledSet = new Set(successfulPages.map((p) => p.url));
   const sitemapSet = new Set(sitemapUrls);
   const missingFromSitemap = [...crawledSet].filter(
     (u) => sitemapSet.size > 0 && !sitemapSet.has(u)
   );
 
   const inlinkCount = new Map<string, number>();
-  for (const p of pages) {
+  for (const p of successfulPages) {
     for (const out of p.internalOutlinks) {
       inlinkCount.set(out, (inlinkCount.get(out) || 0) + 1);
     }
   }
-  const orphans = pages.filter((p) => {
+  const orphans = successfulPages.filter((p) => {
     const isHome = new URL(p.url).pathname === "/" || p.url === seedUrl;
     return !isHome && (inlinkCount.get(p.url) || 0) === 0;
   });
@@ -927,9 +959,9 @@ async function executeCrawl(
   /* ---- Compute scores ---- */
   const healthScore = computeHealthScore(issues, pages.length);
   const avgContentScore =
-    pages.length > 0
+    successfulPages.length > 0
       ? Math.round(
-          pages.reduce((s, p) => s + p.contentScore, 0) / pages.length
+          successfulPages.reduce((s, p) => s + p.contentScore, 0) / successfulPages.length
         )
       : 0;
 
@@ -1005,7 +1037,7 @@ async function executeCrawl(
   }
 
   // Thin content pages as INFO issues
-  const thin = pages.filter((p) => p.contentScore < 60);
+  const thin = successfulPages.filter((p) => p.contentScore < 60);
   if (thin.length) {
     await db.crawlIssue.createMany({
       data: thin.slice(0, 50).map((p) => ({

@@ -42,11 +42,12 @@ describe("agent prompt", () => {
     expect(prompt).toContain("/home/admin/susimacdonald-wix");
     expect(prompt).toContain("Add rental FAQ heading");
     expect(prompt).toContain("apartments for rent playa del carmen");
-    expect(prompt).toContain("Do not run `wix publish`");
-    expect(prompt).toContain("already created the dedicated worktree");
-    expect(prompt).toContain("Do not run `git worktree`");
-    expect(prompt).toContain("Do not edit the shared bridge repository");
+    expect(prompt).toContain("Work only in the current worktree");
+    expect(prompt).toContain("release pipeline handles publication");
+    expect(prompt).toContain("Verify sibling routes remain unchanged");
     expect(prompt).toContain("Keep the existing design.");
+    expect(prompt).not.toContain("LOCALIZED DATA");
+    expect(prompt).not.toContain("BRIDGE PLAN");
   });
 });
 
@@ -57,6 +58,7 @@ describe("agent task transitions", () => {
     expect(canTransitionAgentTask("RUNNING", "AWAITING_REVIEW")).toBe(true);
     expect(canTransitionAgentTask("AWAITING_REVIEW", "CHANGES_REQUESTED")).toBe(true);
     expect(canTransitionAgentTask("CHANGES_REQUESTED", "RUNNING")).toBe(true);
+    expect(canTransitionAgentTask("CHANGES_REQUESTED", "APPROVED")).toBe(true);
     expect(canTransitionAgentTask("AWAITING_REVIEW", "APPROVED")).toBe(true);
     expect(canTransitionAgentTask("APPROVED", "COMMITTED")).toBe(true);
     expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);

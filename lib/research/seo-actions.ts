@@ -6,8 +6,11 @@ import { isSupersededByExternalAuthority } from "@/lib/research/execution-author
 import {
   editorialFingerprint,
   reviewSeoOpportunity,
+  type EditorialCandidatePage,
   type EditorialReview,
 } from "@/lib/editorial/review";
+import { isDurableEditorialTarget } from "@/lib/editorial/targets";
+import { syncCrawlIssuesToActions } from "@/lib/research/crawl-actions";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -46,6 +49,22 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
   if (!site) return { created: 0, updated: 0, dismissed: 0, existing: 0, total: 0 };
 
   const plan = await getContentActionPlan(siteId, site.domain);
+  const latestCrawl = await db.crawl.findFirst({
+    where: { siteId, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { id: true },
+  });
+  const landingPages: EditorialCandidatePage[] = latestCrawl
+    ? (await db.auditPage.findMany({
+        where: { crawlId: latestCrawl.id, statusCode: 200 },
+        orderBy: { contentScore: "desc" },
+        take: 200,
+        select: { url: true, title: true },
+      }))
+      .filter((page) => isDurableEditorialTarget(page.url))
+      .map((page) => ({ url: page.url, title: page.title ?? "" }))
+    : [];
+
   const current = await db.researchAction.findMany({
     where: { siteId, source: "seo_opportunity" },
     select: {
@@ -73,9 +92,9 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
       continue;
     }
 
-    const fingerprint = editorialFingerprint(action);
+    const fingerprint = editorialFingerprint(action, landingPages);
     const review = existingEditorial(previous?.evidence, fingerprint)
-      ?? await reviewSeoOpportunity(action);
+      ?? await reviewSeoOpportunity(action, { landingPages });
 
     if (review.decision === "dismiss") {
       if (previous && previous.status === "PROPOSED") {
@@ -90,7 +109,9 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
       continue;
     }
 
-    const targetUrl = review.decision === "new_article" ? null : action.targetUrl;
+    const targetUrl = review.decision === "new_article"
+      ? null
+      : review.targetUrl ?? action.targetUrl;
     const kind = review.decision === "new_article"
       ? "create_article"
       : review.decision === "add_section"
@@ -154,5 +175,13 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
     else existing += 1;
   }
 
-  return { created, updated, dismissed, existing, total: plan.actions.length };
+  let crawl;
+  try {
+    crawl = await syncCrawlIssuesToActions(siteId);
+  } catch (error) {
+    console.error("Crawl action sync error:", error);
+    crawl = { error: error instanceof Error ? error.message : "crawl action sync failed" };
+  }
+
+  return { created, updated, dismissed, existing, total: plan.actions.length, crawl };
 }

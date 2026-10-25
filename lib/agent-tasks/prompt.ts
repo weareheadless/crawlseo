@@ -23,7 +23,44 @@ export type AgentPromptInput = {
 };
 
 export function buildAgentPrompt(input: AgentPromptInput): string {
-  const evidence = JSON.stringify(input.action.evidence, null, 2).slice(0, 12_000);
+  const evidenceRecord = input.action.evidence && typeof input.action.evidence === "object" && !Array.isArray(input.action.evidence)
+    ? input.action.evidence as Record<string, unknown>
+    : {};
+  const batch = evidenceRecord.batch === true;
+  const affectedUrls = Array.isArray(evidenceRecord.urls)
+    ? evidenceRecord.urls.filter((url): url is string => typeof url === "string")
+    : [];
+  const issueType = typeof evidenceRecord.issue_type === "string" ? evidenceRecord.issue_type : "";
+  const representativeUrls: string[] = [];
+  const families = new Set<string>();
+  for (const url of [input.action.targetUrl, ...affectedUrls].filter((value): value is string => Boolean(value))) {
+    if (representativeUrls.includes(url)) continue;
+    let family = url;
+    try {
+      const parts = new URL(url).pathname.split("/").filter(Boolean);
+      family = parts.slice(0, 2).join("/") || "home";
+    } catch {
+      // Keep the raw URL as the family key.
+    }
+    if (families.has(family)) continue;
+    families.add(family);
+    representativeUrls.push(url);
+    if (representativeUrls.length >= 12) break;
+  }
+  const promptEvidence = {
+    ...evidenceRecord,
+    urls: representativeUrls,
+    ...(issueType !== "BROKEN_LINK" ? { broken_urls: undefined } : {}),
+    ...(evidenceRecord.live_check && typeof evidenceRecord.live_check === "object" && !Array.isArray(evidenceRecord.live_check)
+      ? {
+          live_check: {
+            ...(evidenceRecord.live_check as Record<string, unknown>),
+            checked_urls: representativeUrls.slice(0, 6),
+          },
+        }
+      : {}),
+  };
+  const evidence = JSON.stringify(promptEvidence, null, 2).slice(0, 12_000);
   const draft = input.draft
     ? [
         "CURRENT CONTENT DRAFT",
@@ -35,49 +72,45 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
       ].join("\n")
     : "No content draft exists yet. Use the action evidence and recommendation.";
 
+  const scope = batch
+    ? [
+        "SCOPE",
+        `This action covers ${String(evidenceRecord.affected_pages ?? affectedUrls.length)} pages across ${Array.isArray(evidenceRecord.route_families) ? evidenceRecord.route_families.length : "multiple"} templates.`,
+        "Fix the shared template(s) that produce the issue. Use the attached screenshots and evidence. Keep sibling routes unchanged.",
+        "",
+        `AFFECTED URLS (${affectedUrls.length} total; representative sample)`,
+        representativeUrls.join("\n") || "(see evidence)",
+      ]
+    : [
+        "SCOPE",
+        `Target: ${input.action.targetUrl ?? "(none)"}`,
+        "Keep the change scoped to this route/template. Verify sibling routes remain unchanged.",
+      ];
+
   return [
     "You are implementing an approved CrawlSEO website action.",
     "",
     `SITE: ${input.siteDomain}`,
     `REPOSITORY: ${input.target.repoPath}`,
-    `DEFAULT BRANCH: ${input.target.defaultBranch}`,
     `ROUTE: ${input.action.targetUrl ?? "(choose the closest mapped route)"}`,
     `ACTION: ${input.action.title}`,
     `KIND: ${input.action.kind}`,
     `FORMAT: ${input.action.format ?? "page_update"}`,
-    `PRIORITY: ${input.action.priority}`,
     `PRIMARY QUERY: ${input.action.primaryQuery ?? "none"}`,
     "",
     "RECOMMENDATION",
     input.action.recommendation,
+    "",
+    ...scope,
     "",
     "EVIDENCE",
     evidence,
     "",
     draft,
     "",
-    "BRIDGE",
-    `Shared bridge: ${input.target.bridgeRepoPath}`,
-    `Bridge site alias: ${input.target.bridgeSite}`,
-    `Manifest: ${input.target.bridgeManifestPath}`,
-    `Site source repo: ${input.target.bridgeSiteRepoPath}`,
-    "",
-    "WORKTREE POLICY",
-    "CrawlSEO has already created the dedicated worktree and branch for this task. The current working directory is that worktree.",
-    "- Work only inside the current working directory.",
-    "- Do not run `git worktree`, `git switch`, `git checkout`, `git checkout -b`, or `git branch` commands.",
-    "- Do not edit the shared bridge repository at /home/admin/wix-site-bridge.",
-    "- Do not modify any repository outside the prepared worktree.",
-    "",
-    "REQUIREMENTS",
-    "- Make the smallest change that satisfies the action.",
-    "- Preserve existing design, English/Spanish behavior, CMS bindings, routes and metadata unless the action explicitly requires a change.",
-    "- Do not run `wix publish`, `bridge release --apply`, `bridge deploy --apply`, `git push`, or any Wix mutation.",
-    "- You may run read-only inspection, code edits, lint/build/tests, and bridge dry-run/plan commands.",
-    "- Produce a code/content diff and explain every changed file.",
-    "- Run the relevant build/lint/tests.",
-    "- Prepare the exact bridge plan command for human approval.",
-    "- Do not claim a live change was published or verified.",
+    "WORKTREE",
+    "Work only in the current worktree. Do not switch branches, modify other repositories, publish, or mutate Wix; the release pipeline handles publication.",
+    "Run the relevant tests and report changed files, test results, and any uncertainty.",
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",
   ].filter(Boolean).join("\n");
 }

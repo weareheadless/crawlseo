@@ -18,7 +18,7 @@ describe("research Action cookie ownership", () => {
     mockDb.researchAction.findFirst.mockResolvedValue({ id: "action-1" });
     await expect(userOwnsResearchAction("action-1", "user-1")).resolves.toBe(true);
     expect(mockDb.researchAction.findFirst).toHaveBeenCalledWith({
-      where: { id: "action-1", site: { userId: "user-1" } },
+      where: { id: "action-1", OR: [{ site: { userId: "user-1" } }, { site: { userId: null } }] },
       select: { id: true },
     });
   });
@@ -32,7 +32,7 @@ describe("research Action cookie ownership", () => {
     mockDb.site.findFirst.mockResolvedValue(null);
     await expect(userOwnsSite("site-1", "user-2")).resolves.toBe(false);
     expect(mockDb.site.findFirst).toHaveBeenCalledWith({
-      where: { id: "site-1", userId: "user-2" },
+      where: { id: "site-1", OR: [{ userId: "user-2" }, { userId: null }] },
       select: { id: true },
     });
   });
@@ -43,10 +43,10 @@ describe("research Action cookie ownership", () => {
     await expect(userOwnsResearchRun("run-1", "user-2")).resolves.toBe(false);
     await expect(userOwnsDelivery("delivery-1", "user-2")).resolves.toBe(false);
     expect(mockDb.researchRun.findFirst).toHaveBeenCalledWith({
-      where: { id: "run-1", site: { userId: "user-2" } }, select: { id: true },
+      where: { id: "run-1", OR: [{ site: { userId: "user-2" } }, { site: { userId: null } }] }, select: { id: true },
     });
     expect(mockDb.delivery.findFirst).toHaveBeenCalledWith({
-      where: { id: "delivery-1", action: { site: { userId: "user-2" } } }, select: { id: true },
+      where: { id: "delivery-1", OR: [{ action: { site: { userId: "user-2" } } }, { action: { site: { userId: null } } }] }, select: { id: true },
     });
   });
 
@@ -54,7 +54,7 @@ describe("research Action cookie ownership", () => {
     mockDb.agentTask.findFirst.mockResolvedValue(null);
     await expect(userOwnsAgentTask("task-1", "user-2")).resolves.toBe(false);
     expect(mockDb.agentTask.findFirst).toHaveBeenCalledWith({
-      where: { id: "task-1", site: { userId: "user-2" } }, select: { id: true },
+      where: { id: "task-1", OR: [{ site: { userId: "user-2" } }, { site: { userId: null } }] }, select: { id: true },
     });
   });
 
@@ -81,6 +81,13 @@ describe("research Action cookie ownership", () => {
         connectorContext: { capabilities: {} } },
     ]);
     await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("external");
+  });
+
+  it("lets the signed-in operator work on a project-owned Action", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({
+      site: { userId: null, connectorBinding: null },
+    });
+    await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("owner");
   });
 
   it("does not reveal an external Action to a different user", async () => {

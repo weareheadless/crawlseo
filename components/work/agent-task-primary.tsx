@@ -10,12 +10,16 @@ export function AgentTaskPrimary({
   taskId,
   status,
   hasEmbedTarget,
+  requiresSiteRelease = false,
+  hasReleaseableChange = true,
   targetComponentTag,
   publishedUrl,
 }: {
   taskId: string;
   status: string;
   hasEmbedTarget: boolean;
+  requiresSiteRelease?: boolean;
+  hasReleaseableChange?: boolean;
   targetComponentTag?: string | null;
   publishedUrl: string | null;
 }) {
@@ -74,6 +78,23 @@ export function AgentTaskPrimary({
   }
 
   if (status === "AWAITING_REVIEW") {
+    if (!hasReleaseableChange) {
+      return (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}`, "PATCH", { status: "CHANGES_REQUESTED" })} disabled={busy}>
+              {spinner ?? <Check className="size-3" />}
+              Request changes
+            </Button>
+            <span className="text-[11px] font-medium text-warning">No releaseable site-code change</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            The run produced only non-code or out-of-scope files. Review the outcome and request a different approach; the site release pipeline cannot publish this.
+          </p>
+          {error && <p className="text-[11px] text-danger">{error}</p>}
+        </div>
+      );
+    }
     if (!hasEmbedTarget) {
       return (
         <div className="flex flex-wrap items-center gap-2">
@@ -82,6 +103,23 @@ export function AgentTaskPrimary({
             Approve
           </Button>
           {error && <span className="text-[11px] text-danger">{error}</span>}
+        </div>
+      );
+    }
+    if (requiresSiteRelease) {
+      return (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}/approve-release`, "POST", {})} disabled={busy}>
+              {spinner ?? <Rocket className="size-3" />}
+              Approve &amp; release
+            </Button>
+            {targetComponentTag && <span className="text-[11px] text-muted-foreground">Updates {targetComponentTag}</span>}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Publishes the Velo site code, updates the embed, verifies translations, and closes this task.
+          </p>
+          {error && <p className="text-[11px] text-danger">{error}</p>}
         </div>
       );
     }

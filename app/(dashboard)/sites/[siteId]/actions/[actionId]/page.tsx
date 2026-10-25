@@ -9,13 +9,17 @@ import { ActionControls } from "@/components/work/action-controls";
 import { AgentChat } from "@/components/work/agent-chat";
 import { WixBlogDraftButton } from "@/components/work/wix-blog-draft-button";
 import { AgentTaskPrimary } from "@/components/work/agent-task-primary";
+import { AgentTaskProgress } from "@/components/work/agent-task-progress";
 import { AgentTaskBridgePlanButton } from "@/components/work/agent-task-bridge-plan-button";
 import { WixBlogUpdateControls } from "@/components/work/wix-blog-update-controls";
 import { EmbedDeliveryControls } from "@/components/work/embed-delivery-controls";
 import { SourceList } from "@/components/research/source-evidence";
 import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
-import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { isTechnicalSeoAction, isWixBlogTarget } from "@/lib/agent-tasks/targets";
+import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
+import { cn } from "@/lib/utils";
+import { isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 import { getSiteExecutionAuthority } from "@/lib/research/execution-authority";
 import { ExternalExecutionNotice } from "@/components/work/external-execution-notice";
 
@@ -40,7 +44,9 @@ export default async function ActionDetailPage({ params }: Props) {
   }
   const citedSources = action.evidenceSources;
   const editorial = editorialFromEvidence(action.evidence);
-  const blogTarget = isWixBlogTarget(action.targetUrl);
+  const crawlEvidence = crawlEvidenceFrom(action.evidence);
+  const technicalAction = isTechnicalSeoAction(action);
+  const blogTarget = !technicalAction && isWixBlogTarget(action.targetUrl);
   const blogDraft = blogTarget
     ? action.drafts.find((candidate) => candidate.format === "article" && candidate.status !== "ARCHIVED") ?? null
     : null;
@@ -55,10 +61,10 @@ export default async function ActionDetailPage({ params }: Props) {
     select: { key: true, componentTag: true, snippetId: true, sourcePath: true },
   });
 
-  const preferredEmbedTargetKey = preferredEmbedTarget(
-    deliveryTargets,
-    `${action.title} ${action.recommendation}`,
-  );
+  const preferredEmbedTargetKey = selectEmbedTargetKey(deliveryTargets, {
+    title: action.title,
+    targetUrl: action.targetUrl,
+  }) ?? undefined;
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
   const authority = await getSiteExecutionAuthority(siteId);
   const externallyManaged = authority?.managed ?? false;
@@ -111,9 +117,11 @@ export default async function ActionDetailPage({ params }: Props) {
           description="Verify these original sources before approving the action or the generated content. The excerpt is the text stored when the source was retrieved."
           emptyText={action.source === "seo_opportunity"
             ? "This action is based on Search Console and crawl evidence in the structured evidence panel below, not an external article."
-            : action.source === "keyword_research"
-              ? "This action is based on keyword demand evidence in the structured evidence panel below, not an external article."
-              : "No source links were stored for this action. Treat it as unverified until evidence is attached."}
+            : action.source === "crawl_issue"
+              ? "This action is based on crawl evidence in the structured evidence panel below, not an external article."
+              : action.source === "keyword_research"
+                ? "This action is based on keyword demand evidence in the structured evidence panel below, not an external article."
+                : "No source links were stored for this action. Treat it as unverified until evidence is attached."}
         />
       </div>
 
@@ -203,6 +211,78 @@ export default async function ActionDetailPage({ params }: Props) {
           />
         )}
       </div>
+
+      {crawlEvidence && (
+        <section className="panel mb-5 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-heading text-lg font-semibold">Crawl verification</h2>
+            <span className={cn(
+              "rounded-md px-2 py-1 font-data text-[10px] font-semibold uppercase",
+              crawlEvidence.reproduced === false && "bg-signal/10 text-signal",
+              crawlEvidence.reproduced === true && "bg-warning/15 text-warning",
+              crawlEvidence.reproduced == null && "bg-muted text-muted-foreground",
+            )}>
+              {crawlEvidence.reproduced === false
+                ? "not reproduced live"
+                : crawlEvidence.reproduced === true
+                  ? "reproduced live"
+                  : "live check unavailable"}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Fact label="Crawl date" value={crawlEvidence.crawlDate ?? "unknown"} />
+            <Fact label="Issue" value={crawlEvidence.issueType?.replaceAll("_", " ").toLowerCase() ?? "—"} />
+            <Fact label="Affected pages" value={crawlEvidence.affectedPages != null ? String(crawlEvidence.affectedPages) : "—"} />
+            <Fact label="Target H1 count" value={crawlEvidence.h1Count != null ? String(crawlEvidence.h1Count) : "—"} />
+          </div>
+          <p className="mt-3 break-all font-data text-[10px] text-muted-foreground">
+            Target: {action.targetUrl ?? "—"}
+          </p>
+          {crawlEvidence.families.length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Templates: {crawlEvidence.families.join(", ")}
+            </p>
+          )}
+          {crawlEvidence.duplicateValue && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Duplicate value: <span className="font-medium text-foreground">{crawlEvidence.duplicateValue}</span>
+            </p>
+          )}
+          {crawlEvidence.examples.length > 0 && (
+            <div className="mt-2 rounded border border-border/50 bg-background/50 p-2">
+              <p className="font-data text-[10px] uppercase text-muted-foreground">Examples</p>
+              <ul className="mt-1 space-y-1">
+                {crawlEvidence.examples.map((example) => (
+                  <li key={example.url} className="text-[10px] leading-4 text-muted-foreground">
+                    <span className="font-data">{example.statusCode ?? "—"}</span>
+                    {" · "}
+                    <span className="break-all">{example.url}</span>
+                    {example.title && <span className="block pl-8 text-foreground/80">Title: {example.title}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {crawlEvidence.urls.length > 1 && (
+            <details className="mt-2 rounded border border-border/50 bg-background/50 p-2">
+              <summary className="cursor-pointer font-data text-[10px] uppercase text-muted-foreground">
+                Affected pages ({crawlEvidence.affectedPages ?? crawlEvidence.urls.length})
+              </summary>
+              <ul className="mt-2 max-h-40 space-y-0.5 overflow-auto font-data text-[10px] text-muted-foreground">
+                {crawlEvidence.urls.slice(0, 30).map((url) => (
+                  <li key={url} className="truncate" title={url}>{url}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {crawlEvidence.reason && (
+            <p className="mt-1 text-xs text-muted-foreground">{crawlEvidence.reason}</p>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            The crawl is a snapshot. A live check is run for page-level issues before the action is kept; a mismatch means the issue may already be fixed or the crawl may have received a different page.
+          </p>
+        </section>
+      )}
 
       <div className={blogTarget ? "grid gap-5" : "grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"}>
         <div className="space-y-5">
@@ -328,17 +408,39 @@ export default async function ActionDetailPage({ params }: Props) {
                           {task.status.toLowerCase().replaceAll("_", " ")}
                         </span>
                       ) : (
-                        <AgentTaskPrimary
-                          taskId={task.id}
-                          status={task.status}
-                          hasEmbedTarget={deliveryTargets.length > 0}
-                          targetComponentTag={preferredTarget?.componentTag ?? null}
-                          publishedUrl={task.publishedUrl}
-                        />
+                        <div className="flex flex-col items-end gap-1">
+                          <AgentTaskPrimary
+                            taskId={task.id}
+                            status={task.status}
+                            hasEmbedTarget={deliveryTargets.length > 0}
+                            requiresSiteRelease={hasSiteCodeChanges(task, preferredTarget?.sourcePath ?? null)}
+                            hasReleaseableChange={hasSiteCodeChanges(task, preferredTarget?.sourcePath ?? null)}
+                            targetComponentTag={preferredTarget?.componentTag ?? null}
+                            publishedUrl={task.publishedUrl}
+                          />
+                          {task.artifacts.some((artifact) => artifact.kind === "preview_html") && (
+                            <a
+                              href={`/crawlseo/api/agent-tasks/${task.id}/preview`}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-xs text-primary underline underline-offset-2"
+                            >
+                              Preview change
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
 
-                    <TaskChange task={task} />
+                    <AgentTaskProgress
+                      taskId={task.id}
+                      status={task.status}
+                      startedAt={task.startedAt?.toISOString() ?? null}
+                      result={task.result}
+                      errorCode={task.errorCode}
+                    />
+
+                    <TaskChange task={task} result={task.result} errorCode={task.errorCode} />
 
                     <div className="mt-4">
                       <p className="mb-2 font-data text-[10px] uppercase tracking-wide text-muted-foreground">Corrections</p>
@@ -428,24 +530,42 @@ export default async function ActionDetailPage({ params }: Props) {
 
 function TaskChange({
   task,
+  result,
+  errorCode,
 }: {
   task: {
     goal: string;
     artifacts: Array<{ kind: string; content: string | null }>;
   };
+  result: unknown;
+  errorCode: string | null;
 }) {
   const gitStatus = task.artifacts.find((artifact) => artifact.kind === "git_status")?.content ?? "";
   const diff = task.artifacts.find((artifact) => artifact.kind === "diff")?.content ?? "";
   const agentOutput = task.artifacts.find((artifact) => artifact.kind === "agent_output")?.content ?? "";
-  const files = gitStatus
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[A-Z?]{1,2}\s+/, ""))
-    .filter(Boolean);
+  const resultState = result && typeof result === "object" && !Array.isArray(result)
+    ? result as { outcome?: unknown; files?: unknown; summary?: unknown }
+    : {};
+  const resultFiles = Array.isArray(resultState.files)
+    ? resultState.files.filter((file): file is string => typeof file === "string")
+    : [];
+  const files = resultFiles.length > 0 ? resultFiles : parseGitStatusFiles(gitStatus);
+  const outcome = typeof resultState.outcome === "string" ? resultState.outcome : null;
+  const outcomeLabel = outcome === "changes_ready"
+    ? "Reviewable site-code changes — not committed or pushed."
+    : outcome === "non_code_changes"
+      ? "Non-code changes only — not releaseable through the site-code pipeline."
+      : outcome === "no_changes"
+        ? "No files changed."
+        : errorCode
+          ? `Task stopped with ${errorCode}.`
+          : null;
 
   return (
     <div className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3">
       <p className="font-data text-[10px] uppercase tracking-wide text-muted-foreground">Change</p>
       <p className="mt-1 text-sm leading-6 text-foreground/90">{task.goal}</p>
+      {outcomeLabel && <p className="mt-1 text-[11px] font-medium text-muted-foreground">{outcomeLabel}</p>}
       {files.length > 0 && (
         <p className="mt-2 break-all font-data text-[10px] text-muted-foreground">
           Files: {files.join(", ")}
@@ -481,23 +601,71 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+function hasSiteCodeChanges(
+  task: { artifacts: Array<{ kind: string; content: string | null }>; result?: unknown },
+  targetSourcePath: string | null,
+): boolean {
+  const status = task.artifacts
+    .find((artifact) => artifact.kind === "git_status" && artifact.content)?.content ?? "";
+  const result = task.result && typeof task.result === "object" && !Array.isArray(task.result)
+    ? task.result as { files?: unknown }
+    : {};
+  const resultFiles = Array.isArray(result.files)
+    ? result.files.filter((file): file is string => typeof file === "string")
+    : [];
+  const files = resultFiles.length > 0 ? resultFiles : parseGitStatusFiles(status);
+  return files.some((file) => file === targetSourcePath || isReleaseableSiteFile(file));
+}
+
+function crawlEvidenceFrom(evidence: unknown): {
+  crawlDate: string | null;
+  issueType: string | null;
+  affectedPages: number | null;
+  h1Count: number | null;
+  reproduced: boolean | null;
+  reason: string | null;
+  families: string[];
+  urls: string[];
+  duplicateValue: string | null;
+  examples: Array<{ url: string; title: string | null; statusCode: number | null }>;
+} | null {
+  const root = record(evidence);
+  if (root.kind !== "crawl_issue") return null;
+  const live = record(root.live_check);
+  const page = record(root.page);
+  return {
+    crawlDate: typeof root.crawl_finished_at === "string" ? root.crawl_finished_at.slice(0, 10) : null,
+    issueType: typeof root.issue_type === "string" ? root.issue_type : null,
+    affectedPages: typeof root.affected_pages === "number" ? root.affected_pages : null,
+    h1Count: typeof live.h1_count === "number"
+      ? live.h1_count
+      : typeof page.h1Count === "number" ? page.h1Count : null,
+    reproduced: typeof live.issue_reproduced === "boolean" ? live.issue_reproduced : null,
+    reason: typeof live.reason === "string" ? live.reason : null,
+    families: Array.isArray(root.route_families)
+      ? root.route_families.filter((value): value is string => typeof value === "string")
+      : [],
+    urls: Array.isArray(root.urls)
+      ? root.urls.filter((value): value is string => typeof value === "string")
+      : [],
+    duplicateValue: typeof root.duplicate_value === "string" ? root.duplicate_value : null,
+    examples: Array.isArray(root.examples)
+      ? root.examples
+        .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value))
+        .map((value) => ({
+          url: typeof value.url === "string" ? value.url : "",
+          title: typeof value.title === "string" ? value.title : null,
+          statusCode: typeof value.statusCode === "number" ? value.statusCode : null,
+        }))
+        .filter((value) => value.url)
+        .slice(0, 5)
+      : [],
+  };
+}
+
 function editorialFromEvidence(evidence: unknown): Record<string, unknown> | null {
   const editorial = record(record(evidence).editorial);
   return Object.keys(editorial).length > 0 ? editorial : null;
-}
-
-function preferredEmbedTarget(
-  targets: Array<{ key: string; componentTag: string | null }>,
-  text: string,
-): string | undefined {
-  const lower = text.toLowerCase();
-  const hints = ["faq", "slider", "hero", "listing", "guide", "cta"];
-  for (const hint of hints) {
-    if (!lower.includes(hint)) continue;
-    const target = targets.find((candidate) => candidate.componentTag?.toLowerCase().includes(hint));
-    if (target) return target.key;
-  }
-  return targets[0]?.key;
 }
 
 function record(value: unknown): Record<string, unknown> {

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
   researchFinding: { findMany: vi.fn() },
+  researchAction: { findMany: vi.fn(), update: vi.fn() },
   saveResearchSources: vi.fn(),
   fetchGoogleNewsRssSearch: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock("@/lib/db", () => ({ db: {
   researchPolicy: mocks.researchPolicy,
   researchRun: mocks.researchRun,
   researchFinding: mocks.researchFinding,
+  researchAction: mocks.researchAction,
   crawl: { findFirst: vi.fn() },
   auditPage: { findMany: vi.fn() },
   site: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
@@ -52,6 +54,7 @@ describe("research provider capability reporting", () => {
     });
     mocks.researchRun.count.mockResolvedValue(1);
     mocks.researchRun.updateMany.mockResolvedValue({ count: 1 });
+    mocks.researchRun.update.mockResolvedValue({});
     mocks.researchPolicy.findUnique.mockResolvedValue({ enabled: true });
     mocks.$transaction.mockImplementation(async (callback) => callback({
       $queryRaw: mocks.$queryRaw,
@@ -59,6 +62,7 @@ describe("research provider capability reporting", () => {
       researchRun: mocks.researchRun,
     }));
     mocks.researchFinding.findMany.mockResolvedValue([]);
+    mocks.researchAction.findMany.mockResolvedValue([]);
     mocks.saveResearchSources.mockResolvedValue([]);
     mocks.fetchGoogleNewsRssSearch.mockResolvedValue([]);
   });
