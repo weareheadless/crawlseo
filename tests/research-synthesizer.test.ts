@@ -71,6 +71,48 @@ describe("research synthesis", () => {
     expect(result.model).toBe("test-model");
   });
 
+  it("keeps action links on the original model finding index after filtering", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({
+      findings: [
+        {
+          type: "UNSUPPORTED",
+          theme: "Ignored finding",
+          summary: "This invalid finding is removed before any action is linked.",
+          source_indexes: [0],
+        },
+        {
+          type: "QUESTION",
+          theme: "Ownership",
+          summary: "Buyers ask which ownership steps apply to foreign purchasers.",
+          source_indexes: [0],
+        },
+      ],
+      actions: [{
+        finding_index: 1,
+        source: "market_research",
+        kind: "add_faq",
+        title: "Answer ownership question",
+        recommendation: "Add the evidence-backed answer to the existing page.",
+        priority: 60,
+      }],
+    })));
+
+    const result = await synthesizeResearch({
+      siteDomain: "casamigo.net",
+      title: "Buyer concerns",
+      topics: ["Tulum real estate"],
+      questions: [],
+      sources,
+      candidatePages: [],
+    });
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].modelIndex).toBe(1);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0].findingIndex).toBe(1);
+  });
+
   it("drops a target URL that was not in the candidate page list", async () => {
     vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({

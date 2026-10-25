@@ -18,6 +18,8 @@ export type SynthesisSource = {
 };
 
 export type SynthesizedFinding = {
+  /** Zero-based index in the model's original findings array. */
+  modelIndex: number;
   type: ResearchFindingType;
   theme: string;
   summary: string;
@@ -29,6 +31,7 @@ export type SynthesizedFinding = {
 };
 
 export type SynthesizedAction = {
+  /** Original model finding index, matching SynthesizedFinding.modelIndex. */
   findingIndex: number;
   source: "market_research";
   kind: string;
@@ -208,7 +211,7 @@ export async function synthesizeResearch(input: {
   }
 
   const findings: SynthesizedFinding[] = [];
-  for (const raw of decoded.findings.slice(0, 12)) {
+  for (const [modelIndex, raw] of decoded.findings.slice(0, 12).entries()) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     const type = text(row.type, 40).toUpperCase() as ResearchFindingType;
@@ -221,6 +224,7 @@ export async function synthesizeResearch(input: {
       : [];
     if (!FINDING_TYPES.has(type) || !theme || summary.length < 20 || sourceIndexes.length === 0) continue;
     findings.push({
+      modelIndex,
       type,
       theme,
       summary,
@@ -235,13 +239,14 @@ export async function synthesizeResearch(input: {
     throw new ResearchSynthesisError("The research model returned no valid findings");
   }
 
+  const findingIndexes = new Set(findings.map((finding) => finding.modelIndex));
   const candidatePages = new Set(input.candidatePages);
   const actions: SynthesizedAction[] = [];
   for (const raw of decoded.actions.slice(0, 12)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     const findingIndex = typeof row.finding_index === "number" ? Math.floor(row.finding_index) : -1;
-    if (findingIndex < 0 || findingIndex >= findings.length) continue;
+    if (!findingIndexes.has(findingIndex)) continue;
     const title = text(row.title, 240);
     const recommendation = text(row.recommendation, 4_000);
     if (!title || recommendation.length < 10) continue;

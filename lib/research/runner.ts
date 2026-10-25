@@ -248,17 +248,17 @@ export async function runResearchRun(runId: string) {
         candidatePages,
       });
 
-      const findingIdByIndex = new Map<number, string>();
-      for (const [index, finding] of synthesis.findings.entries()) {
+      const findingIdByModelIndex = new Map<number, string>();
+      for (const finding of synthesis.findings) {
         const sourceIds = finding.sourceIndexes
           .map((sourceIndex) => savedSources[sourceIndex]?.id)
           .filter((id): id is string => Boolean(id));
         const savedFinding = await createResearchFinding(run.id, finding, sourceIds);
-        findingIdByIndex.set(index, savedFinding.id);
+        findingIdByModelIndex.set(finding.modelIndex, savedFinding.id);
       }
 
       for (const action of synthesis.actions) {
-        const findingId = findingIdByIndex.get(action.findingIndex);
+        const findingId = findingIdByModelIndex.get(action.findingIndex);
         const result = await createResearchAction(
           run.siteId,
           {
