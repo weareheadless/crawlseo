@@ -24,6 +24,7 @@ async function makeBuild(root: string) {
   await writeFile(path.join(buildDir, "standalone", ".next", "BUILD_ID"), "build-123\n");
   await writeFile(path.join(buildDir, "standalone", "server.js"), "// fake standalone server\n");
   await writeFile(path.join(buildDir, "standalone", ".env"), "BUILD_ONLY_SECRET=must-not-ship\n");
+  await writeFile(path.join(buildDir, "standalone", ".env.production.local"), "BUILD_OVERRIDE=must-not-ship\n");
   await writeFile(path.join(buildDir, "static", "asset.txt"), "static asset\n");
   await writeFile(path.join(source, "public", "robots.txt"), "User-agent: *\n");
   const envFile = path.join(root, "runtime.env");
@@ -48,6 +49,7 @@ describe("production web release slots", () => {
     await expect(readFile(path.join(releaseDir, ".env"), "utf8")).resolves.toBe("DATABASE_URL=secret-test-value\n");
     await expect(readFile(path.join(paths.buildDir, "standalone", ".env"), "utf8")).resolves.toContain("must-not-ship");
     expect((await stat(path.join(releaseDir, ".env"))).mode & 0o777).toBe(0o600);
+    await expect(stat(path.join(releaseDir, ".env.production.local"))).rejects.toThrow();
   });
 
   it("rejects a standalone build from a different BUILD_ID", async () => {

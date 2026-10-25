@@ -168,6 +168,8 @@ export async function connectorCapabilities(principal: ServicePrincipalContext, 
     schemaVersion: "1.0",
     projectId: principal.projectId,
     siteId: site.id,
+    // Backend capabilities do not imply that this credential has write access.
+    credentialScopes: [...new Set(principal.scopes)].sort(),
     binding: site.connectorBinding ? {
       executor: site.connectorBinding.executor,
       generation: site.connectorBinding.generation,
