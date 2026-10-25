@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils";
 
 export function SyncButton({
   siteId,
+  days,
   className,
   fullWidth = false,
 }: {
   siteId: string;
+  days?: number;
   className?: string;
   fullWidth?: boolean;
 }) {
@@ -31,7 +33,7 @@ export function SyncButton({
       const response = await fetch("/crawlseo/api/gsc/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId }),
+        body: JSON.stringify({ siteId, daysBack: days }),
       });
 
       const data = await response.json();

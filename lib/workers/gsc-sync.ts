@@ -182,7 +182,7 @@ async function recordCoverage(syncRunId: string | undefined, result: SyncResult)
 export async function syncGSCDataForSite(
   userId: string,
   siteId: string,
-  daysBack = 28,
+  daysBack = 90,
   syncRunId?: string,
   dateRange?: SyncDateRange
 ): Promise<SyncResult> {
@@ -216,7 +216,7 @@ export async function syncGSCDataForSite(
 export async function syncGSCDataForProject(
   projectId: string,
   siteId: string,
-  daysBack = 28,
+  daysBack = 90,
   syncRunId?: string,
   dateRange?: SyncDateRange
 ): Promise<SyncResult> {

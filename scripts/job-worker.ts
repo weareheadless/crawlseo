@@ -74,8 +74,8 @@ async function executeJob(
     case JobKind.GSC_SYNC: {
       const dateRange = sourceDateRange(payload);
       const result = projectId
-        ? await syncGSCDataForProject(projectId, job.siteId, integer(payload.daysBack, 28), syncRunId, dateRange)
-        : await syncGSCDataForSite(text(payload.userId, ""), job.siteId, integer(payload.daysBack, 28), syncRunId, dateRange);
+        ? await syncGSCDataForProject(projectId, job.siteId, integer(payload.daysBack, 90), syncRunId, dateRange)
+        : await syncGSCDataForSite(text(payload.userId, ""), job.siteId, integer(payload.daysBack, 90), syncRunId, dateRange);
       if (!result.success) throw new JobExecutionError("GSC_SYNC_FAILED");
       return;
     }

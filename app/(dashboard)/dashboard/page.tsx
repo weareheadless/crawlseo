@@ -11,15 +11,19 @@ import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { formatDeltaPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { getSupersededSiteIds } from "@/lib/research/execution-authority";
+import { TimeframeSelect } from "@/components/sites/timeframe-select";
+import { parseSeoTimeframe } from "@/lib/seo-timeframes";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ all?: string }>;
+  searchParams: Promise<{ all?: string; days?: string }>;
 }) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
-  const showAll = (await searchParams).all === "1";
+  const query = await searchParams;
+  const showAll = query.all === "1";
+  const days = parseSeoTimeframe(query.days);
 
   // Single-operator CrawlSEO: show all sites regardless of provisioning path.
   const [queriedSites, superseded] = await Promise.all([
@@ -83,7 +87,7 @@ export default async function DashboardPage({
         };
       }
       try {
-        const metrics = await getSitePeriodMetrics(site.id, 28);
+        const metrics = await getSitePeriodMetrics(site.id, days);
         return { site, metrics };
       } catch {
         return { site, metrics: null };
@@ -97,11 +101,12 @@ export default async function DashboardPage({
         eyebrow="Workspace"
         title="Portfolio overview"
         description={showAll
-          ? `${allSites.length} sites including empty records · last 28 days vs prior period`
-          : `${sites.length} of ${allSites.length} sites with data · last 28 days vs prior period`}
+          ? `${allSites.length} sites including empty records · last ${days} days vs prior period`
+          : `${sites.length} of ${allSites.length} sites with data · last ${days} days vs prior period`}
         actions={
           <div className="flex items-center gap-3">
             <DataLagBadge />
+            <TimeframeSelect value={days} />
             <Link
               href={showAll ? "/dashboard" : "/dashboard?all=1"}
               className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"

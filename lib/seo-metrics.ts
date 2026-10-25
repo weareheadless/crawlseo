@@ -118,35 +118,44 @@ export async function getSitePeriodMetrics(
   const currentRange = dateRange ?? parseRange(days);
   const prevRange = dateRange ? previousDateRange(dateRange) : previousRange(days);
 
-  const [currentRows, previousRows] = await Promise.all([
+  const [currentPages, previousPages, currentKeywords, previousKeywords] = await Promise.all([
+    db.page.findMany({
+      where: {
+        siteId,
+        date: { gte: currentRange.start, lte: currentRange.end },
+      },
+      select: { clicks: true, impressions: true, position: true },
+    }),
+    db.page.findMany({
+      where: {
+        siteId,
+        date: { gte: prevRange.start, lte: prevRange.end },
+      },
+      select: { clicks: true, impressions: true, position: true },
+    }),
     db.keyword.findMany({
       where: {
         siteId,
         date: { gte: currentRange.start, lte: currentRange.end },
       },
-      select: {
-        query: true,
-        clicks: true,
-        impressions: true,
-        position: true,
-      },
+      select: { query: true, clicks: true, impressions: true, position: true },
     }),
     db.keyword.findMany({
       where: {
         siteId,
         date: { gte: prevRange.start, lte: prevRange.end },
       },
-      select: {
-        query: true,
-        clicks: true,
-        impressions: true,
-        position: true,
-      },
+      select: { query: true, clicks: true, impressions: true, position: true },
     }),
   ]);
 
-  const current = aggregatePeriod(currentRows);
-  const previous = aggregatePeriod(previousRows);
+  // Page-level rows carry the complete site totals. Query-level rows omit
+  // anonymised searches, so they must not be used for headline traffic.
+  const current = {
+    ...aggregatePeriod(currentPages.length > 0 ? currentPages : currentKeywords),
+    uniqueKeywords: new Set(currentKeywords.map((row) => row.query).filter(Boolean)).size,
+  };
+  const previous = aggregatePeriod(previousPages.length > 0 ? previousPages : previousKeywords);
 
   return {
     current,

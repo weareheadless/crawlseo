@@ -10,8 +10,12 @@ export async function POST(req: Request) {
     const userId = await getUserIdFromCookies();
     if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { siteId } = (await req.json()) as { siteId?: string };
+    const { siteId, daysBack } = (await req.json()) as { siteId?: string; daysBack?: number };
     if (!siteId) return Response.json({ error: "Missing siteId" }, { status: 400 });
+    const requestedDays = Number(daysBack);
+    const syncDays = Number.isFinite(requestedDays)
+      ? Math.min(365, Math.max(7, Math.round(requestedDays)))
+      : 90;
     const site = await db.site.findFirst({
       where: { id: siteId, userId },
       select: { userId: true, projectId: true },
@@ -25,13 +29,13 @@ export async function POST(req: Request) {
         projectId: site.projectId,
         siteId,
         kind: JobKind.GSC_SYNC,
-        payload: { daysBack: 28 },
+        payload: { daysBack: syncDays },
         idempotencyKey: req.headers.get("idempotency-key")?.trim() || `browser-gsc:${siteId}:${randomUUID()}`,
       });
       return Response.json({ queued: true, jobId: job.id, status: job.status }, { status: 202 });
     }
 
-    const result = await syncGSCDataForSite(userId, siteId, 28);
+    const result = await syncGSCDataForSite(userId, siteId, syncDays);
     if (!result.success) {
       return Response.json({ error: result.error ?? "Failed to sync GSC data" }, { status: 502 });
     }

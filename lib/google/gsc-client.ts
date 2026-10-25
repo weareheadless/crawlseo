@@ -253,39 +253,45 @@ export async function fetchPageAnalytics(
       ? await getUserAccessToken(auth)
       : await auth.getAccessToken(["https://www.googleapis.com/auth/webmasters.readonly"]);
 
-  const response = await fetch(
-    `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        startDate,
-        endDate,
-        dimensions: ["page", "date"],
-        rowLimit: 25000,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch page analytics: ${response.statusText}`
-    );
-  }
-
-  const data = (await response.json()) as {
-    rows?: SearchAnalyticsRow[];
-  };
-
   const results: KeywordData[] = [];
+  const rowLimit = 25000;
+  let startRow = 0;
 
-  if (data.rows) {
-    for (const row of data.rows) {
+  // Page rows are the complete site totals; paginate so large sites do not
+  // silently truncate at the first 25k rows.
+  while (true) {
+    const response = await fetch(
+      `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startDate,
+          endDate,
+          dimensions: ["page", "date"],
+          rowLimit,
+          startRow,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch page analytics: ${response.statusText}`
+      );
+    }
+
+    const data = (await response.json()) as {
+      rows?: SearchAnalyticsRow[];
+    };
+    const rows = data.rows ?? [];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
       const [page, date] = row.keys;
-
       results.push({
         query: "", // Page data doesn't have queries
         page,
@@ -296,6 +302,9 @@ export async function fetchPageAnalytics(
         date,
       });
     }
+
+    if (rows.length < rowLimit) break;
+    startRow += rows.length;
   }
 
   return results;

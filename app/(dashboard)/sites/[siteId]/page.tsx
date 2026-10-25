@@ -15,14 +15,18 @@ import {
 } from "@/components/sites/action-buttons";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { getAllOpportunities } from "@/lib/seo-opportunities";
+import { TimeframeSelect } from "@/components/sites/timeframe-select";
+import { parseSeoTimeframe } from "@/lib/seo-timeframes";
 
 interface SitePageProps {
   params: Promise<{ siteId: string }>;
+  searchParams: Promise<{ days?: string }>;
 }
 
-export default async function SiteOverviewPage({ params }: SitePageProps) {
+export default async function SiteOverviewPage({ params, searchParams }: SitePageProps) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  const days = parseSeoTimeframe((await searchParams).days);
   if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
@@ -65,7 +69,8 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
         actions={
           <div className="flex flex-wrap items-start gap-2">
             <DataLagBadge />
-            <SyncButton siteId={siteId} />
+            <TimeframeSelect value={days} />
+            <SyncButton siteId={siteId} days={days} />
             <CrawlButton siteId={siteId} />
             <VitalsButton siteId={siteId} />
           </div>
@@ -138,9 +143,9 @@ export default async function SiteOverviewPage({ params }: SitePageProps) {
             </div>
           </div>
 
-          <DashboardMetrics siteId={siteId} />
-          <TrafficChart siteId={siteId} />
-          <TopKeywords siteId={siteId} />
+          <DashboardMetrics siteId={siteId} days={days} />
+          <TrafficChart siteId={siteId} days={days} />
+          <TopKeywords siteId={siteId} days={days} />
 
           <div className="flex flex-wrap gap-2">
             <CsvExportButton siteId={siteId} type="keywords" />
