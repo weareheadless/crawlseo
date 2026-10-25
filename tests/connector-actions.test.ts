@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 const mockDb = vi.hoisted(() => ({
   site: { findFirst: vi.fn() },
@@ -8,6 +9,7 @@ const mockDb = vi.hoisted(() => ({
   researchPolicy: { findUnique: vi.fn() },
   project: { findUnique: vi.fn() },
   connectorExecutionState: { findUnique: vi.fn() },
+  crawl: { findFirst: vi.fn() }, crawlIssue: { findMany: vi.fn() }, auditPage: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
@@ -29,10 +31,17 @@ describe("connector Action envelope and pagination scope", () => {
     mockDb.researchSource.findMany.mockResolvedValue([{ id: "source-1", provider: "news", url: "https://news.example/story",
       title: "Story", publishedAt: null, retrievedAt: new Date("2026-10-25T11:00:00Z"), language: "en", metadata: {},
       run: { brief: { market: "MX", language: "en" }, recencyDays: 30, policyRevision: 4 } }]);
-    mockDb.connectorContextSnapshot.findFirst.mockResolvedValue({ revision: "ctx-3" });
+    mockDb.connectorContextSnapshot.findFirst.mockResolvedValue({ revision: "ctx-3", canonicalOrigin: "https://example.com/" });
     mockDb.researchPolicy.findUnique.mockResolvedValue({ revision: 5, recencyDays: 14 });
     mockDb.project.findUnique.mockResolvedValue({ externalProjectId: "external-1" });
     mockDb.connectorExecutionState.findUnique.mockResolvedValue(null);
+    mockDb.crawl.findFirst.mockResolvedValue({ id: "crawl-1", siteId: "site-1", status: "COMPLETED",
+      finishedAt: new Date("2026-10-25T11:00:00.000Z") });
+    mockDb.crawlIssue.findMany.mockResolvedValue([{ id: "issue-1", crawlId: "crawl-1", url: "https://example.com/",
+      type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }]);
+    mockDb.auditPage.findMany.mockResolvedValue([{ id: "page-1", crawlId: "crawl-1", url: "https://example.com/",
+      statusCode: 200, title: null, description: "Description", canonical: null, h1Count: 1, wordCount: 20,
+      contentScore: 30, hasSchema: false, indexable: true }]);
   });
 
   it("returns incomplete evidence explicitly so consumers can keep the Action out of owner work", async () => {
@@ -53,6 +62,69 @@ describe("connector Action envelope and pagination scope", () => {
     const result = await getConnectorAction(principal, "action-1");
     expect(result.evidence).toEqual([]);
     expect(result.evidenceComplete).toBe(false);
+  });
+
+  it("returns resolved technical crawl provenance as its own evidence contract", async () => {
+    const sourceFingerprint = createHash("sha256").update(JSON.stringify({
+      siteId: "site-1", crawlId: "crawl-1", issueIds: ["issue-1"],
+    })).digest("hex");
+    mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
+      schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-3",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      recencyLimitDays: 7, sourceFingerprint,
+      issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }],
+      pageRefs: [{ id: "page-1", url: "https://example.com/", statusCode: 200, title: null, description: "Description",
+        canonical: null, h1Count: 1, wordCount: 20, contentScore: 30, hasSchema: false, indexable: true }],
+    } } });
+    mockDb.researchSource.findMany.mockResolvedValue([]);
+
+    const result = await getConnectorAction(principal, "action-1");
+
+    expect(result.technicalEvidenceComplete).toBe(true);
+    expect(result.technicalEvidenceStale).toBe(false);
+    expect(result.technicalEvidence?.issueRefs).toHaveLength(1);
+    expect(result.technicalEvidence?.pageRefs[0].id).toBe("page-1");
+    expect(result.evidence).toEqual([]);
+    expect(result.evidenceComplete).toBe(false);
+  });
+
+  it("marks altered or unavailable crawl references invalid instead of completing them", async () => {
+    const sourceFingerprint = createHash("sha256").update(JSON.stringify({
+      siteId: "site-1", crawlId: "crawl-1", issueIds: ["issue-1"],
+    })).digest("hex");
+    mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
+      schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-3",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      recencyLimitDays: 7, sourceFingerprint,
+      issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "INFO", message: "Missing title" }],
+      pageRefs: [],
+    } } });
+    mockDb.researchSource.findMany.mockResolvedValue([]);
+
+    const result = await getConnectorAction(principal, "action-1");
+
+    expect(result.technicalEvidenceComplete).toBe(false);
+    expect(result.invalidTechnicalEvidenceReferences).toBe(true);
+  });
+
+  it("marks crawl provenance incomplete when the canonical context has changed", async () => {
+    const sourceFingerprint = createHash("sha256").update(JSON.stringify({
+      siteId: "site-1", crawlId: "crawl-1", issueIds: ["issue-1"],
+    })).digest("hex");
+    mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
+      schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-old",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      recencyLimitDays: 7, sourceFingerprint,
+      issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }],
+      pageRefs: [{ id: "page-1", url: "https://example.com/", statusCode: 200, title: null, description: "Description",
+        canonical: null, h1Count: 1, wordCount: 20, contentScore: 30, hasSchema: false, indexable: true }],
+    } } });
+    mockDb.researchSource.findMany.mockResolvedValue([]);
+
+    const result = await getConnectorAction(principal, "action-1");
+
+    expect(result.technicalEvidenceComplete).toBe(false);
+    expect(result.invalidTechnicalEvidenceReferences).toBe(true);
   });
 
   it("reports web and competitor research as unsupported", async () => {

@@ -150,3 +150,32 @@ Apply the Prisma migration before provisioning connector credentials. Do not
 backfill customer workflow state or activate a connector against a customer
 site as part of a code-only rollout; use the registered migration and release
 gates for that work.
+
+## Technical crawl evidence reassessment
+
+Technical crawl observations use the separate versioned `technicalEvidence`
+contract (`schemaVersion: 1.0`, `sourceKind: crawl`). It identifies one exact
+completed crawl and persisted CrawlIssue and AuditPage IDs, the registered site,
+the current canonical context revision, and a seven-day observation limit.
+These references are not ResearchSource records and do not assert research
+freshness. The connector resolves each reference against the selected site's
+database rows before returning it as complete. Legacy crawl Actions are never
+backfilled by matching titles, URLs, or dates.
+
+The protected provisioning endpoint
+`POST /api/internal/sites/{siteId}/technical-actions/reassess` accepts an exact
+crawl ID and unique issue IDs. Reassessment requires an active `helloada`
+binding, current context, an explicit operator request ID and reason, and an
+exact group of persisted issue IDs. Reusing an operator request ID with changed
+inputs conflicts. Updating a legacy Action requires its explicit ID and current
+revision, and is blocked if it has review, preparation, execution, candidate,
+delivery, draft, owner-decision, or active task state.
+
+Preparable targets are limited to exact robots/sitemap source files with their
+declared metadata capability, or one current Payload route with
+`content.prepare` for missing or duplicate title and description observations.
+The content proposal names one exact target page; duplicate-group evidence does
+not claim that editing one page resolves the other pages. Other technical issue
+types remain evidence for assessment only and cannot be converted into a
+Payload preparation. This path does not grant research or paid provider
+authority.
