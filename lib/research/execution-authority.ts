@@ -62,12 +62,14 @@ export function executionAuthority(
 
 type SiteAuthorityInput = {
   id: string;
+  projectId: string | null;
   domain: string;
   connectorBinding: ConnectorAuthority;
   connectorContext?: { capabilities: unknown } | null;
 };
 
 type SiblingAuthority = {
+  projectId: string | null;
   domain: string;
   connectorBinding: ConnectorAuthority;
   connectorContext?: { capabilities: unknown } | null;
@@ -86,8 +88,11 @@ export async function resolveSiteAuthority(site: SiteAuthorityInput): Promise<Ex
   const domain = normalizeSiteDomain(site.domain);
   if (domain) {
     const siblings: SiblingAuthority[] = await db.site.findMany({
-      where: { id: { not: site.id } },
+      // Domain equality is only meaningful inside a tenant. A domain may be
+      // managed independently by two CrawlSEO projects.
+      where: { id: { not: site.id }, projectId: site.projectId },
       select: {
+        projectId: true,
         domain: true,
         connectorBinding: { select: { executor: true, status: true } },
         connectorContext: { select: { capabilities: true } },
@@ -110,6 +115,7 @@ export async function getActionExecutionAuthority(actionId: string): Promise<Exe
       site: {
         select: {
           id: true,
+          projectId: true,
           domain: true,
           connectorBinding: { select: { executor: true, status: true } },
           connectorContext: { select: { capabilities: true } },
@@ -126,6 +132,7 @@ export async function getSiteExecutionAuthority(siteId: string): Promise<Executi
     where: { id: siteId },
     select: {
       id: true,
+      projectId: true,
       domain: true,
       connectorBinding: { select: { executor: true, status: true } },
       connectorContext: { select: { capabilities: true } },
@@ -145,6 +152,7 @@ export async function isSupersededByExternalAuthority(siteId: string): Promise<b
     where: { id: siteId },
     select: {
       id: true,
+      projectId: true,
       domain: true,
       connectorBinding: { select: { executor: true, status: true } },
     },
@@ -156,8 +164,9 @@ export async function isSupersededByExternalAuthority(siteId: string): Promise<b
   if (!domain) return false;
 
   const siblings = await db.site.findMany({
-    where: { id: { not: site.id } },
+    where: { id: { not: site.id }, projectId: site.projectId },
     select: {
+      projectId: true,
       domain: true,
       connectorBinding: { select: { executor: true, status: true } },
     },
@@ -168,13 +177,14 @@ export async function isSupersededByExternalAuthority(siteId: string): Promise<b
 
 export type SiteBindingRow = {
   id: string;
+  projectId: string | null;
   domain: string;
   connectorBinding: ConnectorAuthority;
 };
 
 /**
- * A same-domain row is superseded when another row for that domain has an
- * active external executor. Superseded rows stay in the database as immutable
+ * A same-project, same-domain row is superseded when another row for that
+ * domain has an active external executor. Superseded rows stay as immutable
  * audit anchors (for example legacy budget-transfer receipts), but they are
  * not separate sites to show or act on.
  */
@@ -183,9 +193,10 @@ export function supersededSiteIds(sites: readonly SiteBindingRow[]): Set<string>
   for (const site of sites) {
     const domain = normalizeSiteDomain(site.domain);
     if (!domain) continue;
-    const group = groups.get(domain) ?? [];
+    const key = `${site.projectId ?? ""}\u0000${domain}`;
+    const group = groups.get(key) ?? [];
     group.push(site);
-    groups.set(domain, group);
+    groups.set(key, group);
   }
 
   const superseded = new Set<string>();
@@ -203,6 +214,7 @@ export async function getSupersededSiteIds(): Promise<Set<string>> {
   const sites = await db.site.findMany({
     select: {
       id: true,
+      projectId: true,
       domain: true,
       connectorBinding: { select: { executor: true, status: true } },
     },
