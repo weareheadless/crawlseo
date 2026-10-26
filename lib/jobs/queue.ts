@@ -6,7 +6,7 @@ const DEFAULT_LEASE_SECONDS = 120;
 
 export type EnqueueJobInput = {
   projectId?: string | null;
-  siteId: string;
+  siteId?: string | null;
   kind: JobKind;
   payload?: Record<string, unknown>;
   idempotencyKey: string;
@@ -40,6 +40,24 @@ export async function enqueueJob(input: EnqueueJobInput) {
   }
   const maxAttempts = Math.max(1, Math.min(input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS, 10));
   const payload = input.payload ?? {};
+
+  // Existing work remains site-scoped. Domainless project research may use a
+  // project-only job; its idempotency key is globally unique in Job.
+  if (!input.siteId) {
+    if (!input.projectId) throw new Error("A project is required for a site-less job");
+    const existing = await db.job.findUnique({ where: { projectId_kind_idempotencyKey: { projectId: input.projectId, kind: input.kind, idempotencyKey } } });
+    if (existing) return existing;
+    try {
+      return await db.job.create({ data: { projectId: input.projectId, siteId: null, kind: input.kind,
+        payload: payload as Prisma.InputJsonValue, idempotencyKey, maxAttempts } });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") {
+        const winner = await db.job.findUnique({ where: { projectId_kind_idempotencyKey: { projectId: input.projectId, kind: input.kind, idempotencyKey } } });
+        if (winner) return winner;
+      }
+      throw error;
+    }
+  }
 
   const existing = await db.job.findUnique({
     where: {

@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
-import { JobKind } from "@prisma/client";
+import { JobKind, SyncSource, SyncStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   claimNextJob,
@@ -19,6 +19,7 @@ import { syncVitalsForProject, syncVitalsForSite } from "@/lib/workers/vitals-sy
 import { runSiteCrawl } from "@/lib/crawler/engine";
 import { syncCrawlIssuesToActions } from "@/lib/research/crawl-actions";
 import { runSeoResearch } from "@/lib/dataforseo/research";
+import { runPrelaunchResearch } from "@/lib/dataforseo/prelaunch-runner";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
@@ -72,6 +73,7 @@ async function executeJob(
 
   switch (job.kind) {
     case JobKind.GSC_SYNC: {
+      if (!job.siteId) throw new JobExecutionError("GSC_SITE_REQUIRED");
       const dateRange = sourceDateRange(payload);
       const result = projectId
         ? await syncGSCDataForProject(projectId, job.siteId, integer(payload.daysBack, 90), syncRunId, dateRange)
@@ -80,12 +82,14 @@ async function executeJob(
       return;
     }
     case JobKind.GA4_SYNC:
+      if (!job.siteId) throw new JobExecutionError("GA4_SITE_REQUIRED");
       if (!projectId) throw new JobExecutionError("GA4_PROJECT_REQUIRED");
       if (!(await syncGA4DataForProject(projectId, job.siteId, syncRunId, sourceDateRange(payload))).success) {
         throw new JobExecutionError("GA4_SYNC_FAILED");
       }
       return;
     case JobKind.CRAWL: {
+      if (!job.siteId) throw new JobExecutionError("CRAWL_SITE_REQUIRED");
       const site = await db.site.findFirst({
         where: { id: job.siteId, ...(projectId ? { projectId } : {}) },
         select: { domain: true },
@@ -101,6 +105,7 @@ async function executeJob(
       return;
     }
     case JobKind.VITALS_SYNC:
+      if (!job.siteId) throw new JobExecutionError("VITALS_SITE_REQUIRED");
       if (projectId) {
         await syncVitalsForProject(projectId, job.siteId, integer(payload.limit, 5));
       } else {
@@ -111,6 +116,7 @@ async function executeJob(
       if (!projectId) throw new JobExecutionError("SEO_RESEARCH_PROJECT_REQUIRED");
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("SEO_RESEARCH_RUN_REQUIRED");
+      if (!job.siteId) { await runPrelaunchResearch(projectId, researchRunId); return; }
       try {
         const result = await runSeoResearch(projectId, job.siteId, researchRunId);
         if (result.status === "WAITING_FOR_SOURCES") {
@@ -125,12 +131,14 @@ async function executeJob(
       return;
     }
     case JobKind.RESEARCH_RUN: {
+      if (!job.siteId) throw new JobExecutionError("RESEARCH_SITE_REQUIRED");
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("RESEARCH_RUN_ID_REQUIRED");
       await runResearchRun(researchRunId);
       return;
     }
     case JobKind.AGENT_TASK: {
+      if (!job.siteId) throw new JobExecutionError("AGENT_SITE_REQUIRED");
       const agentTaskId = text(payload.agentTaskId, "");
       if (!agentTaskId) throw new JobExecutionError("AGENT_TASK_ID_REQUIRED");
       await runAgentTask(agentTaskId);
@@ -138,6 +146,7 @@ async function executeJob(
     }
     case JobKind.ARTICLE_KEYWORD_RESEARCH: {
       if (!projectId) throw new JobExecutionError("ARTICLE_RESEARCH_PROJECT_REQUIRED");
+      if (!job.siteId) throw new JobExecutionError("ARTICLE_RESEARCH_SITE_REQUIRED");
       const researchRunId = text(payload.articleResearchRunId, "");
       if (!researchRunId) throw new JobExecutionError("ARTICLE_RESEARCH_RUN_REQUIRED");
       try {
@@ -159,7 +168,8 @@ export async function processNextJob(): Promise<boolean> {
 
   let syncRun: Awaited<ReturnType<typeof createSyncRun>>;
   try {
-    syncRun = await createSyncRun(job);
+    if (job.siteId) syncRun = await createSyncRun({ ...job, siteId: job.siteId });
+    else syncRun = { id: "", jobId: job.id, siteId: "", source: SyncSource.DATAFORSEO, status: SyncStatus.PENDING, startedAt: null, finishedAt: null, attempt: job.attempts, errorCode: null, errorText: null, metadata: {}, createdAt: new Date(), updatedAt: new Date() };
   } catch {
     await failJob(job, workerId, "SYNC_RUN_CREATE_FAILED");
     return true;
@@ -169,17 +179,17 @@ export async function processNextJob(): Promise<boolean> {
   }, Math.max(10_000, Math.floor((leaseSeconds * 1000) / 3)));
 
   try {
-    await startSyncRun(syncRun.id);
+    if (syncRun.id) await startSyncRun(syncRun.id);
     await executeJob(job, syncRun.id);
-    await completeSyncRun(syncRun.id);
+    if (syncRun.id) await completeSyncRun(syncRun.id);
     await completeJob(job.id, workerId);
   } catch (error) {
     const code = error instanceof JobExecutionError ? error.code : "JOB_EXECUTION_FAILED";
     if (error instanceof JobExecutionError && error.defer) {
-      await failSyncRun(syncRun.id, code, code).catch(() => undefined);
+      if (syncRun.id) await failSyncRun(syncRun.id, code, code).catch(() => undefined);
       await deferJob(job, workerId, code);
     } else {
-      await failSyncRun(syncRun.id, code, code).catch(() => undefined);
+      if (syncRun.id) await failSyncRun(syncRun.id, code, code).catch(() => undefined);
       await failJob(job, workerId, code);
     }
   } finally {

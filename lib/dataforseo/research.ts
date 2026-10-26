@@ -303,7 +303,7 @@ export function taskDefinitions(
 
 export type ResearchRequestResult = {
   report_id: string;
-  site_id: string;
+  site_id: string | null;
   period: string;
   status: string;
   task_limit: number;
@@ -313,7 +313,7 @@ export type ResearchRequestResult = {
 
 function runResult(run: {
   id: string;
-  siteId: string;
+  siteId: string | null;
   periodStart: Date;
   status: SeoResearchRunStatus;
   taskLimit: number;
@@ -522,7 +522,7 @@ function taskView(task: {
 
 type ResearchRunViewInput = {
   id: string;
-  siteId: string;
+  siteId: string | null;
   periodStart: Date;
   status: SeoResearchRunStatus;
   packageVersion: string;

@@ -66,6 +66,7 @@ model Project {
   dataforseoGrants           ProjectApiKeyGrant[]
   seoResearchPolicies        SeoResearchPolicy[]
   seoResearchRuns            SeoResearchRun[]
+  prelaunchResearchRequests PrelaunchResearchRequest[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
   siteProfiles               SiteProfile[]
   researchRuns               ResearchRun[]
@@ -469,7 +470,7 @@ model ArticleKeywordResearchRun {
 model SeoResearchRun {
   id                  String               @id @default(cuid())
   projectId           String
-  siteId              String
+  siteId              String?
   periodStart         DateTime
   idempotencyKey      String
   brief               Json
@@ -491,12 +492,26 @@ model SeoResearchRun {
   updatedAt           DateTime             @updatedAt
 
   project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site    Site?             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   tasks   SeoResearchTask[]
+  prelaunchRequests PrelaunchResearchRequest[]
 
   @@unique([siteId, periodStart, packageVersion])
   @@unique([siteId, idempotencyKey])
   @@index([projectId, status, periodStart])
+}
+
+model PrelaunchResearchRequest {
+  id             String @id @default(cuid())
+  projectId      String
+  researchRunId  String
+  idempotencyKey String
+  requestHash    String
+  createdAt      DateTime @default(now())
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researchRun    SeoResearchRun @relation(fields: [researchRunId], references: [id], onDelete: Cascade)
+  @@unique([projectId, idempotencyKey])
+  @@index([researchRunId])
 }
 
 model SeoResearchTask {
@@ -1012,7 +1027,7 @@ enum ResearchBudgetReservationStatus {
 model ResearchBudgetReservation {
   id               String                          @id @default(cuid())
   projectId        String
-  siteId           String
+  siteId           String?
   idempotencyKey   String
   period           String
   timeZone         String
@@ -1029,9 +1044,10 @@ model ResearchBudgetReservation {
   settledAt        DateTime?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, idempotencyKey])
+  @@unique([siteId, idempotencyKey])
   @@index([projectId, period, status])
   @@index([siteId, createdAt])
 }
@@ -1274,7 +1290,7 @@ model AnalyticsSnapshot {
 model Job {
   id             String    @id @default(cuid())
   projectId      String?
-  siteId         String
+  siteId         String?
   kind           JobKind
   status         JobStatus @default(PENDING)
   payload        Json
@@ -1290,10 +1306,11 @@ model Job {
   updatedAt      DateTime  @updatedAt
 
   project  Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site     Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site     Site?     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   syncRuns SyncRun[]
 
   @@unique([siteId, kind, idempotencyKey])
+  @@unique([projectId, kind, idempotencyKey])
   @@index([projectId, status, nextAttemptAt])
   @@index([status, nextAttemptAt])
 }

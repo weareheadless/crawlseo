@@ -15,7 +15,7 @@ import { runResearchRun } from "@/lib/research/runner";
 
 const enabled = process.env.RUN_RESEARCH_SOURCE_DB_TESTS === "1";
 const fixtureDatabase = (() => {
-  try { const url = new URL(process.env.DATABASE_URL ?? ""); return url.protocol.startsWith("postgres") && new Set(["127.0.0.1", "localhost", "::1", "[::1]"]).has(url.hostname) && url.username === "codex" && url.pathname === "/unified_intelligence_validation"; }
+  try { const url = new URL(process.env.DATABASE_URL ?? ""); return url.protocol.startsWith("postgres") && new Set(["127.0.0.1", "localhost", "::1", "[::1]"]).has(url.hostname) && url.username === "codex" && url.pathname.slice(1).endsWith("_validation"); }
   catch { return false; }
 })();
 if (enabled && !fixtureDatabase) throw new Error("RUN_RESEARCH_SOURCE_DB_TESTS requires the disposable PostgreSQL fixture DATABASE_URL");
