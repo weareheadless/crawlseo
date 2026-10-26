@@ -101,6 +101,12 @@ describe("canonical business knowledge revisions", () => {
     expect(businessKnowledgeFieldsSchema.parse({ businessName: offsetFact }).businessName?.validFrom).toBe("2026-10-26T13:00:00+00:00");
   });
 
+  it("rejects malformed selectors instead of treating them as missing revisions", async () => {
+    await expect(readBusinessKnowledge("project-1", "document-1", 0 as any)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(readBusinessKnowledge("project-1", "document-1", Number.NaN)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(readBusinessKnowledge("project-1", "document-1", undefined, "other" as any)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
   it("caps durable correction impact and signals remaining pending work", async () => {
     await writeBusinessKnowledge(writeInput(), principal);
     state.actions = Array.from({ length: 101 }, (_, index) => ({ id: `action-${index}`, siteId: "site-1" }));

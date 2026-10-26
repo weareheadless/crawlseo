@@ -55,7 +55,7 @@ describe("atomic research profile contract", () => {
     mockDb.site.findFirst.mockResolvedValue({ id: "site-1", projectId: "project-1", project: { id: "project-1" } });
     mockDb.$transaction.mockImplementation(async (callback) => callback({
       $queryRaw: mockDb.$queryRaw,
-      siteProfile: mockDb.siteProfile,
+      siteProfile: { ...mockDb.siteProfile, findUnique: vi.fn().mockResolvedValue({ constraints: { retainedPolicy: "keep" } }) },
       researchPolicy: mockDb.researchPolicy,
       seoResearchPolicy: mockDb.seoResearchPolicy,
       connectorOperationReceipt: mockDb.connectorOperationReceipt,
@@ -83,7 +83,7 @@ describe("atomic research profile contract", () => {
         projectId: "project-1",
         language: "en",
         topics: ["freediving safety", "cenote training"],
-        constraints: { market: "Mexico", goals: ["Increase qualified freediving training enquiries"], exclusions: ["medical claims"] },
+        constraints: { retainedPolicy: "keep", market: "Mexico", goals: ["Increase qualified freediving training enquiries"], exclusions: ["medical claims"] },
       }),
     }));
     expect(mockDb.researchPolicy.create).toHaveBeenCalledWith(expect.objectContaining({

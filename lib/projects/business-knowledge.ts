@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 
 const identifier = z.string().min(1).max(120).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
-const rfc3339DateTime = z.string().datetime({ offset: true });
+const rfc3339DateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/).refine((value) => !Number.isNaN(Date.parse(value)), "Invalid RFC3339 timestamp");
 const absoluteUri = z.string().max(2000).regex(/^[A-Za-z][A-Za-z0-9+.-]*:[^\s]+$/);
 const provenance = z.object({
   kind: z.enum(["owner_input", "admin_input", "intake", "official_source", "research_observation", "ai_observation"]),
@@ -53,6 +53,11 @@ function documentShape(project: { id: string; workspaceId: string }, head: { log
 }
 
 export async function readBusinessKnowledge(projectId: string, documentId: string, revision?: number, view: "working" | "accepted" = "working") {
+  if (!identifier.safeParse(projectId).success || !identifier.safeParse(documentId).success
+      || (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 1))
+      || !["working", "accepted"].includes(view)) {
+    throw new BusinessKnowledgeError("VALIDATION_FAILED", "Invalid document selector");
+  }
   const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, workspaceId: true } });
   if (!project) throw new BusinessKnowledgeError("NOT_FOUND", "Document not found");
   const head = await db.businessKnowledgeDocument.findUnique({ where: { projectId } });
@@ -63,7 +68,7 @@ export async function readBusinessKnowledge(projectId: string, documentId: strin
     const accepted = await db.businessKnowledgeAcceptance.findFirst({ where: { documentId: head.id, revision: selectedRevision } });
     if (!accepted) throw new BusinessKnowledgeError("NOT_FOUND", "Accepted revision not found");
   }
-  const stored = await db.businessKnowledgeRevision.findUnique({ where: { documentId_revision: { documentId: head.id, revision: selectedRevision } } });
+  const stored = await db.businessKnowledgeRevision.findFirst({ where: { documentId: head.id, revision: selectedRevision }, select: { revision: true, state: true, fields: true, createdAt: true } });
   if (!stored) throw new BusinessKnowledgeError("NOT_FOUND", "Document revision not found");
   return documentShape(project, { ...head, revision: stored.revision,
     acceptedRevision: view === "accepted" ? selectedRevision : head.acceptedRevision !== null && head.acceptedRevision <= stored.revision ? head.acceptedRevision : null }, stored);
@@ -128,8 +133,7 @@ export async function writeBusinessKnowledge(input: {
       const saved = await tx.businessKnowledgeRevision.create({ data: { documentId: documentRowId, revision: current + 1, state: "working", fields: json(validated),
         reason: input.reason.trim(), changedFields: json(changedFields), affectedActionIds: json(affectedActionIds), affectedActionsHaveMore,
         serviceCaller: principal.servicePrincipalId } });
-      const updated = await tx.businessKnowledgeDocument.findUniqueOrThrow({ where: { id: documentRowId } });
-      const result = documentShape(project, updated, saved);
+      const result = documentShape(project, { logicalId: input.documentId, revision: current + 1, acceptedRevision: head?.acceptedRevision ?? null }, saved);
       await tx.businessKnowledgeReceipt.create({ data: { projectId: input.projectId, operation: receiptOp, idempotencyKey: input.idempotencyKey, requestHash, result: json(result) } });
       const eventBySite = new Map<string, string[]>();
       for (const action of boundedActions) eventBySite.set(action.siteId, [...(eventBySite.get(action.siteId) ?? []), action.id]);

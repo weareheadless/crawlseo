@@ -147,11 +147,13 @@ export async function updateConnectorResearchProfile(
         throw new ConnectorError("Research profile changed; refresh before retrying", 409);
       }
 
-      const constraints = {
-        market: input.profile.market,
-        goals: input.profile.goals,
-        exclusions: input.profile.exclusions,
-      };
+      const currentProfile = await tx.siteProfile.findUnique({ where: { siteId: site.id }, select: { constraints: true } });
+      const constraints = currentProfile?.constraints && typeof currentProfile.constraints === "object" && !Array.isArray(currentProfile.constraints)
+        ? { ...(currentProfile.constraints as Record<string, unknown>) } : {};
+      constraints.goals = input.profile.goals;
+      constraints.exclusions = input.profile.exclusions;
+      if (input.profile.market) constraints.market = input.profile.market;
+      else delete constraints.market;
       await tx.siteProfile.upsert({
         where: { siteId: site.id },
         create: {
@@ -160,13 +162,13 @@ export async function updateConnectorResearchProfile(
           language: input.profile.language,
           topics: input.profile.topics,
           audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
-          constraints,
+          constraints: json(constraints),
         },
         update: {
           language: input.profile.language,
           topics: input.profile.topics,
           audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
-          constraints,
+          constraints: json(constraints),
         },
       });
 

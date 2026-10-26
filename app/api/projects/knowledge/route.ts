@@ -11,7 +11,7 @@ const writeSchema = z.object({ ...base, kind: z.literal("document_write"), expec
 const acceptSchema = z.object({ ...base, kind: z.literal("document_accept"), expectedRevision: z.number().int().min(1), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), actor: z.object({ type: z.enum(["owner", "workspace_admin"]), id }).strict() }).strict();
 const readSchema = z.object({ workspaceId: id, projectId: id, documentId: id,
   view: z.enum(["working", "accepted"]).default("working"),
-  revision: z.string().regex(/^[1-9]\d*$/).transform(Number).refine(Number.isSafeInteger, "revision must be a safe integer").optional(),
+  revision: z.string().regex(/^[1-9]\d*$/).transform(Number).refine((value) => Number.isSafeInteger(value), "revision must be a safe integer").optional(),
 }).strict();
 
 function bearer(req: Request) { return req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null; }
