@@ -7,6 +7,9 @@ import {
   createResearchFinding,
   researchMonthBounds,
   saveResearchSources,
+  reusableResearchSources,
+  claimResearchDispatch,
+  releaseResearchDispatch,
 } from "@/lib/research/service";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
@@ -285,6 +288,18 @@ export async function runResearchRun(runId: string) {
     const useNews = providers.includes("news");
     const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news");
     const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
+    const addCollected = (source: Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]) => {
+      const previous = collected.get(source.contentHash);
+      const oldMeta = previous?.metadata ?? {};
+      const newMeta = source.metadata ?? {};
+      const queryKeys = [...new Set([
+        ...(Array.isArray(oldMeta.query_keys) ? oldMeta.query_keys.filter((item): item is string => typeof item === "string") : []),
+        ...(typeof oldMeta.query === "string" ? [oldMeta.query] : []),
+        ...(Array.isArray(newMeta.query_keys) ? newMeta.query_keys.filter((item): item is string => typeof item === "string") : []),
+        ...(typeof newMeta.query === "string" ? [newMeta.query] : []),
+      ].map((query) => query.trim().toLowerCase()).filter(Boolean))];
+      collected.set(source.contentHash, { ...source, metadata: { ...oldMeta, ...newMeta, query_keys: queryKeys } });
+    };
     const sourceErrors: string[] = unsupportedProviders.map((provider) => provider === "web"
       ? "web: general web search is not implemented; Google News RSS is available through the news provider"
       : `${provider}: provider is not implemented; no results were reported for this capability`);
@@ -300,36 +315,71 @@ export async function runResearchRun(runId: string) {
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
     const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
+    const recencyDays = Math.max(1, Math.min(run.recencyDays, run.site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
+    const cached = run.projectId ? await Promise.all([
+      ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
+      ...(useNews ? [reusableResearchSources({ projectId: run.projectId, provider: "google_news_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
+    ]) : [];
+    const reusable = cached.flat();
+    const reusedQueries = new Set(reusable.map((source) => `${source.provider}:${String(source.metadata?.query ?? "").toLowerCase()}`));
+    for (const source of reusable) addCollected(source);
+    const heldClaims: Array<{ provider: string; query: string; owner: string }> = [];
+    const dispatchClaimed = async (provider: string, topic: string, fetchSources: () => Promise<Awaited<ReturnType<typeof fetchRedditRssSearch>>>) => {
+      if (!run.projectId || reusedQueries.has(`${provider}:${topic.toLowerCase()}`)) return null;
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const owner = await claimResearchDispatch(run.projectId, provider, topic);
+        if (owner) {
+          const cachedAfterClaim = await reusableResearchSources({ projectId: run.projectId, provider, queries: [topic], recencyDays, excludedDomains });
+          if (cachedAfterClaim.length) {
+            await releaseResearchDispatch(run.projectId, provider, topic, owner);
+            for (const source of cachedAfterClaim) addCollected(source);
+            reusedQueries.add(`${provider}:${topic.toLowerCase()}`);
+            return null;
+          }
+          heldClaims.push({ provider, query: topic, owner });
+          return await fetchSources();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const found = await reusableResearchSources({ projectId: run.projectId, provider, queries: [topic], recencyDays, excludedDomains });
+        if (found.length) {
+          for (const source of found) addCollected(source);
+          reusedQueries.add(`${provider}:${topic.toLowerCase()}`);
+          return null;
+        }
+      }
+      throw new Error("Timed out waiting for concurrent research dispatch");
+    };
     let requestIndex = 0;
 
     for (const plan of queryPlan) {
       const topic = plan.query;
-      if (useReddit) {
+      if (useReddit && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
         try {
-          const sources = await fetchRedditRssSearch({
+          const sources = await dispatchClaimed("reddit_rss", topic, () => fetchRedditRssSearch({
             query: topic,
             sort: "relevance",
             timeWindow: "year",
             limit: 10,
-          });
-          for (const source of sources) collected.set(source.contentHash, { ...source,
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis } });
+          }));
+          for (const source of sources ?? []) addCollected({ ...source,
+            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (providers.includes("news")) {
+      if (providers.includes("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
-          const sources = await fetchGoogleNewsRssSearch({
+          const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
             query: topic,
             language,
             country,
             limit: 10,
-          });
-          for (const source of sources) collected.set(source.contentHash, { ...source,
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis } });
+          }));
+          for (const source of sources ?? []) addCollected({ ...source,
+            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
         }
@@ -342,8 +392,8 @@ export async function runResearchRun(runId: string) {
     const collectedSources = [...collected.values()];
     const qualityFiltered = collectedSources.filter((source) => !excludedUrl(source.url, excludedDomains));
     const policyRecency = run.site.researchPolicy?.recencyDays ?? run.recencyDays;
-    const recencyDays = Math.max(1, Math.min(run.recencyDays, policyRecency, 730));
-    const recencyIssues = qualityFiltered.map((source) => sourceRecencyIssue(source.publishedAt, recencyDays));
+    const effectiveRecencyDays = Math.max(1, Math.min(run.recencyDays, policyRecency, 730));
+    const recencyIssues = qualityFiltered.map((source) => sourceRecencyIssue(source.publishedAt, effectiveRecencyDays));
     const recencyRejections = { missing_date: 0, invalid_date: 0, future_date: 0, stale: 0 };
     for (const issue of recencyIssues) if (issue) recencyRejections[issue] += 1;
     const freshFiltered = qualityFiltered.filter((_, index) => recencyIssues[index] === null);
@@ -363,6 +413,7 @@ export async function runResearchRun(runId: string) {
         metadata: source.metadata,
       })),
     );
+    for (const claim of heldClaims) await releaseResearchDispatch(run.projectId!, claim.provider, claim.query, claim.owner);
 
     const existingFindings = await db.researchFinding.findMany({
       where: { runId: run.id },
@@ -469,7 +520,7 @@ export async function runResearchRun(runId: string) {
       unsupported_providers: unsupportedProviders,
       query_plan: queryPlan,
       exclusions_applied: { topics: exclusions, domains: excludedDomains },
-      recency_days: recencyDays,
+      recency_days: effectiveRecencyDays,
       max_sources: maxSources,
       topics: effectiveTopics,
       source_count: savedSources.length,

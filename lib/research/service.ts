@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -13,6 +13,8 @@ import type {
 } from "@/lib/research/types";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { isExternallyManaged, isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
+import { normalizeResearchSourceUrl, researchSourceId } from "@/lib/research/evidence";
+import { observationWithinRecencyWindow } from "@/lib/research/quality";
 
 export class ResearchServiceError extends Error {
   constructor(
@@ -306,7 +308,7 @@ export async function saveResearchSources(
 ) {
   const run = await db.researchRun.findUnique({
     where: { id: runId },
-    select: { id: true },
+    select: { id: true, projectId: true },
   });
   if (!run) throw new ResearchServiceError("Research run not found", 404);
 
@@ -324,6 +326,29 @@ export async function saveResearchSources(
     let created = 0;
 
     for (const source of sources) {
+      const normalizedUrl = normalizeResearchSourceUrl(source.url);
+      const identity = run.projectId && normalizedUrl
+        ? await tx.researchSourceIdentity.upsert({
+            where: { projectId_provider_normalizedUrl: { projectId: run.projectId, provider: source.provider, normalizedUrl } },
+            create: { projectId: run.projectId, provider: source.provider, sourceId: researchSourceId(source), normalizedUrl, currentHash: source.contentHash ?? null,
+              queryKeys: typeof source.metadata?.query === "string" ? [source.metadata.query.trim().toLowerCase()] : [] },
+            update: { sourceId: researchSourceId(source) },
+          })
+        : null;
+      if (identity && source.metadata) {
+        const keys = Array.isArray(identity.queryKeys) ? identity.queryKeys.filter((item): item is string => typeof item === "string") : [];
+        const incoming = [
+          ...(typeof source.metadata.query === "string" ? [source.metadata.query] : []),
+          ...(Array.isArray(source.metadata.query_keys) ? source.metadata.query_keys.filter((item): item is string => typeof item === "string") : []),
+        ].map((query) => query.trim().toLowerCase()).filter(Boolean);
+        const merged = [...new Set([...keys, ...incoming])];
+        if (merged.length !== keys.length) await tx.researchSourceIdentity.update({ where: { id: identity.id }, data: { queryKeys: merged } });
+      }
+      if (identity && source.contentHash && identity.currentHash === source.contentHash) {
+        const prior = await tx.researchSource.findFirst({ where: { identityId: identity.id, contentHash: source.contentHash },
+          select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true } });
+        if (prior) { saved.push(prior); continue; }
+      }
       const existing = source.contentHash
         ? await tx.researchSource.findFirst({
             where: { runId, contentHash: source.contentHash },
@@ -346,15 +371,18 @@ export async function saveResearchSources(
           author: source.author,
           community: source.community,
           publishedAt: source.publishedAt ? new Date(source.publishedAt) : undefined,
+          retrievedAt: typeof source.metadata?.retrieved_at === "string" ? new Date(source.metadata.retrieved_at) : undefined,
           excerpt: source.excerpt,
           contentHash: source.contentHash,
           language: source.language,
           metadata: source.metadata ? json(source.metadata) : undefined,
+          identityId: identity?.id,
         },
         select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true },
       });
       saved.push(row);
       created += 1;
+      if (identity) await tx.researchSourceIdentity.update({ where: { id: identity.id }, data: { currentHash: source.contentHash ?? null } });
     }
 
     if (created > 0) {
@@ -365,6 +393,47 @@ export async function saveResearchSources(
     }
     return saved;
   });
+}
+
+export async function reusableResearchSources(input: { projectId: string; provider: string; queries: string[]; recencyDays: number; excludedDomains: string[] }) {
+  const identities = await db.researchSourceIdentity.findMany({
+    where: { projectId: input.projectId, provider: input.provider, currentHash: { not: null } },
+    include: { observations: { where: { contentHash: { not: null } }, orderBy: { retrievedAt: "desc" }, take: 1 } },
+  });
+  return identities.flatMap((identity) => identity.observations.flatMap((source) => {
+    const keys = Array.isArray(identity.queryKeys) ? identity.queryKeys.filter((item): item is string => typeof item === "string") : [];
+    const metadata = source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata) ? source.metadata as Record<string, unknown> : {};
+    const legacyQuery = typeof metadata.query === "string" ? metadata.query.trim().toLowerCase() : "";
+    const matchedQueries = input.queries.map((query) => query.trim().toLowerCase()).filter((query) => query === legacyQuery || keys.includes(query));
+    return matchedQueries.map((query) => ({ identity, source, matchedQuery: query }));
+  })).filter(({ identity, source }) => {
+    const host = (() => { try { return new URL(source.url).hostname.toLowerCase(); } catch { return ""; } })();
+    const excluded = input.excludedDomains.some((domain) => host === domain.toLowerCase() || host.endsWith(`.${domain.toLowerCase()}`));
+    return !excluded && identity.currentHash === source.contentHash && observationWithinRecencyWindow(source.retrievedAt, input.recencyDays);
+  }).map(({ source, matchedQuery }) => ({ provider: source.provider, url: source.url, title: source.title ?? "", publishedAt: source.publishedAt?.toISOString(), excerpt: source.excerpt ?? "", contentHash: source.contentHash!, language: source.language ?? undefined,
+    metadata: { ...(source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata) ? source.metadata as Record<string, unknown> : {}), query: matchedQuery, retrieved_at: source.retrievedAt.toISOString(), reused: true } as Record<string, unknown> }));
+}
+
+/** Database-backed per-project/provider/query lease; contenders wait for the first run to persist observations. */
+export async function claimResearchDispatch(projectId: string, provider: string, query: string): Promise<string | null> {
+  const owner = randomUUID();
+  const requestKey = createHash("sha256").update(query.normalize("NFKC").trim().toLowerCase()).digest("hex");
+  const now = new Date();
+  const leaseExpiresAt = new Date(now.getTime() + 60_000);
+  const inserted = await db.researchDispatchClaim.createMany({
+    data: [{ projectId, provider, requestKey, owner, leaseExpiresAt }], skipDuplicates: true,
+  });
+  if (inserted.count === 1) return owner;
+  const reclaimed = await db.researchDispatchClaim.updateMany({
+    where: { projectId, provider, requestKey, leaseExpiresAt: { lte: now } },
+    data: { owner, leaseExpiresAt },
+  });
+  return reclaimed.count === 1 ? owner : null;
+}
+
+export async function releaseResearchDispatch(projectId: string, provider: string, query: string, owner: string): Promise<void> {
+  const requestKey = createHash("sha256").update(query.normalize("NFKC").trim().toLowerCase()).digest("hex");
+  await db.researchDispatchClaim.updateMany({ where: { projectId, provider, requestKey, owner }, data: { leaseExpiresAt: new Date(0) } });
 }
 
 export async function createResearchFinding(

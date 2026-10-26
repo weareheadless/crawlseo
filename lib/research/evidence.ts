@@ -11,6 +11,30 @@ export type ResearchEvidenceSource = {
   metadata?: unknown;
 };
 
+/** Canonical provider URL identity used for project-scoped observation reuse. */
+export function normalizeResearchSourceUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.protocol = url.protocol.toLowerCase();
+    url.hostname = url.hostname.toLowerCase();
+    if ((url.protocol === "http:" && url.port === "80") || (url.protocol === "https:" && url.port === "443")) url.port = "";
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || ["gclid", "fbclid", "ref"].includes(key.toLowerCase())) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString();
+  } catch { return null; }
+}
+
+export function researchSourceId(source: { url: string; metadata?: unknown }): string {
+  const meta = record(source.metadata);
+  const id = meta.reddit_id ?? meta.source_id ?? meta.guid;
+  return typeof id === "string" && id.trim() ? id.trim() : normalizeResearchSourceUrl(source.url) ?? source.url;
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>

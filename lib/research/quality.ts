@@ -14,3 +14,10 @@ export function sourceRecencyIssue(publishedAt: string | undefined, recencyDays:
 export function sourceWithinRecencyWindow(publishedAt: string | undefined, recencyDays: number, now = Date.now()): boolean {
   return sourceRecencyIssue(publishedAt, recencyDays, now) === null;
 }
+
+/** Stored retrieval timestamps use the same bounded recency policy as source dates. */
+export function observationWithinRecencyWindow(retrievedAt: Date | string | null | undefined, recencyDays: number, now = Date.now()): boolean {
+  if (retrievedAt == null) return false;
+  const value = retrievedAt instanceof Date ? retrievedAt.toISOString() : retrievedAt;
+  return sourceRecencyIssue(value, recencyDays, now) === null;
+}
