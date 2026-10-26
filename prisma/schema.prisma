@@ -82,9 +82,75 @@ model Project {
   legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetProject")
   legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceProject")
   legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetProject")
+  businessKnowledgeDocuments BusinessKnowledgeDocument[]
+  businessKnowledgeReceipts BusinessKnowledgeReceipt[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
+}
+
+model BusinessKnowledgeDocument {
+  id               String   @id @default(cuid())
+  logicalId        String
+  projectId        String   @unique
+  revision         Int      @default(0)
+  acceptedRevision Int?
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisions        BusinessKnowledgeRevision[]
+  acceptances      BusinessKnowledgeAcceptance[]
+
+  @@unique([projectId, logicalId])
+  @@index([projectId, revision])
+}
+
+model BusinessKnowledgeRevision {
+  id                String   @id @default(cuid())
+  documentId        String
+  revision          Int
+  state             String
+  fields            Json
+  reason            String
+  changedFields     Json
+  affectedActionIds Json
+  affectedActionsHaveMore Boolean @default(false)
+  serviceCaller     String
+  createdAt         DateTime @default(now())
+  document   BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, revision])
+  @@index([documentId, createdAt])
+}
+
+model BusinessKnowledgeAcceptance {
+  id            String   @id @default(cuid())
+  documentId    String
+  revision      Int
+  actorType     String
+  actorId       String
+  serviceCaller String?
+  reason        String
+  idempotencyKey String
+  requestHash   String
+  createdAt     DateTime @default(now())
+  document      BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, idempotencyKey])
+  @@index([documentId, revision, createdAt])
+}
+
+model BusinessKnowledgeReceipt {
+  id             String   @id @default(cuid())
+  projectId      String
+  operation      String
+  idempotencyKey String
+  requestHash    String
+  result         Json
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, operation, idempotencyKey])
+  @@index([projectId, createdAt])
 }
 
 model ProjectRegistrationReceipt {

@@ -8,6 +8,7 @@ const mockDb = vi.hoisted(() => ({
   researchPolicy: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
   seoResearchPolicy: { upsert: vi.fn() },
   connectorOperationReceipt: { findUnique: vi.fn(), create: vi.fn() },
+  businessKnowledgeDocument: { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
@@ -54,13 +55,15 @@ describe("atomic research profile contract", () => {
     mockDb.site.findFirst.mockResolvedValue({ id: "site-1", projectId: "project-1", project: { id: "project-1" } });
     mockDb.$transaction.mockImplementation(async (callback) => callback({
       $queryRaw: mockDb.$queryRaw,
-      siteProfile: mockDb.siteProfile,
+      siteProfile: { ...mockDb.siteProfile, findUnique: vi.fn().mockResolvedValue({ constraints: { retainedPolicy: "keep" } }) },
       researchPolicy: mockDb.researchPolicy,
       seoResearchPolicy: mockDb.seoResearchPolicy,
       connectorOperationReceipt: mockDb.connectorOperationReceipt,
+      businessKnowledgeDocument: mockDb.businessKnowledgeDocument,
     }));
     mockDb.connectorOperationReceipt.findUnique.mockResolvedValue(null);
     mockDb.connectorOperationReceipt.create.mockResolvedValue({});
+    mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue(null);
     mockDb.researchPolicy.findUnique.mockResolvedValue(null);
     mockDb.researchPolicy.create.mockImplementation(async ({ data }) => ({ ...data }));
     mockDb.researchPolicy.update.mockImplementation(async ({ data }) => ({ revision: 4, ...data }));
@@ -80,7 +83,7 @@ describe("atomic research profile contract", () => {
         projectId: "project-1",
         language: "en",
         topics: ["freediving safety", "cenote training"],
-        constraints: { market: "Mexico", goals: ["Increase qualified freediving training enquiries"], exclusions: ["medical claims"] },
+        constraints: { retainedPolicy: "keep", market: "Mexico", goals: ["Increase qualified freediving training enquiries"], exclusions: ["medical claims"] },
       }),
     }));
     expect(mockDb.researchPolicy.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -120,5 +123,15 @@ describe("atomic research profile contract", () => {
   it("rejects an idempotency key reused with a different payload", async () => {
     mockDb.connectorOperationReceipt.findUnique.mockResolvedValue({ requestHash: "different", result: { revision: 1 } });
     await expect(updateConnectorResearchProfile(principal, input)).rejects.toThrow("different research profile");
+  });
+
+  it("keeps research targeting editable alongside canonical business facts", async () => {
+    mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue({ id: "doc-1" });
+    await expect(updateConnectorResearchProfile(principal, input)).resolves.toMatchObject({ profile: input.profile });
+    expect(mockDb.siteProfile.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ topics: input.profile.topics, audience: input.profile.audience }),
+      update: expect.objectContaining({ topics: input.profile.topics, audience: input.profile.audience }),
+    }));
+    expect(mockDb.businessKnowledgeDocument.findUnique).not.toHaveBeenCalled();
   });
 });

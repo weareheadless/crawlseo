@@ -71,7 +71,6 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
   }
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, projectId: true } });
   if (!site) throw new Error("Site not found");
-
   await db.siteProfile.upsert({
     where: { siteId },
     create: {
