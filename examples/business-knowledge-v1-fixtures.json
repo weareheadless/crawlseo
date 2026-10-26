@@ -3,23 +3,24 @@
     {
       "schemaVersion": "business-knowledge/1",
       "kind": "project_registration",
-      "workspaceId": "workspace-ada",
       "displayName": "Northstar Studio",
       "origin": {
         "system": "helloada",
         "externalId": "intake-42"
       },
       "domain": null,
-      "credentialScope": {
+      "externalProjectId": "helloada:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
         "audience": "business-knowledge",
-        "permissions": [
+        "requestedPermissions": [
           "project:read",
           "document:read",
           "document:write"
         ]
-      },
-      "externalProjectId": "helloada:intake-42",
-      "idempotencyKey": "intake-42-register-001"
+      }
     },
     {
       "schemaVersion": "business-knowledge/1",
@@ -30,6 +31,18 @@
       "origin": {
         "system": "helloada",
         "externalId": "intake-42"
+      },
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "credentialScope": {
+        "audience": "business-knowledge",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "permissions": [
+          "project:read",
+          "document:read"
+        ]
       }
     },
     {
@@ -357,40 +370,42 @@
     {
       "schemaVersion": "business-knowledge/1",
       "kind": "project_registration",
-      "workspaceId": "workspace-ada",
       "displayName": "Northstar Studio",
       "domain": null,
-      "credentialScope": {
+      "externalProjectId": "helloada:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
         "audience": "business-knowledge",
-        "permissions": [
+        "requestedPermissions": [
           "project:read",
           "document:read",
           "document:write"
         ]
-      },
-      "externalProjectId": "helloada:intake-42",
-      "idempotencyKey": "intake-42-register-001"
+      }
     },
     {
       "schemaVersion": "business-knowledge/1",
       "kind": "project_registration",
-      "workspaceId": "workspace-ada",
       "displayName": "Northstar Studio",
       "origin": {
         "system": "helloada",
         "externalId": "intake-42"
       },
       "domain": null,
-      "credentialScope": {
+      "externalProjectId": "other:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
         "audience": "business-knowledge",
-        "permissions": [
+        "requestedPermissions": [
           "project:read",
           "document:read",
           "document:write"
         ]
-      },
-      "externalProjectId": "other:intake-42",
-      "idempotencyKey": "intake-42-register-001"
+      }
     }
   ],
   "conflictCases": [
@@ -633,6 +648,110 @@
       },
       "result": {
         "revision": 3
+      }
+    }
+  ],
+  "registrationCases": [
+    {
+      "name": "organization-bound-bootstrap",
+      "bootstrapCredential": {
+        "audience": "business-knowledge-bootstrap",
+        "externalOrganizationId": "helloada-org-42",
+        "permissions": [
+          "project:register"
+        ]
+      },
+      "serverAllowlist": [
+        "project:read",
+        "document:read"
+      ],
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration",
+        "displayName": "Northstar Studio",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "domain": null,
+        "externalProjectId": "helloada:intake-42",
+        "idempotencyKey": "intake-42-register-001",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "requestedCredentialScope": {
+          "audience": "business-knowledge",
+          "requestedPermissions": [
+            "project:read",
+            "document:read",
+            "document:write"
+          ]
+        }
+      },
+      "result": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration_result",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "externalProjectId": "helloada:intake-42",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "credentialScope": {
+          "audience": "business-knowledge",
+          "externalOrganizationId": "helloada-org-42",
+          "workspaceId": "workspace-ada",
+          "projectId": "project-42",
+          "permissions": [
+            "project:read",
+            "document:read"
+          ]
+        }
+      }
+    },
+    {
+      "name": "wrong-bootstrap-organization",
+      "bootstrapCredential": {
+        "audience": "business-knowledge-bootstrap",
+        "externalOrganizationId": "different-org",
+        "permissions": [
+          "project:register"
+        ]
+      },
+      "serverAllowlist": [
+        "project:read",
+        "document:read"
+      ],
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration",
+        "displayName": "Northstar Studio",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "domain": null,
+        "externalProjectId": "helloada:intake-42",
+        "idempotencyKey": "intake-42-register-001",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "requestedCredentialScope": {
+          "audience": "business-knowledge",
+          "requestedPermissions": [
+            "project:read",
+            "document:read",
+            "document:write"
+          ]
+        }
+      },
+      "result": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "error",
+        "code": "FORBIDDEN",
+        "message": "Bootstrap credential is not authorized for this organization.",
+        "retryable": false
       }
     }
   ]

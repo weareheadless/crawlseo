@@ -10,6 +10,7 @@ const fixtures: {
   conflictCases: Array<{ name: string; state: object; credential: object; priorRequest?: object; request: object; response: { code: string; retryable: boolean } }>;
   acceptanceCases: Array<{ name: string; request: object; before: { revision: number; state: string; acceptedRevision: number | null }; after: { revision: number; state: string; acceptedRevision: number | null }; acceptedRead: { revision: number } }>;
   historicalReadCases: Array<{ state: { revision: number; acceptedRevision: number; acceptedRevisions: number[] }; read: { view: string; revision?: number }; result: { revision: number } }>;
+  registrationCases: Array<{ name: string; bootstrapCredential: { externalOrganizationId: string; permissions: string[] }; serverAllowlist: string[]; request: any; result: any }>;
 } = JSON.parse(readFileSync(resolve(process.cwd(), "examples/business-knowledge-v1-fixtures.json"), "utf8"));
 const validate = new Ajv({ allErrors: true }).compile(schema);
 const hasValidLifecyclePins = (fixture: any) => fixture.kind !== "business_document" || (
@@ -98,5 +99,22 @@ describe("shared business knowledge v1 producer/consumer fixtures", () => {
     expect(registration.externalProjectId).toBe(`${registration.origin.system}:${registration.origin.externalId}`);
     expect(validate(registration)).toBe(true);
     expect(validate({ ...registration, domain: "northstar.example" })).toBe(true);
+  });
+
+  it("binds bootstrap credentials to the authenticated organization and treats requested permissions as advisory", () => {
+    for (const fixture of fixtures.registrationCases) {
+      expect(validate(fixture.request)).toBe(true);
+      expect(validate(fixture.result)).toBe(true);
+      if (fixture.bootstrapCredential.externalOrganizationId !== fixture.request.externalOrganizationId) {
+        expect(fixture.result.code).toBe("FORBIDDEN");
+        continue;
+      }
+      expect(fixture.bootstrapCredential.permissions).toEqual(["project:register"]);
+      expect(fixture.result.credentialScope.externalOrganizationId).toBe(fixture.request.externalOrganizationId);
+      expect(fixture.result.credentialScope.workspaceId).toBe(fixture.result.workspaceId);
+      expect(fixture.result.credentialScope.projectId).toBe(fixture.result.projectId);
+      expect(fixture.result.credentialScope.permissions).toEqual(["project:read", "document:read"]);
+      expect(fixture.result.credentialScope.permissions).not.toContain("document:write");
+    }
   });
 });

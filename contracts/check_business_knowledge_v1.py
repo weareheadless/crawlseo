@@ -72,6 +72,25 @@ def main():
         require(resolve_conflict(case) == expected[case["name"]], f"wrong consumer outcome for {case['name']}")
         require(case["response"]["code"] == expected[case["name"]], f"fixture response disagrees for {case['name']}")
 
+    for case in FIXTURES["registrationCases"]:
+        request = case["request"]
+        principal = case["bootstrapCredential"]
+        result = case["result"]
+        require(not list(VALIDATOR.iter_errors(request)), f"registration request {case['name']} rejected by schema")
+        require(not list(VALIDATOR.iter_errors(result)), f"registration result {case['name']} rejected by schema")
+        authenticated = principal["externalOrganizationId"] == request["externalOrganizationId"] and principal["permissions"] == ["project:register"]
+        if not authenticated:
+            require(result["code"] == "FORBIDDEN", f"wrong bootstrap organization must be forbidden: {case['name']}")
+            continue
+        issued = result["credentialScope"]
+        require(issued["externalOrganizationId"] == request["externalOrganizationId"], "issued scope must preserve trusted organization binding")
+        require(issued["workspaceId"] == result["workspaceId"] and issued["projectId"] == result["projectId"], "issued credential must bind canonical IDs")
+        allowed = set(case["serverAllowlist"])
+        requested = set(request["requestedCredentialScope"]["requestedPermissions"])
+        effective = set(issued["permissions"])
+        require(effective == requested.intersection(allowed), "requested permissions must remain advisory under server allowlist")
+        require("document:write" not in effective, "caller request must not grant a permission excluded by server policy")
+
     for case in FIXTURES["acceptanceCases"]:
         require(not list(VALIDATOR.iter_errors(case["request"])), f"acceptance request {case['name']} rejected by schema")
         before, after = case["before"], case["after"]
@@ -87,7 +106,7 @@ def main():
         require(requested_revision < case["state"]["acceptedRevision"], "historical read fixture must select an older accepted revision after pointer advance")
         require(case["result"]["revision"] == requested_revision, "explicit revision read must return that exact snapshot")
 
-    print(f"Python consumer compatibility passed: {len(FIXTURES['valid'])} valid, {len(FIXTURES['invalid'])} invalid, {len(FIXTURES['conflictCases'])} conflicts, {len(FIXTURES['acceptanceCases']) + len(FIXTURES['historicalReadCases'])} lifecycle cases")
+    print(f"Python consumer compatibility passed: {len(FIXTURES['valid'])} valid, {len(FIXTURES['invalid'])} invalid, {len(FIXTURES['conflictCases'])} conflicts, {len(FIXTURES['registrationCases'])} registration auth cases, {len(FIXTURES['acceptanceCases']) + len(FIXTURES['historicalReadCases'])} lifecycle cases")
 
 
 if __name__ == "__main__":

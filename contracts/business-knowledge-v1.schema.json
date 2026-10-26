@@ -18,25 +18,35 @@
     "namespace": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
     "projectRegistration": {
       "type": "object", "additionalProperties": false,
-      "required": ["schemaVersion", "kind", "workspaceId", "externalProjectId", "displayName", "origin", "idempotencyKey", "credentialScope"],
+      "required": ["schemaVersion", "kind", "externalOrganizationId", "workspaceName", "externalProjectId", "displayName", "origin", "idempotencyKey", "requestedCredentialScope"],
       "properties": {
         "schemaVersion": { "const": "business-knowledge/1" }, "kind": { "const": "project_registration" },
-        "workspaceId": { "$ref": "#/$defs/identifier" }, "externalProjectId": { "$ref": "#/$defs/identifier" },
+        "externalOrganizationId": { "$ref": "#/$defs/identifier" }, "workspaceName": { "$ref": "#/$defs/nonEmpty" }, "externalProjectId": { "$ref": "#/$defs/identifier" },
         "displayName": { "$ref": "#/$defs/nonEmpty" },
         "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 240 },
         "origin": { "type": "object", "additionalProperties": false, "required": ["system", "externalId"], "properties": { "system": { "$ref": "#/$defs/namespace" }, "externalId": { "$ref": "#/$defs/identifier" } } },
         "domain": { "type": ["string", "null"], "maxLength": 253, "format": "hostname" },
-        "credentialScope": { "type": "object", "additionalProperties": false, "required": ["audience", "permissions"], "properties": { "audience": { "const": "business-knowledge" }, "permissions": { "type": "array", "items": { "enum": ["project:read", "document:read", "document:write"] }, "uniqueItems": true, "minItems": 1, "maxItems": 3 } } }
+        "requestedCredentialScope": { "$ref": "#/$defs/requestedCredentialScope" }
       }
     },
     "projectRegistrationResult": {
       "type": "object", "additionalProperties": false,
-      "required": ["schemaVersion", "kind", "workspaceId", "projectId", "externalProjectId", "origin"],
+      "required": ["schemaVersion", "kind", "externalOrganizationId", "workspaceId", "projectId", "externalProjectId", "origin", "credentialScope"],
       "properties": {
         "schemaVersion": { "const": "business-knowledge/1" }, "kind": { "const": "project_registration_result" },
-        "workspaceId": { "$ref": "#/$defs/identifier" }, "projectId": { "$ref": "#/$defs/identifier" }, "externalProjectId": { "$ref": "#/$defs/identifier" },
-        "origin": { "type": "object", "additionalProperties": false, "required": ["system", "externalId"], "properties": { "system": { "$ref": "#/$defs/namespace" }, "externalId": { "$ref": "#/$defs/identifier" } } }
+        "externalOrganizationId": { "$ref": "#/$defs/identifier" }, "workspaceId": { "$ref": "#/$defs/identifier" }, "workspaceName": { "$ref": "#/$defs/nonEmpty" },
+        "projectId": { "$ref": "#/$defs/identifier" }, "externalProjectId": { "$ref": "#/$defs/identifier" },
+        "origin": { "type": "object", "additionalProperties": false, "required": ["system", "externalId"], "properties": { "system": { "$ref": "#/$defs/namespace" }, "externalId": { "$ref": "#/$defs/identifier" } } },
+        "credentialScope": { "$ref": "#/$defs/issuedCredentialScope" }
       }
+    },
+    "requestedCredentialScope": {
+      "type": "object", "additionalProperties": false, "required": ["audience", "requestedPermissions"],
+      "properties": { "audience": { "const": "business-knowledge" }, "requestedPermissions": { "type": "array", "items": { "enum": ["project:read", "document:read", "document:write"] }, "uniqueItems": true, "minItems": 1, "maxItems": 3 } }
+    },
+    "issuedCredentialScope": {
+      "type": "object", "additionalProperties": false, "required": ["audience", "externalOrganizationId", "workspaceId", "projectId", "permissions"],
+      "properties": { "audience": { "const": "business-knowledge" }, "externalOrganizationId": { "$ref": "#/$defs/identifier" }, "workspaceId": { "$ref": "#/$defs/identifier" }, "projectId": { "$ref": "#/$defs/identifier" }, "permissions": { "type": "array", "items": { "enum": ["project:read", "document:read", "document:write"] }, "uniqueItems": true, "minItems": 1, "maxItems": 3 } }
     },
     "provenance": {
       "type": "object", "additionalProperties": false,
