@@ -41,6 +41,13 @@ export type PublicationResult = {
   output: string;
 };
 
+export class WixPublicationOutcomeUnknown extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WixPublicationOutcomeUnknown";
+  }
+}
+
 export function siteRevisionFromPayload(payload: unknown): SiteRevision {
   const raw = (payload as { siteRevision?: { revision?: unknown } } | null)?.siteRevision?.revision;
   const revision = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
@@ -197,43 +204,41 @@ export async function publishWixSite(input: {
     ["publish", "--source", "remote", "-y"],
     { cwd: context.repoPath, env: context.env, timeout: 300_000 },
   ));
-  const published = await publish({
-    repoPath: input.repoPath,
-    revision: revisionBefore.revision,
-    env,
-  });
+  try {
+    const published = await publish({
+      repoPath: input.repoPath,
+      revision: revisionBefore.revision,
+      env,
+    });
 
-  const reported = published.stdout.match(/UI version:\s*(\d+)/i)?.[1];
-  if (reported && reported !== revisionBefore.revision) {
-    throw new Error(`Wix published UI version ${reported}, expected ${revisionBefore.revision}`);
-  }
-  if (!reported) {
-    throw new Error("Wix publish did not report the UI version it used");
-  }
-  if (!/published successfully|site has been published/i.test(published.stdout)) {
-    throw new Error("Wix publish did not return a successful publication result");
-  }
-  if (/newer design changes/i.test(published.stdout)) {
-    throw new Error(
-      "Wix reported a concurrent editor revision during publish; the release may have published an older UI version. Retry the release.",
-    );
-  }
+    const reported = published.stdout.match(/UI version:\s*(\d+)/i)?.[1];
+    if (reported && reported !== revisionBefore.revision) {
+      throw new Error(`Wix published UI version ${reported}, expected ${revisionBefore.revision}`);
+    }
+    if (!reported) throw new Error("Wix publish did not report the UI version it used");
+    if (!/published successfully|site has been published/i.test(published.stdout)) {
+      throw new Error("Wix publish did not return a successful publication result");
+    }
+    if (/newer design changes/i.test(published.stdout)) {
+      throw new Error("Wix reported a concurrent editor revision during publish; the release may have published an older UI version.");
+    }
 
-  const revisionAfter = await getRevision(input.siteId);
-  if (revisionAfter.number < revisionBefore.number) {
-    throw new Error(
-      `The Wix site revision moved backwards during publish (before ${revisionBefore.revision}, after ${revisionAfter.revision})`,
-    );
-  }
+    const revisionAfter = await getRevision(input.siteId);
+    if (revisionAfter.number < revisionBefore.number) {
+      throw new Error(`The Wix site revision moved backwards during publish (before ${revisionBefore.revision}, after ${revisionAfter.revision})`);
+    }
 
-  const previewUrl = published.stdout.match(/https:\/\/wix\.to\/[A-Za-z0-9]+/)?.[0] ?? null;
-  return {
-    codeSha: input.gitSha,
-    releaseSha,
-    revisionBefore,
-    revisionPublished: revisionBefore,
-    revisionAfter,
-    previewUrl,
-    output: published.stdout,
-  };
+    const previewUrl = published.stdout.match(/https:\/\/wix\.to\/[A-Za-z0-9]+/)?.[0] ?? null;
+    return {
+      codeSha: input.gitSha,
+      releaseSha,
+      revisionBefore,
+      revisionPublished: revisionBefore,
+      revisionAfter,
+      previewUrl,
+      output: published.stdout,
+    };
+  } catch (error) {
+    throw new WixPublicationOutcomeUnknown(error instanceof Error ? error.message : "Wix publication outcome is unknown");
+  }
 }

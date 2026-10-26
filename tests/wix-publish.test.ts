@@ -8,6 +8,7 @@ import {
   publishWixSite,
   siteRevisionFromPayload,
   syncWixUiVersion,
+  WixPublicationOutcomeUnknown,
 } from "@/lib/delivery/wix-publish";
 
 const roots: string[] = [];
@@ -91,6 +92,18 @@ describe("Wix UI revision synchronization", () => {
 });
 
 describe("Wix publication transaction", () => {
+  it("labels a lost publish response as unknown rather than retryable failure", async () => {
+    const { repo } = await gitFixture();
+    const codeSha = git(repo, "rev-parse", "HEAD");
+    await expect(publishWixSite({
+      repoPath: repo,
+      siteId: "site-123",
+      gitSha: codeSha,
+      getRevision: async () => revision(848),
+      publish: async () => { throw new Error("connection reset after request"); },
+    })).rejects.toBeInstanceOf(WixPublicationOutcomeUnknown);
+  });
+
   it("syncs the UI revision, publishes remote code, and requires a new site revision", async () => {
     const { repo } = await gitFixture();
     const codeSha = git(repo, "rev-parse", "HEAD");

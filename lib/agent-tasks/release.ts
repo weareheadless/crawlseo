@@ -5,10 +5,11 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { commitAgentTask } from "@/lib/agent-tasks/commit";
 import { markActionVerified } from "@/lib/agent-tasks/deploy";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
+import { addAgentArtifact } from "@/lib/agent-tasks/chat";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 import { isTechnicalSeoAction } from "@/lib/agent-tasks/targets";
-import { publishWixSite, readWixConfig } from "@/lib/delivery/wix-publish";
+import { publishWixSite, readWixConfig, WixPublicationOutcomeUnknown, type PublicationResult } from "@/lib/delivery/wix-publish";
 import { verifyReleaseOutcome } from "@/lib/research/release-verification";
 import {
   applyEmbedDelivery,
@@ -189,12 +190,51 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
   let publication;
   try {
     const wixConfig = await readWixConfig(task.repoPath);
-    publication = await publishWixSite({
-      repoPath: task.repoPath,
-      siteId: wixConfig.siteId,
-      gitSha: releaseHead,
+    const priorPublish = await db.agentTaskArtifact.findMany({
+      where: { taskId: task.id, kind: { in: ["wix_publish_started", "wix_publish_receipt", "wix_publish_unknown", "wix_publish_not_started"] } },
+      orderBy: { createdAt: "desc" }, take: 1, select: { kind: true, content: true },
     });
+    const previous = priorPublish[0];
+    if (previous?.kind === "wix_publish_started" || previous?.kind === "wix_publish_unknown") {
+      throw new ResearchServiceError("A Wix code publication has an uncertain outcome; reconcile it before retrying", 409);
+    }
+    if (previous?.kind === "wix_publish_receipt") {
+      if (!previous.content) throw new ResearchServiceError("The prior Wix publication receipt is missing; reconcile it before retrying", 409);
+      let saved: PublicationResult;
+      try { saved = JSON.parse(previous.content) as PublicationResult; }
+      catch { throw new ResearchServiceError("The prior Wix publication receipt is unreadable; reconcile it before retrying", 409); }
+      if (!saved.codeSha || !saved.releaseSha || !saved.revisionPublished?.revision) {
+        throw new ResearchServiceError("The prior Wix publication receipt is incomplete; reconcile it before retrying", 409);
+      }
+      if (saved.codeSha !== releaseHead) throw new ResearchServiceError("A prior Wix publication receipt belongs to a different commit", 409);
+      publication = saved;
+    }
+    if (!publication) {
+      const publishAttempt = {
+        siteId: wixConfig.siteId,
+        commitSha: releaseHead,
+        startedAt: new Date().toISOString(),
+      };
+      await addAgentArtifact(task.id, { kind: "wix_publish_started", content: JSON.stringify(publishAttempt) });
+      publication = await publishWixSite({
+        repoPath: task.repoPath,
+        siteId: wixConfig.siteId,
+        gitSha: releaseHead,
+      });
+      await addAgentArtifact(task.id, { kind: "wix_publish_receipt", content: JSON.stringify(publication) });
+    }
   } catch (error) {
+    if (!(error instanceof ResearchServiceError)) {
+      await addAgentArtifact(task.id, {
+        kind: error instanceof WixPublicationOutcomeUnknown ? "wix_publish_unknown" : "wix_publish_not_started",
+        content: JSON.stringify({
+          commitSha: releaseHead,
+          outcome: error instanceof WixPublicationOutcomeUnknown ? "unknown" : "not_started",
+          error: error instanceof Error ? error.message : "Wix release failed",
+          recordedAt: new Date().toISOString(),
+        }),
+      });
+    }
     await updateAgentTask(task.id, {
       status: "CHANGES_REQUESTED",
       errorCode: "SITE_RELEASE_FAILED",
@@ -220,7 +260,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     if (target) {
       const planned = await planEmbedDelivery(task.id, target.key);
       embedPlan = planned.plan;
-      const applied = await applyEmbedDelivery(task.id, target.key, `apply-embed:${task.id}:${target.key}`);
+      const applied = await applyEmbedDelivery(task.id, target.key, planned.confirmation);
       embedReceipt = applied.receipt;
       verification = await verifyEmbedDelivery(task.id, target.key);
     }

@@ -5,6 +5,34 @@ import path from "node:path";
 const BRIDGE_ROOT = process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge";
 const BRIDGE_CLI = path.join(BRIDGE_ROOT, "src", "cli.mjs");
 
+export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "cms" | "seo_tags";
+
+/** A capability is true only when a bridge explicitly reports it. Unknown bridges fail closed. */
+export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridgeOperation, boolean> {
+  const capabilities = (value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>).capabilities : null);
+  const operations = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
+    ? capabilities as Record<string, unknown> : {};
+  return {
+    inspect: operations.inspect === true,
+    plan: operations.plan === true,
+    deploy: operations.deploy === true,
+    publish: operations.publish === true,
+    release: operations.release === true,
+    verify: operations.verify === true,
+    read_embed: operations.read_embed === true,
+    write_embed: operations.write_embed === true,
+    cms: operations.cms === true,
+    seo_tags: operations.seo_tags === true,
+  };
+}
+
+export function assertWixBridgeCapability(value: unknown, operation: WixBridgeOperation): void {
+  if (!negotiateWixBridgeCapabilities(value)[operation]) {
+    throw new Error(`Wix bridge capability is unsupported or unnegotiated: ${operation}`);
+  }
+}
+
 function parseEnvFile(value: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const rawLine of value.split(/\r?\n/)) {

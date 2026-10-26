@@ -133,7 +133,7 @@ export async function approveAndDeployAgentTask(taskId: string, requestedTargetK
     throw new ResearchServiceError("Committed task has no commit SHA", 409);
   }
   const plan = await planEmbedDelivery(task.id, targetKey);
-  const receipt = await applyEmbedDelivery(task.id, targetKey, `apply-embed:${task.id}:${targetKey}`);
+  const receipt = await applyEmbedDelivery(task.id, targetKey, plan.confirmation);
   const verification = await verifyEmbedDelivery(task.id, targetKey);
 
   if (!verification.verified) {

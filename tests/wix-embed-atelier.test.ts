@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { rebuildAtelierEarlyPacket } from "@/lib/delivery/wix-embed";
+import {
+  assertWixEmbedExecutionBinding,
+  rebuildAtelierEarlyPacket,
+  wixEmbedEffectToken,
+  wixEmbedReadbackMatches,
+} from "@/lib/delivery/wix-embed";
 
 function packet(key: string, source: string) {
   return gzipSync(Buffer.from(source, "utf8")).toString("base64");
@@ -22,5 +28,30 @@ describe("Atelier early packet", () => {
   it("fails when the packet key is missing", () => {
     expect(() => rebuildAtelierEarlyPacket("<script></script>", "navbar", "source"))
       .toThrow("Atelier packet key navbar");
+  });
+});
+
+describe("Wix embed effect receipts", () => {
+  it("binds a confirmation to the exact effect fields", () => {
+    const effect = { taskId: "task-1", actionRevision: 3, snippetId: "snippet-1", desiredHtmlSha256: "abc" };
+    expect(wixEmbedEffectToken(effect)).toBe(wixEmbedEffectToken({ ...effect }));
+    expect(wixEmbedEffectToken(effect)).not.toBe(wixEmbedEffectToken({ ...effect, snippetId: "snippet-2" }));
+    expect(wixEmbedEffectToken(effect)).not.toBe(wixEmbedEffectToken({ ...effect, actionRevision: 4 }));
+  });
+
+  it("requires exact readback content to reconcile an embed effect", () => {
+    expect(wixEmbedReadbackMatches("expected HTML", wixEmbedEffectToken({ html: "expected HTML" }))).toBe(false);
+    const hash = createHash("sha256").update("expected HTML").digest("hex");
+    expect(wixEmbedReadbackMatches("expected HTML", hash)).toBe(true);
+    expect(wixEmbedReadbackMatches("changed HTML", hash)).toBe(false);
+  });
+
+  it("rejects stale Action revisions and changed or non-owning bindings", () => {
+    const task = { actionId: "action-1", actionRevision: 4, connectorGeneration: 2, action: { revision: 4 } };
+    const binding = { id: "binding-1", executor: "crawlseo-agent", generation: 2, status: "ACTIVE" };
+    expect(() => assertWixEmbedExecutionBinding(task, binding)).not.toThrow();
+    expect(() => assertWixEmbedExecutionBinding({ ...task, action: { revision: 5 } }, binding)).toThrow(/Action revision changed/);
+    expect(() => assertWixEmbedExecutionBinding(task, { ...binding, generation: 3 })).toThrow(/binding changed/);
+    expect(() => assertWixEmbedExecutionBinding(task, { ...binding, executor: "helloada-agent" })).toThrow(/binding changed/);
   });
 });
