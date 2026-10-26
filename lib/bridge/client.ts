@@ -5,6 +5,53 @@ import path from "node:path";
 const BRIDGE_ROOT = process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge";
 const BRIDGE_CLI = path.join(BRIDGE_ROOT, "src", "cli.mjs");
 
+export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "update_snippet" | "private_editor_revision" | "cms" | "seo_tags";
+
+/** A capability is true only when a bridge explicitly reports it. Unknown bridges fail closed. */
+export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridgeOperation, boolean> {
+  const response = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : {};
+  if (response.contract !== "wix-bridge-generic-v1") return {
+    inspect: false, plan: false, deploy: false, publish: false, release: false, verify: false,
+    read_embed: false, write_embed: false, update_snippet: false, private_editor_revision: false, cms: false, seo_tags: false,
+  };
+  const capabilities = response.capabilities;
+  const operations = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
+    ? capabilities as Record<string, unknown> : {};
+  return {
+    inspect: operations.inspect === true,
+    plan: operations.plan === true,
+    deploy: operations.deploy === true,
+    publish: operations.publish === true,
+    release: operations.release === true,
+    verify: operations.verify === true,
+    read_embed: operations.read_embed === true,
+    write_embed: operations.write_embed === true,
+    // Generic v1 has no update-snippet operation. Host-only commands are not promoted.
+    update_snippet: false,
+    // The legacy editor revision probe uses a private endpoint, not generic v1.
+    private_editor_revision: false,
+    cms: operations.cms === true,
+    seo_tags: operations.seo_tags === true,
+  };
+}
+
+/** Run an intelligence command only after a read-only bridge inspection explicitly negotiates it. */
+export async function assertNegotiatedWixBridgeOperations(
+  alias: string,
+  operations: WixBridgeOperation[],
+  siteRepo?: string,
+): Promise<void> {
+  const inspected = await inspectBridgeSite(alias, siteRepo);
+  for (const operation of operations) assertWixBridgeCapability(inspected, operation);
+}
+
+export function assertWixBridgeCapability(value: unknown, operation: WixBridgeOperation): void {
+  if (!negotiateWixBridgeCapabilities(value)[operation]) {
+    throw new Error(`Wix bridge capability is unsupported or unnegotiated: ${operation}`);
+  }
+}
+
 function parseEnvFile(value: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const rawLine of value.split(/\r?\n/)) {
