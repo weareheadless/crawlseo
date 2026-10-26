@@ -35,6 +35,14 @@ Never assign an arbitrary human as owner just to populate a field.
 
 ## Agent pickup and PR checklist
 
+The lightweight operational protocol and manager commands are implemented in
+[the shared coordinator](https://github.com/weareheadless/site-agent/blob/21f1bc35e1fd9ebb537667489ce41d5370cdc13a/docs/agent-coordination.md).
+[OPS-001](https://github.com/weareheadless/site-agent/issues/341) tracks adoption
+across the four repositories. Reuse the existing shared key; no separate identity
+system, worker service or automatic merger is introduced. Templates/checks become
+defaults when the coordination PRs merge. Task-format feedback is not code review;
+the manager checks current CI and the actual diff before merge.
+
 1. Read the issue, its dependency state, linked spec requirements, current default
    branch and active related PRs. Read repository AGENTS/CLAUDE instructions.
 2. Claim the issue through an assignee or a short comment naming the agent/run,
