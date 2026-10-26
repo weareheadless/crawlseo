@@ -39,6 +39,7 @@ model Workspace {
 
   projects    Project[]
   connections GoogleConnection[]
+  projectRegistrationReceipts ProjectRegistrationReceipt[]
 }
 
 model Project {
@@ -54,6 +55,8 @@ model Project {
   researchBudgetCurrency         String        @default("USD")
   researchBudgetTimeZone         String        @default("UTC")
   researchBudgetRevision         Int           @default(1)
+  registrationRequestHash        String?
+  registrationDomain             String?
 
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sites                      Site[]
@@ -82,6 +85,21 @@ model Project {
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
+}
+
+model ProjectRegistrationReceipt {
+  id                     String   @id @default(cuid())
+  externalOrganizationId String
+  operation              String
+  idempotencyKey         String
+  requestHash            String
+  result                 Json
+  createdAt              DateTime @default(now())
+
+  workspace Workspace @relation(fields: [externalOrganizationId], references: [externalOrganizationId], onDelete: Cascade)
+
+  @@unique([externalOrganizationId, operation, idempotencyKey])
+  @@index([externalOrganizationId, createdAt])
 }
 
 enum ConnectorBindingStatus {

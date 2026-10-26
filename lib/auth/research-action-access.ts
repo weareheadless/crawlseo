@@ -60,6 +60,7 @@ export async function researchActionAccess(actionId: string, userId: string): Pr
       site: {
         select: {
           id: true,
+          projectId: true,
           domain: true,
           userId: true,
           connectorBinding: { select: { executor: true, status: true } },

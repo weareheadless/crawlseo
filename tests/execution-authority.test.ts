@@ -47,40 +47,40 @@ describe("external execution authority", () => {
   });
 
   it("does not treat an externally managed site as superseded by itself", async () => {
-    mockDb.site.findUnique.mockResolvedValue({ id: "site-1", domain: "oceanicvibes.com",
+    mockDb.site.findUnique.mockResolvedValue({ id: "site-1", projectId: "project-1", domain: "oceanicvibes.com",
       connectorBinding: { status: "ACTIVE", executor: "helloada" } });
     await expect(isSupersededByExternalAuthority("site-1")).resolves.toBe(false);
     expect(mockDb.site.findMany).not.toHaveBeenCalled();
   });
 
   it("marks an unbound site as superseded by a bound sibling on the same domain", async () => {
-    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", domain: "https://www.oceanicvibes.com/",
+    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", projectId: "project-1", domain: "https://www.oceanicvibes.com/",
       connectorBinding: null });
     mockDb.site.findMany.mockResolvedValue([
-      { domain: "other.example", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
-      { domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+      { projectId: "project-1", domain: "other.example", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+      { projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
     ]);
     await expect(isSupersededByExternalAuthority("site-legacy")).resolves.toBe(true);
   });
 
   it("ignores an inactive sibling binding and a different domain", async () => {
-    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", domain: "oceanicvibes.com",
+    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", projectId: "project-1", domain: "oceanicvibes.com",
       connectorBinding: null });
     mockDb.site.findMany.mockResolvedValue([
-      { domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
-      { domain: "other.example", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+      { projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
+      { projectId: "project-1", domain: "other.example", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
     ]);
     await expect(isSupersededByExternalAuthority("site-legacy")).resolves.toBe(false);
   });
 
   it("resolves a duplicate site's authority to the bound sibling for its domain", async () => {
     mockDb.site.findUnique.mockResolvedValue({
-      id: "site-legacy", domain: "https://www.oceanicvibes.com/",
+      id: "site-legacy", projectId: "project-1", domain: "https://www.oceanicvibes.com/",
       connectorBinding: null,
       connectorContext: null,
     });
     mockDb.site.findMany.mockResolvedValue([
-      { domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" },
+      { projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" },
         connectorContext: { capabilities: { reviewOrigin: "https://helloada.example/admin" } } },
     ]);
     await expect(getSiteExecutionAuthority("site-legacy")).resolves.toEqual({
@@ -93,7 +93,7 @@ describe("external execution authority", () => {
   it("resolves action-level authority from the owning site", async () => {
     mockDb.researchAction.findUnique.mockResolvedValue({
       site: {
-        id: "site-1", domain: "oceanicvibes.com",
+        id: "site-1", projectId: "project-1", domain: "oceanicvibes.com",
         connectorBinding: { status: "ACTIVE", executor: "helloada" },
         connectorContext: { capabilities: { reviewOrigin: "https://helloada.example/review/9" } },
       },
@@ -109,9 +109,10 @@ describe("external execution authority", () => {
 });
 
 describe("superseded duplicate sites", () => {
-  const local = (id: string, domain: string) => ({ id, domain, connectorBinding: null });
+  const local = (id: string, domain: string, projectId = "project-1") => ({ id, domain, projectId, connectorBinding: null });
   const bound = (id: string, domain: string) => ({
     id,
+    projectId: "project-1",
     domain,
     connectorBinding: { status: "ACTIVE", executor: "helloada" },
   });
@@ -128,8 +129,8 @@ describe("superseded duplicate sites", () => {
   it("keeps rows when no binding exists or when the binding is local", () => {
     expect(supersededSiteIds([
       local("a", "oceanicvibes.com"),
-      { id: "b", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
-      { id: "c", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
+      { id: "b", projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
+      { id: "c", projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
     ]).size).toBe(0);
   });
 
@@ -138,5 +139,23 @@ describe("superseded duplicate sites", () => {
       bound("one", "oceanicvibes.com"),
       bound("two", "oceanicvibes.com"),
     ]).size).toBe(0);
+  });
+
+  it("keeps same-domain businesses in different projects independent", () => {
+    const sites = [
+      local("project-one-local", "https://www.shared.example/", "project-one"),
+      { id: "project-two-bound", projectId: "project-two", domain: "shared.example",
+        connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+    ];
+    expect(supersededSiteIds(sites)).toEqual(new Set());
+  });
+
+  it("does not infer shared authority for sites without a project tenant", () => {
+    const unassigned = [
+      { id: "owner-one", projectId: null, domain: "shared.example", connectorBinding: null },
+      { id: "owner-two", projectId: null, domain: "shared.example",
+        connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+    ];
+    expect(supersededSiteIds(unassigned)).toEqual(new Set());
   });
 });
