@@ -15,7 +15,16 @@ function bearer(req: Request): string | null {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json() as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      const parsed: unknown = await req.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return businessKnowledgeError(400, "VALIDATION_FAILED", "Invalid credential recovery request");
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return businessKnowledgeError(400, "VALIDATION_FAILED", "Invalid credential recovery request");
+    }
     if (typeof body.externalOrganizationId !== "string" || typeof body.registrationIdempotencyKey !== "string" ||
         body.registrationIdempotencyKey.trim().length < 8 || body.registrationIdempotencyKey.trim().length > 240 ||
         typeof body.recoveryIdempotencyKey !== "string" || body.recoveryIdempotencyKey.trim().length < 8 ||

@@ -86,7 +86,7 @@ export async function resolveSiteAuthority(site: SiteAuthorityInput): Promise<Ex
   }
 
   const domain = normalizeSiteDomain(site.domain);
-  if (domain) {
+  if (domain && site.projectId) {
     const siblings: SiblingAuthority[] = await db.site.findMany({
       // Domain equality is only meaningful inside a tenant. A domain may be
       // managed independently by two CrawlSEO projects.
@@ -159,6 +159,7 @@ export async function isSupersededByExternalAuthority(siteId: string): Promise<b
   });
   if (!site) return false;
   if (isExternallyManaged(site.connectorBinding)) return false;
+  if (!site.projectId) return false;
 
   const domain = normalizeSiteDomain(site.domain);
   if (!domain) return false;
@@ -191,9 +192,10 @@ export type SiteBindingRow = {
 export function supersededSiteIds(sites: readonly SiteBindingRow[]): Set<string> {
   const groups = new Map<string, SiteBindingRow[]>();
   for (const site of sites) {
+    if (!site.projectId) continue;
     const domain = normalizeSiteDomain(site.domain);
     if (!domain) continue;
-    const key = `${site.projectId ?? ""}\u0000${domain}`;
+    const key = `${site.projectId}\u0000${domain}`;
     const group = groups.get(key) ?? [];
     group.push(site);
     groups.set(key, group);

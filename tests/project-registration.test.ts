@@ -208,6 +208,16 @@ describe("domainless project registration", () => {
     expect(state.projects.size).toBe(0);
   });
 
+  it("rejects malformed credential-recovery JSON with the canonical validation envelope", async () => {
+    const response = await recoverPost(new Request("https://example.test/api/projects/registration-credential", {
+      method: "POST", headers: { "content-type": "application/json" }, body: "null",
+    }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      schemaVersion: "business-knowledge/1", kind: "error", code: "VALIDATION_FAILED", retryable: false,
+    });
+  });
+
   it("reads the canonical project identity under its project-scoped credential without requiring a Site", async () => {
     const registered = await registerProject(input);
     state.authBinding = { workspaceId: registered.identity.workspaceId, projectId: registered.identity.projectId };

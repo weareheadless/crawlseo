@@ -149,4 +149,13 @@ describe("superseded duplicate sites", () => {
     ];
     expect(supersededSiteIds(sites)).toEqual(new Set());
   });
+
+  it("does not infer shared authority for sites without a project tenant", () => {
+    const unassigned = [
+      { id: "owner-one", projectId: null, domain: "shared.example", connectorBinding: null },
+      { id: "owner-two", projectId: null, domain: "shared.example",
+        connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+    ];
+    expect(supersededSiteIds(unassigned)).toEqual(new Set());
+  });
 });
