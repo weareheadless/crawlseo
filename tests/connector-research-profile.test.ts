@@ -125,13 +125,13 @@ describe("atomic research profile contract", () => {
     await expect(updateConnectorResearchProfile(principal, input)).rejects.toThrow("different research profile");
   });
 
-  it("keeps canonical business fields out of the legacy profile writer", async () => {
+  it("keeps research targeting editable alongside canonical business facts", async () => {
     mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue({ id: "doc-1" });
-    mockDb.siteProfile.upsert.mockResolvedValue({ topics: ["canonical topic"], audience: "canonical audience" });
-    await expect(updateConnectorResearchProfile(principal, input)).resolves.toMatchObject({ profile: { topics: ["canonical topic"], audience: "canonical audience" } });
+    await expect(updateConnectorResearchProfile(principal, input)).resolves.toMatchObject({ profile: input.profile });
     expect(mockDb.siteProfile.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      create: expect.not.objectContaining({ topics: expect.anything(), audience: expect.anything() }),
-      update: expect.not.objectContaining({ topics: expect.anything(), audience: expect.anything() }),
+      create: expect.objectContaining({ topics: input.profile.topics, audience: input.profile.audience }),
+      update: expect.objectContaining({ topics: input.profile.topics, audience: input.profile.audience }),
     }));
+    expect(mockDb.businessKnowledgeDocument.findUnique).not.toHaveBeenCalled();
   });
 });

@@ -23,7 +23,10 @@ vi.mock("@/lib/db", () => {
     businessKnowledgeRevision: {
       findUnique: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId_revision.documentId, where.documentId_revision.revision)) ?? null),
       findUniqueOrThrow: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId_revision.documentId, where.documentId_revision.revision))),
-      findFirst: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId, where.revision)) ?? null),
+      findFirst: vi.fn(async ({ where }: any) => {
+        const row = state.head ? state.revisions.get(key(state.head.id, where.revision)) : null;
+        return row ? { ...row, document: { logicalId: state.head.logicalId } } : null;
+      }),
       create: vi.fn(async ({ data }: any) => { const row = { id: `rev-${data.revision}`, ...data, createdAt: new Date() }; state.revisions.set(key(data.documentId, data.revision), row); return row; }),
     },
     businessKnowledgeReceipt: {
@@ -45,7 +48,7 @@ vi.mock("@/lib/db", () => {
   return { db: { ...tx, $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)) } };
 });
 
-import { acceptBusinessKnowledge, BusinessKnowledgeError, readBusinessKnowledge, readBusinessKnowledgeCorrectionImpact, writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { acceptBusinessKnowledge, BusinessKnowledgeError, businessKnowledgeFieldsSchema, readBusinessKnowledge, readBusinessKnowledgeCorrectionImpact, writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
 
 const principal = { credentialId: "credential-1", servicePrincipalId: "principal-1", workspaceId: "workspace-1", projectId: "project-1", scopes: ["document:read", "document:write"] };
 const fact = (value: string) => ({ value, provenance: { kind: "intake", sourceId: "intake-1", originSystem: "helloada", originRecordId: "owner-1", originRevision: 1,
@@ -54,6 +57,7 @@ const writeInput = (overrides: Record<string, unknown> = {}) => ({ workspaceId: 
   idempotencyKey: "intake-write-0001", reason: "confirmed intake", changes: { businessName: fact("Acme") }, ...overrides });
 const contractSchema = JSON.parse(readFileSync(resolve(process.cwd(), "contracts/business-knowledge-v1.schema.json"), "utf8"));
 const validateDocument = new Ajv({ allErrors: true }).compile(contractSchema);
+const canonicalFixtures = JSON.parse(readFileSync(resolve(process.cwd(), "examples/business-knowledge-v1-fixtures.json"), "utf8")) as { valid: Array<Record<string, any>> };
 
 describe("canonical business knowledge revisions", () => {
   beforeEach(() => { state.head = null; state.revisions.clear(); state.receipts.clear(); state.acceptances.clear(); state.events.length = 0; state.sequence = 0; state.actions = [{ id: "action-1", siteId: "site-1" }]; });
@@ -67,10 +71,10 @@ describe("canonical business knowledge revisions", () => {
     expect(validateDocument(accepted)).toBe(true);
     const correction = await writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "correction-0001", reason: "corrected name", changes: { businessName: fact("Acme Studio") } }), principal);
     expect(correction).toMatchObject({ revision: 2, state: "working", acceptedRevision: 1 });
-    expect(state.revisions.get("document-1:2")).toMatchObject({ reason: "corrected name", changedFields: ["businessName"], affectedActionIds: ["action-1"], serviceCaller: "principal-1" });
+    expect(state.revisions.get(`${state.head.id}:2`)).toMatchObject({ reason: "corrected name", changedFields: ["businessName"], affectedActionIds: ["action-1"], serviceCaller: "principal-1" });
     await expect(readBusinessKnowledgeCorrectionImpact("project-1", "document-1", 2)).resolves.toMatchObject({ affectedActionIds: ["action-1"], affectedActionsHaveMore: false });
     await expect(readBusinessKnowledge("project-1", "document-1", 1, "accepted")).resolves.toMatchObject({ revision: 1, state: "accepted", acceptedRevision: 1, fields: { businessName: { value: "Acme" } } });
-    await expect(readBusinessKnowledge("project-1")).resolves.toMatchObject({ revision: 2, state: "working", acceptedRevision: 1 });
+    await expect(readBusinessKnowledge("project-1", "document-1")).resolves.toMatchObject({ revision: 2, state: "working", acceptedRevision: 1 });
     expect(state.events).toHaveLength(2);
     expect(state.events[1]).toMatchObject({ type: "business.knowledge.corrected", payload: { affectedActionIds: ["action-1"], changedFields: ["businessName"] } });
   });
@@ -85,6 +89,16 @@ describe("canonical business knowledge revisions", () => {
   it("hides documents outside the credential project and enforces write scope", async () => {
     await expect(writeBusinessKnowledge({ ...writeInput(), projectId: "other-project", workspaceId: "other-workspace" }, principal)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(writeBusinessKnowledge(writeInput(), { ...principal, scopes: ["document:read"] })).rejects.toBeInstanceOf(BusinessKnowledgeError);
+  });
+
+  it("parses canonical fixtures, Python RFC3339 offsets, and opaque evidence URIs", () => {
+    for (const fixture of canonicalFixtures.valid) {
+      if (fixture.kind === "business_document") expect(businessKnowledgeFieldsSchema.parse(fixture.fields)).toEqual(fixture.fields);
+      if (fixture.kind === "document_write") expect(businessKnowledgeFieldsSchema.parse(fixture.changes)).toEqual(fixture.changes);
+    }
+    const offsetFact = { ...fact("Offset-aware evidence"), validFrom: "2026-10-26T13:00:00+00:00", validUntil: null,
+      provenance: { ...fact("Offset-aware evidence").provenance, observedAt: "2026-10-26T13:00:00+00:00", recordedAt: "2026-10-26T13:01:00+00:00", evidenceUri: "urn:source:owner-intake:42" } };
+    expect(businessKnowledgeFieldsSchema.parse({ businessName: offsetFact }).businessName?.validFrom).toBe("2026-10-26T13:00:00+00:00");
   });
 
   it("caps durable correction impact and signals remaining pending work", async () => {

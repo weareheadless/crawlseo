@@ -8,12 +8,12 @@ Each revision stores its reason, changed top-level field paths, service principa
 
 | Writer | Fields | Compatibility behavior |
 | --- | --- | --- |
-| `saveResearchConfig` in `lib/research/policy.ts` | `SiteProfile.topics`, `audience`, `constraints`; research policy | Continues writing research policy and market/goals/exclusions. Once a canonical business document exists, it leaves `topics` and `audience` untouched. |
-| `updateConnectorResearchPolicy` in `lib/connectors/service.ts` | same profile fields and research policy | Same fence for topics/audience; policy remains independently editable. |
-| `updateConnectorResearchProfile` in `lib/connectors/service.ts` | profile snapshot plus research policy | Same fence for topics/audience; policy and language/constraints continue to update. |
+| `saveResearchConfig` in `lib/research/policy.ts` | `SiteProfile.topics`, `audience`, `constraints`; research policy | Writes query topics, target segment, and market/goals/exclusions as research targeting policy. |
+| `updateConnectorResearchPolicy` in `lib/connectors/service.ts` | same profile fields and research policy | Same independently editable research targeting and policy controls. |
+| `updateConnectorResearchProfile` in `lib/connectors/service.ts` | profile snapshot plus research policy | Same independently editable research targeting and policy controls. |
 | `saveContextSnapshot` in `lib/connectors/service.ts` | `ConnectorContextSnapshot.businessFacts` | Remains an observed crawl snapshot, not a source for owner-confirmed business facts. |
 
-No remaining path in this inventory writes a canonical business fact into `SiteProfile` after the project document exists. Existing profile rows remain readable as compatibility data; they are not copied into the typed document without provenance.
+Compatibility mapping is intentionally explicit: `SiteProfile.topics` means research query topics; `SiteProfile.audience` means a target segment for research; `SiteProfile.constraints`/`ResearchPolicy` hold market, goals, exclusions and execution cadence. Canonical `BusinessKnowledge.fields.services` means owner sourced offerings, while `audienceMotivations` means sourced motivations. There is no automatic projection between those concepts. Existing SiteProfile rows are not automatically imported into the typed document; no ownership transfer or provenance is inferred. Business fact changes use the canonical document API.
 
 ## Acceptance authority
 

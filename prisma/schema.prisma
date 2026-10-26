@@ -90,7 +90,8 @@ model Project {
 }
 
 model BusinessKnowledgeDocument {
-  id               String   @id
+  id               String   @id @default(cuid())
+  logicalId        String
   projectId        String   @unique
   revision         Int      @default(0)
   acceptedRevision Int?
@@ -99,6 +100,7 @@ model BusinessKnowledgeDocument {
   revisions        BusinessKnowledgeRevision[]
   acceptances      BusinessKnowledgeAcceptance[]
 
+  @@unique([projectId, logicalId])
   @@index([projectId, revision])
 }
 

@@ -71,21 +71,20 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
   }
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, projectId: true } });
   if (!site) throw new Error("Site not found");
-  const canonicalKnowledgeExists = site.projectId ? await db.businessKnowledgeDocument.findUnique({ where: { projectId: site.projectId }, select: { id: true } }) : null;
-
   await db.siteProfile.upsert({
     where: { siteId },
     create: {
       siteId,
       projectId: site.projectId,
       language: input.language,
-      topics: canonicalKnowledgeExists ? undefined : json(input.topics),
-      audience: canonicalKnowledgeExists ? undefined : (input.audience ? json(input.audience) : undefined),
+      topics: json(input.topics),
+      audience: input.audience ? json(input.audience) : undefined,
       constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
     },
     update: {
       language: input.language,
-      ...(canonicalKnowledgeExists ? {} : { topics: json(input.topics), audience: input.audience ? json(input.audience) : Prisma.JsonNull }),
+      topics: json(input.topics),
+      audience: input.audience ? json(input.audience) : Prisma.JsonNull,
       constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
     },
   });

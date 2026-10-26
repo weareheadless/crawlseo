@@ -9,6 +9,10 @@ const id = z.string().min(1).max(120);
 const base = { schemaVersion: z.literal("business-knowledge/1"), workspaceId: id, projectId: id, documentId: id };
 const writeSchema = z.object({ ...base, kind: z.literal("document_write"), expectedRevision: z.number().int().min(0), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), changes: businessKnowledgeFieldsSchema }).strict();
 const acceptSchema = z.object({ ...base, kind: z.literal("document_accept"), expectedRevision: z.number().int().min(1), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), actor: z.object({ type: z.enum(["owner", "workspace_admin"]), id }).strict() }).strict();
+const readSchema = z.object({ workspaceId: id, projectId: id, documentId: id,
+  view: z.enum(["working", "accepted"]).default("working"),
+  revision: z.string().regex(/^[1-9]\d*$/).transform(Number).refine(Number.isSafeInteger, "revision must be a safe integer").optional(),
+}).strict();
 
 function bearer(req: Request) { return req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null; }
 function errorResponse(error: unknown): Response {
@@ -31,12 +35,10 @@ async function principal(req: Request, scope: string) {
 export async function GET(req: Request) {
   try {
     const auth = await principal(req, "document:read");
-    const params = new URL(req.url).searchParams;
-    const projectId = params.get("projectId") ?? "";
-    const workspaceId = params.get("workspaceId") ?? "";
-    if (auth.projectId !== projectId || auth.workspaceId !== workspaceId) return businessKnowledgeError(404, "NOT_FOUND", "Document not found");
-    const document = await readBusinessKnowledge(projectId, params.get("documentId") ?? undefined,
-      params.has("revision") ? Number(params.get("revision")) : undefined, params.get("view") === "accepted" ? "accepted" : "working");
+    const params = Object.fromEntries(new URL(req.url).searchParams.entries());
+    const query = readSchema.parse(params);
+    if (auth.projectId !== query.projectId || auth.workspaceId !== query.workspaceId) return businessKnowledgeError(404, "NOT_FOUND", "Document not found");
+    const document = await readBusinessKnowledge(query.projectId, query.documentId, query.revision, query.view);
     return Response.json(document, { headers: { "cache-control": "no-store" } });
   } catch (error) { return errorResponse(error); }
 }

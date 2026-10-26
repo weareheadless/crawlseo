@@ -28,17 +28,32 @@ dbDescribe("business knowledge revisions on disposable PostgreSQL", () => {
     const workspace = await db.workspace.create({ data: { externalOrganizationId, name: `UI-003 fixture ${suffix}` } });
     const project = await db.project.create({ data: { workspaceId: workspace.id, externalProjectId: `helloada:${suffix}`, name: "Business knowledge fixture" } });
     const actor = principal(workspace.id, project.id);
-    const documentId = `bk-${suffix}`;
+    const documentId = "business-profile";
     const initial = { workspaceId: workspace.id, projectId: project.id, documentId, expectedRevision: 0, idempotencyKey: `initial-${suffix}`, reason: "fixture intake", changes: { businessName: fact("Fixture Business") } };
     const [first, concurrentRetry] = await Promise.all([writeBusinessKnowledge(initial, actor), writeBusinessKnowledge(initial, actor)]);
     expect(first).toEqual(concurrentRetry);
-    expect(await db.businessKnowledgeRevision.count({ where: { documentId } })).toBe(1);
+    await expect(readBusinessKnowledge(project.id, documentId)).resolves.toEqual(first);
+    expect(await db.businessKnowledgeRevision.count({ where: { document: { projectId: project.id } } })).toBe(1);
     await expect(writeBusinessKnowledge({ ...initial, idempotencyKey: `stale-${suffix}` }, actor)).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
-    await expect(acceptBusinessKnowledge({ workspaceId: workspace.id, projectId: project.id, documentId, expectedRevision: 1, idempotencyKey: `accept-${suffix}`, reason: "owner reviewed" }, actor, { actorId: `owner-${suffix}`, externalOrganizationId })).resolves.toMatchObject({ state: "accepted", acceptedRevision: 1 });
+    const acceptanceInput = { workspaceId: workspace.id, projectId: project.id, documentId, expectedRevision: 1, idempotencyKey: `accept-${suffix}`, reason: "owner reviewed" };
+    const accepted = await acceptBusinessKnowledge(acceptanceInput, actor, { actorId: `owner-${suffix}`, externalOrganizationId });
+    expect(accepted).toMatchObject({ state: "accepted", acceptedRevision: 1 });
+    await expect(acceptBusinessKnowledge(acceptanceInput, actor, { actorId: `owner-${suffix}`, externalOrganizationId })).resolves.toEqual(accepted);
     const corrected = await writeBusinessKnowledge({ ...initial, expectedRevision: 1, idempotencyKey: `correct-${suffix}`, reason: "correction", changes: { businessName: fact("Corrected Fixture Business") } }, actor);
     expect(corrected).toMatchObject({ revision: 2, acceptedRevision: 1, state: "working" });
-    await expect(readBusinessKnowledge(project.id, documentId, 1, "accepted")).resolves.toMatchObject({ revision: 1, acceptedRevision: 1, state: "accepted", fields: { businessName: { value: "Fixture Business" } } });
-    expect(await db.businessKnowledgeAcceptance.count({ where: { documentId } })).toBe(1);
+    await expect(readBusinessKnowledge(project.id, documentId, 1, "accepted")).resolves.toEqual(accepted);
+    await expect(acceptBusinessKnowledge(acceptanceInput, actor, { actorId: `owner-${suffix}`, externalOrganizationId })).resolves.toEqual(accepted);
+    expect(await db.businessKnowledgeAcceptance.count({ where: { document: { projectId: project.id } } })).toBe(1);
     expect(await db.businessKnowledgeReceipt.count({ where: { projectId: project.id } })).toBe(2);
+    expect(await db.connectorEvent.count({ where: { projectId: project.id } })).toBe(0);
+    expect(await db.connectorEventCounter.findUnique({ where: { projectId: project.id } })).toBeNull();
+
+    const otherProject = await db.project.create({ data: { workspaceId: workspace.id, externalProjectId: `helloada:other-${suffix}`, name: "Second business knowledge fixture" } });
+    const otherActor = principal(workspace.id, otherProject.id);
+    const secondDocument = await writeBusinessKnowledge({ ...initial, projectId: otherProject.id,
+      idempotencyKey: `second-${suffix}`, changes: { businessName: fact("Other Fixture Business") } }, otherActor);
+    expect(secondDocument.documentId).toBe(documentId);
+    expect(await readBusinessKnowledge(otherProject.id, documentId)).toMatchObject({ projectId: otherProject.id, documentId, fields: { businessName: { value: "Other Fixture Business" } } });
+    expect(await readBusinessKnowledge(project.id, documentId)).toMatchObject({ projectId: project.id, fields: { businessName: { value: "Corrected Fixture Business" } } });
   }, 60_000);
 });

@@ -68,19 +68,18 @@ export async function updateConnectorResearchPolicy(principal: ServicePrincipalC
       const revision = current?.revision ?? 0;
       if (revision !== input.expectedRevision) throw new ConnectorError("Research policy changed; refresh before retrying", 409);
       const profile = await tx.siteProfile.findUnique({ where: { siteId: site.id }, select: { constraints: true } });
-      const canonicalKnowledge = await tx.businessKnowledgeDocument.findUnique({ where: { projectId: principal.projectId }, select: { id: true } });
       const constraints = profile?.constraints && typeof profile.constraints === "object" && !Array.isArray(profile.constraints)
         ? { ...(profile.constraints as Record<string, unknown>) } : {};
       constraints.exclusions = input.exclusions;
       constraints.goals = input.goals;
       if (input.market) constraints.market = input.market;
       else delete constraints.market;
-      const savedProfile = await tx.siteProfile.upsert({
+      await tx.siteProfile.upsert({
         where: { siteId: site.id },
         create: { siteId: site.id, projectId: principal.projectId, language: input.language,
-          topics: canonicalKnowledge ? undefined : json(input.topics), audience: canonicalKnowledge ? undefined : (input.audience === null ? Prisma.JsonNull : json(input.audience)),
+          topics: json(input.topics), audience: input.audience === null ? Prisma.JsonNull : json(input.audience),
           constraints: json(constraints) },
-        update: { language: input.language, ...(canonicalKnowledge ? {} : { topics: json(input.topics), audience: input.audience === null ? Prisma.JsonNull : json(input.audience) }), constraints: json(constraints) },
+        update: { language: input.language, topics: json(input.topics), audience: input.audience === null ? Prisma.JsonNull : json(input.audience), constraints: json(constraints) },
       });
       const policyData = { enabled: input.enabled, cadence: input.cadence, providers: json(input.providers),
         goals: json(input.goals), exclusions: json(input.exclusions), recencyDays: input.recencyDays,
@@ -89,9 +88,9 @@ export async function updateConnectorResearchPolicy(principal: ServicePrincipalC
         ? await tx.researchPolicy.update({ where: { siteId: site.id }, data: { ...policyData, revision: { increment: 1 } } })
         : await tx.researchPolicy.create({ data: { siteId: site.id, ...policyData, revision: 1 } });
       return { schemaVersion: "1.0", projectId: principal.projectId, siteId: site.id, revision: policy.revision,
-        topics: canonicalKnowledge ? (Array.isArray(savedProfile.topics) ? savedProfile.topics : []) : input.topics,
+        topics: input.topics,
         goals: input.goals, exclusions: input.exclusions, recencyDays: input.recencyDays,
-        audience: canonicalKnowledge ? (typeof savedProfile.audience === "string" ? savedProfile.audience : null) : input.audience, market: input.market, language: input.language,
+        audience: input.audience, market: input.market, language: input.language,
         providers: input.providers, cadence: input.cadence, enabled: input.enabled, maxSources: input.maxSources,
         monthlyBudget: input.monthlyBudget, autoDraft: input.autoDraft, autoAgent: input.autoAgent };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -153,20 +152,20 @@ export async function updateConnectorResearchProfile(
         goals: input.profile.goals,
         exclusions: input.profile.exclusions,
       };
-      const canonicalKnowledge = await tx.businessKnowledgeDocument.findUnique({ where: { projectId: principal.projectId }, select: { id: true } });
-      const savedProfile = await tx.siteProfile.upsert({
+      await tx.siteProfile.upsert({
         where: { siteId: site.id },
         create: {
           siteId: site.id,
           projectId: principal.projectId,
           language: input.profile.language,
-          topics: canonicalKnowledge ? undefined : input.profile.topics,
-          audience: canonicalKnowledge ? undefined : (input.profile.audience === null ? Prisma.JsonNull : input.profile.audience),
+          topics: input.profile.topics,
+          audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
           constraints,
         },
         update: {
           language: input.profile.language,
-          ...(canonicalKnowledge ? {} : { topics: input.profile.topics, audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience }),
+          topics: input.profile.topics,
+          audience: input.profile.audience === null ? Prisma.JsonNull : input.profile.audience,
           constraints,
         },
       });
@@ -207,10 +206,7 @@ export async function updateConnectorResearchProfile(
         projectId: principal.projectId,
         siteId: site.id,
         revision: policy.revision,
-        profile: canonicalKnowledge ? { ...input.profile,
-          topics: Array.isArray(savedProfile.topics) ? savedProfile.topics as string[] : [],
-          audience: typeof savedProfile.audience === "string" ? savedProfile.audience : null,
-        } : input.profile,
+        profile: input.profile,
         researchPolicy: input.researchPolicy,
         seoResearch: input.seoResearch,
       };

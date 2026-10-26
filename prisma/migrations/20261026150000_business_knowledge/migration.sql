@@ -1,5 +1,6 @@
 CREATE TABLE "BusinessKnowledgeDocument" (
   "id" TEXT NOT NULL,
+  "logicalId" TEXT NOT NULL,
   "projectId" TEXT NOT NULL,
   "revision" INTEGER NOT NULL DEFAULT 0,
   "acceptedRevision" INTEGER,
@@ -7,6 +8,7 @@ CREATE TABLE "BusinessKnowledgeDocument" (
   CONSTRAINT "BusinessKnowledgeDocument_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "BusinessKnowledgeDocument_projectId_key" ON "BusinessKnowledgeDocument"("projectId");
+CREATE UNIQUE INDEX "BusinessKnowledgeDocument_projectId_logicalId_key" ON "BusinessKnowledgeDocument"("projectId", "logicalId");
 CREATE INDEX "BusinessKnowledgeDocument_projectId_revision_idx" ON "BusinessKnowledgeDocument"("projectId", "revision");
 ALTER TABLE "BusinessKnowledgeDocument" ADD CONSTRAINT "BusinessKnowledgeDocument_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
