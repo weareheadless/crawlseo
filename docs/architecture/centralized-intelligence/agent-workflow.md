@@ -88,24 +88,44 @@ independently on separate branches with separate claims. The manager serializes
 claim writes to avoid a race; this does not serialize unrelated coding tasks.
 No issue automatically launches a coding agent.
 
-### If the worker has no GitHub shell credentials
+### Shared GitHub key on this coding host
 
-The manager uses the existing shared key to inspect readiness, submit the worker’s
-claim and publish/update its PR. The worker only needs the agreed main-based
-checkout, issue/claim details and local tools to implement and test. The manager
-can handle fetch/push when that worker’s environment lacks network access. Do not
-request a new token, copy a personal token into the repository or application env,
-or treat a missing worker `GH_TOKEN` as a missing product prerequisite.
+The existing key file is **`/SOCIAL/configs/github.env`**. Use its
+**`GITHUB_PROJECTS_TOKEN`** entry for the coordinator: it has the repository and
+Projects access needed by `GH_TOKEN`. A missing environment variable does not
+mean the key is unavailable. Load it into the current shell before pickup:
 
-When shell transport is available, run the coordinator from a checkout pinned to
-`21f1bc35e1fd9ebb537667489ce41d5370cdc13a` in Site-Agent. Supply the shared key
-through the environment or the host’s existing credential loader. Repository access
-and sandbox network permission are separate: use the normal permission mechanism
-for an authorized fetch/push. A credential cannot override sandbox restrictions.
-Before delegating, the manager verifies these operations and supplies exact
-checkout, branch, baseline and checker paths; a proposal-branch checkout is not
-the implementation workspace. If a remote environment cannot access this host’s
-paths, prepare the equivalent there or keep GitHub transport with the manager.
+```bash
+set +x
+set -a
+. /SOCIAL/configs/github.env
+set +a
+export GH_TOKEN="${GITHUB_PROJECTS_TOKEN:?Shared GitHub Projects token is missing}"
+```
+
+Do not print the key, dump the environment, add it to application `.env` files or
+commit it. The host credential configuration is
+`/SOCIAL/configs/host-credentials.yaml`; Site-Agent's existing credential loader
+reads the same file when a program needs it. No additional token is needed.
+These paths describe this shared coding host; a different host must expose the
+same authorized secret through its configured environment, not a repository copy.
+
+Run the coordinator from a Site-Agent checkout pinned to
+`21f1bc35e1fd9ebb537667489ce41d5370cdc13a`. The prepared local checkout is
+`/SEO/.agent-tools/site-agent`; verify its HEAD before use. Example, after saving
+your real run ID, main baseline, branch and scope in a plan JSON:
+
+```bash
+node /SEO/.agent-tools/site-agent/tools/agent-coordination/cli.mjs claim --plan /path/to/plan.json --dry-run
+node /SEO/.agent-tools/site-agent/tools/agent-coordination/cli.mjs claim --plan /path/to/plan.json
+```
+
+Repository access and sandbox network permission are separate. Use the normal
+permission mechanism for an authorized fetch/push; do not report a sandbox denial
+as a missing key. Work from an isolated current-main checkout, not the architecture
+proposal branch. The manager can handle GitHub transport on the worker’s behalf
+if a different environment cannot access this host; record the actual worker’s
+run ID in its claim.
 
 ## Status and release discipline
 
