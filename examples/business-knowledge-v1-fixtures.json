@@ -1,0 +1,106 @@
+{
+  "valid": [
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "displayName": "Northstar Studio",
+      "origin": { "system": "helloada", "externalId": "intake-42" },
+      "domain": null,
+      "credentialScope": { "audience": "business-knowledge", "permissions": ["project:read", "document:read", "document:write"] }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 3,
+      "state": "working",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": 2,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": { "kind": "owner_input", "sourceId": "conversation-42", "observedAt": "2026-10-25T09:00:00.000Z", "evidenceUri": "urn:helloada:conversation:42", "quote": "Northstar Studio" },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        },
+        "audience": {
+          "value": "Independent retailers",
+          "provenance": { "kind": "intake", "sourceId": "intake-42", "observedAt": "2026-10-25T09:00:00.000Z", "evidenceUri": "urn:helloada:intake:42" },
+          "publicationUse": "internal_only"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_write",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "expectedRevision": 3,
+      "idempotencyKey": "intake-42-write-003",
+      "reason": "Owner confirmed the current positioning",
+      "changes": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": { "kind": "owner_input", "sourceId": "conversation-43", "observedAt": "2026-10-25T11:00:00.000Z", "evidenceUri": "urn:helloada:conversation:43" },
+          "publicationUse": "approved"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_read",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "view": "accepted"
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "error",
+      "code": "REVISION_CONFLICT",
+      "message": "The document changed after the supplied revision.",
+      "retryable": true,
+      "currentRevision": 4
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "displayName": "Northstar Studio",
+      "origin": { "system": "helloada", "externalId": "intake-42" },
+      "credentialScope": { "audience": "business-knowledge", "permissions": [] },
+      "domain": "northstar.example"
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_write",
+      "workspaceId": "workspace-ada",
+      "projectId": "other-project",
+      "documentId": "business-profile",
+      "expectedRevision": 2,
+      "idempotencyKey": "short",
+      "reason": "Changed retry has a different body.",
+      "changes": { "businessName": { "value": "Different", "provenance": { "kind": "owner_input", "sourceId": "input-1", "observedAt": "2026-10-25T11:00:00.000Z", "evidenceUri": "urn:input:1" }, "publicationUse": "approved" } }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 0,
+      "state": "accepted",
+      "updatedAt": "2026-10-25T09:00:00.000Z",
+      "acceptedRevision": 0,
+      "fields": { "businessName": { "value": "Northstar Studio", "provenance": { "kind": "owner_input", "sourceId": "conversation-42", "observedAt": "2026-10-25T09:00:00.000Z", "evidenceUri": "urn:helloada:conversation:42" }, "publicationUse": "approved" } }
+    }
+  ]
+}

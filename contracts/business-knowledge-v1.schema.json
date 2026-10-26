@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://helloada.app/contracts/business-knowledge-v1.schema.json",
+  "title": "HelloAda shared business knowledge v1",
+  "description": "First-slice project registration and scoped business-document read/CAS-write wire contract. This is a contract, not a deployed endpoint or physical migration.",
+  "oneOf": [
+    { "$ref": "#/$defs/projectRegistration" },
+    { "$ref": "#/$defs/businessDocument" },
+    { "$ref": "#/$defs/documentWrite" },
+    { "$ref": "#/$defs/documentRead" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "identifier": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "projectRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "workspaceId", "projectId", "displayName", "origin", "credentialScope"],
+      "properties": {
+        "schemaVersion": { "const": "business-knowledge/1" },
+        "kind": { "const": "project_registration" },
+        "workspaceId": { "$ref": "#/$defs/identifier" },
+        "projectId": { "$ref": "#/$defs/identifier" },
+        "displayName": { "$ref": "#/$defs/nonEmpty" },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system", "externalId"],
+          "properties": {
+            "system": { "$ref": "#/$defs/identifier" },
+            "externalId": { "$ref": "#/$defs/identifier" }
+          }
+        },
+        "domain": { "type": ["string", "null"], "maxLength": 253, "format": "hostname" },
+        "credentialScope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["audience", "permissions"],
+          "properties": {
+            "audience": { "const": "business-knowledge" },
+            "permissions": { "type": "array", "items": { "enum": ["project:read", "document:read", "document:write"] }, "uniqueItems": true, "minItems": 1, "maxItems": 3 }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sourceId", "observedAt", "evidenceUri"],
+      "properties": {
+        "kind": { "enum": ["owner_input", "intake", "official_source", "research_observation", "ai_observation"] },
+        "sourceId": { "$ref": "#/$defs/identifier" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "evidenceUri": { "type": "string", "format": "uri", "maxLength": 2000 },
+        "quote": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance", "publicationUse"],
+      "properties": {
+        "value": { "type": ["string", "number", "boolean", "null", "array", "object"] },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "publicationUse": { "enum": ["approved", "internal_only", "prohibited", "unknown"] },
+        "locale": { "type": "string", "minLength": 2, "maxLength": 35 },
+        "validFrom": { "type": ["string", "null"], "format": "date-time" },
+        "validUntil": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "businessDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "workspaceId", "projectId", "documentId", "revision", "state", "updatedAt", "fields"],
+      "properties": {
+        "schemaVersion": { "const": "business-knowledge/1" },
+        "kind": { "const": "business_document" },
+        "workspaceId": { "$ref": "#/$defs/identifier" },
+        "projectId": { "$ref": "#/$defs/identifier" },
+        "documentId": { "$ref": "#/$defs/identifier" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "state": { "enum": ["working", "accepted"] },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "acceptedRevision": { "type": ["integer", "null"], "minimum": 1 },
+        "fields": { "type": "object", "minProperties": 1, "maxProperties": 100, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]{0,63}$" }, "additionalProperties": { "$ref": "#/$defs/fact" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "accepted" } } }, "then": { "properties": { "acceptedRevision": { "type": "integer", "minimum": 1 } }, "required": ["acceptedRevision"] } },
+        { "if": { "properties": { "state": { "const": "working" } } }, "then": { "properties": { "acceptedRevision": { "type": ["integer", "null"] } } } }
+      ]
+    },
+    "documentWrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "workspaceId", "projectId", "documentId", "expectedRevision", "idempotencyKey", "reason", "changes"],
+      "properties": {
+        "schemaVersion": { "const": "business-knowledge/1" },
+        "kind": { "const": "document_write" },
+        "workspaceId": { "$ref": "#/$defs/identifier" },
+        "projectId": { "$ref": "#/$defs/identifier" },
+        "documentId": { "$ref": "#/$defs/identifier" },
+        "expectedRevision": { "type": "integer", "minimum": 0 },
+        "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 240 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "changes": { "type": "object", "minProperties": 1, "maxProperties": 100, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]{0,63}$" }, "additionalProperties": { "$ref": "#/$defs/fact" } }
+      }
+    },
+    "documentRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "workspaceId", "projectId", "documentId", "view"],
+      "properties": {
+        "schemaVersion": { "const": "business-knowledge/1" },
+        "kind": { "const": "document_read" },
+        "workspaceId": { "$ref": "#/$defs/identifier" },
+        "projectId": { "$ref": "#/$defs/identifier" },
+        "documentId": { "$ref": "#/$defs/identifier" },
+        "view": { "enum": ["working", "accepted"] }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "code", "message", "retryable"],
+      "properties": {
+        "schemaVersion": { "const": "business-knowledge/1" },
+        "kind": { "const": "error" },
+        "code": { "enum": ["UNAUTHENTICATED", "FORBIDDEN", "NOT_FOUND", "ORIGIN_CONFLICT", "REVISION_CONFLICT", "IDEMPOTENCY_CONFLICT", "VALIDATION_FAILED", "UNAVAILABLE"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "retryable": { "type": "boolean" },
+        "currentRevision": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
