@@ -1,6 +1,7 @@
 # Centralized business intelligence and execution
 
-Status: proposed reference architecture, v0.1, 2026-10-25.
+Status: reviewed proposal, v0.2, 2026-10-25. The first release is a bounded
+HelloAda content slice; the full design includes later AI and platform work.
 
 [GitHub Project: Unified Business Intelligence](https://github.com/users/weareheadless/projects/3)
 
@@ -14,6 +15,8 @@ phases. Publishing this proposal does not activate customer automation.
 - [Implementation plan](implementation-plan.md)
 - [Coding-agent workflow](agent-workflow.md)
 - [Machine-readable work packages and dependencies](work-packages.json)
+- [Architecture review findings and simplifications](review.md)
+- [Requirement ownership and delivery scope](requirement-coverage.md)
 - [Decision 0001: authorities and shared intelligence](decisions/0001-authorities.md)
 
 Existing coordination anchors:

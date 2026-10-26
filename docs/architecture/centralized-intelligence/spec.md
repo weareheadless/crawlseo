@@ -1,6 +1,6 @@
 # Architecture specification
 
-Version 0.1 — proposed, 2026-10-25. Baseline is [code-inventory.md](code-inventory.md).
+Version 0.2 — reviewed proposal, 2026-10-25. Baseline is [code-inventory.md](code-inventory.md).
 Normative requirements use stable IDs. Proposed models and endpoints below are
 new design, not claims about current capabilities.
 
@@ -25,6 +25,36 @@ Excluded from centralization: CMS document ownership, private conversations,
 design generation, full assets, enquiries, contacts, bookings, owner login,
 platform secrets and infrastructure deployment. These retain existing owners.
 GitHub coordinates engineering; it is not the customer approval authority.
+
+### Minimal implementation and first release
+
+The target model below describes the full product, not a requirement to build a
+general-purpose knowledge graph or finish every platform before delivering value.
+Use the existing Next.js/Postgres application, Prisma, jobs, outbox and connector
+services. No new microservice, queue broker, vector database, workflow engine,
+plugin framework or shared runtime package is required for the first release.
+
+Start with a typed project business document and immutable revisions using the
+existing intake shape and provenance. Keep offerings, audiences, locations and
+claims as nested typed fields until independent queries justify separate tables.
+Reuse ResearchRun/Source/Finding and ResearchAction; add only the smallest
+project-scoped fields/records needed. Logical entities in section 4 are concepts,
+not a table-per-entity mandate. Reuse the existing v1 execution envelope unchanged
+unless a demonstrated capability cannot fit an additive, negotiated extension.
+
+The first proof is: intake facts saved once -> the same facts can be inspected
+and corrected in CrawlSEO -> one bounded sourced question returns to Ada -> one
+supported content improvement uses those facts and the existing review path.
+Start on a disposable project. Neither advanced schema auditing, multi-engine AI
+monitoring, Wix nor Webflow is a dependency of that HelloAda proof. AI requirements
+shape IDs, locale, evidence and observation boundaries now; provider integrations
+are implemented only when a concrete supported surface and budget are established.
+
+First make a correct whole-document revision refresh work. Identify relevant
+changed field paths and recheck bounded pending work; do not build a generic
+incremental dependency/invalidation graph. Add fine-grained optimization only
+after correctness and an actual workload justify it. No autonomous agent fleet or
+automatic issue-dispatch infrastructure is needed to implement these work packages.
 
 ## 2. System topology
 
@@ -122,6 +152,10 @@ write returns the original result. Imports retain old IDs and hashes.
 **KNOW-005:** Business, policy and content revisions are separate. Expose bounded
 views for intake/design/editorial/research/strategy. Pin exact consumed revisions
 on research runs, assessments and candidate review packages.
+An incomplete working intake can inform research before a design run exists;
+it must not replace a pinned accepted brief. Candidate content uses facts approved
+for that use, retaining their real actor/origin. A draft hypothesis never becomes
+an approved business claim merely because its snapshot was synchronized.
 
 **KNOW-006:** A correction identifies affected questions, coverage links and
 Actions. Reassess pending work whose inputs changed; do not rewrite history,
@@ -294,7 +328,8 @@ Prompt/model diagnostics belong in operator detail, not mandatory owner setup.
 An Action includes problem, recommendation, evidence refs, relevant questions/
 claims, input revisions, target identity, expected outcome, required capabilities,
 dependencies, acceptance criteria, priority basis and reassessment conditions.
-No executable target becomes a request for information or labelled analysis.
+An Action without a supported executable target becomes a request for information
+or labelled analysis; it must not be forced into a fabricated candidate.
 
 **EXEC-002:** One active executor per site with generation fencing. Keep binding
 transfer explicit; settle outstanding events, reservations and owner decisions.
@@ -309,6 +344,14 @@ current knowledge, content and evidence before candidate creation/application.
 rollback limitations. Publication receipts identify each actual effect, target,
 content hash and time. Verification separates API readback, live render and later
 outcome measurements. Partial application is not success.
+
+HelloAda's existing candidate path must be proven for the selected effect, not
+assumed correct because it exists. Source-maintenance review has an existing
+[Site-Agent #252 prerequisite](https://github.com/weareheadless/site-agent/issues/252).
+Until its exact render/review gates are met, source effects stay blocked. The
+first intelligence slice uses the independently validated Payload content path;
+it does not reopen or redesign the source/design pipeline. Missing proof for
+that content path is an explicit blocker at verification, not a prompt workaround.
 
 **EXEC-005:** Wix capabilities are per-operation, not a blanket `wix` permission.
 Custom Embeds, Wix Blog, CMS, SEO tags and source code have different authorities
@@ -360,6 +403,8 @@ data indefinitely merely to preserve an audit link.
 
 Business lifecycle: collecting -> confirmed -> live -> maintained; confirmation
 does not imply public release. Research can run before live under policy.
+These labels describe the journey; derive them from existing identity, intake and
+publication records rather than adding an independent lifecycle engine.
 
 Research: requested -> queued -> collecting -> synthesizing -> completed/partial/
 blocked/failed. An unavailable provider is not an empty successful research run.
@@ -395,6 +440,10 @@ point -> confirmed answer -> Ada-generated candidate -> exact owner review ->
 approved publication -> baseline crawl -> one improvement Action -> executor
 candidate -> publication receipt -> live verification -> outcome observation.
 All stages resolve to one project and explicit input/content revisions.
+This gate is for the first supported HelloAda content slice; schema expansion,
+AI sampling and other platforms have independent acceptance gates and do not
+block this proof. Track later capability qualification without claiming universal
+platform completion.
 
 **ACCEPT-002:** Repeat with an existing site, an owner correction, a failed provider,
 stale edit, duplicate event, interrupted publication and a transferred executor.
@@ -422,6 +471,12 @@ uniqueness, field status enum mapping, project credential bootstrapping, new sco
 names, retention periods and source reuse policy. AI provider task must settle
 available integrations, allowed surfaces and cost bounds. These are explicit
 dependencies, not permission to fabricate working endpoints or providers.
+
+UI-001 settles only the first-slice wire contract and migration shape before
+coding. It records future AI/question/source envelope requirements but does not
+specify every future API/provider in advance. Later work extends the reviewed
+contract through concrete fixtures. The initial admin editor needs business
+knowledge and existing policy records, not a completed question-coverage engine.
 
 ## 15. Primary external references
 

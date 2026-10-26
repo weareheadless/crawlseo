@@ -66,6 +66,11 @@ All paths are repository-relative. Site-Agent application paths below have prefi
    that must be reconciled with documented bridge APIs and target-specific human-
    only publication policies. Do not interpret existing code as blanket authority.
 9. No reviewed Webflow adapter was found in these repositories. It remains planned.
+10. Existing [Site-Agent #252](https://github.com/weareheadless/site-agent/issues/252)
+    tracks incomplete exact source-maintenance rendering/review. Its presence is
+    a capability-specific blocker, not evidence that all HelloAda candidate paths
+    work or a requirement to redesign that pipeline in this initiative. The first
+    content slice must prove its own existing Payload review path separately.
 
 ## Existing test anchors
 

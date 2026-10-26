@@ -20,6 +20,13 @@ Site-Agent's conversations, assets, creative context and design pipeline local.
 Keep content with its CMS and approval/execution with the assigned executor.
 Use existing connector state, events, budgets and candidate receipts.
 
+Implementation starts with one typed business document and revision history,
+not a normalized business ontology or a new service. Reuse the current execution
+envelope and existing infrastructure. A first HelloAda content proof can ship
+independently of schema expansion, AI-monitoring providers and other platforms.
+These constraints refine the proposal after architecture review; they do not
+remove the full-product provenance, locale, privacy or evidence requirements.
+
 Transfer knowledge ownership explicitly after import/read comparison; until then,
 existing origin records remain authoritative. A synchronized snapshot alone is
 not an authority transfer. An admin may change facts through the canonical

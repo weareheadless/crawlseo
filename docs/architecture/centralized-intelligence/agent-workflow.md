@@ -52,6 +52,26 @@ Never assign an arbitrary human as owner just to populate a field.
 8. Leave production changes to the existing reviewed release path and exact target
    authorization. Do not expose credentials or put tenant private data in issues.
 
+Start with [implementation-plan.md](implementation-plan.md), then read only the
+owning issue's requirement sections and direct dependencies. The complete spec
+is context; it is not the scope of every task. Source maps are starting points,
+not an instruction to review or refactor the whole repository on every pickup.
+Keep existing working behavior when a task can be satisfied by a small adapter.
+
+For each pickup, record a short handoff: issue/work ID, current baseline, consumed
+contract commit, existing code being reused, bounded change, tests, and remaining
+blockers. Stop at the issue's acceptance boundary. If implementation reveals a
+new requirement, update the owning issue/spec rather than adding a parallel
+workflow or silently expanding the PR. Long work packages may use a checklist of
+small PRs on the same issue; add a sub-issue only for independently owned work.
+
+Architecture PR #27 is a proposed design reference. Ready UI-001/UI-013 permits
+contract/inventory work; it does not approve a breaking schema, credential or
+customer cutover. Implement against a reviewed concrete contract commit. A
+downstream dependency is satisfied by that deliverable and its tests, not merely
+by an issue being closed. Verify active ownership/claims before starting; none of
+the issues assigns a person or launches a coding agent automatically.
+
 ## Status and release discipline
 
 Use Proposed -> Specified -> Ready -> In progress -> In review -> Merged -> Verified.
@@ -61,8 +81,10 @@ open until integration/pilot evidence exists; use separate release-gate issues
 when implementation issues close at merge.
 
 Project fields: Work ID, Area, Phase, Priority, Readiness and Status. Repository
-is native metadata. Views: Roadmap, Ready for agents, Cross-repo dependencies,
-Contract changes, Verification gates and Blocked. Automation should add matching
+is native metadata. Configured views: All work, Ready for agents, Blocked,
+Deferred capabilities, AI visibility, Verification gates and Delivery board. Later platform work is
+explicitly Deferred, not merely waiting to become ready when a contract closes.
+Automation should add matching
 issues/PRs and reflect review/merge status only when configured and tested; never
 mark Verified automatically from merge. Use actual issue relationships for
 blocking/sub-issues where permissions allow, plus readable dependency links.
@@ -79,3 +101,12 @@ There is no unattended manager/worker running merely because this file exists.
 Agent dispatch or recurring review automation must be explicitly configured and
 authorized. Until then, agents pick linked Ready issues and PM updates occur in
 the active work session.
+
+## Existing execution blockers
+
+Site-Agent #252 tracks unfinished exact source-maintenance review. Link it as a
+capability prerequisite if working on source effects; do not invent an initial-
+design parent, bypass review, or block unrelated Payload content work on it.
+Every executor capability must have proof of its own preparation/review path.
+Keep UI-018 focused on the first HelloAda content proof. Wix, advanced AI and
+Webflow qualify in their own tasks; no platform is advertised from a mock pass.

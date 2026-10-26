@@ -4,15 +4,16 @@
   "projectURL": "https://github.com/users/weareheadless/projects/3",
   "initiativeURL": "https://github.com/weareheadless/crawlseo/issues/3",
   "architecturePR": "https://github.com/weareheadless/crawlseo/pull/27",
-  "note": "Initial readiness is a planning snapshot. Recheck live native issue dependencies, contract versions and active PRs before claiming work.",
+  "note": "Reviewed delivery plan: first HelloAda content slice; advanced schema/AI monitoring and platform pilots are independent Deferred capabilities. Recheck live dependencies, artifacts and claims before work.",
   "items": [
     {
       "id": "UI-001",
       "repository": "weareheadless/crawlseo",
       "issue": "https://github.com/weareheadless/crawlseo/issues/15",
       "dependsOn": [],
-      "initialReadiness": "ready-for-contract-or-inventory",
-      "title": "[UI-001] Define versioned project knowledge and intelligence contracts"
+      "initialReadiness": "Ready",
+      "title": "[UI-001] Define the first shared knowledge handoff and compatibility fixtures",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-002",
@@ -21,8 +22,9 @@
       "dependsOn": [
         "UI-001"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-002] Support domainless intelligence projects and project-scoped jobs"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-002] Register prelaunch projects without fake sites or Google prerequisites",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-003",
@@ -32,8 +34,9 @@
         "UI-001",
         "UI-002"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-003] Implement sourced business knowledge revisions and correction impact"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-003] Implement sourced business knowledge revisions and correction impact",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-004",
@@ -43,8 +46,9 @@
         "UI-001",
         "UI-003"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-004] Map confirmed intake and accepted context to shared knowledge"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-004] Map confirmed intake and accepted context to shared knowledge",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-005",
@@ -55,8 +59,9 @@
         "UI-002",
         "UI-003"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-005] Centralize research requests and reusable source observations"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-005] Centralize research requests and reusable source observations",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-006",
@@ -66,8 +71,9 @@
         "UI-004",
         "UI-005"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-006] Route incubation research through CrawlSEO and retire duplicate dispatch"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-006] Route incubation research through CrawlSEO and retire duplicate dispatch",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-007",
@@ -77,31 +83,31 @@
         "UI-003",
         "UI-005"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-007] Link customer questions, business evidence and actual content coverage"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-007] Link customer questions, business evidence and actual content coverage",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-008",
       "repository": "weareheadless/crawlseo",
       "issue": "https://github.com/weareheadless/crawlseo/issues/20",
       "dependsOn": [
-        "UI-003",
-        "UI-005",
-        "UI-007"
+        "UI-003"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-008] Expose inspectable intelligence and unify configuration writers"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-008] Expose a correctable business profile through existing admin services",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-009",
       "repository": "weareheadless/crawlseo",
       "issue": "https://github.com/weareheadless/crawlseo/issues/21",
       "dependsOn": [
-        "UI-003",
-        "UI-007"
+        "UI-003"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-009] Audit schema semantics and visible business-content consistency"
+      "initialReadiness": "Deferred",
+      "title": "[UI-009] Audit schema semantics and visible business-content consistency",
+      "deliveryTrack": "Later capability"
     },
     {
       "id": "UI-010",
@@ -109,11 +115,11 @@
       "issue": "https://github.com/weareheadless/crawlseo/issues/22",
       "dependsOn": [
         "UI-001",
-        "UI-003",
-        "UI-005"
+        "UI-003"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-010] Implement truthful AI access and visibility observation contracts"
+      "initialReadiness": "Deferred",
+      "title": "[UI-010] Implement truthful AI access and visibility observation contracts",
+      "deliveryTrack": "Later capability"
     },
     {
       "id": "UI-011",
@@ -123,8 +129,9 @@
         "UI-007",
         "UI-010"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-011] Turn AI citation gaps into shared Actions and measurable outcomes"
+      "initialReadiness": "Deferred",
+      "title": "[UI-011] Turn AI citation gaps into shared Actions and measurable outcomes",
+      "deliveryTrack": "Later capability"
     },
     {
       "id": "UI-012",
@@ -135,16 +142,18 @@
         "UI-006",
         "UI-007"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-012] Carry shared intelligence through design, launch and ongoing execution"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-012] Carry shared intelligence through design, launch and ongoing execution",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-013",
       "repository": "weareheadless/wix-site-bridge",
       "issue": "https://github.com/weareheadless/wix-site-bridge/issues/5",
       "dependsOn": [],
-      "initialReadiness": "ready-for-contract-or-inventory",
-      "title": "[UI-013] Reconcile generic bridge capabilities with CrawlSEO consumer expectations"
+      "initialReadiness": "Ready",
+      "title": "[UI-013] Inventory Wix bridge compatibility and define the smallest adapter contract",
+      "deliveryTrack": "Independent bridge inventory"
     },
     {
       "id": "UI-014",
@@ -154,19 +163,20 @@
         "UI-001",
         "UI-013"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-014] Qualify Wix execution adapter with exact effect approval and receipts"
+      "initialReadiness": "Deferred",
+      "title": "[UI-014] Qualify Wix execution adapter with exact effect approval and receipts",
+      "deliveryTrack": "Later capability"
     },
     {
       "id": "UI-015",
       "repository": "weareheadless/crawlseo",
       "issue": "https://github.com/weareheadless/crawlseo/issues/25",
       "dependsOn": [
-        "UI-001",
-        "UI-014"
+        "UI-001"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-015] Specify and qualify a bounded Webflow intelligence execution adapter"
+      "initialReadiness": "Deferred",
+      "title": "[UI-015] Specify and qualify a bounded Webflow intelligence execution adapter",
+      "deliveryTrack": "Later capability"
     },
     {
       "id": "UI-016",
@@ -177,8 +187,9 @@
         "UI-006",
         "UI-012"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-016] Complete knowledge/research cutover and retire duplicate producers"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-016] Complete knowledge/research cutover and retire duplicate producers",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-017",
@@ -187,8 +198,9 @@
       "dependsOn": [
         "UI-002"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-017] Preserve one intelligence project identity across selector bootstrap and handoff"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-017] Preserve one intelligence project identity across selector bootstrap and handoff",
+      "deliveryTrack": "First HelloAda slice"
     },
     {
       "id": "UI-018",
@@ -196,15 +208,14 @@
       "issue": "https://github.com/weareheadless/crawlseo/issues/26",
       "dependsOn": [
         "UI-008",
-        "UI-009",
-        "UI-011",
         "UI-012",
-        "UI-014",
         "UI-016",
         "UI-017"
       ],
-      "initialReadiness": "blocked",
-      "title": "[UI-018] Qualify cross-repository intelligence journey and maintain release evidence"
+      "initialReadiness": "Blocked by dependencies",
+      "title": "[UI-018] Verify the first HelloAda content intelligence release",
+      "deliveryTrack": "First HelloAda slice"
     }
-  ]
+  ],
+  "designVersion": "0.2"
 }
