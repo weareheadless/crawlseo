@@ -20,6 +20,23 @@ describe("shared business knowledge v1 producer/consumer fixtures", () => {
     }
   });
 
+  it("specifies consumer outcomes for stale revisions, changed retries and wrong-project access", () => {
+    expect(fixtures.conflictCases.map(({ name }) => name)).toEqual([
+      "stale-revision",
+      "same-idempotency-key-different-body",
+      "wrong-project-scope",
+    ]);
+    for (const { request, response } of fixtures.conflictCases) {
+      expect(validate(request)).toBe(true);
+      expect(validate(response)).toBe(true);
+    }
+    expect(fixtures.conflictCases.map(({ response }) => response.code)).toEqual([
+      "REVISION_CONFLICT",
+      "IDEMPOTENCY_CONFLICT",
+      "NOT_FOUND",
+    ]);
+  });
+
   it("keeps business identity independent of an optional public domain", () => {
     const registration = fixtures.valid[0];
     expect(registration.domain).toBeNull();
