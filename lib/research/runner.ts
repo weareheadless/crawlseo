@@ -8,6 +8,8 @@ import {
   researchMonthBounds,
   saveResearchSources,
   reusableResearchSources,
+  claimResearchDispatch,
+  releaseResearchDispatch,
 } from "@/lib/research/service";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
@@ -309,19 +311,39 @@ export async function runResearchRun(runId: string) {
     const reusable = cached.flat();
     const reusedQueries = new Set(reusable.map((source) => `${source.provider}:${String(source.metadata?.query ?? "").toLowerCase()}`));
     for (const source of reusable) collected.set(source.contentHash, source);
+    const heldClaims: Array<{ provider: string; query: string; owner: string }> = [];
+    const dispatchClaimed = async (provider: string, topic: string, fetchSources: () => Promise<Awaited<ReturnType<typeof fetchRedditRssSearch>>>) => {
+      if (!run.projectId || reusedQueries.has(`${provider}:${topic.toLowerCase()}`)) return null;
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const owner = await claimResearchDispatch(run.projectId, provider, topic);
+        if (owner) {
+          heldClaims.push({ provider, query: topic, owner });
+          return await fetchSources();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const found = await reusableResearchSources({ projectId: run.projectId, provider, queries: [topic], recencyDays, excludedDomains });
+        if (found.length) {
+          for (const source of found) collected.set(source.contentHash, source);
+          reusedQueries.add(`${provider}:${topic.toLowerCase()}`);
+          return null;
+        }
+      }
+      throw new Error("Timed out waiting for concurrent research dispatch");
+    };
     let requestIndex = 0;
 
     for (const plan of queryPlan) {
       const topic = plan.query;
       if (useReddit && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
         try {
-          const sources = await fetchRedditRssSearch({
+          const sources = await dispatchClaimed("reddit_rss", topic, () => fetchRedditRssSearch({
             query: topic,
             sort: "relevance",
             timeWindow: "year",
             limit: 10,
-          });
-          for (const source of sources) collected.set(source.contentHash, { ...source,
+          }));
+          for (const source of sources ?? []) collected.set(source.contentHash, { ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
@@ -331,13 +353,13 @@ export async function runResearchRun(runId: string) {
       }
       if (providers.includes("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
-          const sources = await fetchGoogleNewsRssSearch({
+          const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
             query: topic,
             language,
             country,
             limit: 10,
-          });
-          for (const source of sources) collected.set(source.contentHash, { ...source,
+          }));
+          for (const source of sources ?? []) collected.set(source.contentHash, { ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
@@ -372,6 +394,7 @@ export async function runResearchRun(runId: string) {
         metadata: source.metadata,
       })),
     );
+    for (const claim of heldClaims) await releaseResearchDispatch(run.projectId!, claim.provider, claim.query, claim.owner);
 
     const existingFindings = await db.researchFinding.findMany({
       where: { runId: run.id },

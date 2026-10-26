@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -399,6 +399,28 @@ export async function reusableResearchSources(input: { projectId: string; provid
     return querySet.has(query) && !excluded && identity.currentHash === source.contentHash && observationWithinRecencyWindow(source.retrievedAt, input.recencyDays);
   }).map(({ source }) => ({ provider: source.provider, url: source.url, title: source.title ?? "", publishedAt: source.publishedAt?.toISOString(), excerpt: source.excerpt ?? "", contentHash: source.contentHash!, language: source.language ?? undefined,
     metadata: { ...(source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata) ? source.metadata as Record<string, unknown> : {}), retrieved_at: source.retrievedAt.toISOString(), reused: true } as Record<string, unknown> }));
+}
+
+/** Database-backed per-project/provider/query lease; contenders wait for the first run to persist observations. */
+export async function claimResearchDispatch(projectId: string, provider: string, query: string): Promise<string | null> {
+  const owner = randomUUID();
+  const requestKey = createHash("sha256").update(query.normalize("NFKC").trim().toLowerCase()).digest("hex");
+  const now = new Date();
+  const leaseExpiresAt = new Date(now.getTime() + 60_000);
+  const inserted = await db.researchDispatchClaim.createMany({
+    data: [{ projectId, provider, requestKey, owner, leaseExpiresAt }], skipDuplicates: true,
+  });
+  if (inserted.count === 1) return owner;
+  const reclaimed = await db.researchDispatchClaim.updateMany({
+    where: { projectId, provider, requestKey, leaseExpiresAt: { lte: now } },
+    data: { owner, leaseExpiresAt },
+  });
+  return reclaimed.count === 1 ? owner : null;
+}
+
+export async function releaseResearchDispatch(projectId: string, provider: string, query: string, owner: string): Promise<void> {
+  const requestKey = createHash("sha256").update(query.normalize("NFKC").trim().toLowerCase()).digest("hex");
+  await db.researchDispatchClaim.updateMany({ where: { projectId, provider, requestKey, owner }, data: { leaseExpiresAt: new Date(0) } });
 }
 
 export async function createResearchFinding(

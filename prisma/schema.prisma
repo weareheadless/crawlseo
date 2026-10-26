@@ -70,6 +70,7 @@ model Project {
   siteProfiles               SiteProfile[]
   researchRuns               ResearchRun[]
   researchSourceIdentities   ResearchSourceIdentity[]
+  researchDispatchClaims    ResearchDispatchClaim[]
   researchActions            ResearchAction[]
   connectorBindings          ConnectorBinding[]
   connectorBindingTransfers  ConnectorBindingTransfer[]
@@ -642,6 +643,19 @@ model ResearchSourceIdentity {
 
   @@unique([projectId, provider, normalizedUrl])
   @@index([projectId, provider, sourceId])
+}
+
+model ResearchDispatchClaim {
+  id           String   @id @default(cuid())
+  projectId    String
+  provider     String
+  requestKey   String
+  owner        String
+  leaseExpiresAt DateTime
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, provider, requestKey])
+  @@index([leaseExpiresAt])
 }
 
 model ResearchSource {
