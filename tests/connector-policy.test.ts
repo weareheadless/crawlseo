@@ -5,6 +5,7 @@ const mockDb = vi.hoisted(() => ({
   site: { findFirst: vi.fn() },
   siteProfile: { findUnique: vi.fn(), upsert: vi.fn() },
   researchPolicy: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
+  businessKnowledgeDocument: { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
@@ -21,10 +22,12 @@ describe("project-scoped research policy contract", () => {
     mockDb.site.findFirst.mockResolvedValue({ id: "site-1", projectId: "project-1", project: { id: "project-1" } });
     mockDb.$transaction.mockImplementation(async (callback) => callback({
       $queryRaw: mockDb.$queryRaw, siteProfile: mockDb.siteProfile, researchPolicy: mockDb.researchPolicy,
+      businessKnowledgeDocument: mockDb.businessKnowledgeDocument,
     }));
     mockDb.siteProfile.findUnique.mockResolvedValue(null);
     mockDb.siteProfile.upsert.mockResolvedValue({});
     mockDb.researchPolicy.findUnique.mockResolvedValue(null);
+    mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue(null);
     mockDb.researchPolicy.create.mockImplementation(async ({ data }) => ({ ...data }));
     mockDb.researchPolicy.update.mockImplementation(async ({ data }) => ({ revision: 4, ...data }));
   });

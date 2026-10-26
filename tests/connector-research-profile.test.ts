@@ -8,6 +8,7 @@ const mockDb = vi.hoisted(() => ({
   researchPolicy: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
   seoResearchPolicy: { upsert: vi.fn() },
   connectorOperationReceipt: { findUnique: vi.fn(), create: vi.fn() },
+  businessKnowledgeDocument: { findUnique: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
@@ -58,9 +59,11 @@ describe("atomic research profile contract", () => {
       researchPolicy: mockDb.researchPolicy,
       seoResearchPolicy: mockDb.seoResearchPolicy,
       connectorOperationReceipt: mockDb.connectorOperationReceipt,
+      businessKnowledgeDocument: mockDb.businessKnowledgeDocument,
     }));
     mockDb.connectorOperationReceipt.findUnique.mockResolvedValue(null);
     mockDb.connectorOperationReceipt.create.mockResolvedValue({});
+    mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue(null);
     mockDb.researchPolicy.findUnique.mockResolvedValue(null);
     mockDb.researchPolicy.create.mockImplementation(async ({ data }) => ({ ...data }));
     mockDb.researchPolicy.update.mockImplementation(async ({ data }) => ({ revision: 4, ...data }));
@@ -120,5 +123,15 @@ describe("atomic research profile contract", () => {
   it("rejects an idempotency key reused with a different payload", async () => {
     mockDb.connectorOperationReceipt.findUnique.mockResolvedValue({ requestHash: "different", result: { revision: 1 } });
     await expect(updateConnectorResearchProfile(principal, input)).rejects.toThrow("different research profile");
+  });
+
+  it("keeps canonical business fields out of the legacy profile writer", async () => {
+    mockDb.businessKnowledgeDocument.findUnique.mockResolvedValue({ id: "doc-1" });
+    mockDb.siteProfile.upsert.mockResolvedValue({ topics: ["canonical topic"], audience: "canonical audience" });
+    await expect(updateConnectorResearchProfile(principal, input)).resolves.toMatchObject({ profile: { topics: ["canonical topic"], audience: "canonical audience" } });
+    expect(mockDb.siteProfile.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.not.objectContaining({ topics: expect.anything(), audience: expect.anything() }),
+      update: expect.not.objectContaining({ topics: expect.anything(), audience: expect.anything() }),
+    }));
   });
 });
