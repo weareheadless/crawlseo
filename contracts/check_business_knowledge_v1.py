@@ -32,6 +32,9 @@ def resolve_conflict(case):
     state = case["state"]
     if (request["workspaceId"], request["projectId"]) != (credential["workspaceId"], credential["projectId"]):
         return "NOT_FOUND"
+    required_permission = "document:read" if request["kind"] == "document_read" else "document:write"
+    if required_permission not in credential["permissions"]:
+        return "FORBIDDEN"
     if case.get("priorRequest"):
         prior = case["priorRequest"]
         if prior["idempotencyKey"] == request["idempotencyKey"]:
@@ -46,11 +49,17 @@ def main():
         require(not list(VALIDATOR.iter_errors(fixture)), f"valid fixture {index} rejected by schema")
         if fixture["kind"] == "business_document":
             require(valid_lifecycle(fixture), f"valid document {index} has an impossible acceptance pin")
+        if fixture["kind"] == "project_registration":
+            origin = fixture["origin"]
+            require(origin["system"] + ":" + origin["externalId"] == fixture["externalProjectId"], "registration external ID must encode its origin tuple")
+        if fixture["kind"] == "project_registration_result":
+            require(fixture["projectId"] != fixture["externalProjectId"], "registration result must distinguish server and external IDs")
 
     for index, fixture in enumerate(FIXTURES["invalid"]):
         errors = list(VALIDATOR.iter_errors(fixture))
         lifecycle_invalid = fixture.get("kind") == "business_document" and not valid_lifecycle(fixture)
-        require(errors or lifecycle_invalid, f"invalid fixture {index} was accepted")
+        registration_invalid = fixture.get("kind") == "project_registration" and "origin" in fixture and "externalProjectId" in fixture and fixture["origin"]["system"] + ":" + fixture["origin"]["externalId"] != fixture["externalProjectId"]
+        require(errors or lifecycle_invalid or registration_invalid, f"invalid fixture {index} was accepted")
 
     expected = {
         "stale-revision": "REVISION_CONFLICT",
@@ -73,7 +82,10 @@ def main():
     for case in FIXTURES["historicalReadCases"]:
         require(not list(VALIDATOR.iter_errors(case["read"])), f"historical read {case['name']} rejected by schema")
         require(case["read"]["view"] == "accepted", "historical snapshot example must request accepted view")
-        require(case["result"]["revision"] == case["state"]["acceptedRevision"], "accepted view must return the pinned historical revision")
+        requested_revision = case["read"].get("revision")
+        require(requested_revision in case["state"]["acceptedRevisions"], "an explicit accepted read must reference an acceptance event")
+        require(requested_revision < case["state"]["acceptedRevision"], "historical read fixture must select an older accepted revision after pointer advance")
+        require(case["result"]["revision"] == requested_revision, "explicit revision read must return that exact snapshot")
 
     print(f"Python consumer compatibility passed: {len(FIXTURES['valid'])} valid, {len(FIXTURES['invalid'])} invalid, {len(FIXTURES['conflictCases'])} conflicts, {len(FIXTURES['acceptanceCases']) + len(FIXTURES['historicalReadCases'])} lifecycle cases")
 

@@ -53,12 +53,13 @@
             "quote": "Northstar Studio",
             "originSystem": "helloada",
             "originRecordId": "conversation-42",
-            "originRevision": 1,
+            "originRevision": "v7",
             "actor": {
               "type": "owner",
               "id": "conversation-42"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
           },
           "publicationUse": "approved",
           "locale": "en-US"
@@ -74,12 +75,13 @@
             "evidenceUri": "urn:helloada:intake:42",
             "originSystem": "helloada",
             "originRecordId": "intake-42",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "service",
               "id": "intake-42"
             },
-            "status": "verified"
+            "status": "verified",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
           },
           "publicationUse": "internal_only"
         }
@@ -104,12 +106,13 @@
             "evidenceUri": "urn:helloada:conversation:43",
             "originSystem": "helloada",
             "originRecordId": "conversation-43",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "owner",
               "id": "conversation-43"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T12:30:00.000Z"
           },
           "publicationUse": "approved"
         }
@@ -143,6 +146,61 @@
       "actor": {
         "type": "owner",
         "id": "owner-42"
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 2,
+      "state": "accepted",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": 2,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "quote": "Northstar Studio",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        },
+        "audienceMotivations": {
+          "value": [
+            "Independent retailers"
+          ],
+          "provenance": {
+            "kind": "intake",
+            "sourceId": "intake-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:intake:42",
+            "originSystem": "helloada",
+            "originRecordId": "intake-42",
+            "originRevision": null,
+            "actor": {
+              "type": "service",
+              "id": "intake-42"
+            },
+            "status": "verified",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "internal_only"
+        }
       }
     }
   ],
@@ -182,12 +240,13 @@
             "evidenceUri": "urn:input:1",
             "originSystem": "helloada",
             "originRecordId": "input-1",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "owner",
               "id": "input-1"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T12:30:00.000Z"
           },
           "publicationUse": "approved"
         }
@@ -213,12 +272,13 @@
             "evidenceUri": "urn:helloada:conversation:42",
             "originSystem": "helloada",
             "originRecordId": "conversation-42",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "owner",
               "id": "conversation-42"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
           },
           "publicationUse": "approved"
         }
@@ -245,12 +305,13 @@
             "quote": "Northstar Studio",
             "originSystem": "helloada",
             "originRecordId": "conversation-42",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "owner",
               "id": "conversation-42"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
           },
           "publicationUse": "approved",
           "locale": "en-US"
@@ -280,17 +341,56 @@
             "quote": "Northstar Studio",
             "originSystem": "helloada",
             "originRecordId": "conversation-42",
-            "originRevision": 1,
+            "originRevision": null,
             "actor": {
               "type": "owner",
               "id": "conversation-42"
             },
-            "status": "owner_confirmed"
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
           },
           "publicationUse": "approved",
           "locale": "en-US"
         }
       }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "workspaceId": "workspace-ada",
+      "displayName": "Northstar Studio",
+      "domain": null,
+      "credentialScope": {
+        "audience": "business-knowledge",
+        "permissions": [
+          "project:read",
+          "document:read",
+          "document:write"
+        ]
+      },
+      "externalProjectId": "helloada:intake-42",
+      "idempotencyKey": "intake-42-register-001"
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "workspaceId": "workspace-ada",
+      "displayName": "Northstar Studio",
+      "origin": {
+        "system": "helloada",
+        "externalId": "intake-42"
+      },
+      "domain": null,
+      "credentialScope": {
+        "audience": "business-knowledge",
+        "permissions": [
+          "project:read",
+          "document:read",
+          "document:write"
+        ]
+      },
+      "externalProjectId": "other:intake-42",
+      "idempotencyKey": "intake-42-register-001"
     }
   ],
   "conflictCases": [
@@ -315,12 +415,13 @@
               "evidenceUri": "urn:helloada:conversation:44",
               "originSystem": "helloada",
               "originRecordId": "conversation-44",
-              "originRevision": 1,
+              "originRevision": null,
               "actor": {
                 "type": "owner",
                 "id": "conversation-44"
               },
-              "status": "owner_confirmed"
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
             },
             "publicationUse": "approved"
           }
@@ -372,12 +473,13 @@
               "evidenceUri": "urn:helloada:conversation:43",
               "originSystem": "helloada",
               "originRecordId": "conversation-43",
-              "originRevision": 1,
+              "originRevision": null,
               "actor": {
                 "type": "owner",
                 "id": "conversation-43"
               },
-              "status": "owner_confirmed"
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
             },
             "publicationUse": "approved"
           }
@@ -425,12 +527,13 @@
               "evidenceUri": "urn:helloada:conversation:43",
               "originSystem": "helloada",
               "originRecordId": "conversation-43",
-              "originRevision": 1,
+              "originRevision": null,
               "actor": {
                 "type": "owner",
                 "id": "conversation-43"
               },
-              "status": "owner_confirmed"
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
             },
             "publicationUse": "approved"
           }
@@ -511,9 +614,13 @@
         "workspaceId": "workspace-ada",
         "projectId": "project-42",
         "documentId": "business-profile",
-        "revision": 4,
+        "revision": 5,
         "state": "working",
-        "acceptedRevision": 3
+        "acceptedRevision": 4,
+        "acceptedRevisions": [
+          3,
+          4
+        ]
       },
       "read": {
         "schemaVersion": "business-knowledge/1",
@@ -521,7 +628,8 @@
         "workspaceId": "workspace-ada",
         "projectId": "project-42",
         "documentId": "business-profile",
-        "view": "accepted"
+        "view": "accepted",
+        "revision": 3
       },
       "result": {
         "revision": 3
