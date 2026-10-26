@@ -1,6 +1,6 @@
 # Agent task coordination
 
-Use the [shared pickup, review and manager commands](https://github.com/weareheadless/site-agent/blob/ecf778d74123ee643ff9bf4a827bd50eb1a0f6b7/docs/agent-coordination.md).
+Use the [shared pickup, review and manager commands](https://github.com/weareheadless/site-agent/blob/21f1bc35e1fd9ebb537667489ce41d5370cdc13a/docs/agent-coordination.md).
 This repo pins that one checker; it does not maintain another coordinator implementation.
 
 Give the agent its issue URL. It records a bounded claim and an early draft PR,
