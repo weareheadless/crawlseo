@@ -362,7 +362,11 @@ export async function applyEmbedDelivery(
         completedAt: new Date(),
       },
     });
-    if (finalized.count !== 1) throw new WixEmbedDeliveryError("Embed effect was recorded but task finalization raced another executor", 409);
+    if (finalized.count !== 1) {
+      const existing = await tx.agentTask.findUnique({ where: { id: task.id } });
+      if (existing?.status === "PUBLISHED") return existing;
+      throw new WixEmbedDeliveryError("Embed effect was recorded but task finalization raced another executor", 409);
+    }
     const result = await tx.agentTask.findUnique({ where: { id: task.id } });
     if (task.actionId) {
       await tx.delivery.create({
