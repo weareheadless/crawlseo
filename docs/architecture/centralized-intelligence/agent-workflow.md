@@ -11,6 +11,10 @@ planned capability until its repository/adapter and pilot are established.
 Canonical initiative: CrawlSEO #3; preserve #14 and Site-Agent #330 as existing
 workstreams rather than duplicating their histories.
 
+`work-packages.json` provides stable work IDs, issue URLs and dependency edges
+for agent tooling. Its initial readiness is a planning snapshot, not a live
+dispatch authorization; check GitHub issue relationships and active claims.
+
 ## Issue contract
 
 Every implementation issue must contain:

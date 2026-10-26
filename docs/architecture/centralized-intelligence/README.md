@@ -13,6 +13,7 @@ phases. Publishing this proposal does not activate customer automation.
 - [Code inventory and baseline](code-inventory.md)
 - [Implementation plan](implementation-plan.md)
 - [Coding-agent workflow](agent-workflow.md)
+- [Machine-readable work packages and dependencies](work-packages.json)
 - [Decision 0001: authorities and shared intelligence](decisions/0001-authorities.md)
 
 Existing coordination anchors:
