@@ -288,6 +288,18 @@ export async function runResearchRun(runId: string) {
     const useNews = providers.includes("news");
     const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news");
     const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
+    const addCollected = (source: Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]) => {
+      const previous = collected.get(source.contentHash);
+      const oldMeta = previous?.metadata ?? {};
+      const newMeta = source.metadata ?? {};
+      const queryKeys = [...new Set([
+        ...(Array.isArray(oldMeta.query_keys) ? oldMeta.query_keys.filter((item): item is string => typeof item === "string") : []),
+        ...(typeof oldMeta.query === "string" ? [oldMeta.query] : []),
+        ...(Array.isArray(newMeta.query_keys) ? newMeta.query_keys.filter((item): item is string => typeof item === "string") : []),
+        ...(typeof newMeta.query === "string" ? [newMeta.query] : []),
+      ].map((query) => query.trim().toLowerCase()).filter(Boolean))];
+      collected.set(source.contentHash, { ...source, metadata: { ...oldMeta, ...newMeta, query_keys: queryKeys } });
+    };
     const sourceErrors: string[] = unsupportedProviders.map((provider) => provider === "web"
       ? "web: general web search is not implemented; Google News RSS is available through the news provider"
       : `${provider}: provider is not implemented; no results were reported for this capability`);
@@ -310,7 +322,7 @@ export async function runResearchRun(runId: string) {
     ]) : [];
     const reusable = cached.flat();
     const reusedQueries = new Set(reusable.map((source) => `${source.provider}:${String(source.metadata?.query ?? "").toLowerCase()}`));
-    for (const source of reusable) collected.set(source.contentHash, source);
+    for (const source of reusable) addCollected(source);
     const heldClaims: Array<{ provider: string; query: string; owner: string }> = [];
     const dispatchClaimed = async (provider: string, topic: string, fetchSources: () => Promise<Awaited<ReturnType<typeof fetchRedditRssSearch>>>) => {
       if (!run.projectId || reusedQueries.has(`${provider}:${topic.toLowerCase()}`)) return null;
@@ -318,13 +330,20 @@ export async function runResearchRun(runId: string) {
       while (Date.now() < deadline) {
         const owner = await claimResearchDispatch(run.projectId, provider, topic);
         if (owner) {
+          const cachedAfterClaim = await reusableResearchSources({ projectId: run.projectId, provider, queries: [topic], recencyDays, excludedDomains });
+          if (cachedAfterClaim.length) {
+            await releaseResearchDispatch(run.projectId, provider, topic, owner);
+            for (const source of cachedAfterClaim) addCollected(source);
+            reusedQueries.add(`${provider}:${topic.toLowerCase()}`);
+            return null;
+          }
           heldClaims.push({ provider, query: topic, owner });
           return await fetchSources();
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
         const found = await reusableResearchSources({ projectId: run.projectId, provider, queries: [topic], recencyDays, excludedDomains });
         if (found.length) {
-          for (const source of found) collected.set(source.contentHash, source);
+          for (const source of found) addCollected(source);
           reusedQueries.add(`${provider}:${topic.toLowerCase()}`);
           return null;
         }
@@ -343,7 +362,7 @@ export async function runResearchRun(runId: string) {
             timeWindow: "year",
             limit: 10,
           }));
-          for (const source of sources ?? []) collected.set(source.contentHash, { ...source,
+          for (const source of sources ?? []) addCollected({ ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
@@ -359,7 +378,7 @@ export async function runResearchRun(runId: string) {
             country,
             limit: 10,
           }));
-          for (const source of sources ?? []) collected.set(source.contentHash, { ...source,
+          for (const source of sources ?? []) addCollected({ ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);

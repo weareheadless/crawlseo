@@ -637,6 +637,7 @@ model ResearchSourceIdentity {
   sourceId        String
   normalizedUrl   String
   currentHash     String?
+  queryKeys       Json     @default("[]")
   updatedAt       DateTime @updatedAt
   project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   observations    ResearchSource[]
