@@ -1,0 +1,758 @@
+{
+  "valid": [
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "displayName": "Northstar Studio",
+      "origin": {
+        "system": "helloada",
+        "externalId": "intake-42"
+      },
+      "domain": null,
+      "externalProjectId": "helloada:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
+        "audience": "business-knowledge",
+        "requestedPermissions": [
+          "project:read",
+          "document:read",
+          "document:write"
+        ]
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration_result",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "externalProjectId": "helloada:intake-42",
+      "origin": {
+        "system": "helloada",
+        "externalId": "intake-42"
+      },
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "credentialScope": {
+        "audience": "business-knowledge",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "permissions": [
+          "project:read",
+          "document:read"
+        ]
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 3,
+      "state": "working",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": 2,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "quote": "Northstar Studio",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": "v7",
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        },
+        "audienceMotivations": {
+          "value": [
+            "Independent retailers"
+          ],
+          "provenance": {
+            "kind": "intake",
+            "sourceId": "intake-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:intake:42",
+            "originSystem": "helloada",
+            "originRecordId": "intake-42",
+            "originRevision": null,
+            "actor": {
+              "type": "service",
+              "id": "intake-42"
+            },
+            "status": "verified",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "internal_only"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_write",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "expectedRevision": 3,
+      "idempotencyKey": "intake-42-write-003",
+      "reason": "Owner confirmed the current positioning",
+      "changes": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-43",
+            "observedAt": "2026-10-25T11:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:43",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-43",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-43"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T12:30:00.000Z"
+          },
+          "publicationUse": "approved"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_read",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "view": "accepted"
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "error",
+      "code": "REVISION_CONFLICT",
+      "message": "The document changed after the supplied revision.",
+      "retryable": true,
+      "currentRevision": 4
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_accept",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "expectedRevision": 3,
+      "idempotencyKey": "owner-accept-003",
+      "reason": "Owner confirmed the current intake",
+      "actor": {
+        "type": "owner",
+        "id": "owner-42"
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 2,
+      "state": "accepted",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": 2,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "quote": "Northstar Studio",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        },
+        "audienceMotivations": {
+          "value": [
+            "Independent retailers"
+          ],
+          "provenance": {
+            "kind": "intake",
+            "sourceId": "intake-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:intake:42",
+            "originSystem": "helloada",
+            "originRecordId": "intake-42",
+            "originRevision": null,
+            "actor": {
+              "type": "service",
+              "id": "intake-42"
+            },
+            "status": "verified",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "internal_only"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "displayName": "Northstar Studio",
+      "origin": {
+        "system": "helloada",
+        "externalId": "intake-42"
+      },
+      "credentialScope": {
+        "audience": "business-knowledge",
+        "permissions": []
+      },
+      "domain": "northstar.example"
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "document_write",
+      "workspaceId": "workspace-ada",
+      "projectId": "other-project",
+      "documentId": "business-profile",
+      "expectedRevision": 2,
+      "idempotencyKey": "short",
+      "reason": "Changed retry has a different body.",
+      "changes": {
+        "businessName": {
+          "value": "Different",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "input-1",
+            "observedAt": "2026-10-25T11:00:00.000Z",
+            "evidenceUri": "urn:input:1",
+            "originSystem": "helloada",
+            "originRecordId": "input-1",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "input-1"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T12:30:00.000Z"
+          },
+          "publicationUse": "approved"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 0,
+      "state": "accepted",
+      "updatedAt": "2026-10-25T09:00:00.000Z",
+      "acceptedRevision": 0,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 3,
+      "state": "working",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": 999,
+      "fields": {
+        "businessName": {
+          "value": "Northstar Studio",
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "quote": "Northstar Studio",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "business_document",
+      "workspaceId": "workspace-ada",
+      "projectId": "project-42",
+      "documentId": "business-profile",
+      "revision": 1,
+      "state": "working",
+      "updatedAt": "2026-10-25T10:00:00.000Z",
+      "acceptedRevision": null,
+      "fields": {
+        "businessName": {
+          "value": {
+            "name": "Northstar"
+          },
+          "provenance": {
+            "kind": "owner_input",
+            "sourceId": "conversation-42",
+            "observedAt": "2026-10-25T09:00:00.000Z",
+            "evidenceUri": "urn:helloada:conversation:42",
+            "quote": "Northstar Studio",
+            "originSystem": "helloada",
+            "originRecordId": "conversation-42",
+            "originRevision": null,
+            "actor": {
+              "type": "owner",
+              "id": "conversation-42"
+            },
+            "status": "owner_confirmed",
+            "recordedAt": "2026-10-25T10:00:00.000Z"
+          },
+          "publicationUse": "approved",
+          "locale": "en-US"
+        }
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "displayName": "Northstar Studio",
+      "domain": null,
+      "externalProjectId": "helloada:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
+        "audience": "business-knowledge",
+        "requestedPermissions": [
+          "project:read",
+          "document:read",
+          "document:write"
+        ]
+      }
+    },
+    {
+      "schemaVersion": "business-knowledge/1",
+      "kind": "project_registration",
+      "displayName": "Northstar Studio",
+      "origin": {
+        "system": "helloada",
+        "externalId": "intake-42"
+      },
+      "domain": null,
+      "externalProjectId": "other:intake-42",
+      "idempotencyKey": "intake-42-register-001",
+      "externalOrganizationId": "helloada-org-42",
+      "workspaceName": "Northstar Workspace",
+      "requestedCredentialScope": {
+        "audience": "business-knowledge",
+        "requestedPermissions": [
+          "project:read",
+          "document:read",
+          "document:write"
+        ]
+      }
+    }
+  ],
+  "conflictCases": [
+    {
+      "name": "stale-revision",
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_write",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "expectedRevision": 2,
+        "idempotencyKey": "intake-42-write-004",
+        "reason": "Owner correction",
+        "changes": {
+          "businessName": {
+            "value": "Northstar Studio",
+            "provenance": {
+              "kind": "owner_input",
+              "sourceId": "conversation-44",
+              "observedAt": "2026-10-25T12:00:00.000Z",
+              "evidenceUri": "urn:helloada:conversation:44",
+              "originSystem": "helloada",
+              "originRecordId": "conversation-44",
+              "originRevision": null,
+              "actor": {
+                "type": "owner",
+                "id": "conversation-44"
+              },
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
+            },
+            "publicationUse": "approved"
+          }
+        }
+      },
+      "response": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "error",
+        "code": "REVISION_CONFLICT",
+        "message": "The document changed after the supplied revision.",
+        "retryable": true,
+        "currentRevision": 4
+      },
+      "state": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "revision": 4,
+        "acceptedRevision": 2,
+        "state": "working"
+      },
+      "credential": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "permissions": [
+          "document:read",
+          "document:write"
+        ]
+      }
+    },
+    {
+      "name": "same-idempotency-key-different-body",
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_write",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "expectedRevision": 3,
+        "idempotencyKey": "intake-42-write-003",
+        "reason": "Changed retry payload",
+        "changes": {
+          "businessName": {
+            "value": "Different name",
+            "provenance": {
+              "kind": "owner_input",
+              "sourceId": "conversation-43",
+              "observedAt": "2026-10-25T11:00:00.000Z",
+              "evidenceUri": "urn:helloada:conversation:43",
+              "originSystem": "helloada",
+              "originRecordId": "conversation-43",
+              "originRevision": null,
+              "actor": {
+                "type": "owner",
+                "id": "conversation-43"
+              },
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
+            },
+            "publicationUse": "approved"
+          }
+        }
+      },
+      "response": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "error",
+        "code": "IDEMPOTENCY_CONFLICT",
+        "message": "The idempotency key was already used with a different request.",
+        "retryable": false
+      },
+      "state": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "revision": 4,
+        "acceptedRevision": 2,
+        "state": "working"
+      },
+      "credential": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "permissions": [
+          "document:read",
+          "document:write"
+        ]
+      },
+      "priorRequest": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_write",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "expectedRevision": 3,
+        "idempotencyKey": "intake-42-write-003",
+        "reason": "Changed retry payload",
+        "changes": {
+          "businessName": {
+            "value": "Northstar Studio",
+            "provenance": {
+              "kind": "owner_input",
+              "sourceId": "conversation-43",
+              "observedAt": "2026-10-25T11:00:00.000Z",
+              "evidenceUri": "urn:helloada:conversation:43",
+              "originSystem": "helloada",
+              "originRecordId": "conversation-43",
+              "originRevision": null,
+              "actor": {
+                "type": "owner",
+                "id": "conversation-43"
+              },
+              "status": "owner_confirmed",
+              "recordedAt": "2026-10-25T12:30:00.000Z"
+            },
+            "publicationUse": "approved"
+          }
+        }
+      }
+    },
+    {
+      "name": "wrong-project-scope",
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_read",
+        "workspaceId": "workspace-ada",
+        "projectId": "other-project",
+        "documentId": "business-profile",
+        "view": "accepted"
+      },
+      "response": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "error",
+        "code": "NOT_FOUND",
+        "message": "No document exists in the requested project scope.",
+        "retryable": false
+      },
+      "state": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "revision": 4,
+        "acceptedRevision": 2,
+        "state": "working"
+      },
+      "credential": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "permissions": [
+          "document:read",
+          "document:write"
+        ]
+      }
+    }
+  ],
+  "acceptanceCases": [
+    {
+      "name": "accept-current-revision",
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_accept",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "expectedRevision": 3,
+        "idempotencyKey": "owner-accept-003",
+        "reason": "Owner confirmed the current intake",
+        "actor": {
+          "type": "owner",
+          "id": "owner-42"
+        }
+      },
+      "before": {
+        "revision": 3,
+        "state": "working",
+        "acceptedRevision": 2
+      },
+      "after": {
+        "revision": 3,
+        "state": "accepted",
+        "acceptedRevision": 3
+      },
+      "acceptedRead": {
+        "revision": 3
+      }
+    }
+  ],
+  "historicalReadCases": [
+    {
+      "name": "accepted-view-pins-historical-snapshot",
+      "state": {
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "revision": 5,
+        "state": "working",
+        "acceptedRevision": 4,
+        "acceptedRevisions": [
+          3,
+          4
+        ]
+      },
+      "read": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "document_read",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "documentId": "business-profile",
+        "view": "accepted",
+        "revision": 3
+      },
+      "result": {
+        "revision": 3
+      }
+    }
+  ],
+  "registrationCases": [
+    {
+      "name": "organization-bound-bootstrap",
+      "bootstrapCredential": {
+        "audience": "business-knowledge-bootstrap",
+        "externalOrganizationId": "helloada-org-42",
+        "permissions": [
+          "project:register"
+        ]
+      },
+      "serverAllowlist": [
+        "project:read",
+        "document:read"
+      ],
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration",
+        "displayName": "Northstar Studio",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "domain": null,
+        "externalProjectId": "helloada:intake-42",
+        "idempotencyKey": "intake-42-register-001",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "requestedCredentialScope": {
+          "audience": "business-knowledge",
+          "requestedPermissions": [
+            "project:read",
+            "document:read",
+            "document:write"
+          ]
+        }
+      },
+      "result": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration_result",
+        "workspaceId": "workspace-ada",
+        "projectId": "project-42",
+        "externalProjectId": "helloada:intake-42",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "credentialScope": {
+          "audience": "business-knowledge",
+          "externalOrganizationId": "helloada-org-42",
+          "workspaceId": "workspace-ada",
+          "projectId": "project-42",
+          "permissions": [
+            "project:read",
+            "document:read"
+          ]
+        }
+      }
+    },
+    {
+      "name": "wrong-bootstrap-organization",
+      "bootstrapCredential": {
+        "audience": "business-knowledge-bootstrap",
+        "externalOrganizationId": "different-org",
+        "permissions": [
+          "project:register"
+        ]
+      },
+      "serverAllowlist": [
+        "project:read",
+        "document:read"
+      ],
+      "request": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "project_registration",
+        "displayName": "Northstar Studio",
+        "origin": {
+          "system": "helloada",
+          "externalId": "intake-42"
+        },
+        "domain": null,
+        "externalProjectId": "helloada:intake-42",
+        "idempotencyKey": "intake-42-register-001",
+        "externalOrganizationId": "helloada-org-42",
+        "workspaceName": "Northstar Workspace",
+        "requestedCredentialScope": {
+          "audience": "business-knowledge",
+          "requestedPermissions": [
+            "project:read",
+            "document:read",
+            "document:write"
+          ]
+        }
+      },
+      "result": {
+        "schemaVersion": "business-knowledge/1",
+        "kind": "error",
+        "code": "FORBIDDEN",
+        "message": "Bootstrap credential is not authorized for this organization.",
+        "retryable": false
+      }
+    }
+  ]
+}
