@@ -39,14 +39,15 @@ The lightweight operational protocol and manager commands are implemented in
 [the shared coordinator](https://github.com/weareheadless/site-agent/blob/21f1bc35e1fd9ebb537667489ce41d5370cdc13a/docs/agent-coordination.md).
 [OPS-001](https://github.com/weareheadless/site-agent/issues/341) tracks adoption
 across the four repositories. Reuse the existing shared key; no separate identity
-system, worker service or automatic merger is introduced. Templates/checks become
-defaults when the coordination PRs merge. Task-format feedback is not code review;
+system, worker service or automatic merger is introduced. The coordination PRs are merged; templates and checks are on each default
+branch. Task-format feedback is not code review;
 the manager checks current CI and the actual diff before merge.
 
 1. Read the issue, its dependency state, linked spec requirements, current default
    branch and active related PRs. Read repository AGENTS/CLAUDE instructions.
-2. Claim the issue through an assignee or a short comment naming the agent/run,
-   branch, scope and current baseline. Check for an existing claim before work.
+2. Use the shared coordinator claim command with the actual worker run ID,
+   branch, scope and current baseline. The manager may submit the claim on the
+   worker’s behalf. An assignee or plain comment alone does not satisfy the checker.
 3. Use an isolated `codex/<work-id>-<description>` branch/worktree. Keep changes
    bounded to the issue; cross-repo code needs separate linked PRs.
 4. Reuse application services/contracts. Add failing behavioral tests for meaningful
@@ -73,12 +74,38 @@ new requirement, update the owning issue/spec rather than adding a parallel
 workflow or silently expanding the PR. Long work packages may use a checklist of
 small PRs on the same issue; add a sub-issue only for independently owned work.
 
-Architecture PR #27 is a proposed design reference. Ready UI-001/UI-013 permits
-contract/inventory work; it does not approve a breaking schema, credential or
-customer cutover. Implement against a reviewed concrete contract commit. A
-downstream dependency is satisfied by that deliverable and its tests, not merely
-by an issue being closed. Verify active ownership/claims before starting; none of
-the issues assigns a person or launches a coding agent automatically.
+The architecture on `main` is the reviewed design baseline, not an implemented
+API. **UI-001 produces the first concrete contract**; it and UI-013 use
+`contract: null` in their claims and PRs. Neither needs a pre-existing
+implementation-contract commit. Downstream implementation pins the reviewed
+contract delivered by UI-001 after merge, with passing compatibility fixtures.
+Design acceptance does not authorize a breaking schema, credential or customer
+cutover. A dependency is satisfied by its artifact and tests, not merely a closed
+issue.
+
+Claims are exclusive **per issue**, not globally. UI-001 and UI-013 may run
+independently on separate branches with separate claims. The manager serializes
+claim writes to avoid a race; this does not serialize unrelated coding tasks.
+No issue automatically launches a coding agent.
+
+### If the worker has no GitHub shell credentials
+
+The manager uses the existing shared key to inspect readiness, submit the worker’s
+claim and publish/update its PR. The worker only needs the agreed main-based
+checkout, issue/claim details and local tools to implement and test. The manager
+can handle fetch/push when that worker’s environment lacks network access. Do not
+request a new token, copy a personal token into the repository or application env,
+or treat a missing worker `GH_TOKEN` as a missing product prerequisite.
+
+When shell transport is available, run the coordinator from a checkout pinned to
+`21f1bc35e1fd9ebb537667489ce41d5370cdc13a` in Site-Agent. Supply the shared key
+through the environment or the host’s existing credential loader. Repository access
+and sandbox network permission are separate: use the normal permission mechanism
+for an authorized fetch/push. A credential cannot override sandbox restrictions.
+Before delegating, the manager verifies these operations and supplies exact
+checkout, branch, baseline and checker paths; a proposal-branch checkout is not
+the implementation workspace. If a remote environment cannot access this host’s
+paths, prepare the equivalent there or keep GitHub transport with the manager.
 
 ## Status and release discipline
 

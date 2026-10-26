@@ -1,6 +1,6 @@
 # Implementation plan
 
-Reviewed proposal v0.2, 2026-10-25. [Project board](https://github.com/users/weareheadless/projects/3).
+Reviewed design baseline v0.2, 2026-10-25. [Project board](https://github.com/users/weareheadless/projects/3).
 
 Read the full design for context, then implement one bounded slice. AI requirements influence the shared model now; advanced monitoring and other platforms are not prerequisites of the first usable HelloAda flow.
 

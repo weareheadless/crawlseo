@@ -1,6 +1,6 @@
 # Centralized business intelligence and execution
 
-Status: reviewed proposal, v0.2, 2026-10-25. The first release is a bounded
+Status: reviewed design baseline, v0.2, 2026-10-25. The first release is a bounded
 HelloAda content slice; the full design includes later AI and platform work.
 
 [GitHub Project: Unified Business Intelligence](https://github.com/users/weareheadless/projects/3)

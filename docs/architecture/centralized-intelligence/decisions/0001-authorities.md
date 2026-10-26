@@ -1,6 +1,6 @@
 # ADR 0001: Shared intelligence with platform-owned execution
 
-Status: proposed. Date: 2026-10-25. Requirements: ID-001, KNOW-001–006,
+Status: accepted design direction; implementation and authority transfer pending. Date: 2026-10-25. Requirements: ID-001, KNOW-001–006,
 RES-001, EXEC-001–007, MIG-001–004.
 
 ## Context

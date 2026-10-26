@@ -1,6 +1,6 @@
 # Architecture specification
 
-Version 0.2 — reviewed proposal, 2026-10-25. Baseline is [code-inventory.md](code-inventory.md).
+Version 0.2 — reviewed design baseline, 2026-10-25. Baseline is [code-inventory.md](code-inventory.md).
 Normative requirements use stable IDs. Proposed models and endpoints below are
 new design, not claims about current capabilities.
 
