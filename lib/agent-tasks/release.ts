@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { db } from "@/lib/db";
 import { ResearchServiceError } from "@/lib/research/service";
@@ -74,6 +75,8 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       status: true,
       title: true,
       actionId: true,
+      actionRevision: true,
+      connectorGeneration: true,
       repoPath: true,
       branch: true,
       worktreePath: true,
@@ -81,6 +84,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       route: true,
       action: {
         select: {
+          revision: true,
           title: true,
           recommendation: true,
           targetUrl: true,
@@ -95,6 +99,12 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
   if (!task) throw new ResearchServiceError("Agent task not found", 404);
   if (!["AWAITING_REVIEW", "CHANGES_REQUESTED"].includes(task.status)) {
     throw new ResearchServiceError("Only tasks awaiting review or retry can be released", 409);
+  }
+  if (task.connectorGeneration !== null) {
+    throw new ResearchServiceError("Wix code publication is unsupported for connector-bound Actions until the generic bridge capability is qualified", 409);
+  }
+  if (task.actionId && (task.actionRevision === null || task.action?.revision !== task.actionRevision)) {
+    throw new ResearchServiceError("Action revision changed since this task was prepared", 409);
   }
   if (!task.worktreePath || !task.route) {
     throw new ResearchServiceError("The task is missing its worktree or target route", 409);
@@ -178,26 +188,52 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     );
   }
 
-  await updateAgentTask(task.id, { status: "APPROVED", errorCode: null });
+  const claimed = await db.agentTask.updateMany({
+    where: {
+      id: task.id,
+      status: task.status,
+      actionRevision: task.actionRevision,
+      commitSha: task.commitSha,
+      ...(task.actionId ? { action: { is: { revision: task.actionRevision! } } } : {}),
+    },
+    data: { status: "APPROVED", errorCode: null },
+  });
+  if (claimed.count !== 1) throw new ResearchServiceError("Another executor changed this task or Action revision; refresh and retry", 409);
   const committed = existingCommit
     ? { commitSha: existingCommit }
     : await commitAgentTask(task.id);
+  if (task.actionId) {
+    const currentAction = await db.researchAction.findUnique({ where: { id: task.actionId }, select: { revision: true } });
+    if (!currentAction || currentAction.revision !== task.actionRevision) {
+      throw new ResearchServiceError("Action revision changed before the site release", 409);
+    }
+  }
   const releaseHead = await mergeAndPush(task.repoPath, committed.commitSha);
   if (existingCommit) {
     await updateAgentTask(task.id, { status: "COMMITTED", commitSha: existingCommit, errorCode: null });
   }
 
   let publication;
+  let publishAttemptId: string | null = null;
   try {
     const wixConfig = await readWixConfig(task.repoPath);
-    const priorPublish = await db.agentTaskArtifact.findMany({
+    const priorPublishes = await db.agentTaskArtifact.findMany({
       where: { taskId: task.id, kind: { in: ["wix_publish_started", "wix_publish_receipt", "wix_publish_unknown", "wix_publish_not_started"] } },
-      orderBy: { createdAt: "desc" }, take: 1, select: { kind: true, content: true },
+      orderBy: { createdAt: "desc" }, select: { kind: true, content: true, createdAt: true },
     });
-    const previous = priorPublish[0];
-    if (previous?.kind === "wix_publish_started" || previous?.kind === "wix_publish_unknown") {
-      throw new ResearchServiceError("A Wix code publication has an uncertain outcome; reconcile it before retrying", 409);
+    const attemptId = (artifact: (typeof priorPublishes)[number]) => {
+      try { return JSON.parse(artifact.content ?? "").attemptId as string | undefined; } catch { return undefined; }
+    };
+    const started = priorPublishes.filter((item) => item.kind === "wix_publish_started");
+    for (const item of started) {
+      const id = attemptId(item);
+      const terminal = priorPublishes.filter((entry) => entry.kind !== "wix_publish_started" && attemptId(entry) === id);
+      if (!id || terminal.some((entry) => entry.kind === "wix_publish_unknown")
+          || !terminal.some((entry) => entry.kind === "wix_publish_receipt" || entry.kind === "wix_publish_not_started")) {
+        throw new ResearchServiceError("A Wix code publication has an uncertain outcome; reconcile it before retrying", 409);
+      }
     }
+    const previous = priorPublishes.find((item) => item.kind === "wix_publish_receipt");
     if (previous?.kind === "wix_publish_receipt") {
       if (!previous.content) throw new ResearchServiceError("The prior Wix publication receipt is missing; reconcile it before retrying", 409);
       let saved: PublicationResult;
@@ -210,7 +246,15 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       publication = saved;
     }
     if (!publication) {
+      if (task.actionId) {
+        const currentAction = await db.researchAction.findUnique({ where: { id: task.actionId }, select: { revision: true } });
+        if (!currentAction || currentAction.revision !== task.actionRevision) {
+          throw new ResearchServiceError("Action revision changed before Wix publication", 409);
+        }
+      }
+      publishAttemptId = randomUUID();
       const publishAttempt = {
+        attemptId: publishAttemptId,
         siteId: wixConfig.siteId,
         commitSha: releaseHead,
         startedAt: new Date().toISOString(),
@@ -221,13 +265,18 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
         siteId: wixConfig.siteId,
         gitSha: releaseHead,
       });
-      await addAgentArtifact(task.id, { kind: "wix_publish_receipt", content: JSON.stringify(publication) });
+      try {
+        await addAgentArtifact(task.id, { kind: "wix_publish_receipt", content: JSON.stringify({ attemptId: publishAttemptId, ...publication }) });
+      } catch {
+        throw new WixPublicationOutcomeUnknown("Wix publish succeeded but its local receipt could not be persisted");
+      }
     }
   } catch (error) {
     if (!(error instanceof ResearchServiceError)) {
       await addAgentArtifact(task.id, {
         kind: error instanceof WixPublicationOutcomeUnknown ? "wix_publish_unknown" : "wix_publish_not_started",
         content: JSON.stringify({
+          attemptId: publishAttemptId,
           commitSha: releaseHead,
           outcome: error instanceof WixPublicationOutcomeUnknown ? "unknown" : "not_started",
           error: error instanceof Error ? error.message : "Wix release failed",

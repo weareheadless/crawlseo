@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/lib/db";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
-import { readBridgeSnippet, updateBridgeSnippet } from "@/lib/bridge/client";
+import { assertNegotiatedWixBridgeOperations, readBridgeSnippet, updateBridgeSnippet } from "@/lib/bridge/client";
 import { addAgentArtifact } from "@/lib/agent-tasks/chat";
 
 export class WixEmbedDeliveryError extends Error {
@@ -166,8 +166,9 @@ export function assertWixEmbedExecutionBinding(task: {
   if (task.actionId && (task.actionRevision === null || task.action?.revision !== task.actionRevision)) {
     throw new WixEmbedDeliveryError("Action revision changed since this task was reviewed", 409);
   }
-  if (binding && (binding.status !== "ACTIVE" || binding.executor !== "crawlseo-agent"
-      || task.connectorGeneration !== binding.generation)) {
+  if ((task.connectorGeneration !== null && !binding)
+      || (binding && (binding.status !== "ACTIVE" || binding.executor !== "crawlseo-agent"
+        || task.connectorGeneration !== binding.generation))) {
     throw new WixEmbedDeliveryError("The Wix execution binding changed since this task was prepared", 409);
   }
 }
@@ -197,6 +198,7 @@ function buildPacket(currentHtml: string, target: { componentTag: string | null;
 export async function planEmbedDelivery(taskId: string, targetKey: string) {
   const { task, target, delivery, binding } = await loadTaskAndTarget(taskId, targetKey);
   assertWixEmbedExecutionBinding(task, binding);
+  if (binding) await assertNegotiatedWixBridgeOperations(delivery.bridgeAlias, ["read_embed", "update_snippet"]);
   const sourcePath = path.join(task.worktreePath!, target.sourcePath!);
   const source = task.status === "COMMITTED" || task.status === "APPROVED"
     ? await reviewedSource(task, target.sourcePath!)
@@ -249,6 +251,7 @@ export async function applyEmbedDelivery(
     throw new WixEmbedDeliveryError("Commit the agent changes before applying the embed", 409);
   }
   assertWixEmbedExecutionBinding(task, binding);
+  if (binding) await assertNegotiatedWixBridgeOperations(delivery.bridgeAlias, ["read_embed", "update_snippet"]);
   const artifacts = await db.agentTaskArtifact.findMany({
     where: { taskId, kind: { in: ["embed_plan", "embed_apply_started", "embed_apply_unknown", "embed_receipt", "embed_partial_receipt"] } },
     orderBy: { createdAt: "desc" },
@@ -297,7 +300,12 @@ export async function applyEmbedDelivery(
   const htmlFile = path.join(dir, `${target.componentTag}.html`);
   await writeFile(htmlFile, nextHtml, "utf8");
   const claimed = await db.agentTask.updateMany({
-    where: { id: task.id, status: "COMMITTED", actionRevision: task.actionRevision },
+    where: {
+      id: task.id,
+      status: "COMMITTED",
+      actionRevision: task.actionRevision,
+      ...(task.actionId ? { action: { is: { revision: task.actionRevision! } } } : {}),
+    },
     data: { status: "PUBLISHING" },
   });
   if (claimed.count !== 1) throw new WixEmbedDeliveryError("Another executor changed this task; refresh and reconcile before applying", 409);
@@ -340,86 +348,125 @@ export async function applyEmbedDelivery(
   }
   await addAgentArtifact(task.id, {
     kind: "embed_receipt",
-    content: JSON.stringify(receipt, null, 2).slice(0, 100_000),
+    content: JSON.stringify({ token: prepared.token, effect, receipt, outcome: "complete" }, null, 2).slice(0, 100_000),
   });
-  const updated = await db.agentTask.update({
-    where: { id: task.id },
-    data: {
-      status: "PUBLISHED",
-      bridgeReceiptId: (receipt as { operationId?: string; releaseId?: string }).operationId
-        ?? (receipt as { releaseId?: string }).releaseId
-        ?? null,
-      publishedUrl: target.route ?? null,
-      completedAt: new Date(),
-    },
-  });
-  if (task.actionId) {
-    await db.delivery.create({
+  const updated = await db.$transaction(async (tx) => {
+    const finalized = await tx.agentTask.updateMany({
+      where: { id: task.id, status: "PUBLISHING", actionRevision: task.actionRevision },
       data: {
-        actionId: task.actionId,
-        platform: "wix_embed",
-        externalId: target.snippetId!,
         status: "PUBLISHED",
-        payload: { target: target.key, receipt: JSON.parse(JSON.stringify(receipt)) },
-        verifiedAt: new Date(),
+        bridgeReceiptId: (receipt as { operationId?: string; releaseId?: string }).operationId
+          ?? (receipt as { releaseId?: string }).releaseId
+          ?? null,
+        publishedUrl: target.route ?? null,
+        completedAt: new Date(),
       },
     });
-  }
+    if (finalized.count !== 1) throw new WixEmbedDeliveryError("Embed effect was recorded but task finalization raced another executor", 409);
+    const result = await tx.agentTask.findUnique({ where: { id: task.id } });
+    if (task.actionId) {
+      await tx.delivery.create({
+        data: {
+          actionId: task.actionId,
+          platform: "wix_embed",
+          externalId: target.snippetId!,
+          status: "PUBLISHED",
+          payload: JSON.parse(JSON.stringify({ target: target.key, receipt })),
+          verifiedAt: new Date(),
+        },
+      });
+    }
+    return result;
+  });
   return { task: updated, receipt };
 }
 
 export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
-  const { task, target, delivery } = await loadTaskAndTarget(taskId, targetKey);
-  const sourcePath = path.join(task.worktreePath!, target.sourcePath!);
-  const source = task.commitSha ? await reviewedSource(task, target.sourcePath!) : await readFile(sourcePath, "utf8");
+  const { task, target, delivery, binding } = await loadTaskAndTarget(taskId, targetKey);
+  assertWixEmbedExecutionBinding(task, binding);
+  if (binding) await assertNegotiatedWixBridgeOperations(delivery.bridgeAlias, ["read_embed"]);
+  const artifacts = await db.agentTaskArtifact.findMany({
+    where: { taskId, kind: { in: ["embed_apply_started", "embed_receipt", "embed_apply_unknown", "embed_partial_receipt"] } },
+    orderBy: { createdAt: "desc" }, take: 100, select: { kind: true, content: true },
+  });
+  const started = artifacts.find((item) => item.kind === "embed_apply_started");
+  type EmbedAttempt = { token?: string; effect?: Record<string, unknown> };
+  let attempt: EmbedAttempt | null = null;
+  try { attempt = started?.content ? JSON.parse(started.content) as EmbedAttempt : null; }
+  catch { attempt = null; }
+  const effect = attempt?.effect;
+  const identityMatches = Boolean(effect
+    && effect.taskId === task.id
+    && effect.siteId === task.siteId
+    && effect.actionId === task.actionId
+    && effect.actionRevision === task.actionRevision
+    && effect.bindingId === (binding?.id ?? null)
+    && effect.bindingGeneration === (binding?.generation ?? null)
+    && effect.alias === delivery.bridgeAlias
+    && effect.targetKey === target.key
+    && effect.snippetId === target.snippetId
+    && effect.componentTag === target.componentTag
+    && effect.sourcePath === target.sourcePath
+    && effect.scopeSha256 === sha256(JSON.stringify(target.metadata ?? null))
+    && effect.commitSha === task.commitSha);
+  if (!identityMatches || typeof attempt?.token !== "string" || !effect || typeof effect.desiredHtmlSha256 !== "string") {
+    return {
+      verified: false,
+      reason: "No immutable applied-effect receipt is available for this target; a plan alone cannot verify publication",
+      target: target.key,
+      snippetId: target.snippetId,
+      componentTag: target.componentTag,
+      expectedSha256: null,
+      actualSha256: null,
+    };
+  }
+  const source = await reviewedSource(task, target.sourcePath!);
+  if (sha256(source) !== effect.sourceSha256) {
+    throw new WixEmbedDeliveryError("Reviewed source changed after the recorded embed attempt", 409);
+  }
   const snippet = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as {
     snippet?: { embedData?: { html?: string } };
   };
   const currentHtml = snippet.snippet?.embedData?.html ?? "";
-  const expectedHtml = buildPacket(currentHtml, target, source);
-  const plans = await db.agentTaskArtifact.findMany({
-    where: { taskId, kind: "embed_plan" }, orderBy: { createdAt: "desc" }, take: 1,
-    select: { content: true },
-  });
-  let plannedHash: string | null = null;
-  if (plans[0]?.content) {
-    try {
-      const plan = JSON.parse(plans[0].content) as { target?: string; effect?: { desiredHtmlSha256?: string } };
-      if (plan.target === target.key) plannedHash = plan.effect?.desiredHtmlSha256 ?? null;
-    } catch { /* A malformed plan is not reconciliation evidence. */ }
-  }
+  const actualSha256 = sha256(currentHtml);
+  const verified = actualSha256 === effect.desiredHtmlSha256;
   const result = {
-    verified: plannedHash ? sha256(currentHtml) === plannedHash : currentHtml === expectedHtml,
+    verified,
     target: target.key,
     snippetId: target.snippetId,
     componentTag: target.componentTag,
-    expectedSha256: plannedHash ?? sha256(expectedHtml),
-    actualSha256: createHash("sha256").update(currentHtml).digest("hex"),
+    expectedSha256: effect.desiredHtmlSha256,
+    actualSha256,
   };
-  await addAgentArtifact(task.id, { kind: "embed_verify", content: JSON.stringify(result, null, 2) });
-  if (result.verified) {
-    const attempts = await db.agentTaskArtifact.findMany({
-      where: { taskId, kind: { in: ["embed_apply_started", "embed_receipt"] } },
-      orderBy: { createdAt: "desc" }, take: 1, select: { kind: true, content: true },
-    });
-    const reconciledEffect = attempts[0]?.content ? JSON.parse(attempts[0].content) as Record<string, unknown> : {};
-    await addAgentArtifact(task.id, { kind: "embed_reconcile", content: JSON.stringify({
-      target: target.key, snippetId: target.snippetId, sha256: result.actualSha256,
-      outcome: attempts[0]?.kind === "embed_apply_started" ? "applied_by_readback" : "verified",
-      reconciledAt: new Date().toISOString(),
-    }) });
-    if (attempts[0]?.kind === "embed_apply_started" && task.status === "PUBLISHING") {
-      const updated = await db.agentTask.update({ where: { id: task.id }, data: {
-        status: "PUBLISHED", publishedUrl: target.route ?? null, completedAt: new Date(),
-      } });
-      if (task.actionId) {
-        await db.delivery.create({ data: {
-          actionId: task.actionId, platform: "wix_embed", externalId: target.snippetId!, status: "PUBLISHED",
-          payload: JSON.parse(JSON.stringify({ target: target.key, reconciled: true, effect: reconciledEffect })), verifiedAt: new Date(),
-        } });
-      }
-      return { ...result, reconciled: true, task: updated };
-    }
+  if (!verified || task.status !== "PUBLISHING") {
+    await addAgentArtifact(task.id, { kind: "embed_verify", content: JSON.stringify({ ...result, attemptToken: attempt.token }) });
+    return result;
   }
-  return result;
+
+  const reconciled = await db.$transaction(async (tx) => {
+    const finalized = await tx.agentTask.updateMany({
+      where: { id: task.id, status: "PUBLISHING", actionRevision: task.actionRevision },
+      data: { status: "PUBLISHED", publishedUrl: target.route ?? null, completedAt: new Date() },
+    });
+    if (finalized.count !== 1) return false;
+    if (task.actionId) {
+      await tx.delivery.create({
+        data: {
+          actionId: task.actionId,
+          platform: "wix_embed",
+          externalId: target.snippetId!,
+          status: "PUBLISHED",
+          payload: JSON.parse(JSON.stringify({ target: target.key, reconciled: true, effect, attemptToken: attempt.token })),
+          verifiedAt: new Date(),
+        },
+      });
+    }
+    await tx.agentTaskArtifact.create({ data: {
+      taskId: task.id,
+      kind: "embed_reconcile",
+      content: JSON.stringify({ target: target.key, snippetId: target.snippetId, sha256: actualSha256, attemptToken: attempt.token, outcome: "applied_by_readback", reconciledAt: new Date().toISOString() }),
+    } });
+    return true;
+  });
+  return { ...result, reconciled };
 }

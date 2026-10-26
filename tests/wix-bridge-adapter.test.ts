@@ -12,6 +12,8 @@ describe("Wix bridge capability negotiation", () => {
       verify: false,
       read_embed: false,
       write_embed: false,
+      update_snippet: false,
+      private_editor_revision: false,
       cms: false,
       seo_tags: false,
     });
@@ -20,14 +22,17 @@ describe("Wix bridge capability negotiation", () => {
 
   it("accepts only explicitly declared operations and never infers neighboring support", () => {
     const capabilities = negotiateWixBridgeCapabilities({
+      contract: "wix-bridge-generic-v1",
       capabilities: { inspect: true, plan: true, read_embed: true, write_embed: true },
     });
     expect(capabilities.inspect).toBe(true);
     expect(capabilities.write_embed).toBe(true);
     expect(capabilities.publish).toBe(false);
     expect(capabilities.release).toBe(false);
+    expect(capabilities.update_snippet).toBe(false);
+    expect(capabilities.private_editor_revision).toBe(false);
     expect(capabilities.cms).toBe(false);
     expect(capabilities.seo_tags).toBe(false);
-    expect(() => assertWixBridgeCapability({ capabilities: { deploy: true } }, "release")).toThrow();
+    expect(() => assertWixBridgeCapability({ contract: "wix-bridge-generic-v1", capabilities: { deploy: true } }, "release")).toThrow();
   });
 });
