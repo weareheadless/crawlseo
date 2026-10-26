@@ -7,6 +7,9 @@ const TOKEN_BYTES = 32;
 const MAX_TOKEN_LENGTH = 512;
 
 const KNOWN_SCOPES = new Set([
+  "project:read",
+  "document:read",
+  "document:write",
   "seo:read",
   "seo:research:request",
   "analytics:read",
@@ -101,7 +104,16 @@ export async function createServiceCredential(
     if (options.requestHash !== undefined && existing.issuanceRequestHash !== options.requestHash) {
       throw new Error("Credential idempotency key was already used for different request inputs");
     }
+    const existingScopes = normalizeScopes(parseScopes(existing.scopes)).sort();
+    const requestedScopes = [...normalizedScopes].sort();
+    if (existingScopes.length !== requestedScopes.length
+        || existingScopes.some((scope, index) => scope !== requestedScopes[index])) {
+      throw new Error("Credential idempotency key was already used with different scopes");
+    }
     if (options.reissueIfReused === true) {
+      if (existing.revokedAt || (existing.expiresAt && existing.expiresAt <= new Date())) {
+        throw new ServiceAuthError("Service credential for this idempotency key is no longer active", 403);
+      }
       const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
       await client.serviceCredential.update({
         where: { id: existing.id },
@@ -120,12 +132,6 @@ export async function createServiceCredential(
         token,
         reused: true,
       };
-    }
-    const existingScopes = normalizeScopes(parseScopes(existing.scopes)).sort();
-    const requestedScopes = [...normalizedScopes].sort();
-    if (existingScopes.length !== requestedScopes.length
-        || existingScopes.some((scope, index) => scope !== requestedScopes[index])) {
-      throw new Error("Credential idempotency key was already used with different scopes");
     }
     if (existing.revokedAt || (existing.expiresAt && existing.expiresAt <= new Date())) {
       throw new ServiceAuthError("Service credential for this idempotency key is no longer active", 403);

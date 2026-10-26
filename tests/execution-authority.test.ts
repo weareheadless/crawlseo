@@ -129,8 +129,8 @@ describe("superseded duplicate sites", () => {
   it("keeps rows when no binding exists or when the binding is local", () => {
     expect(supersededSiteIds([
       local("a", "oceanicvibes.com"),
-      { id: "b", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
-      { id: "c", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
+      { id: "b", projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "crawlseo-agent" } },
+      { id: "c", projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "INACTIVE", executor: "helloada" } },
     ]).size).toBe(0);
   });
 

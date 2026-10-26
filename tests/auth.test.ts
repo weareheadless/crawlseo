@@ -115,6 +115,9 @@ describe("service credentials", () => {
     mockDb.serviceCredential.findUnique.mockResolvedValue({
       id: "credential-1",
       servicePrincipalId: "principal-1",
+      scopes: ["seo:read"],
+      expiresAt: null,
+      revokedAt: null,
     });
     mockDb.serviceCredential.update.mockResolvedValue({ id: "credential-1" });
 
@@ -149,6 +152,18 @@ describe("service credentials", () => {
     });
     await expect(createServiceCredential("project-1", ["seo:read"], { idempotencyKey: "issue-1" }))
       .rejects.toThrow("no longer active");
+  });
+
+  it("rejects a credential recovery request that changes scopes", async () => {
+    mockDb.servicePrincipal.upsert.mockResolvedValue({ id: "principal-1", status: "ACTIVE" });
+    mockDb.serviceCredential.findUnique.mockResolvedValue({
+      id: "credential-1", servicePrincipalId: "principal-1", scopes: ["seo:read"],
+      expiresAt: null, revokedAt: null,
+    });
+    await expect(createServiceCredential("project-1", ["connector:write"], {
+      idempotencyKey: "issue-1", reissueIfReused: true,
+    })).rejects.toThrow("different scopes");
+    expect(mockDb.serviceCredential.update).not.toHaveBeenCalled();
   });
 
   it("resolves a valid token to its project and rejects unknown tokens", async () => {

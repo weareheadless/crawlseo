@@ -74,10 +74,10 @@ describe("research Action cookie ownership", () => {
 
   it("treats an Action on an unbound duplicate site as external when a bound sibling owns the domain", async () => {
     mockDb.researchAction.findFirst.mockResolvedValue({
-      site: { id: "site-legacy", domain: "oceanicvibes.com", userId: "user-1", connectorBinding: null },
+      site: { id: "site-legacy", projectId: null, domain: "oceanicvibes.com", userId: "user-1", connectorBinding: null },
     });
     mockDb.site.findMany.mockResolvedValue([
-      { domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" },
+      { projectId: null, domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" },
         connectorContext: { capabilities: {} } },
     ]);
     await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("external");
