@@ -27,6 +27,15 @@ export type BusinessKnowledgeDocument = {
   documentId: string; revision: number; state: "working" | "accepted"; updatedAt: string;
   acceptedRevision: number | null; fields: BusinessKnowledgeFields;
 };
+export type BusinessKnowledgeCorrectionImpact = {
+  projectId: string;
+  documentId: string;
+  revision: number;
+  reason: string;
+  changedFields: string[];
+  affectedActionIds: string[];
+  affectedActionsHaveMore: boolean;
+};
 export class BusinessKnowledgeError extends Error {
   constructor(readonly code: "FORBIDDEN" | "NOT_FOUND" | "IDEMPOTENCY_CONFLICT" | "REVISION_CONFLICT" | "VALIDATION_FAILED", message: string, readonly currentRevision?: number) { super(message); }
 }
@@ -58,6 +67,22 @@ export async function readBusinessKnowledge(projectId: string, documentId?: stri
     acceptedRevision: view === "accepted" ? selectedRevision : head.acceptedRevision !== null && head.acceptedRevision <= stored.revision ? head.acceptedRevision : null }, stored);
 }
 
+/** Read the durable, bounded correction impact for a precise project revision. */
+export async function readBusinessKnowledgeCorrectionImpact(
+  projectId: string,
+  documentId: string,
+  revision: number,
+): Promise<BusinessKnowledgeCorrectionImpact> {
+  const stored = await db.businessKnowledgeRevision.findFirst({
+    where: { documentId, revision, document: { projectId } },
+    select: { documentId: true, revision: true, reason: true, changedFields: true, affectedActionIds: true, affectedActionsHaveMore: true },
+  });
+  if (!stored) throw new BusinessKnowledgeError("NOT_FOUND", "Document revision not found");
+  return { projectId, documentId: stored.documentId, revision: stored.revision, reason: stored.reason,
+    changedFields: stored.changedFields as string[], affectedActionIds: stored.affectedActionIds as string[],
+    affectedActionsHaveMore: stored.affectedActionsHaveMore };
+}
+
 export async function writeBusinessKnowledge(input: {
   workspaceId: string; projectId: string; documentId?: string; expectedRevision: number; idempotencyKey: string;
   reason: string; changes: unknown;
@@ -86,9 +111,11 @@ export async function writeBusinessKnowledge(input: {
       const validated = businessKnowledgeFieldsSchema.parse(merged);
       const changedFields = (Object.keys(fields) as Array<keyof BusinessKnowledgeFields>).filter((field) => JSON.stringify(previousFields[field]) !== JSON.stringify(fields[field]));
       const affectedActions = current > 0 && changedFields.length > 0
-        ? await tx.researchAction.findMany({ where: { projectId: input.projectId, status: { in: ["PROPOSED", "DRAFTING", "DRAFT_READY"] } }, select: { id: true, siteId: true } })
+        ? await tx.researchAction.findMany({ where: { projectId: input.projectId, status: { in: ["PROPOSED", "DRAFTING", "DRAFT_READY"] } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 101, select: { id: true, siteId: true } })
         : [];
-      const affectedActionIds = affectedActions.map((action) => action.id);
+      const affectedActionsHaveMore = affectedActions.length > 100;
+      const boundedActions = affectedActions.slice(0, 100);
+      const affectedActionIds = boundedActions.map((action) => action.id);
       const documentId = head?.id ?? input.documentId ?? randomUUID();
       if (head) {
         const count = await tx.businessKnowledgeDocument.updateMany({ where: { id: head.id, revision: current }, data: { revision: current + 1 } });
@@ -97,12 +124,13 @@ export async function writeBusinessKnowledge(input: {
         await tx.businessKnowledgeDocument.create({ data: { id: documentId, projectId: input.projectId, revision: 1, updatedAt: new Date() } });
       }
       const saved = await tx.businessKnowledgeRevision.create({ data: { documentId, revision: current + 1, state: "working", fields: json(validated),
-        reason: input.reason.trim(), changedFields: json(changedFields), affectedActionIds: json(affectedActionIds), serviceCaller: principal.servicePrincipalId } });
+        reason: input.reason.trim(), changedFields: json(changedFields), affectedActionIds: json(affectedActionIds), affectedActionsHaveMore,
+        serviceCaller: principal.servicePrincipalId } });
       const updated = await tx.businessKnowledgeDocument.findUniqueOrThrow({ where: { id: documentId } });
       const result = documentShape(project, updated, saved);
       await tx.businessKnowledgeReceipt.create({ data: { projectId: input.projectId, operation: receiptOp, idempotencyKey: input.idempotencyKey, requestHash, result: json(result) } });
       const eventBySite = new Map<string, string[]>();
-      for (const action of affectedActions) eventBySite.set(action.siteId, [...(eventBySite.get(action.siteId) ?? []), action.id]);
+      for (const action of boundedActions) eventBySite.set(action.siteId, [...(eventBySite.get(action.siteId) ?? []), action.id]);
       if (eventBySite.size === 0 && project.sites[0]) eventBySite.set(project.sites[0].id, []);
       for (const [siteId, actionIds] of eventBySite) {
         await tx.connectorEventCounter.upsert({ where: { projectId: input.projectId }, create: { projectId: input.projectId, sequence: 1 }, update: { sequence: { increment: 1 } } });

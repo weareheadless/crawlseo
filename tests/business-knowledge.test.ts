@@ -23,6 +23,7 @@ vi.mock("@/lib/db", () => {
     businessKnowledgeRevision: {
       findUnique: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId_revision.documentId, where.documentId_revision.revision)) ?? null),
       findUniqueOrThrow: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId_revision.documentId, where.documentId_revision.revision))),
+      findFirst: vi.fn(async ({ where }: any) => state.revisions.get(key(where.documentId, where.revision)) ?? null),
       create: vi.fn(async ({ data }: any) => { const row = { id: `rev-${data.revision}`, ...data, createdAt: new Date() }; state.revisions.set(key(data.documentId, data.revision), row); return row; }),
     },
     businessKnowledgeReceipt: {
@@ -44,7 +45,7 @@ vi.mock("@/lib/db", () => {
   return { db: { ...tx, $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)) } };
 });
 
-import { acceptBusinessKnowledge, BusinessKnowledgeError, readBusinessKnowledge, writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { acceptBusinessKnowledge, BusinessKnowledgeError, readBusinessKnowledge, readBusinessKnowledgeCorrectionImpact, writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
 
 const principal = { credentialId: "credential-1", servicePrincipalId: "principal-1", workspaceId: "workspace-1", projectId: "project-1", scopes: ["document:read", "document:write"] };
 const fact = (value: string) => ({ value, provenance: { kind: "intake", sourceId: "intake-1", originSystem: "helloada", originRecordId: "owner-1", originRevision: 1,
@@ -67,6 +68,7 @@ describe("canonical business knowledge revisions", () => {
     const correction = await writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "correction-0001", reason: "corrected name", changes: { businessName: fact("Acme Studio") } }), principal);
     expect(correction).toMatchObject({ revision: 2, state: "working", acceptedRevision: 1 });
     expect(state.revisions.get("document-1:2")).toMatchObject({ reason: "corrected name", changedFields: ["businessName"], affectedActionIds: ["action-1"], serviceCaller: "principal-1" });
+    await expect(readBusinessKnowledgeCorrectionImpact("project-1", "document-1", 2)).resolves.toMatchObject({ affectedActionIds: ["action-1"], affectedActionsHaveMore: false });
     await expect(readBusinessKnowledge("project-1", "document-1", 1, "accepted")).resolves.toMatchObject({ revision: 1, state: "accepted", acceptedRevision: 1, fields: { businessName: { value: "Acme" } } });
     await expect(readBusinessKnowledge("project-1")).resolves.toMatchObject({ revision: 2, state: "working", acceptedRevision: 1 });
     expect(state.events).toHaveLength(2);
@@ -83,5 +85,16 @@ describe("canonical business knowledge revisions", () => {
   it("hides documents outside the credential project and enforces write scope", async () => {
     await expect(writeBusinessKnowledge({ ...writeInput(), projectId: "other-project", workspaceId: "other-workspace" }, principal)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(writeBusinessKnowledge(writeInput(), { ...principal, scopes: ["document:read"] })).rejects.toBeInstanceOf(BusinessKnowledgeError);
+  });
+
+  it("caps durable correction impact and signals remaining pending work", async () => {
+    await writeBusinessKnowledge(writeInput(), principal);
+    state.actions = Array.from({ length: 101 }, (_, index) => ({ id: `action-${index}`, siteId: "site-1" }));
+    await writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "bounded-correction-0001", reason: "bounded correction", changes: { businessName: fact("Changed") } }), principal);
+    await expect(readBusinessKnowledgeCorrectionImpact("project-1", "document-1", 2)).resolves.toMatchObject({
+      affectedActionIds: expect.arrayContaining(["action-0", "action-99"]), affectedActionsHaveMore: true,
+    });
+    const impact = await readBusinessKnowledgeCorrectionImpact("project-1", "document-1", 2);
+    expect(impact.affectedActionIds).toHaveLength(100);
   });
 });

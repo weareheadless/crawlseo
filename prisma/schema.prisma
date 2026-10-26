@@ -111,6 +111,7 @@ model BusinessKnowledgeRevision {
   reason            String
   changedFields     Json
   affectedActionIds Json
+  affectedActionsHaveMore Boolean @default(false)
   serviceCaller     String
   createdAt         DateTime @default(now())
   document   BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)

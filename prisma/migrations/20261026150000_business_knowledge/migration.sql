@@ -19,6 +19,7 @@ CREATE TABLE "BusinessKnowledgeRevision" (
   "reason" TEXT NOT NULL,
   "changedFields" JSONB NOT NULL,
   "affectedActionIds" JSONB NOT NULL,
+  "affectedActionsHaveMore" BOOLEAN NOT NULL DEFAULT FALSE,
   "serviceCaller" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "BusinessKnowledgeRevision_pkey" PRIMARY KEY ("id")

@@ -8,7 +8,7 @@ import { businessKnowledgeError } from "@/lib/projects/business-knowledge-respon
 const id = z.string().min(1).max(120);
 const base = { schemaVersion: z.literal("business-knowledge/1"), workspaceId: id, projectId: id, documentId: id };
 const writeSchema = z.object({ ...base, kind: z.literal("document_write"), expectedRevision: z.number().int().min(0), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), changes: businessKnowledgeFieldsSchema }).strict();
-const acceptSchema = z.object({ ...base, kind: z.literal("document_accept"), expectedRevision: z.number().int().min(1), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), actor: z.object({ type: z.literal("owner"), id }).strict() }).strict();
+const acceptSchema = z.object({ ...base, kind: z.literal("document_accept"), expectedRevision: z.number().int().min(1), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000), actor: z.object({ type: z.enum(["owner", "workspace_admin"]), id }).strict() }).strict();
 
 function bearer(req: Request) { return req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null; }
 function errorResponse(error: unknown): Response {
@@ -54,6 +54,7 @@ export async function POST(req: Request) {
     if (kind === "document_accept") {
       const auth = await principal(req, "document:write");
       const body = acceptSchema.parse(raw);
+      if (body.actor.type === "workspace_admin") return businessKnowledgeError(403, "FORBIDDEN", "Workspace-admin acceptance is not supported through the project API; use the authenticated dashboard workflow");
       const project = await db.project.findFirst({ where: { id: body.projectId, workspaceId: body.workspaceId }, select: { workspace: { select: { externalOrganizationId: true } } } });
       if (!project) return businessKnowledgeError(404, "NOT_FOUND", "Document not found");
       const owner = verifyBusinessKnowledgeOwnerProof(req.headers.get("x-helloada-owner-proof"), { externalOrganizationId: project.workspace.externalOrganizationId,
