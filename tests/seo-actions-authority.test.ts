@@ -18,10 +18,10 @@ describe("SEO Action production authority", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("does not produce a second Action set for a superseded duplicate site", async () => {
-    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", domain: "oceanicvibes.com",
+    mockDb.site.findUnique.mockResolvedValue({ id: "site-legacy", projectId: "project-1", domain: "oceanicvibes.com",
       connectorBinding: null });
     mockDb.site.findMany.mockResolvedValue([
-      { domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
+      { projectId: "project-1", domain: "oceanicvibes.com", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
     ]);
 
     await expect(syncSeoOpportunitiesToActions("site-legacy")).resolves.toEqual({
