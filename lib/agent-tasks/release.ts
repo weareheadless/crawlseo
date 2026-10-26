@@ -199,6 +199,8 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     data: { status: "APPROVED", errorCode: null },
   });
   if (claimed.count !== 1) throw new ResearchServiceError("Another executor changed this task or Action revision; refresh and retry", 409);
+  // The status fence above is the single-winner claim. Keep it through the
+  // external publish, including unknown outcomes; never reopen for a blind retry.
   const committed = existingCommit
     ? { commitSha: existingCommit }
     : await commitAgentTask(task.id);
@@ -215,6 +217,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
 
   let publication;
   let publishAttemptId: string | null = null;
+  let publishStartedDurably = false;
   try {
     const wixConfig = await readWixConfig(task.repoPath);
     const priorPublishes = await db.agentTaskArtifact.findMany({
@@ -260,6 +263,7 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
         startedAt: new Date().toISOString(),
       };
       await addAgentArtifact(task.id, { kind: "wix_publish_started", content: JSON.stringify(publishAttempt) });
+      publishStartedDurably = true;
       publication = await publishWixSite({
         repoPath: task.repoPath,
         siteId: wixConfig.siteId,
@@ -274,11 +278,15 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
   } catch (error) {
     if (!(error instanceof ResearchServiceError)) {
       await addAgentArtifact(task.id, {
-        kind: error instanceof WixPublicationOutcomeUnknown ? "wix_publish_unknown" : "wix_publish_not_started",
+        // Once the durable start marker exists, every later error is
+        // conservatively uncertain. In particular, receipt persistence can
+        // fail after Wix has already published; never authorize a blind retry.
+        kind: publishStartedDurably || error instanceof WixPublicationOutcomeUnknown
+          ? "wix_publish_unknown" : "wix_publish_not_started",
         content: JSON.stringify({
           attemptId: publishAttemptId,
           commitSha: releaseHead,
-          outcome: error instanceof WixPublicationOutcomeUnknown ? "unknown" : "not_started",
+          outcome: publishStartedDurably || error instanceof WixPublicationOutcomeUnknown ? "unknown" : "not_started",
           error: error instanceof Error ? error.message : "Wix release failed",
           recordedAt: new Date().toISOString(),
         }),

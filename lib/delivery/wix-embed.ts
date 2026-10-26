@@ -390,7 +390,7 @@ export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
   assertWixEmbedExecutionBinding(task, binding);
   if (binding) await assertNegotiatedWixBridgeOperations(delivery.bridgeAlias, ["read_embed"]);
   const artifacts = await db.agentTaskArtifact.findMany({
-    where: { taskId, kind: { in: ["embed_apply_started", "embed_receipt", "embed_apply_unknown", "embed_partial_receipt"] } },
+    where: { taskId, kind: { in: ["embed_plan", "embed_apply_started", "embed_receipt", "embed_apply_unknown", "embed_partial_receipt"] } },
     orderBy: { createdAt: "desc" }, take: 100, select: { kind: true, content: true },
   });
   const started = artifacts.find((item) => item.kind === "embed_apply_started");
@@ -399,6 +399,15 @@ export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
   try { attempt = started?.content ? JSON.parse(started.content) as EmbedAttempt : null; }
   catch { attempt = null; }
   const effect = attempt?.effect;
+  const attemptedPlan = artifacts.find((item) => {
+    if (item.kind !== "embed_plan" || !item.content) return false;
+    try {
+      const plan = JSON.parse(item.content) as { target?: string; token?: string; effect?: Record<string, unknown> };
+      return plan.target === target.key
+        && plan.token === attempt?.token
+        && plan.effect?.desiredHtmlSha256 === effect?.desiredHtmlSha256;
+    } catch { return false; }
+  });
   const identityMatches = Boolean(effect
     && effect.taskId === task.id
     && effect.siteId === task.siteId
@@ -413,7 +422,7 @@ export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
     && effect.sourcePath === target.sourcePath
     && effect.scopeSha256 === sha256(JSON.stringify(target.metadata ?? null))
     && effect.commitSha === task.commitSha);
-  if (!identityMatches || typeof attempt?.token !== "string" || !effect || typeof effect.desiredHtmlSha256 !== "string") {
+  if (!identityMatches || !attemptedPlan || typeof attempt?.token !== "string" || !effect || typeof effect.desiredHtmlSha256 !== "string") {
     return {
       verified: false,
       reason: "No immutable applied-effect receipt is available for this target; a plan alone cannot verify publication",

@@ -206,4 +206,18 @@ describe("public Wix embed planning, apply, and reconcile operations", () => {
     expect(h.state.deliveries).toHaveLength(1);
     expect(h.state.artifacts.filter((item: any) => item.kind === "embed_reconcile")).toHaveLength(1);
   });
+
+  it("does not reconcile an attempt if its matching immutable plan is missing", async () => {
+    const plan = await planEmbedDelivery("task-1", "navbar");
+    h.state.failWrite = true;
+    await expect(applyEmbedDelivery("task-1", "navbar", plan.confirmation)).rejects.toThrow(/reconcile before retrying/);
+    h.state.artifacts = h.state.artifacts.filter((item: any) => item.kind !== "embed_plan");
+    h.state.failWrite = false;
+    h.state.currentHtml = await readFile(plan.htmlFile, "utf8");
+
+    const result = await verifyEmbedDelivery("task-1", "navbar");
+    expect(result.verified).toBe(false);
+    expect(h.state.task.status).toBe("PUBLISHING");
+    expect(h.state.deliveries).toHaveLength(0);
+  });
 });
