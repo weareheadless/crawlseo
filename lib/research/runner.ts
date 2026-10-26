@@ -7,6 +7,7 @@ import {
   createResearchFinding,
   researchMonthBounds,
   saveResearchSources,
+  reusableResearchSources,
 } from "@/lib/research/service";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
@@ -300,11 +301,19 @@ export async function runResearchRun(runId: string) {
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
     const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
+    const recencyDays = Math.max(1, Math.min(run.recencyDays, run.site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
+    const cached = run.projectId ? await Promise.all([
+      ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
+      ...(useNews ? [reusableResearchSources({ projectId: run.projectId, provider: "google_news_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
+    ]) : [];
+    const reusable = cached.flat();
+    const reusedQueries = new Set(reusable.map((source) => `${source.provider}:${String(source.metadata?.query ?? "").toLowerCase()}`));
+    for (const source of reusable) collected.set(source.contentHash, source);
     let requestIndex = 0;
 
     for (const plan of queryPlan) {
       const topic = plan.query;
-      if (useReddit) {
+      if (useReddit && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await fetchRedditRssSearch({
             query: topic,
@@ -313,14 +322,14 @@ export async function runResearchRun(runId: string) {
             limit: 10,
           });
           for (const source of sources) collected.set(source.contentHash, { ...source,
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis } });
+            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (providers.includes("news")) {
+      if (providers.includes("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await fetchGoogleNewsRssSearch({
             query: topic,
@@ -329,7 +338,7 @@ export async function runResearchRun(runId: string) {
             limit: 10,
           });
           for (const source of sources) collected.set(source.contentHash, { ...source,
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis } });
+            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
         }
@@ -342,8 +351,8 @@ export async function runResearchRun(runId: string) {
     const collectedSources = [...collected.values()];
     const qualityFiltered = collectedSources.filter((source) => !excludedUrl(source.url, excludedDomains));
     const policyRecency = run.site.researchPolicy?.recencyDays ?? run.recencyDays;
-    const recencyDays = Math.max(1, Math.min(run.recencyDays, policyRecency, 730));
-    const recencyIssues = qualityFiltered.map((source) => sourceRecencyIssue(source.publishedAt, recencyDays));
+    const effectiveRecencyDays = Math.max(1, Math.min(run.recencyDays, policyRecency, 730));
+    const recencyIssues = qualityFiltered.map((source) => sourceRecencyIssue(source.publishedAt, effectiveRecencyDays));
     const recencyRejections = { missing_date: 0, invalid_date: 0, future_date: 0, stale: 0 };
     for (const issue of recencyIssues) if (issue) recencyRejections[issue] += 1;
     const freshFiltered = qualityFiltered.filter((_, index) => recencyIssues[index] === null);
@@ -469,7 +478,7 @@ export async function runResearchRun(runId: string) {
       unsupported_providers: unsupportedProviders,
       query_plan: queryPlan,
       exclusions_applied: { topics: exclusions, domains: excludedDomains },
-      recency_days: recencyDays,
+      recency_days: effectiveRecencyDays,
       max_sources: maxSources,
       topics: effectiveTopics,
       source_count: savedSources.length,

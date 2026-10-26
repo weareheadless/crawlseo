@@ -13,6 +13,8 @@ import type {
 } from "@/lib/research/types";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { isExternallyManaged, isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
+import { normalizeResearchSourceUrl, researchSourceId } from "@/lib/research/evidence";
+import { observationWithinRecencyWindow } from "@/lib/research/quality";
 
 export class ResearchServiceError extends Error {
   constructor(
@@ -306,7 +308,7 @@ export async function saveResearchSources(
 ) {
   const run = await db.researchRun.findUnique({
     where: { id: runId },
-    select: { id: true },
+    select: { id: true, projectId: true },
   });
   if (!run) throw new ResearchServiceError("Research run not found", 404);
 
@@ -324,6 +326,19 @@ export async function saveResearchSources(
     let created = 0;
 
     for (const source of sources) {
+      const normalizedUrl = normalizeResearchSourceUrl(source.url);
+      const identity = run.projectId && normalizedUrl
+        ? await tx.researchSourceIdentity.upsert({
+            where: { projectId_provider_normalizedUrl: { projectId: run.projectId, provider: source.provider, normalizedUrl } },
+            create: { projectId: run.projectId, provider: source.provider, sourceId: researchSourceId(source), normalizedUrl, currentHash: source.contentHash ?? null },
+            update: { sourceId: researchSourceId(source) },
+          })
+        : null;
+      if (identity && source.contentHash && identity.currentHash === source.contentHash) {
+        const prior = await tx.researchSource.findFirst({ where: { identityId: identity.id, contentHash: source.contentHash },
+          select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true } });
+        if (prior) { saved.push(prior); continue; }
+      }
       const existing = source.contentHash
         ? await tx.researchSource.findFirst({
             where: { runId, contentHash: source.contentHash },
@@ -346,15 +361,18 @@ export async function saveResearchSources(
           author: source.author,
           community: source.community,
           publishedAt: source.publishedAt ? new Date(source.publishedAt) : undefined,
+          retrievedAt: typeof source.metadata?.retrieved_at === "string" ? new Date(source.metadata.retrieved_at) : undefined,
           excerpt: source.excerpt,
           contentHash: source.contentHash,
           language: source.language,
           metadata: source.metadata ? json(source.metadata) : undefined,
+          identityId: identity?.id,
         },
         select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true },
       });
       saved.push(row);
       created += 1;
+      if (identity) await tx.researchSourceIdentity.update({ where: { id: identity.id }, data: { currentHash: source.contentHash ?? null } });
     }
 
     if (created > 0) {
@@ -365,6 +383,22 @@ export async function saveResearchSources(
     }
     return saved;
   });
+}
+
+export async function reusableResearchSources(input: { projectId: string; provider: string; queries: string[]; recencyDays: number; excludedDomains: string[] }) {
+  const identities = await db.researchSourceIdentity.findMany({
+    where: { projectId: input.projectId, provider: input.provider, currentHash: { not: null } },
+    include: { observations: { where: { contentHash: { not: null } }, orderBy: { retrievedAt: "desc" }, take: 1 } },
+  });
+  const querySet = new Set(input.queries.map((query) => query.trim().toLowerCase()));
+  return identities.flatMap((identity) => identity.observations.map((source) => ({ identity, source }))).filter(({ identity, source }) => {
+    const metadata = source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata) ? source.metadata as Record<string, unknown> : {};
+    const query = typeof metadata.query === "string" ? metadata.query.trim().toLowerCase() : "";
+    const host = (() => { try { return new URL(source.url).hostname.toLowerCase(); } catch { return ""; } })();
+    const excluded = input.excludedDomains.some((domain) => host === domain.toLowerCase() || host.endsWith(`.${domain.toLowerCase()}`));
+    return querySet.has(query) && !excluded && identity.currentHash === source.contentHash && observationWithinRecencyWindow(source.retrievedAt, input.recencyDays);
+  }).map(({ source }) => ({ provider: source.provider, url: source.url, title: source.title ?? "", publishedAt: source.publishedAt?.toISOString(), excerpt: source.excerpt ?? "", contentHash: source.contentHash!, language: source.language ?? undefined,
+    metadata: { ...(source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata) ? source.metadata as Record<string, unknown> : {}), retrieved_at: source.retrievedAt.toISOString(), reused: true } as Record<string, unknown> }));
 }
 
 export async function createResearchFinding(

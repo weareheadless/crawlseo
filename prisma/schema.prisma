@@ -69,6 +69,7 @@ model Project {
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
   siteProfiles               SiteProfile[]
   researchRuns               ResearchRun[]
+  researchSourceIdentities   ResearchSourceIdentity[]
   researchActions            ResearchAction[]
   connectorBindings          ConnectorBinding[]
   connectorBindingTransfers  ConnectorBindingTransfer[]
@@ -628,6 +629,21 @@ model ResearchRun {
   @@unique([siteId, scheduleKey])
 }
 
+model ResearchSourceIdentity {
+  id              String @id @default(cuid())
+  projectId       String
+  provider        String
+  sourceId        String
+  normalizedUrl   String
+  currentHash     String?
+  updatedAt       DateTime @updatedAt
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  observations    ResearchSource[]
+
+  @@unique([projectId, provider, normalizedUrl])
+  @@index([projectId, provider, sourceId])
+}
+
 model ResearchSource {
   id          String    @id @default(cuid())
   runId       String
@@ -642,9 +658,11 @@ model ResearchSource {
   contentHash String?
   language    String?
   metadata    Json?
+  identityId  String?
   createdAt   DateTime  @default(now())
 
   run ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  identity ResearchSourceIdentity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
 
   @@unique([runId, contentHash])
   @@index([runId, provider])
