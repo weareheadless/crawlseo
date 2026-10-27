@@ -52,6 +52,39 @@ export function auditSchemaSemantics(input: string | SchemaAuditProjection | nul
   return findings;
 }
 
+/** Verify identity JSON-LD against accepted owner facts without inferring values. */
+export function identityJsonLdMatchesAcceptedRevision(input: string | SchemaAuditProjection | null | undefined, knowledge: BusinessKnowledgeDocument | null | undefined): { passed: boolean; mismatchedFields: string[]; requiredFields: string[] } {
+  const projection = typeof input === "string" ? schemaAuditProjection(input) : input;
+  const requiredFields = ["businessName"];
+  if (!projection || !knowledge) return { passed: false, mismatchedFields: requiredFields, requiredFields };
+  const parsed = projection.jsonLdBlocks.flatMap((block) => {
+    try { const value: unknown = JSON.parse(block); return Array.isArray(value) ? value : [value]; } catch { return []; }
+  });
+  const flatten = (item: unknown): Record<string, unknown>[] => {
+    if (!item || typeof item !== "object") return [];
+    const obj = item as Record<string, unknown>;
+    return [...(Array.isArray(obj["@graph"]) ? obj["@graph"].flatMap(flatten) : []), obj];
+  };
+  const nodes = parsed.flatMap(flatten).filter((node) => {
+    const type = node["@type"];
+    return (Array.isArray(type) ? type : [type]).some((value) => typeof value === "string" && /organization|localbusiness|corporation/i.test(value));
+  });
+  const mismatchedFields: string[] = [];
+  const compare = (field: "businessName" | "location", key: string) => {
+    const fact = knowledge.fields[field];
+    if (!fact || fact.publicationUse !== "approved" || !["owner_confirmed", "admin_confirmed", "verified"].includes(fact.provenance.status)) return;
+    const expected = Array.isArray(fact.value) ? fact.value.join(", ") : fact.value;
+    if (!nodes.some((node) => {
+      const observed = node[key];
+      const text = typeof observed === "string" ? observed : observed && typeof observed === "object" ? JSON.stringify(observed) : "";
+      return text.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
+    })) mismatchedFields.push(field);
+  };
+  compare("businessName", "name");
+  compare("location", "address");
+  return { passed: nodes.length > 0 && mismatchedFields.length === 0, mismatchedFields, requiredFields };
+}
+
 const LIVE_CHECKABLE = new Set([
   "MISSING_H1",
   "MULTIPLE_H1",

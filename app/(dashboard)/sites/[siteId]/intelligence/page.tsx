@@ -5,7 +5,8 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
 import { observedCount, visibilityState } from "@/lib/research/intelligence-view";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
-import { providerCapabilityMatrixSchema } from "@/lib/research/ai-visibility-capabilities";
+import { AI_VISIBILITY_CAPABILITY_INVENTORY, providerCapabilityMatrixSchema } from "@/lib/research/ai-visibility-capabilities";
+import { actionDimension } from "@/lib/work/categories";
 
 export default async function IntelligencePage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
@@ -28,7 +29,7 @@ export default async function IntelligencePage({ params }: { params: Promise<{ s
     try { knowledgeDoc = await readBusinessKnowledge(projectId!, knowledge.logicalId, knowledge.acceptedRevision ?? undefined, knowledge.acceptedRevision ? "accepted" : "working"); }
     catch { knowledgeDoc = null; }
   }
-  const capability = providerCapabilityMatrixSchema.safeParse(capabilityRecord?.capabilities);
+  const capability = providerCapabilityMatrixSchema.safeParse(capabilityRecord?.capabilities ?? AI_VISIBILITY_CAPABILITY_INVENTORY);
   const prelaunchRuns = projectId ? await db.seoResearchRun.findMany({ where: { projectId, siteId: null }, orderBy: { periodStart: "desc" }, take: 20, select: { id: true, periodStart: true, status: true, actualCostMicros: true } }) : [];
   const robotsIssue = crawl?.issues.some((issue) => issue.type === "MISSING_ROBOTS" || (issue.details as { kind?: string } | null)?.kind === "ai_crawler_block");
   const sitemapIssue = crawl?.issues.some((issue) => issue.type === "MISSING_SITEMAP");
