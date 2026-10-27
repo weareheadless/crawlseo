@@ -198,7 +198,7 @@ export async function processNextJob(): Promise<boolean> {
   return true;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.error(`[CrawlSEO worker] ${workerId} started`);
   let stopping = false;
   const stop = () => {
