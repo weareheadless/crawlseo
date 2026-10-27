@@ -1,71 +1,47 @@
 # OPS-003 production prelaunch research verification
 
-**Result: blocked at production authorization; no paid research was run.**
+**Result: request accepted, but the queued run did not execute. No paid
+provider work or completed-run replay occurred.**
 
-## Baseline and target
+## Baseline, target and budget
 
-- Fresh `main` checkout: `81ad3e6b44444c8283ad2099b1aa047ce304d6c6`; OPS-010
-  (`0f48d778`) is an ancestor. `npm ci` and `npx prisma generate` succeeded.
-- Production API health returned HTTP 200. Its response has no source SHA, so
-  this does not prove which API build was serving requests.
-- Target: internal `ada-provision-test` only (project
-  `cmuls0r2n0002oyqfmv86i92z`; synthetic site domain
-  `ada-provision-test.helloada.app`). No customer project was accessed.
-- Production environment was sourced from `/SEO/.env.local`; neither its
-  contents nor credential values are included here.
+- Fresh `main`: `81ad3e6b44444c8283ad2099b1aa047ce304d6c6`, including
+  OPS-010 `0f48d778`. `npm ci` and `npx prisma generate` passed. Production
+  health returned HTTP 200 but exposes no source SHA.
+- Only target: internal `ada-provision-test` (project
+  `cmuls0r2n0002oyqfmv86i92z`; synthetic site
+  `ada-provision-test.helloada.app`). No customer project was changed.
+- `/SEO/.env.local` was sourced without printing or recording its contents.
+- The budget was set through the authenticated budget API to USD 1.00 monthly
+  (`1,000,000` micros) and USD 0.10 per operation (`100,000` micros), USD/UTC,
+  revision 2. It remains at these exact caps.
+- Budget PUT body (credential redacted):
 
-## Fixed budget
+  ```json
+  {"siteId":"cmuls0r2v0004oyqfcbjnqwxq","expectedRevision":1,"monthlyAllowanceMicros":"1000000","maxOperationMicros":"100000","currency":"USD","timeZone":"UTC"}
+  ```
 
-The budget endpoint initially reported no allowance or ceiling, USD, UTC,
-revision 1, and zero committed/reserved micros. Through the authenticated budget
-API, the test project was then configured with the exact authorized caps:
+  Response: HTTP 200, revision 2 and both exact caps. Before configuration,
+  budget GET returned HTTP 200, `configured:false`, null caps, and zero
+  committed/reserved micros. An earlier diagnostic GET omitted the `/crawlseo`
+  mount prefix and returned HTML 404; it caused no mutation.
 
-- Monthly allowance: **USD 1.00** (`1,000,000` micros)
-- Per-operation ceiling: **USD 0.10** (`100,000` micros)
+## Retry request and response
 
-The PUT returned HTTP 200, revision 2, with both exact values. After the
-research request was rejected, a read-only Prisma check confirmed the same
-budget, no research run for the selected period, and no October reservations.
-The budget remains configured at those caps as requested.
+The pre-deployment request had returned HTTP 403
+`{"error":"Service credential lacks required scope"}`. After the reported
+scope-fix deployment, I issued one fresh project-scoped
+`seo:research:request` credential through the existing issuer and sent exactly
+one retry with the same body and idempotency key. The temporary credential was
+revoked afterward; existing credentials were not revoked.
 
-The successful budget PUT body (service credential redacted):
-
-```json
-{
-  "siteId": "cmuls0r2v0004oyqfcbjnqwxq",
-  "expectedRevision": 1,
-  "monthlyAllowanceMicros": "1000000",
-  "maxOperationMicros": "100000",
-  "currency": "USD",
-  "timeZone": "UTC"
-}
-```
-
-Response: HTTP 200; `policy` returned project/site IDs, revision `2`,
-`monthlyAllowanceMicros: "1000000"`, `maxOperationMicros: "100000"`,
-`currency: "USD"`, and `timeZone: "UTC"`. The preceding budget GET returned
-HTTP 200 with `configured: false`, null allowance/ceiling, and zero committed
-and reserved micros. One preliminary GET mistakenly omitted the `/crawlseo`
-mount prefix and got an HTML 404; it made no mutation and was corrected before
-the successful GET/PUT.
-
-## Request and exact response
-
-A short-lived project credential was issued through the existing service
-credential issuer with only `connector:read`, `connector:write`,
-`seo:research:request`, and `document:read`; pre-existing credentials were not
-revoked. It was revoked after the attempt. The live budget API accepted it, but
-the prelaunch endpoint did not.
-
-The single intended request was sent to the production mount at
-`/crawlseo/api/projects/cmuls0r2n0002oyqfmv86i92z/prelaunch-research` with
-`Authorization: Bearer [REDACTED]` and this body:
+POST path: `/crawlseo/api/projects/cmuls0r2n0002oyqfmv86i92z/prelaunch-research`
 
 ```json
 {
   "brief": {
     "period": "2026-09",
-    "focus_market": { "language": "en", "country": "US" },
+    "focus_market": {"language":"en","country":"US"},
     "business_goal": "Improve local discovery for a throwaway test profile representing a small, owner-operated neighborhood bakery offering artisan breads, pastries, and custom cakes.",
     "audience": ["nearby residents looking for fresh bread and pastries", "families ordering custom celebration cakes", "local offices arranging small catering orders"],
     "priority_services": ["artisan bread", "fresh pastries", "custom cakes"],
@@ -83,43 +59,71 @@ The single intended request was sent to the production mount at
 }
 ```
 
-Response: **HTTP 403**
+Response: **HTTP 200**
 
 ```json
-{"error":"Service credential lacks required scope"}
+{"report_id":"cmvqm9i130001oyri2trh7hdx","project_id":"cmuls0r2n0002oyqfmv86i92z","period":"2026-09","status":"requested","task_limit":9,"task_count":5,"existing":false}
 ```
 
-The credential carried `seo:research:request`, as required by merged OPS-010,
-yet the live endpoint still rejected it. The runtime's exact deployed SHA could
-not be established. Per the issue instruction, I stopped: no alternate scope,
-credential bypass, retry, or replay was attempted.
+## Accepted run: queue failure before provider execution
 
-## Spend, task and replay evidence
+I waited 30 minutes. Read-only Prisma inspection at `2026-10-27T12:14:37Z`
+found:
 
-- Total spend: **USD 0.00**; no provider operation was invoked.
-- No run ID was returned; no run or task rows exist for the selected period.
-- No reservation or settlement rows exist for the current budget period.
-- Domain-dependent tasks, findings, source receipts, task skip reasons and
-  settled provider charges are unavailable because the request was rejected
-  before run creation. The body omitted a competitor and supplied no verified
-  public business domain; those skips were not confirmed by a completed run.
-  The submitted bakery profile was a synthetic throwaway profile, not a named
-  real business; it was not forwarded to the provider.
-- Replay was not attempted because the first request was rejected.
-- The test project had no canonical business-knowledge document at preflight;
-  none was created. The contract shape is
-  `schemaVersion: "business-knowledge/1"`, `kind: "business_document"`,
-  `workspaceId`, `projectId`, `documentId`, `revision`, `state`, `updatedAt`,
-  `acceptedRevision`, and `fields` (optional facts for business name, services,
-  location, service area, differentiators, trust evidence, audience motivations,
-  concerns, conversion goals, voice, and prohibited claims). No actual document
-  or research-report shape could be read back.
+- One `SeoResearchRun`: `cmvqm9i130001oyri2trh7hdx`, status `REQUESTED`,
+  `taskCount:5`, `attemptedCount:0`, `actualCostMicros:0`, no `startedAt`,
+  `completedAt`, report or source manifest.
+- Five `SeoResearchTask` rows, all `RESERVED`; all have null
+  `attemptedAt`, `providerTaskId`, cost and error. Thus provider calls: **0**.
+- One `SEO_RESEARCH` job for this run is `FAILED`, attempts `10/10`, with no
+  lease/heartbeat and null `lastErrorCode`. The run remained `REQUESTED`, so
+  the prelaunch runner did not start. The runner code transitions to
+  `RUNNING_PAID_RESEARCH` before task execution. The queue code marks an
+  expired lease `FAILED` once attempts reach the maximum without persisting an
+  error code. These rows are consistent with exhausted worker leases, but do
+  not identify why the lease expired.
+- Five matching reservations are still `RESERVED` at `100,000` micros each:
+  **USD 0.50 held**, with no settlements or provider task IDs. Actual spend is
+  **USD 0.00**; the monthly cap remains USD 1.00 and no per-operation cap was
+  raised.
+- The idempotency mapping exists once. Project-wide `ResearchAction` count is
+  3, unchanged from preflight; zero actions, `ResearchFinding` rows, or
+  `ResearchSource` rows are linked to this prelaunch run. The project had no
+  canonical business-knowledge document before or after; none was written.
+- The report GET and identical-request replay were not attempted because the
+  accepted run never completed. No replay/no-duplicate-spend proof is claimed.
+  No worker/job reset, manual dispatch, or additional POST was attempted.
 
-## Remaining acceptance gap and state
+The task plan contained five keyword seeds. Domain-dependent work was not
+executed: the current prelaunch runner's defined skip reasons are no domain for
+own-domain overview and backlinks, no site integrations for GSC/GA4, no site
+for crawl history, and no selected competitor. Those report skips are not yet
+persisted because the runner never started. The submitted bakery profile was a
+synthetic throwaway profile, not a named real business; the accepted request's
+queued job failed before any provider saw the profile.
 
-This is not successful live provider verification. The project remains an
-internal test project with the requested USD 1.00 / USD 0.10 budget, no
-research runs or reservations, and no canonical knowledge document. Temporary
-credentials created for the budget and request attempts were revoked; existing
-credentials were left unchanged. Rerun only after the live endpoint accepts
-`seo:research:request`, while retaining the same caps.
+## Separate symptom: six existing `ResearchRun` rows are PARTIAL
+
+Read-only inspection found six production `ResearchRun` rows, each with
+`errorCode: PARTIAL_SOURCE_FAILURES`; every report contains one or more
+`Reddit RSS returned HTTP 429` source errors. Together they have **117 saved
+source rows, 33 finding rows and 32 action rows** (all per-run row counts were
+nonzero). The error-count distribution per row is 1, 2, 4, 4, 4, and 3.
+
+The runner defines PARTIAL as `sourceErrors.length > 0 || savedSourceCount ===
+0`. Its Reddit provider throws on non-2xx responses, and the runner records the
+429 errors while still synthesizing findings/actions from other saved sources.
+So PARTIAL does not mean those runs have no results. Three newer reports also
+show freshness filtering (15, 36 and 22 stale items respectively), but each
+still saved at least one source; the Reddit 429s explain their PARTIAL status.
+This task did not alter those runs or fix the separate owner-visible symptom;
+the dashboard rendering was not verified.
+
+## Handoff
+
+The test project remains with the requested budget, one accepted but unexecuted
+run, five reserved tasks, USD 0.50 held and USD 0.00 spent. The async job
+exhausted its attempts before provider execution. Acceptance remains incomplete:
+there are no provider findings/sources, no completed run, no replay proof, and
+no canonical knowledge document. All temporary service credentials were
+revoked. Do not claim paid live verification from the HTTP 200.
