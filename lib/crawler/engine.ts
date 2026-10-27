@@ -5,6 +5,9 @@ import type { IssueSeverity, IssueType } from "@prisma/client";
 import robotsParser from "robots-parser";
 import { REMEDIATION } from "./remediation";
 import { computeHealthScore } from "./health";
+import { auditSchemaSemantics } from "@/lib/research/crawl-live-check";
+import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { persistSchemaSemanticsIssues } from "./schema-semantics-persistence";
 
 const ABSOLUTE_MAX_PAGES = 2000;
 const BATCH_SIZE = 2;
@@ -57,6 +60,7 @@ type PageSnapshot = {
   loadMs: number;
   contentHash: string;
   indexable: boolean;
+  auditHtml?: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -663,7 +667,7 @@ export async function runSiteCrawl(
 
 async function executeCrawl(
   crawlId: string,
-  _siteId: string,
+  siteId: string,
   seedUrl: string,
   origin: string,
   maxPages: number
@@ -834,7 +838,7 @@ async function executeCrawl(
         });
       }
 
-      pages.push(page);
+      pages.push({ ...page, auditHtml: res.html });
       allLinks.push(...page.links);
       issues.push(...issuesFromPage(page));
 
@@ -1021,19 +1025,47 @@ async function executeCrawl(
     }
   }
 
+  /* ---- Compare published pages with the accepted canonical knowledge document ---- */
+  const projectId = (await db.site.findUnique({ where: { id: siteId }, select: { projectId: true } }))?.projectId;
+  let knowledge: Awaited<ReturnType<typeof readBusinessKnowledge>> | null = null;
+  let knowledgeReason: string | null = null;
+  let knowledgeDocumentId: string | null = null;
+  if (projectId) {
+    const head = await db.businessKnowledgeDocument.findUnique({ where: { projectId }, select: { logicalId: true, acceptedRevision: true } });
+    knowledgeDocumentId = head?.logicalId ?? null;
+    if (head?.logicalId && head.acceptedRevision != null) {
+      try { knowledge = await readBusinessKnowledge(projectId, head.logicalId, head.acceptedRevision, "accepted"); }
+      catch (error) { knowledgeReason = error instanceof Error ? error.message : "Canonical business knowledge could not be read"; }
+    } else knowledgeReason = head ? "No accepted business knowledge revision exists" : "Canonical business knowledge document is missing";
+  } else knowledgeReason = "Site is not linked to a project with canonical business knowledge";
+  for (const page of successfulPages) {
+    const findings = knowledge
+      ? auditSchemaSemantics(page.auditHtml, knowledge)
+      : [{ code: "BUSINESS_KNOWLEDGE_UNAVAILABLE", field: "businessKnowledge", status: "unknown" as const, evidence: knowledgeReason ?? "Canonical business knowledge unavailable", key: "BUSINESS_KNOWLEDGE_UNAVAILABLE:businessKnowledge", location: "canonical business knowledge API" }];
+    for (const finding of findings) {
+      issues.push({ url: page.url, type: "MISSING_SCHEMA", severity: finding.status === "mismatch" ? "WARNING" : "INFO",
+        message: finding.status === "mismatch" ? `Business content mismatch: ${finding.field}` : `Business consistency audit unknown: ${finding.field}`,
+        details: { kind: "business_schema_semantics", stableKey: `${page.url}:${finding.key}`, field: finding.field, status: finding.status,
+          expected: finding.expected ?? null, observed: finding.observed ?? null, observedLocation: finding.location ?? null,
+          evidence: finding.evidence, knowledgeDocumentId, knowledgeRevision: knowledge?.revision ?? null } });
+    }
+  }
+
   /* ---- Persist CrawlIssue records ---- */
-  const toSave = issues.slice(0, 1000);
+  const semanticsIssues = issues.filter((issue) => issue.details?.kind === "business_schema_semantics");
+  await persistSchemaSemanticsIssues(db, crawlId, semanticsIssues as Array<{ url: string; severity: "INFO" | "WARNING"; message: string; details: Record<string, unknown> }>);
+  const toSave = issues.filter((issue) => issue.details?.kind !== "business_schema_semantics").slice(0, 1000);
   if (toSave.length) {
-    await db.crawlIssue.createMany({
-      data: toSave.map((i) => ({
+    for (const i of toSave) {
+      await db.crawlIssue.create({ data: {
         crawlId,
         url: i.url,
         type: i.type,
         severity: i.severity,
         message: i.message,
         details: (i.details ?? undefined) as undefined | Record<string, string | number | boolean | null>,
-      })),
-    });
+      } });
+    }
   }
 
   // Thin content pages as INFO issues
