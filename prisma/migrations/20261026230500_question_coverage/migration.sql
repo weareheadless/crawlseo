@@ -2,7 +2,7 @@
 CREATE TYPE "QuestionCoverageStatus" AS ENUM ('COVERED', 'UNRESOLVED');
 
 -- CreateEnum
-CREATE TYPE "QuestionCoverageReason" AS ENUM ('NO_EVIDENCE', 'DISPUTED_EVIDENCE', 'STALE_HASH');
+CREATE TYPE "QuestionCoverageReason" AS ENUM ('NO_EVIDENCE', 'DISPUTED_EVIDENCE', 'STALE_HASH', 'UNUSABLE_PUBLICATION_USE');
 
 -- CreateTable
 CREATE TABLE "QuestionCoverage" (
@@ -34,7 +34,7 @@ CREATE INDEX "QuestionCoverage_projectId_status_updatedAt_idx" ON "QuestionCover
 CREATE INDEX "QuestionCoverage_documentId_evidenceRevision_idx" ON "QuestionCoverage"("documentId", "evidenceRevision");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "QuestionCoverage_projectId_findingId_service_audience_local_key" ON "QuestionCoverage"("projectId", "findingId", "service", "audience", "locale", "sectionIdentity");
+CREATE UNIQUE INDEX "QuestionCoverage_projectId_findingId_sectionIdentity_key" ON "QuestionCoverage"("projectId", "findingId", "sectionIdentity");
 
 -- AddForeignKey
 ALTER TABLE "QuestionCoverage" ADD CONSTRAINT "QuestionCoverage_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -44,4 +44,3 @@ ALTER TABLE "QuestionCoverage" ADD CONSTRAINT "QuestionCoverage_findingId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "QuestionCoverage" ADD CONSTRAINT "QuestionCoverage_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "BusinessKnowledgeDocument"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
