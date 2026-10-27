@@ -6,6 +6,8 @@ vi.mock("@/lib/db", () => ({ db: {
   connectorBinding: { findUnique: mocks.bindingFindUnique },
 } }));
 vi.mock("@/lib/delivery/unsplash", () => ({ findUnsplashCover: vi.fn(), importUnsplashCover: vi.fn() }));
+const coverage = vi.hoisted(() => ({ record: vi.fn() }));
+vi.mock("@/lib/research/question-coverage", () => ({ recordDraftCoverage: coverage.record }));
 
 import { approveWixBlogUpdateForDraft, createWixBlogDraftForDraft, publishWixBlogUpdateForDraft, WixBlogDeliveryError } from "@/lib/delivery/wix-blog";
 
@@ -18,7 +20,7 @@ const draft = {
 };
 
 describe("Wix Blog exact candidate approval", () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.bindingFindUnique.mockResolvedValue(null); });
+  beforeEach(() => { vi.clearAllMocks(); mocks.bindingFindUnique.mockResolvedValue(null); coverage.record.mockResolvedValue({ status: "COVERED" }); });
 
   it("refuses publication without a persisted exact-candidate approval", async () => {
     mocks.findUnique.mockResolvedValue(draft);
@@ -37,6 +39,7 @@ describe("Wix Blog exact candidate approval", () => {
       where: expect.objectContaining({ id: "draft-1", updatedAt: draft.updatedAt }),
       data: expect.objectContaining({ wixApprovalHash: result.candidateHash, wixApprovedBy: "owner-1", wixApprovedRevision: 3 }),
     }));
+    expect(coverage.record).toHaveBeenCalledWith("draft-1");
   });
 
   it("rejects approval if the Action target is not a Wix Blog post", async () => {
