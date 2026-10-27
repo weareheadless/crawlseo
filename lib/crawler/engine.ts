@@ -695,6 +695,14 @@ async function executeCrawl(
     });
   } else {
     robotsChecker = robotsParser(robotsUrl, robotsText);
+    for (const crawler of ["GPTBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Google-Extended"]) {
+      const lines = robotsText.split(/\r?\n/);
+      const rule = lines.find((line) => /^\s*Disallow\s*:/i.test(line) && robotsParser(robotsUrl, `${line}\n`).isAllowed(`${origin}/`, crawler) === false);
+      if (rule && robotsChecker.isAllowed(`${origin}/`, crawler) === false) {
+        issues.push({ url: robotsUrl, type: "MISSING_SCHEMA", severity: "WARNING", message: `${crawler} is blocked by robots rule: ${rule.trim()}`,
+          details: { kind: "ai_crawler_block", crawler, rule: rule.trim(), gapIdentity: `robots:${crawler}:${rule.trim()}` } });
+      }
+    }
   }
 
   /* ---- Sitemap discovery ---- */
@@ -1069,6 +1077,13 @@ async function executeCrawl(
         message: i.message,
         details: (i.details ?? undefined) as undefined | Record<string, string | number | boolean | null>,
       })) });
+  }
+
+  // Thin content pages as INFO issues
+  const sitemapCoverageSet = new Set(sitemapUrls);
+  for (const page of pages.filter((candidate) => candidate.indexable && !sitemapCoverageSet.has(candidate.url))) {
+    issues.push({ url: page.url, type: "MISSING_SCHEMA", severity: "WARNING", message: `Indexable page is absent from sitemap: ${page.url}`,
+      details: { kind: "sitemap_coverage", gapIdentity: `sitemap:${page.url}`, page: page.url } });
   }
 
   // Thin content pages as INFO issues
