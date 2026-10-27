@@ -59,7 +59,7 @@ export async function getActionDetail(siteId: string, actionId: string) {
         },
       },
       finding: true,
-      questionCoverage: { include: { document: { select: { id: true, logicalId: true } } } },
+      questionCoverages: { include: { document: { select: { id: true, logicalId: true } } }, orderBy: { updatedAt: "desc" } },
       drafts: { orderBy: { createdAt: "desc" } },
       deliveries: { orderBy: { createdAt: "desc" }, take: 20 },
       agentTasks: {

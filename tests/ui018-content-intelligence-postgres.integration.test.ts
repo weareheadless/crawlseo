@@ -56,8 +56,10 @@ suite("UI-018 CrawlSEO content intelligence contract on disposable PostgreSQL", 
     const researchRun = await db.researchRun.create({ data: { siteId: site.id, projectId, title: "UI018 coverage fixture", brief: {}, status: "COMPLETED",
       findings: { create: { type: "QUESTION", theme: "plumbing", summary: "What plumbing services are available?", confidence: 100 } } }, include: { findings: true } });
     const finding = researchRun.findings[0];
-    const coverage = await recordQuestionCoverage({ projectId, findingId: finding.id, evidence: { documentId: (await db.businessKnowledgeDocument.findUniqueOrThrow({ where: { projectId } })).id, fieldPath: "services", revision: 1 }, section: { key: "faq:services", contentHash: "fixture-content" }, service: "Plumbing", audience: "local customers", locale: "en-US", status: "covered" });
+    const coverage = await recordQuestionCoverage({ projectId, findingId: finding.id, question: finding.summary, evidence: { documentId: (await db.businessKnowledgeDocument.findUniqueOrThrow({ where: { projectId } })).id, fieldPath: "services", revision: 1 }, section: { key: "faq:services", contentHash: "fixture-content" }, service: "Plumbing", audience: "local customers", locale: "en-US", status: "covered" });
     expect(coverage).toMatchObject({ status: "COVERED", evidenceRevision: 1 });
+    const legacyReadable = await db.questionCoverage.findUnique({ where: { id: coverage.id }, include: { finding: { select: { summary: true } } } });
+    expect(legacyReadable?.finding?.summary).toBe(finding.summary);
     const findings = auditSchemaSemantics('<p>Fixture Plumbing</p><script type="application/ld+json">{"@type":"LocalBusiness","name":"Fixture Plumbing"}</script>', readback);
     expect(findings).toEqual([]);
   }, 60000);

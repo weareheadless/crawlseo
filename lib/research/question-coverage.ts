@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { createResearchAction, updateResearchAction } from "@/lib/research/service";
 
 export type CoverageInput = {
-  projectId: string; findingId: string;
+  projectId: string; question: string; findingId?: string | null; siteId?: string;
   evidence?: { documentId: string; fieldPath: string; revision: number };
   section: { key: string; contentHash: string };
   service: string; audience: string; locale: string;
@@ -15,41 +15,50 @@ export type CoverageInput = {
 
 export function hashSection(content: string) { return createHash("sha256").update(content).digest("hex"); }
 
+export function normalizeQuestion(question: string) {
+  return question.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+}
+
 /** Stable provider-neutral identity for the complete written draft candidate. */
 export function hashContentDraft(draft: { id: string; siteId: string; actionId: string | null; title: string; slug: string; metaTitle: string; metaDescription: string; excerpt: string; markdown: string }) {
-  return createHash("sha256").update(JSON.stringify(draft)).digest("hex");
+  const { id, siteId, actionId, title, slug, metaTitle, metaDescription, excerpt, markdown } = draft;
+  return createHash("sha256").update(JSON.stringify({ id, siteId, actionId, title, slug, metaTitle, metaDescription, excerpt, markdown })).digest("hex");
 }
 
 export async function recordDraftCoverage(contentDraftId: string, evidence?: CoverageInput["evidence"]) {
   const draft = await db.contentDraft.findUnique({ where: { id: contentDraftId }, include: { action: { select: { id: true, findingId: true, projectId: true } }, site: { select: { projectId: true } } } });
   if (!draft) throw new Error("Content draft not found");
-  const findingId = draft.action?.findingId;
+  const findingId = draft.action?.findingId ?? null;
   const projectId = draft.action?.projectId ?? draft.site?.projectId;
-  if (!findingId || !projectId) return { recorded: 0 };
-  const finding = await db.researchFinding.findUnique({ where: { id: findingId }, select: { summary: true, theme: true } });
-  if (!finding) return { recorded: 0 };
+  if (!projectId) return { recorded: 0 };
+  const finding = findingId ? await db.researchFinding.findUnique({ where: { id: findingId }, select: { summary: true, theme: true } }) : null;
   const revision = evidence ? await db.businessKnowledgeRevision.findFirst({ where: { documentId: evidence.documentId, revision: evidence.revision }, select: { fields: true } }) : null;
   const revFields = revision?.fields && typeof revision.fields === "object" ? revision.fields as Record<string, unknown> : {};
   const fact = evidence ? revFields[evidence.fieldPath] as { provenance?: { status?: string }; publicationUse?: string } | undefined : undefined;
   const usableEvidence = Boolean(fact?.provenance && ["owner_confirmed", "admin_confirmed", "verified"].includes(fact.provenance.status ?? "") && fact.publicationUse === "approved");
   const section = { key: draft.id, contentHash: hashContentDraft({ id: draft.id, siteId: draft.siteId, actionId: draft.actionId, title: draft.title, slug: draft.slug, metaTitle: draft.metaTitle, metaDescription: draft.metaDescription, excerpt: draft.excerpt, markdown: draft.markdown }) };
-  const prior = await db.questionCoverage.findUnique({ where: { projectId_findingId_sectionIdentity: { projectId, findingId, sectionIdentity: draft.id } }, select: { contentHash: true } });
+  const question = normalizeQuestion(draft.primaryQuery || finding?.summary || draft.title);
+  if (!question) throw new Error("Content draft question is required");
+  const prior = await db.questionCoverage.findUnique({ where: { projectId_question_sectionIdentity: { projectId, question, sectionIdentity: draft.id } }, select: { contentHash: true } });
   const changed = Boolean(prior && prior.contentHash !== section.contentHash);
-  const missingEvidence = usableEvidence ? null : `Unlinked question: ${finding.summary}`;
-  return recordQuestionCoverage({ projectId, findingId, evidence: usableEvidence ? evidence : undefined, section, service: finding.theme, audience: "site visitors", locale: "und", status: usableEvidence ? "covered" : "unresolved", missingEvidence, reasonCode: usableEvidence ? null : changed ? "stale_hash" : "no_evidence", revalidated: usableEvidence });
+  const summary = finding?.summary ?? (draft.primaryQuery || draft.title);
+  const missingEvidence = usableEvidence ? null : `Evidence is needed to answer: ${summary}`;
+  return recordQuestionCoverage({ projectId, question, findingId, siteId: draft.siteId, evidence: usableEvidence ? evidence : undefined, section, service: finding?.theme ?? "general", audience: "site visitors", locale: "und", status: usableEvidence ? "covered" : "unresolved", missingEvidence, reasonCode: usableEvidence ? null : changed ? "stale_hash" : "no_evidence", revalidated: usableEvidence });
 }
 
 export async function recordQuestionCoverage(input: CoverageInput) {
   if (input.status === "unresolved" && !input.missingEvidence?.trim()) throw new Error("missingEvidence is required for unresolved coverage");
-  const finding = await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true, summary: true, theme: true, runId: true, run: { select: { siteId: true } } } });
-  if (!finding) throw new Error("Finding does not belong to project");
+  const question = normalizeQuestion(input.question);
+  if (!question) throw new Error("Question is required");
+  const finding = input.findingId ? await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true, summary: true, theme: true, runId: true, run: { select: { siteId: true } } } }) : null;
+  if (input.findingId && !finding) throw new Error("Finding does not belong to project");
   const rev = input.evidence ? await db.businessKnowledgeRevision.findFirst({ where: { documentId: input.evidence.documentId, revision: input.evidence.revision }, select: { fields: true } }) : null;
   const fields = rev?.fields && typeof rev.fields === "object" ? rev.fields as Record<string, unknown> : {};
   const fact = input.evidence ? fields[input.evidence.fieldPath] as { provenance?: { status?: string }; publicationUse?: string } | undefined : undefined;
   if (input.status === "covered" && !fact?.provenance) throw new Error("Referenced evidence field or provenance does not exist");
 
-  const existing = await db.questionCoverage.findUnique({ where: { projectId_findingId_sectionIdentity: {
-    projectId: input.projectId, findingId: input.findingId, sectionIdentity: input.section.key,
+  const existing = await db.questionCoverage.findUnique({ where: { projectId_question_sectionIdentity: {
+    projectId: input.projectId, question, sectionIdentity: input.section.key,
   } }, select: { contentHash: true } });
   let status = input.status;
   let reason = input.reasonCode?.toUpperCase() as "NO_EVIDENCE" | "DISPUTED_EVIDENCE" | "STALE_HASH" | "UNUSABLE_PUBLICATION_USE" | undefined;
@@ -65,25 +74,27 @@ export async function recordQuestionCoverage(input: CoverageInput) {
   }
   if (status === "unresolved" && !missingEvidence) throw new Error("missingEvidence is required for unresolved coverage");
   const coverage = await db.questionCoverage.upsert({
-    where: { projectId_findingId_sectionIdentity: { projectId: input.projectId, findingId: input.findingId, sectionIdentity: input.section.key } },
-    create: { projectId: input.projectId, findingId: input.findingId, service: input.service, audience: input.audience, locale: input.locale,
+    where: { projectId_question_sectionIdentity: { projectId: input.projectId, question, sectionIdentity: input.section.key } },
+    create: { projectId: input.projectId, question, findingId: input.findingId ?? null, service: input.service, audience: input.audience, locale: input.locale,
       sectionIdentity: input.section.key, contentHash: input.section.contentHash, status: status.toUpperCase() as "COVERED" | "UNRESOLVED",
       documentId: input.evidence?.documentId ?? null, fieldPath: input.evidence?.fieldPath ?? null, evidenceRevision: input.evidence?.revision ?? null,
       missingEvidence, reason: reason ?? null, requestedAt: status === "unresolved" ? new Date() : null },
-    update: { service: input.service, audience: input.audience, locale: input.locale, contentHash: input.section.contentHash,
+    update: { findingId: input.findingId ?? null, service: input.service, audience: input.audience, locale: input.locale, contentHash: input.section.contentHash,
       status: status.toUpperCase() as "COVERED" | "UNRESOLVED", documentId: input.evidence?.documentId ?? null,
       fieldPath: input.evidence?.fieldPath ?? null, evidenceRevision: input.evidence?.revision ?? null, missingEvidence, reason: reason ?? null,
       requestedAt: status === "unresolved" ? new Date() : null },
   });
   if (status === "unresolved" && missingEvidence) {
-    const result = await createResearchAction(finding.run.siteId, {
-      runId: finding.runId, findingId: finding.id, source: "ai_visibility_coverage", kind: "missing_evidence",
-      title: `Provide evidence for: ${finding.summary.slice(0, 180)}`,
-      primaryQuery: `${input.projectId}:${input.findingId}:${input.section.key}`,
+    const siteId = finding?.run.siteId ?? input.siteId;
+    if (!siteId) throw new Error("A site is required to create a question coverage Action");
+    const result = await createResearchAction(siteId, {
+      runId: finding?.runId, findingId: finding?.id, source: "ai_visibility_coverage", kind: "missing_evidence",
+      title: `Provide evidence for: ${(finding?.summary ?? question).slice(0, 180)}`,
+      primaryQuery: question,
       recommendation: `Supply this evidence request: ${missingEvidence}. Close this Action when the same question coverage is supported by confirmed, publication-approved evidence. This request does not assert the underlying fact.`,
       acceptanceCriteria: ["The question coverage for this section is recorded as covered using confirmed, publication-approved evidence."],
       evidence: { question_coverage_id: coverage.id, missing_evidence: missingEvidence, outcome: "unknown_until_coverage_resolves" },
-      dedupeKey: `question-coverage:${input.projectId}:${input.findingId}:${input.section.key}`,
+      dedupeKey: `question-coverage:${input.projectId}:${question}`,
       priority: 50, automationMode: "MANUAL",
     }, "system:question-coverage");
     await db.questionCoverage.update({ where: { id: coverage.id }, data: { actionId: result.action.id } });

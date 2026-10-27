@@ -766,7 +766,8 @@ enum QuestionCoverageReason {
 model QuestionCoverage {
   id                 String @id @default(cuid())
   projectId          String
-  findingId          String
+  question           String @default("")
+  findingId          String?
   service            String
   audience           String
   locale             String
@@ -782,12 +783,12 @@ model QuestionCoverage {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  finding            ResearchFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  finding            ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
   document           BusinessKnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  actionId           String? @unique
+  actionId           String?
   action             ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
-  @@unique([projectId, findingId, sectionIdentity])
+  @@unique([projectId, question, sectionIdentity])
   @@index([projectId, status, updatedAt])
   @@index([documentId, evidenceRevision])
 }
@@ -830,7 +831,7 @@ model ResearchAction {
   project    Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   run        ResearchRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
   finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
-  questionCoverage QuestionCoverage?
+  questionCoverages QuestionCoverage[]
   drafts     ContentDraft[]
   deliveries Delivery[]
   agentTasks AgentTask[]
