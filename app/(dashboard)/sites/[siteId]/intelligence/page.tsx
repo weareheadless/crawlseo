@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
 import { observedCount, visibilityState } from "@/lib/research/intelligence-view";
+import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { providerCapabilityMatrixSchema } from "@/lib/research/ai-visibility-capabilities";
 
 export default async function IntelligencePage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
@@ -12,12 +14,21 @@ export default async function IntelligencePage({ params }: { params: Promise<{ s
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, userId: true, projectId: true, domain: true } });
   if (!site) redirect("/sites");
   const projectId = site.projectId;
-  const [crawl, observations, coverages, sources] = await Promise.all([
+  const [crawl, observations, coverages, sources, knowledge, actions, capabilityRecord] = await Promise.all([
     db.crawl.findFirst({ where: { siteId, status: "COMPLETED" }, orderBy: { finishedAt: "desc" }, select: { id: true, finishedAt: true, issues: { select: { type: true, details: true } } } }),
     projectId ? db.aIVisibilityObservation.findMany({ where: { projectId }, orderBy: [{ observedAt: "desc" }, { provider: "asc" }, { modelSurface: "asc" }], take: 200 }) : Promise.resolve([]),
     projectId ? db.questionCoverage.findMany({ where: { projectId }, include: { finding: { select: { summary: true } }, action: { select: { id: true, title: true } }, document: { select: { logicalId: true } } }, orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
     projectId ? db.researchSource.findMany({ where: { run: { projectId } }, select: { id: true, provider: true, url: true, title: true, retrievedAt: true, identityId: true }, orderBy: { retrievedAt: "desc" }, take: 200 }) : Promise.resolve([]),
+    projectId ? db.businessKnowledgeDocument.findUnique({ where: { projectId }, select: { logicalId: true, revision: true, acceptedRevision: true } }) : null,
+    db.researchAction.findMany({ where: { siteId }, orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, title: true, status: true, kind: true, source: true, evidence: true, updatedAt: true } }),
+    projectId ? db.connectorContextSnapshot.findUnique({ where: { siteId }, select: { capabilities: true } }) : null,
   ]);
+  let knowledgeDoc = null;
+  if (knowledge) {
+    try { knowledgeDoc = await readBusinessKnowledge(projectId!, knowledge.logicalId, knowledge.acceptedRevision ?? undefined, knowledge.acceptedRevision ? "accepted" : "working"); }
+    catch { knowledgeDoc = null; }
+  }
+  const capability = providerCapabilityMatrixSchema.safeParse(capabilityRecord?.capabilities);
   const prelaunchRuns = projectId ? await db.seoResearchRun.findMany({ where: { projectId, siteId: null }, orderBy: { periodStart: "desc" }, take: 20, select: { id: true, periodStart: true, status: true, actualCostMicros: true } }) : [];
   const robotsIssue = crawl?.issues.some((issue) => issue.type === "MISSING_ROBOTS" || (issue.details as { kind?: string } | null)?.kind === "ai_crawler_block");
   const sitemapIssue = crawl?.issues.some((issue) => issue.type === "MISSING_SITEMAP");
@@ -29,6 +40,11 @@ export default async function IntelligencePage({ params }: { params: Promise<{ s
 
   return <div className="space-y-6">
     <PageHeader eyebrow={site.domain} title="Intelligence" description="Evidence about AI access, observed answer-engine visibility, question coverage and research sources. Access does not imply visibility." />
+    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Business profile</h2>
+      {!knowledge ? <Empty title="Business profile unavailable" text="No canonical business knowledge document is recorded for this project; profile facts are unknown, not empty." /> : !knowledgeDoc ? <Empty title="Business profile could not be read" text="The canonical knowledge revision is unavailable or invalid; no facts are inferred." /> : <><p className="mt-1 text-sm text-muted-foreground">{knowledgeDoc.state} revision {knowledgeDoc.revision} · changed {new Date(knowledgeDoc.updatedAt).toLocaleString()}</p><div className="mt-3 divide-y divide-border/50">{Object.entries(knowledgeDoc.fields).map(([field, fact]) => <article key={field} className="py-3"><p className="font-medium">{field}</p><p className="break-words text-sm">{Array.isArray(fact.value) ? fact.value.join(", ") : fact.value}</p><p className="mt-1 text-xs text-muted-foreground">{fact.provenance.status} · {fact.provenance.kind} · source {fact.provenance.originSystem}/{fact.provenance.originRecordId}{fact.provenance.status === "owner_confirmed" || fact.provenance.status === "admin_confirmed" || fact.provenance.status === "verified" ? " · confirmed" : " · unaccepted/unconfirmed"}</p></article>)}</div></>}
+    </section>
+    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Actions</h2>{actions.length === 0 ? <Empty title="No Actions recorded" text="No ResearchAction is linked to this site; this does not establish that no work is needed." /> : <div className="mt-3 divide-y divide-border/50">{actions.map((action) => { const evidence = action.evidence && typeof action.evidence === "object" ? action.evidence as Record<string, unknown> : {}; const verifier = evidence.verifier ?? evidence.verifier_result; return <article key={action.id} className="py-3"><Link className="font-medium text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link><p className="mt-1 text-xs text-muted-foreground">{action.status.toLowerCase()} · dimension {action.kind} · origin gap {String(evidence.originGap ?? evidence.origin_gap ?? "unknown (not recorded)")} · verifier {verifier ? JSON.stringify(verifier) : "unknown (not recorded)"}</p></article>; })}</div>}</section>
+    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Provider capability matrix</h2>{!capability.success || capability.data.providers.length === 0 ? <Empty title="Capability inventory unavailable" text="No valid provider capability matrix is recorded; dashboard and export support are unknown, not unavailable." /> : <div className="mt-3 space-y-3">{capability.data.providers.map((provider) => <article key={provider.provider} className="rounded-lg bg-muted/30 p-3"><h3 className="font-medium">{provider.provider}</h3><p className="text-sm">Dashboard: {provider.dashboard.availability}{provider.dashboard.availability === "available" ? ` — ${provider.dashboard.details}` : ` — ${provider.dashboard.reasonCode}`}</p><p className="text-sm">API/export: {provider.apiOrExport.availability}{provider.apiOrExport.availability === "available" ? ` — ${provider.apiOrExport.details}` : ` — ${provider.apiOrExport.reasonCode}`}</p><p className="text-xs text-muted-foreground">Unavailable surfaces: {provider.unavailableSurfaces.length ? provider.unavailableSurfaces.join(", ") : "none recorded"}</p></article>)}</div>}</section>
     <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">AI access readiness</h2><p className="mt-1 text-sm text-muted-foreground">Technical access signals from the latest completed crawl. These do not measure whether AI answers mention your site.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">{[{ label: "Robots / AI crawlers", value: !crawl ? "Unknown — crawl evidence unavailable" : robotsIssue ? "Potential restriction found" : "No blocking issue found" }, { label: "Sitemap", value: !crawl ? "Unknown — crawl evidence unavailable" : sitemapIssue ? "Not found by crawl" : "No missing-sitemap issue found" }, { label: "HTTP reachability", value: crawl ? "Site pages responded during crawl" : "Unknown — run a crawl" }].map(({ label, value }) => <div key={label} className="rounded-lg bg-muted/30 p-3"><p className="text-xs font-medium">{label}</p><p className="mt-1 text-sm">{value}</p><p className="mt-1 text-xs text-muted-foreground">{crawl?.finishedAt ? `Crawl evidence · ${crawl.finishedAt.toLocaleString()}` : "No dated evidence"}</p></div>)}</div>
       {!crawl && <p className="mt-3 text-sm text-muted-foreground">Run a site crawl to populate these access checks.</p>}
