@@ -252,7 +252,7 @@ export default async function CrawlPage({ params }: Props) {
             ) : (
               <ul className="divide-y divide-border/40">
                 {realIssues.slice(0, 100).map((issue) => {
-                  const details = issue.details as { howToFix?: string; kind?: string } | null;
+                  const details = issue.details as { howToFix?: string; kind?: string; field?: string; status?: string; expected?: string | null; observed?: string | null; observedLocation?: string | null; evidence?: string; knowledgeDocumentId?: string | null; knowledgeRevision?: number | null } | null;
                   return (
                     <li key={issue.id} className="px-5 py-3">
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -280,6 +280,14 @@ export default async function CrawlPage({ params }: Props) {
                           <span className="font-semibold text-foreground/80">Fix: </span>
                           {details.howToFix}
                         </p>
+                      )}
+                      {details?.kind === "business_schema_semantics" && (
+                        <div className="mt-1.5 rounded-lg bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          <p><span className="font-semibold text-foreground/80">Audit: </span>{details.status ?? "unknown"} · {details.field ?? "business field"}</p>
+                          {details.evidence && <p>{details.evidence}</p>}
+                          {details.expected && <p>Expected: {details.expected}{details.knowledgeDocumentId ? ` (knowledge ${details.knowledgeDocumentId}, revision ${details.knowledgeRevision ?? "unknown"})` : " (canonical knowledge source unavailable)"}</p>}
+                          {details.observed && <p>Observed at {details.observedLocation ?? "page"}: {details.observed}</p>}
+                        </div>
                       )}
                     </li>
                   );
