@@ -24,6 +24,9 @@ pm2 reload deploy/ecosystem.config.cjs --only crawlseo
 pm2 save
 ```
 
+For Worker/MCP, the same isolated source checkout must have completed
+`npm ci`/`npx prisma generate` and match the web release SHA before staging.
+
 The staging command requires explicit source, build, release, and runtime env
 paths. It copies the standalone server, `.next/static`, and `public` into a new
 release directory, copies the runtime env file as `.env` with mode `0600`,
@@ -84,3 +87,39 @@ file or in the repository.
 The worker claims PostgreSQL jobs with leases. Run exactly one PM2 worker unless
 you intentionally want multiple workers; row locking supports multiple workers
 when capacity requires it.
+
+## Worker and MCP release identity (OPS-013)
+
+Worker and MCP source is staged as a complete per-SHA runtime at
+`/SEO/.releases/worker/<full-40-character-SHA>` (TypeScript source, package
+metadata, generated Prisma client and `node_modules`). Build that source from an
+isolated checkout matching the web release SHA after `npm ci` and
+`npx prisma generate`, then run:
+
+```bash
+SHA="$(git rev-parse HEAD)"
+node scripts/stage-production-worker.mjs "$PWD" "/SEO/.releases/worker/$SHA" "$SHA"
+ln -s "/SEO/.releases/worker/$SHA" /SEO/.releases/worker/current.next
+mv -Tf /SEO/.releases/worker/current.next /SEO/.releases/worker/current
+CRAWLSEO_WORKER_EXPECTED_SHA="$SHA" pm2 reload deploy/ecosystem.config.cjs --only crawlseo-worker,crawlseo-mcp
+CRAWLSEO_WORKER_RELEASE_DIR=/SEO/.releases/worker/current CRAWLSEO_WORKER_EXPECTED_SHA="$SHA" /SEO/scripts/start-worker-production.sh --smoke
+```
+
+The deploy/release automation must set `CRAWLSEO_WORKER_EXPECTED_SHA` to the
+exact staged source SHA in the PM2 environment, run this smoke command after
+reload, and treat its nonzero exit as release failure. The web release steps
+above are unchanged.
+
+The PM2 release identity is the full `CRAWLSEO_WORKER_EXPECTED_SHA`; both
+processes resolve `CRAWLSEO_WORKER_RELEASE_DIR` and refuse to run from `/SEO`.
+Startup checks the slot's `RELEASE_SHA`, required runtime files and generated
+`node_modules/.prisma/client/schema.prisma` against the release's migrated
+`prisma/schema.prisma`; mismatch is a hard startup failure. The smoke enqueues a
+unique project-level `SEO_RESEARCH` job with `siteId=NULL`, lets the worker
+process the normal no-site validation path and requires persisted `FAILED`
+status with `AGENT_SITE_REQUIRED` (the worker's intentional contract for a
+site-bound task). This proves nullable siteId was read and handled by the
+generated client; a crash/schema error or any other outcome fails deployment.
+It requires an existing project/database. Run it after reloading the new worker and
+before considering that release successful. MCP uses the same verified slot.
+Web staging remains the independent `stage-production-web.mjs` flow above.
