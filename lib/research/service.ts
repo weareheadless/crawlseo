@@ -787,3 +787,11 @@ async function recordResearchActionEvent(
       recommendation: action.recommendation, status: action.status.toLowerCase(), priority: action.priority },
   });
 }
+export {
+  AI_VISIBILITY_CAPABILITY_VERSION,
+  AI_VISIBILITY_UNKNOWN_REASON,
+  providerCapabilityMatrixSchema,
+  providerCapabilitySchema,
+  visibilityFromAccessSignals,
+} from "./ai-visibility-capabilities";
+export type { ProviderCapabilityMatrix } from "./ai-visibility-capabilities";
