@@ -67,6 +67,8 @@ type IssueGroup = {
   anchors: Set<string>;
   batch: boolean;
   families: Set<string>;
+  identity: string;
+  specialDetails?: Record<string, unknown>;
 };
 
 const SITE_WIDE_ISSUES = new Set(["MISSING_ROBOTS", "MISSING_SITEMAP"]);
@@ -219,10 +221,14 @@ export function buildCrawlActionDrafts(input: {
     const sourceLinks = issue.type === "BROKEN_LINK" ? linksByTarget.get(issue.url) ?? [] : [];
     const sourceUrl = sourceLinks[0]?.sourceUrl ?? null;
     const blogContentIssue = issue.type === "BROKEN_LINK" && Boolean(sourceUrl) && isWixBlogTarget(sourceUrl!);
-    const batch = !blogContentIssue
+    const gapIdentity = typeof details.gapIdentity === "string" ? details.gapIdentity
+      : details.kind === "business_schema_semantics" ? `business:${String(details.stableKey ?? `${issue.url}:${details.field ?? "identity"}`)}` : null;
+    const batch = !gapIdentity && !blogContentIssue
       && !SITE_WIDE_ISSUES.has(issue.type)
       && !["BROKEN_LINK", "DUPLICATE_TITLE", "DUPLICATE_DESCRIPTION"].includes(issue.type);
-    const group = batch
+    const group = gapIdentity
+      ? { key: gapIdentity, label: issue.url }
+      : batch
       ? { key: "all-pages", label: "all affected pages" }
       : groupForIssue(issue, linksByTarget);
     if (!group) continue;
@@ -274,6 +280,8 @@ export function buildCrawlActionDrafts(input: {
         anchors: new Set(sourceLinks.map((link) => link.anchorText).filter((value): value is string => Boolean(value))),
         batch,
         families: new Set([family]),
+        identity: gapIdentity ?? key,
+        ...(gapIdentity ? { specialDetails: details } : {}),
       });
     }
   }
@@ -292,7 +300,12 @@ export function buildCrawlActionDrafts(input: {
     const affectedPct = Math.round((affectedPages / Math.max(1, input.crawl.pagesFound)) * 1000) / 10;
     const severity = statusCode === 429 ? "INFO" : group.severity;
     const remediation = REMEDIATION[group.type];
-    const issueTitle = group.orphan
+    const details = group.specialDetails ?? {};
+    const issueTitle = details.kind === "business_schema_semantics"
+      ? `Business identity ${String(details.status ?? "mismatch")}: ${String(details.field ?? "field")}`
+      : details.kind === "ai_crawler_block" ? `AI crawler ${String(details.crawler)} blocked`
+        : details.kind === "sitemap_coverage" ? "Page missing from sitemap"
+      : group.orphan
       ? "Orphaned page"
       : remediation?.title ?? group.type.replaceAll("_", " ").toLowerCase();
     const title = group.type === "BROKEN_LINK" && group.sourceUrl
@@ -302,7 +315,11 @@ export function buildCrawlActionDrafts(input: {
         : SITE_WIDE_ISSUES.has(group.type)
           ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
           : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
-    const fix = group.orphan
+    const fix = details.kind === "business_schema_semantics"
+      ? `Review ${String(details.field)} on ${targetUrl}. ${details.status === "mismatch" ? "Compare the page value with confirmed canonical knowledge and correct only after owner confirmation." : "Confirm the canonical value and add matching structured data; do not infer a value."}`
+      : details.kind === "ai_crawler_block" ? `Review robots.txt rule “${String(details.rule)}”, which blocks ${String(details.crawler)}. Change it only if the owner intends to allow this crawler.`
+        : details.kind === "sitemap_coverage" ? `Add ${targetUrl} to the parsed sitemap if it should remain indexable.`
+      : group.orphan
       ? "Add internal links from relevant pages to this orphan page, or remove or redirect it if it should not be indexed."
       : remediation?.howToFix ?? "Review the affected pages and fix the underlying template or content issue.";
     const rateLimit = statusCode === 429
@@ -359,10 +376,21 @@ export function buildCrawlActionDrafts(input: {
       broken_urls: [...group.brokenUrls],
       anchor_texts: [...group.anchors],
       how_to_fix: fix,
+      verifier: {
+        version: 1,
+        type: details.kind === "business_schema_semantics" ? "business_identity_comparison" : details.kind === "ai_crawler_block" ? "robots_rule_evaluation" : details.kind === "sitemap_coverage" ? "sitemap_presence" : "crawl_issue_absence",
+        identity: group.key,
+        issueType: group.orphan ? "ORPHAN_PAGE" : group.type,
+        urls: urls.slice(0, group.batch ? 100 : 20),
+        ...(details.kind === "business_schema_semantics" ? { field: details.field, expected: details.expected, observed: details.observed, stableKey: details.stableKey } : {}),
+        ...(details.kind === "ai_crawler_block" ? { crawler: details.crawler, rule: details.rule } : {}),
+        ...(details.kind === "sitemap_coverage" ? { page: targetUrl } : {}),
+        check: "The next completed crawl must not report this issue identity for these URLs.",
+      },
       ...(page ? { page } : {}),
     };
     drafts.push({
-      dedupeKey: `crawl:${group.key}`,
+      dedupeKey: `${group.specialDetails ? "gap" : "crawl"}:${group.key}`,
       title: title.slice(0, 240),
       targetUrl,
       recommendation,
@@ -384,7 +412,7 @@ export function buildCrawlActionDrafts(input: {
 export async function syncCrawlIssuesToActions(siteId: string) {
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { domain: true },
+    select: { domain: true, projectId: true },
   });
   if (!site) return { created: 0, updated: 0, dismissed: 0, existing: 0, total: 0 };
   const crawl = await db.crawl.findFirst({
@@ -412,7 +440,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       },
     }),
     db.researchAction.findMany({
-      where: { siteId, source: "crawl_issue" },
+      where: site.projectId ? { projectId: site.projectId, source: "crawl_issue" } : { siteId, source: "crawl_issue" },
       select: { id: true, status: true, priority: true, dedupeKey: true, evidence: true },
     }),
   ]);
@@ -507,8 +535,23 @@ export async function syncCrawlIssuesToActions(siteId: string) {
   const draftKeys = new Set(drafts.map((draft) => draft.dedupeKey));
   let staleDismissed = 0;
   for (const action of current) {
-    if (draftKeys.has(action.dedupeKey) || action.status !== "PROPOSED") continue;
+    if (draftKeys.has(action.dedupeKey)) continue;
     const evidence = record(action.evidence);
+    const verifier = record(evidence.verifier);
+    if (["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)) continue;
+    if (["crawl_issue_absence", "business_identity_comparison", "robots_rule_evaluation", "sitemap_presence"].includes(String(verifier.type))) {
+      await db.researchAction.update({
+        where: { id: action.id },
+        data: {
+          status: "FULFILLED",
+          verifiedAt: new Date(),
+          evidence: json({ ...evidence, verifier_result: { passed: true, crawl_id: crawl.id, checked_at: new Date().toISOString() } }),
+        },
+      });
+      staleDismissed += 1;
+      continue;
+    }
+    if (action.status !== "PROPOSED") continue;
     await db.researchAction.update({
       where: { id: action.id },
       data: {

@@ -17,6 +17,28 @@ function page(url: string, statusCode = 200) {
 }
 
 describe("crawl action generation", () => {
+  it("creates distinct verifiable business, robots, and sitemap gap Actions", () => {
+    const issues = [
+      { url: "https://www.example.com/", type: "MISSING_SCHEMA", severity: "WARNING", message: "Identity mismatch: name", details: { kind: "business_schema_semantics", stableKey: "https://www.example.com/:name", field: "name", status: "mismatch", expected: "Confirmed Co", observed: "Other Co" } },
+      { url: "https://www.example.com/robots.txt", type: "MISSING_SCHEMA", severity: "WARNING", message: "GPTBot is blocked by robots rule: Disallow: /", details: { kind: "ai_crawler_block", gapIdentity: "robots:GPTBot:Disallow: /", crawler: "GPTBot", rule: "Disallow: /" } },
+      { url: "https://www.example.com/article", type: "MISSING_SCHEMA", severity: "WARNING", message: "Page absent from sitemap", details: { kind: "sitemap_coverage", gapIdentity: "sitemap:https://www.example.com/article", page: "https://www.example.com/article" } },
+    ];
+    const drafts = buildCrawlActionDrafts({ site, crawl, issues, pages: issues.map((issue) => page(issue.url)) });
+    expect(drafts).toHaveLength(3);
+    expect(drafts.map((draft) => (draft.evidence.verifier as { type: string }).type).sort()).toEqual([
+      "business_identity_comparison", "robots_rule_evaluation", "sitemap_presence",
+    ].sort());
+    const business = drafts.find((draft) => (draft.evidence.verifier as { type: string }).type === "business_identity_comparison")!;
+    const robots = drafts.find((draft) => (draft.evidence.verifier as { type: string }).type === "robots_rule_evaluation")!;
+    const sitemap = drafts.find((draft) => (draft.evidence.verifier as { type: string }).type === "sitemap_presence")!;
+    expect(business.title).toContain("name");
+    expect((business.evidence.verifier as { expected: string }).expected).toBe("Confirmed Co");
+    expect(robots.recommendation).toContain("Disallow: /");
+    expect(robots.recommendation).toContain("GPTBot");
+    expect(sitemap.targetUrl).toBe("https://www.example.com/article");
+    expect(new Set(drafts.map((draft) => draft.dedupeKey)).size).toBe(3);
+  });
+
   it("groups crawl issues into actionable technical work", () => {
     const duplicateUrls = [
       "https://www.example.com/blog",
