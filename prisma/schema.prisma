@@ -1047,7 +1047,6 @@ model ResearchBudgetReservation {
   site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, idempotencyKey])
-  @@unique([siteId, idempotencyKey])
   @@index([projectId, period, status])
   @@index([siteId, createdAt])
 }
@@ -1310,7 +1309,9 @@ model Job {
   syncRuns SyncRun[]
 
   @@unique([siteId, kind, idempotencyKey])
-  @@unique([projectId, kind, idempotencyKey])
+  // Project-only jobs need dedupe only when siteId is NULL. PostgreSQL's
+  // partial unique index is created by the additive migration; Prisma cannot
+  // represent its WHERE predicate. Keep the site-scoped unique unchanged.
   @@index([projectId, status, nextAttemptAt])
   @@index([status, nextAttemptAt])
 }

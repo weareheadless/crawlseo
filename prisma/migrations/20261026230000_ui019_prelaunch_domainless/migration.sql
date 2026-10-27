@@ -25,17 +25,12 @@ CREATE INDEX "PrelaunchResearchRequest_researchRunId_idx" ON "PrelaunchResearchR
 -- CreateIndex
 CREATE UNIQUE INDEX "PrelaunchResearchRequest_projectId_idempotencyKey_key" ON "PrelaunchResearchRequest"("projectId", "idempotencyKey");
 
--- CreateIndex
-CREATE UNIQUE INDEX "ResearchBudgetReservation_siteId_idempotencyKey_key" ON "ResearchBudgetReservation"("siteId", "idempotencyKey");
-
--- CreateIndex
-CREATE UNIQUE INDEX "SeoResearchRun_projectId_periodStart_packageVersion_key" ON "SeoResearchRun"("projectId", "periodStart", "packageVersion");
-
--- CreateIndex
-CREATE UNIQUE INDEX "SeoResearchRun_projectId_idempotencyKey_key" ON "SeoResearchRun"("projectId", "idempotencyKey");
-
 -- AddForeignKey
 ALTER TABLE "PrelaunchResearchRequest" ADD CONSTRAINT "PrelaunchResearchRequest_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PrelaunchResearchRequest" ADD CONSTRAINT "PrelaunchResearchRequest_researchRunId_fkey" FOREIGN KEY ("researchRunId") REFERENCES "SeoResearchRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+-- Site-less jobs dedupe per project while site-bound keys remain site-scoped.
+CREATE UNIQUE INDEX "Job_projectId_kind_idempotencyKey_siteLess_key" ON "Job"("projectId", "kind", "idempotencyKey") WHERE "siteId" IS NULL;

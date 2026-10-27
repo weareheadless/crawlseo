@@ -13,6 +13,8 @@ import { db } from "@/lib/db";
 import { requestPrelaunchResearch } from "@/lib/dataforseo/prelaunch";
 import { getResearchReport } from "@/lib/dataforseo/research";
 import { runPrelaunchResearch } from "@/lib/dataforseo/prelaunch-runner";
+import { enqueueJob } from "@/lib/jobs/queue";
+import { JobKind } from "@prisma/client";
 const orgs: string[] = [];
 const brief = (period: string) => ({ period, focus_market: { language: "en", country: "US" }, business_goal: "Grow business", audience: ["buyers"], priority_services: ["service"], keyword_seeds: ["seed one", "seed two", "seed three", "seed four", "seed five"], competitor: null, research_questions: ["What is needed?"], selection_rationale: { market: "owner brief", seeds: ["seed one", "seed two", "seed three", "seed four", "seed five"], competitor: "none" }, package: "standard-v1" });
 const lastClosedPeriod = () => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); };
@@ -31,6 +33,15 @@ suite("UI-019 domainless prelaunch persistence", () => {
     await expect(requestPrelaunchResearch({ projectId: p.id, brief: brief(lastClosedPeriod()), idempotencyKey: "no-budget-123" })).rejects.toThrow(/allowance and per-operation ceiling/);
     expect(await db.seoResearchRun.count({ where: { projectId: p.id } })).toBe(0);
     expect(await db.job.count({ where: { projectId: p.id } })).toBe(0);
+  });
+  it("keeps identical site-scoped job dedupe keys independent across sites in one project", async () => {
+    const p = await project();
+    const a = await db.site.create({ data: { projectId: p.id, domain: `a-${p.id}.example` } });
+    const b = await db.site.create({ data: { projectId: p.id, domain: `b-${p.id}.example` } });
+    const first = await enqueueJob({ projectId: p.id, siteId: a.id, kind: JobKind.SEO_RESEARCH, idempotencyKey: "same-site-key" });
+    const second = await enqueueJob({ projectId: p.id, siteId: b.id, kind: JobKind.SEO_RESEARCH, idempotencyKey: "same-site-key" });
+    expect(second.id).not.toBe(first.id);
+    expect(await db.job.count({ where: { projectId: p.id, kind: JobKind.SEO_RESEARCH, idempotencyKey: "same-site-key" } })).toBe(2);
   });
   it("creates and reads a domainless run; a second key maps to it without spending or creating a Site", async () => {
     const p = await project();
