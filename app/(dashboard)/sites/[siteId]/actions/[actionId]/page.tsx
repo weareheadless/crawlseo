@@ -16,6 +16,7 @@ import { EmbedDeliveryControls } from "@/components/work/embed-delivery-controls
 import { SourceList } from "@/components/research/source-evidence";
 import { keywordEvidenceForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction, opportunitySignalLabel } from "@/lib/ai-seo/opportunity-priority";
+import { actionDimension } from "@/lib/work/categories";
 import { isTechnicalSeoAction, isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,13 @@ export default async function ActionDetailPage({ params }: Props) {
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
   const authority = await getSiteExecutionAuthority(siteId);
   const externallyManaged = authority?.managed ?? false;
+  const coverage = action.questionCoverage;
+  const knowledgeRevision = coverage?.documentId && coverage.evidenceRevision != null
+    ? await db.businessKnowledgeRevision.findUnique({
+        where: { documentId_revision: { documentId: coverage.documentId, revision: coverage.evidenceRevision } },
+        select: { revision: true, fields: true },
+      })
+    : null;
 
   return (
     <div>
@@ -87,6 +95,24 @@ export default async function ActionDetailPage({ params }: Props) {
           </div>
         }
       />
+
+      <section className="panel mb-5 p-5" aria-label="Action provenance">
+        <h2 className="font-heading text-lg font-semibold">Why this Action exists</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{actionDimension(action).toUpperCase()} · provenance from recorded research and coverage.</p>
+        <ol className="mt-4 space-y-3 border-l border-border pl-4 text-sm">
+          <li>
+            <strong>Knowledge revision and field:</strong>{" "}
+            {coverage?.document && coverage.evidenceRevision != null && coverage.fieldPath ? (
+              <Link className="text-primary underline" href={`/sites/${siteId}/intelligence`}>Knowledge {coverage.document.logicalId}, revision {coverage.evidenceRevision}, field {coverage.fieldPath}{knowledgeRevision ? ` (${Object.prototype.hasOwnProperty.call(record(knowledgeRevision.fields), coverage.fieldPath) ? "field recorded" : "field missing from revision"})` : " (revision missing)"}</Link>
+            ) : <span className="text-muted-foreground">Missing hop: no knowledge revision/field is linked to this Action.</span>}
+          </li>
+          <li><strong>Research finding:</strong>{" "}{action.finding ? <Link className="text-primary underline" href={`/sites/${siteId}/research/runs/${action.runId ?? action.finding.runId}`}>{action.finding.summary}</Link> : <span className="text-muted-foreground">Missing hop: no research finding is linked.</span>}</li>
+          <li><strong>Sources and retrieval dates:</strong>{" "}{action.evidenceSources.length ? <ul className="mt-1 list-disc pl-5">{action.evidenceSources.map((source) => <li key={source.id}><a className="text-primary underline" href={source.url} target="_blank" rel="noreferrer">{source.title || source.url}</a> · retrieved {source.retrievedAt.toISOString().slice(0, 10)}</li>)}</ul> : <span className="text-muted-foreground">Missing hop: no source is linked to the finding or Action.</span>}</li>
+          <li><strong>Question coverage:</strong>{" "}{coverage ? <Link className="text-primary underline" href={`/sites/${siteId}/intelligence`}>{coverage.status.toLowerCase()} · {coverage.service} / {coverage.audience} · {coverage.missingEvidence ?? "no missing-evidence note"}</Link> : <span className="text-muted-foreground">Missing hop: no coverage record is linked to this Action.</span>}</li>
+          <li><strong>Action:</strong> {action.title} · {action.status.toLowerCase().replaceAll("_", " ")}</li>
+          <li><strong>Outcome:</strong>{" "}{action.deliveries.length ? action.deliveries.map((delivery) => `${delivery.status.toLowerCase()} (${delivery.createdAt.toISOString().slice(0, 10)})`).join("; ") : ["VERIFIED", "FULFILLED", "FAILED", "DISMISSED"].includes(action.status) ? action.status.toLowerCase() : "Missing hop: no outcome is recorded yet."}</li>
+        </ol>
+      </section>
 
       {editorial && (
         <section className="panel mb-5 p-5">

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Bot, ClipboardList, FileText, Inbox, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KeywordEvidenceSummary } from "@/lib/research/evidence";
-import { workCategory, workCategoryLabel, type WorkCategory } from "@/lib/work/categories";
+import { actionDimensions, workCategory, workCategoryLabel, type ActionDimension, type WorkCategory } from "@/lib/work/categories";
 import {
   opportunitySignalLabel,
   type OpportunityPriority,
@@ -16,6 +16,7 @@ type ActionRow = {
   title: string;
   source: string;
   kind: string;
+  dimension: ActionDimension;
   format: string | null;
   status: string;
   priority: number;
@@ -74,20 +75,27 @@ const statusTone: Record<string, string> = {
 export function Workbench({
   siteId,
   initialTab = "inbox",
+  initialDimension = "all",
+  initialState = "all",
   actions,
   drafts,
   agentTasks,
 }: {
   siteId: string;
   initialTab?: Tab;
+  initialDimension?: ActionDimension | "all";
+  initialState?: string;
   actions: ActionRow[];
   drafts: DraftRow[];
   agentTasks: TaskRow[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [category, setCategory] = useState<"all" | WorkCategory>("all");
+  const [dimension, setDimension] = useState<ActionDimension | "all">(initialDimension);
+  const [state, setState] = useState<string>(initialState);
   const actionCategory = new Map(actions.map((action) => [action.id, workCategory(action)]));
-  const matchesCategory = (action: ActionRow) => category === "all" || workCategory(action) === category;
+  const matchesCategory = (action: ActionRow) => (category === "all" || workCategory(action) === category)
+    && (dimension === "all" || action.dimension === dimension) && (state === "all" || action.status === state);
   const matchesTask = (task: TaskRow) => category === "all"
     || Boolean(task.actionId && actionCategory.get(task.actionId) === category);
   const matchesDraft = (draft: DraftRow) => category === "all"
@@ -136,6 +144,19 @@ export function Workbench({
         <FilterButton active={category === "content"} onClick={() => setCategory("content")}>
           Content creation <span className="ml-1 opacity-60">{contentCount}</span>
         </FilterButton>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-muted-foreground" htmlFor="action-dimension">Dimension</label>
+        <select id="action-dimension" value={dimension} onChange={(event) => { const value = event.target.value as ActionDimension | "all"; setDimension(value); const url = new URL(window.location.href); if (value === "all") url.searchParams.delete("dimension"); else url.searchParams.set("dimension", value); window.history.replaceState(null, "", url); }} className="rounded-md border border-border bg-background px-2 py-1 text-xs">
+          <option value="all">All dimensions ({actions.length})</option>
+          {actionDimensions.map((value) => <option key={value} value={value}>{value.toUpperCase()} ({actions.filter((action) => action.dimension === value && (state === "all" || action.status === state)).length})</option>)}
+        </select>
+        <label className="text-xs text-muted-foreground" htmlFor="action-state">State</label>
+        <select id="action-state" value={state} onChange={(event) => { const value = event.target.value; setState(value); const url = new URL(window.location.href); if (value === "all") url.searchParams.delete("state"); else url.searchParams.set("state", value); window.history.replaceState(null, "", url); }} className="rounded-md border border-border bg-background px-2 py-1 text-xs">
+          <option value="all">All states ({actions.filter((action) => dimension === "all" || action.dimension === dimension).length})</option>
+          {[...new Set(actions.map((action) => action.status))].sort().map((value) => <option key={value} value={value}>{value.toLowerCase().replaceAll("_", " ")} ({actions.filter((action) => action.status === value && (dimension === "all" || action.dimension === dimension)).length})</option>)}
+        </select>
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-border/60 pb-2">
