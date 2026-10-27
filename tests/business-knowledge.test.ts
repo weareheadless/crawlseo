@@ -88,11 +88,14 @@ describe("canonical business knowledge revisions", () => {
 
   it("records dashboard correction provenance, requires rationale over owner truth, preserves disputes, and replays exactly", async () => {
     await writeBusinessKnowledge(writeInput(), principal);
-    const corrected = await writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "dashboard-correct-01", reason: "Owner provided corrected name", changes: { businessName: fact("New") } }), principal, { type: "workspace_admin", id: "operator-1" });
+    const correction = { expectedRevision: 1, idempotencyKey: "dashboard-correct-01", reason: "Owner provided corrected name", changes: { businessName: fact("New") } };
+    await expect(writeBusinessKnowledge(writeInput(correction), principal, { type: "workspace_admin", id: "operator-1" })).rejects.toMatchObject({ code: "VALIDATION_FAILED", message: expect.stringContaining("acknowledgement") });
+    const corrected = await writeBusinessKnowledge(writeInput({ ...correction, acknowledgeOwnerOverride: true }), principal, { type: "workspace_admin", id: "operator-1" });
     expect(corrected.revision).toBe(2);
     expect(corrected.fields.businessName?.provenance).toMatchObject({ kind: "admin_input", status: "admin_confirmed", actor: { type: "workspace_admin", id: "operator-1" } });
     await expect(writeBusinessKnowledge(writeInput({ expectedRevision: 2, idempotencyKey: "dashboard-correct-02", reason: "", changes: { businessName: fact("No reason") } }), principal, { type: "workspace_admin", id: "operator-1" })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
-    await expect(writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "dashboard-correct-01", reason: "Owner provided corrected name", changes: { businessName: fact("New") } }), principal, { type: "workspace_admin", id: "operator-1" })).resolves.toEqual(corrected);
+    await expect(writeBusinessKnowledge(writeInput({ ...correction, acknowledgeOwnerOverride: true }), principal, { type: "workspace_admin", id: "operator-1" })).resolves.toEqual(corrected);
+    expect(state.events.at(-1)?.payload).toMatchObject({ ownerOverrideAcknowledged: true });
     expect(state.head.revision).toBe(2);
   });
 

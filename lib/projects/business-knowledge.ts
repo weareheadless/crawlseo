@@ -92,7 +92,7 @@ export async function readBusinessKnowledgeCorrectionImpact(
 
 export async function writeBusinessKnowledge(input: {
   workspaceId: string; projectId: string; documentId: string; expectedRevision: number; idempotencyKey: string;
-  reason: string; changes: unknown;
+  reason: string; changes: unknown; acknowledgeOwnerOverride?: true;
 }, principal: ServicePrincipalContext, corrector?: { type: "owner" | "workspace_admin"; id: string }) {
   if (!principal.scopes.includes("document:write")) throw new BusinessKnowledgeError("FORBIDDEN", "Document write permission is required");
   if (input.projectId !== principal.projectId || input.workspaceId !== principal.workspaceId) throw new BusinessKnowledgeError("NOT_FOUND", "Document not found");
@@ -114,23 +114,23 @@ export async function writeBusinessKnowledge(input: {
       if (input.expectedRevision !== current) throw new BusinessKnowledgeError("REVISION_CONFLICT", "Document revision changed", current);
       const oldFields = head ? await tx.businessKnowledgeRevision.findUnique({ where: { documentId_revision: { documentId: head.id, revision: current } } }) : null;
       const previousFields = oldFields?.fields as Record<string, unknown> | undefined ?? {};
-       const corrected = Object.fromEntries(Object.entries(fields).map(([name, fact]) => {
-         const previous = previousFields[name] as { provenance?: { status?: string } } | undefined;
-         if (previous?.provenance?.status === "disputed" || previous?.provenance?.status === "deferred") {
-           throw new BusinessKnowledgeError("VALIDATION_FAILED", `Cannot correct ${name} while its existing status is ${previous.provenance.status}`);
-         }
-         if (previous?.provenance?.status === "owner_confirmed" && corrector?.type === "workspace_admin"
-             && !input.reason.trim()) throw new BusinessKnowledgeError("VALIDATION_FAILED", "An explicit reason is required to overwrite an owner-confirmed fact");
-         if (corrector) {
-           const record = fact as { provenance: Record<string, unknown> };
-           return [name, { ...record, provenance: { ...record.provenance, kind: corrector.type === "owner" ? "owner_input" : "admin_input",
-             actor: corrector, status: corrector.type === "owner" ? "owner_confirmed" : "admin_confirmed" } }];
-         }
-         return [name, fact];
-       }));
-       const merged = { ...previousFields, ...corrected };
+      const corrected = Object.fromEntries(Object.entries(fields).map(([name, fact]) => {
+        const previous = previousFields[name] as { provenance?: { status?: string } } | undefined;
+        if (previous?.provenance?.status === "disputed" || previous?.provenance?.status === "deferred") {
+          throw new BusinessKnowledgeError("VALIDATION_FAILED", `Cannot correct ${name} while its existing status is ${previous.provenance.status}`);
+        }
+        if (previous?.provenance?.status === "owner_confirmed" && corrector?.type === "workspace_admin"
+            && input.acknowledgeOwnerOverride !== true) throw new BusinessKnowledgeError("VALIDATION_FAILED", "Explicit acknowledgement is required to overwrite an owner-confirmed fact");
+        if (corrector) {
+          const record = fact as { provenance: Record<string, unknown> };
+          return [name, { ...record, provenance: { ...record.provenance, kind: corrector.type === "owner" ? "owner_input" : "admin_input",
+            actor: corrector, status: corrector.type === "owner" ? "owner_confirmed" : "admin_confirmed" } }];
+        }
+        return [name, fact];
+      }));
+      const merged = { ...previousFields, ...corrected };
       const validated = businessKnowledgeFieldsSchema.parse(merged);
-       const changedFields = (Object.keys(corrected) as Array<keyof BusinessKnowledgeFields>).filter((field) => JSON.stringify(previousFields[field]) !== JSON.stringify(corrected[field]));
+      const changedFields = (Object.keys(corrected) as Array<keyof BusinessKnowledgeFields>).filter((field) => JSON.stringify(previousFields[field]) !== JSON.stringify(corrected[field]));
       const affectedActions = current > 0 && changedFields.length > 0
         ? await tx.researchAction.findMany({ where: { projectId: input.projectId, status: { in: ["PROPOSED", "DRAFTING", "DRAFT_READY"] } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 101, select: { id: true, siteId: true } })
         : [];
@@ -157,7 +157,8 @@ export async function writeBusinessKnowledge(input: {
         const counter = await tx.connectorEventCounter.findUniqueOrThrow({ where: { projectId: input.projectId } });
         await tx.connectorEvent.create({ data: { id: randomUUID(), projectId: input.projectId, siteId, sequence: counter.sequence,
           type: current > 0 && actionIds.length ? "business.knowledge.corrected" : "business.knowledge.updated",
-          payload: json({ documentId: input.documentId, revision: current + 1, changedFields, affectedActionIds: actionIds }) } });
+          payload: json({ documentId: input.documentId, revision: current + 1, changedFields, affectedActionIds: actionIds,
+            ownerOverrideAcknowledged: input.acknowledgeOwnerOverride === true }) } });
       }
       return result;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

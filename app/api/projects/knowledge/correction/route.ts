@@ -3,9 +3,16 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { writeBusinessKnowledge, BusinessKnowledgeError, businessKnowledgeFieldsSchema } from "@/lib/projects/business-knowledge";
 
-const schema = z.object({ workspaceId: z.string().min(1), projectId: z.string().min(1), documentId: z.string().min(1),
-  expectedRevision: z.number().int().min(0), idempotencyKey: z.string().min(8).max(240), reason: z.string().min(1).max(1000),
-  changes: businessKnowledgeFieldsSchema }).strict();
+const schema = z.object({
+  workspaceId: z.string().min(1),
+  projectId: z.string().min(1),
+  documentId: z.string().min(1),
+  expectedRevision: z.number().int().min(0),
+  idempotencyKey: z.string().min(8).max(240),
+  reason: z.string().min(1).max(1000),
+  acknowledgeOwnerOverride: z.literal(true).optional(),
+  changes: businessKnowledgeFieldsSchema,
+}).strict();
 
 export async function POST(request: Request) {
   const userId = await getUserIdFromCookies();
@@ -14,11 +21,12 @@ export async function POST(request: Request) {
     const input = schema.parse(await request.json());
     const project = await db.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId },
       select: { id: true, workspaceId: true, sites: { select: { id: true, userId: true } } } });
-    if (!project || project.sites.some((site) => site.userId !== null && site.userId !== userId)) return Response.json({ code: "NOT_FOUND", error: "Document not found" }, { status: 404 });
-    const owner = project.sites.some((site) => site.userId === userId);
+    if (!project) return Response.json({ code: "NOT_FOUND", error: "Document not found" }, { status: 404 });
+    const siteOwners = project.sites.map((site) => site.userId).filter((id): id is string => id !== null);
+    if (siteOwners.length === 0 || siteOwners.some((id) => id !== userId)) return Response.json({ code: "NOT_FOUND", error: "Project ownership cannot be verified" }, { status: 404 });
     const principal = { credentialId: `dashboard:${userId}`, servicePrincipalId: `dashboard:${userId}`,
       workspaceId: input.workspaceId, projectId: input.projectId, scopes: ["document:write"] };
-    const document = await writeBusinessKnowledge(input, principal, { type: owner ? "owner" : "workspace_admin", id: userId });
+    const document = await writeBusinessKnowledge(input, principal, { type: "owner", id: userId });
     return Response.json(document, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof BusinessKnowledgeError) {
