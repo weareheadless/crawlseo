@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditSchemaSemantics, liveCheckFromHtml, schemaAuditProjection } from "@/lib/research/crawl-live-check";
+import { auditSchemaSemantics, identityJsonLdMatchesAcceptedRevision, liveCheckFromHtml, schemaAuditProjection } from "@/lib/research/crawl-live-check";
 import { persistSchemaSemanticsIssues } from "@/lib/crawler/schema-semantics-persistence";
 
 const page = `<!doctype html><html><head>
@@ -30,6 +30,11 @@ describe("crawl live checks", () => {
     const bounded = schemaAuditProjection(`<main>${"visible ".repeat(1000)}</main><script type="application/ld+json">${JSON.stringify({ name: "Acme Ltd" })}</script>`)!;
     expect(bounded.visibleText.length).toBeLessThanOrEqual(4000);
     expect(bounded.jsonLdBlocks.join("").length).toBeLessThanOrEqual(20_000);
+  });
+  it("verifies valid identity JSON-LD against accepted facts and names mismatches", () => {
+    expect(identityJsonLdMatchesAcceptedRevision("<h1>Acme</h1>", knowledge)).toMatchObject({ passed: false, mismatchedFields: ["businessName"] });
+    expect(identityJsonLdMatchesAcceptedRevision('<script type="application/ld+json">{"@type":"Organization","name":"Acme Ltd"}</script>', knowledge)).toMatchObject({ passed: true, mismatchedFields: [] });
+    expect(identityJsonLdMatchesAcceptedRevision('<script type="application/ld+json">{"@type":"Organization","name":"Other"}</script>', knowledge).mismatchedFields).toContain("businessName");
   });
   it("persists evidence, stays idempotent, and updates changed results", async () => {
     const rows = new Map<string, { id: string; data: Record<string, unknown> }>();

@@ -573,7 +573,7 @@ function issuesFromPage(page: PageSnapshot): IssueInput[] {
       type: "MISSING_SCHEMA",
       severity: "INFO",
       message: "No structured data (JSON-LD / microdata)",
-      details: rem("MISSING_SCHEMA"),
+      details: { ...rem("MISSING_SCHEMA"), kind: "identity_jsonld_absence" },
     });
   }
 
@@ -1058,7 +1058,7 @@ async function executeCrawl(
     for (const finding of findings) {
       issues.push({ url: page.url, type: "MISSING_SCHEMA", severity: finding.status === "mismatch" ? "WARNING" : "INFO",
         message: finding.status === "mismatch" ? `Business content mismatch: ${finding.field}` : `Business consistency audit unknown: ${finding.field}`,
-        details: { kind: "business_schema_semantics", stableKey: `${page.url}:${finding.key}`, field: finding.field, status: finding.status,
+        details: { kind: "business_schema_semantics", code: finding.code, stableKey: `${page.url}:${finding.key}`, field: finding.field, status: finding.status,
           expected: finding.expected ?? null, observed: finding.observed ?? null, observedLocation: finding.location ?? null,
           evidence: finding.evidence, knowledgeDocumentId, knowledgeRevision: knowledge?.revision ?? null } });
     }

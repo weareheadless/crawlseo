@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AI_VISIBILITY_CAPABILITY_VERSION,
+  AI_VISIBILITY_CAPABILITY_INVENTORY,
   AI_VISIBILITY_UNKNOWN_REASON,
   providerCapabilityMatrixSchema,
   visibilityFromAccessSignals,
@@ -17,6 +18,12 @@ describe("AI visibility capability inventory", () => {
   it("validates per-provider dashboard, API/export, and unavailable surfaces", () => {
     expect(providerCapabilityMatrixSchema.parse(matrix)).toEqual(matrix);
     expect(providerCapabilityMatrixSchema.safeParse({ ...matrix, version: "future" }).success).toBe(false);
+  });
+  it("renders a code-level matrix with unavailable surfaces called out explicitly", () => {
+    const parsed = providerCapabilityMatrixSchema.parse(AI_VISIBILITY_CAPABILITY_INVENTORY);
+    expect(parsed.providers.length).toBeGreaterThan(0);
+    expect(parsed.providers.every((provider) => Array.isArray(provider.unavailableSurfaces))).toBe(true);
+    expect(parsed.providers[0].dashboard.availability).toBe("unknown");
   });
 
   it("represents unobserved surfaces as unknown with reason codes, never numeric zero", () => {

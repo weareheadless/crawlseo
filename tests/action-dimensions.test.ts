@@ -6,6 +6,7 @@ describe("derived action dimensions", () => {
     [{ source: "ai_visibility_coverage", kind: "missing_evidence" }, "aeo"],
     [{ source: "research", kind: "visibility_gap" }, "geo"],
     [{ source: "crawl_issue", kind: "fix_technical_issue" }, "technical"],
+    [{ source: "crawl_issue", kind: "fix_business_identity_jsonld" }, "aeo"],
     [{ source: "crawl_issue", kind: "fix_broken_link" }, "seo"],
     [{ source: "keyword_research", kind: "create_article" }, "content"],
     [{ source: "seo_opportunity", kind: "improve_metadata" }, "content"],

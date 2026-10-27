@@ -26,6 +26,17 @@ export const providerCapabilityMatrixSchema = z.object({
 
 export type ProviderCapabilityMatrix = z.infer<typeof providerCapabilityMatrixSchema>;
 
+/** Code-level inventory: unknown is kept distinct from unavailable. */
+export const AI_VISIBILITY_CAPABILITY_INVENTORY: ProviderCapabilityMatrix = {
+  version: AI_VISIBILITY_CAPABILITY_VERSION,
+  providers: ["ChatGPT", "Claude", "Gemini", "Perplexity"].map((provider) => ({
+    provider,
+    dashboard: { availability: "unknown" as const, reasonCode: "not_inventoried" },
+    apiOrExport: { availability: "unknown" as const, reasonCode: "not_inventoried" },
+    unavailableSurfaces: [],
+  })),
+};
+
 // This is an evidence taxonomy, not a result set: no unsupported provider claims are prefilled.
 export const AI_VISIBILITY_UNKNOWN_REASON = {
   NOT_OBSERVED: "not_observed",

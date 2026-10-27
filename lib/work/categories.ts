@@ -7,6 +7,7 @@ export type ActionDimension = (typeof actionDimensions)[number];
 export function actionDimension(action: { source?: string | null; kind?: string | null }): ActionDimension {
   const source = action.source ?? "";
   const kind = action.kind ?? "";
+  if (/business_identity|identity_jsonld/i.test(kind)) return "aeo";
   if (source === "ai_visibility_coverage" || kind === "missing_evidence") return "aeo";
   if (/visibility|geo/i.test(source) || /visibility|citation|mention/i.test(kind)) return "geo";
   if (source === "crawl_issue") {

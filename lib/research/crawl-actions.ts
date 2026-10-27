@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { REMEDIATION } from "@/lib/crawler/remediation";
 import { createResearchAction } from "@/lib/research/service";
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
-import { verifyCrawlDraftLive } from "@/lib/research/crawl-live-check";
+import { identityJsonLdMatchesAcceptedRevision, verifyCrawlDraftLive } from "@/lib/research/crawl-live-check";
 
 type CrawlIssueRow = {
   url: string;
@@ -42,7 +42,7 @@ export type CrawlActionDraft = {
   recommendation: string;
   priority: number;
   issueType: string;
-  kind: "fix_technical_issue" | "fix_broken_link";
+  kind: "fix_technical_issue" | "fix_broken_link" | "fix_business_identity_jsonld";
   fixMode: "site_code" | "blog_content";
   severity: string;
   groupKey: string;
@@ -221,7 +221,10 @@ export function buildCrawlActionDrafts(input: {
     const sourceLinks = issue.type === "BROKEN_LINK" ? linksByTarget.get(issue.url) ?? [] : [];
     const sourceUrl = sourceLinks[0]?.sourceUrl ?? null;
     const blogContentIssue = issue.type === "BROKEN_LINK" && Boolean(sourceUrl) && isWixBlogTarget(sourceUrl!);
-    const gapIdentity = typeof details.gapIdentity === "string" ? details.gapIdentity
+    const identityJsonLdGap = issue.type === "MISSING_SCHEMA" && details.kind === "business_schema_semantics"
+      && (details.code === "STRUCTURED_DATA_MISSING" || details.field === "structuredData")
+      || issue.type === "MISSING_SCHEMA" && details.kind === "identity_jsonld_absence";
+    const gapIdentity = identityJsonLdGap ? `identity-jsonld:${issue.url}` : typeof details.gapIdentity === "string" ? details.gapIdentity
       : details.kind === "business_schema_semantics" ? `business:${String(details.stableKey ?? `${issue.url}:${details.field ?? "identity"}`)}` : null;
     const batch = !gapIdentity && !blogContentIssue
       && !SITE_WIDE_ISSUES.has(issue.type)
@@ -244,7 +247,7 @@ export function buildCrawlActionDrafts(input: {
       ? duplicateUrls(issue)
       : [issue.url];
     if (urls.length === 0) continue;
-    const key = `${issue.type}:${group.key}`;
+    const key = identityJsonLdGap ? group.key : `${issue.type}:${group.key}`;
     const existing = groups.get(key);
     if (existing) {
       for (const url of urls) existing.urls.add(url);
@@ -294,7 +297,8 @@ export function buildCrawlActionDrafts(input: {
     const targetUrl = group.sourceUrl ?? representative;
     const statusCode = group.statusCodes.size === 1 ? [...group.statusCodes][0] : null;
     const blogContent = group.type === "BROKEN_LINK" && isWixBlogTarget(targetUrl);
-    const kind = blogContent ? "fix_broken_link" : "fix_technical_issue";
+    const identityJsonLd = group.specialDetails?.kind === "identity_jsonld_absence" || group.specialDetails?.code === "STRUCTURED_DATA_MISSING" || group.specialDetails?.field === "structuredData";
+    const kind = identityJsonLd ? "fix_business_identity_jsonld" : blogContent ? "fix_broken_link" : "fix_technical_issue";
     const fixMode = blogContent ? "blog_content" : "site_code";
     const affectedPages = group.type === "BROKEN_LINK" && group.brokenUrls.size > 0 ? group.brokenUrls.size : urls.length;
     const affectedPct = Math.round((affectedPages / Math.max(1, input.crawl.pagesFound)) * 1000) / 10;
@@ -315,7 +319,9 @@ export function buildCrawlActionDrafts(input: {
         : SITE_WIDE_ISSUES.has(group.type)
           ? `${issueTitle} — ${affectedPages} page${affectedPages === 1 ? "" : "s"}`
           : `${issueTitle} — ${group.label} (${affectedPages} page${affectedPages === 1 ? "" : "s"})`;
-    const fix = details.kind === "business_schema_semantics"
+    const fix = identityJsonLd
+      ? `Add valid Organization JSON-LD to ${targetUrl}, matching only the accepted business identity revision. Do not invent or infer fields.`
+      : details.kind === "business_schema_semantics"
       ? `Review ${String(details.field)} on ${targetUrl}. ${details.status === "mismatch" ? "Compare the page value with confirmed canonical knowledge and correct only after owner confirmation." : "Confirm the canonical value and add matching structured data; do not infer a value."}`
       : details.kind === "ai_crawler_block" ? `Review robots.txt rule “${String(details.rule)}”, which blocks ${String(details.crawler)}. Change it only if the owner intends to allow this crawler.`
         : details.kind === "sitemap_coverage" ? `Add ${targetUrl} to the parsed sitemap if it should remain indexable.`
@@ -342,12 +348,14 @@ export function buildCrawlActionDrafts(input: {
       .join("\n\n")
       .slice(0, 4_000);
     const page = pageEvidence(pagesByUrl.get(targetUrl));
-    const evidence = {
+      const evidence = {
       kind: "crawl_issue",
       technical: fixMode === "site_code",
       crawl_id: input.crawl.id,
       crawl_finished_at: input.crawl.finishedAt ? new Date(input.crawl.finishedAt).toISOString() : null,
       issue_type: group.orphan ? "ORPHAN_PAGE" : group.type,
+      knowledge_document_id: details.knowledgeDocumentId ?? null,
+      knowledge_revision: details.knowledgeRevision ?? null,
       duplicate_value: group.duplicateValue,
       examples: urls.slice(0, 5).map((url) => {
         const page = pagesByUrl.get(url);
@@ -376,9 +384,18 @@ export function buildCrawlActionDrafts(input: {
       broken_urls: [...group.brokenUrls],
       anchor_texts: [...group.anchors],
       how_to_fix: fix,
-      verifier: {
+      verifier: identityJsonLd ? {
         version: 1,
-        type: details.kind === "business_schema_semantics" ? "business_identity_comparison" : details.kind === "ai_crawler_block" ? "robots_rule_evaluation" : details.kind === "sitemap_coverage" ? "sitemap_presence" : "crawl_issue_absence",
+        type: "identity_jsonld_matches_accepted_revision",
+        identity: group.key,
+        url: targetUrl,
+        check: "The next completed crawl finds valid identity JSON-LD matching the accepted revision.",
+        requiredFields: ["businessName", ...((typeof details.expected === "string" && details.field === "location") ? ["location"] : [])],
+        knowledgeDocumentId: details.knowledgeDocumentId ?? null,
+        knowledgeRevision: details.knowledgeRevision ?? null,
+      } : {
+        version: 1,
+        type: identityJsonLd ? "identity_jsonld_matches_accepted_revision" : details.kind === "business_schema_semantics" ? "business_identity_comparison" : details.kind === "ai_crawler_block" ? "robots_rule_evaluation" : details.kind === "sitemap_coverage" ? "sitemap_presence" : "crawl_issue_absence",
         identity: group.key,
         issueType: group.orphan ? "ORPHAN_PAGE" : group.type,
         urls: urls.slice(0, group.batch ? 100 : 20),
@@ -470,12 +487,30 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       existing += 1;
       continue;
     }
-    const liveCheck = await verifyCrawlDraftLive(draft);
+    const identityVerifier = record(draft.evidence.verifier).type === "identity_jsonld_matches_accepted_revision";
+    const liveCheck = identityVerifier ? null : await verifyCrawlDraftLive(draft);
     if (liveCheck?.reproduced_url) {
       draft.targetUrl = liveCheck.reproduced_url;
       draft.evidence = { ...draft.evidence, sample_url: liveCheck.reproduced_url };
     }
-    const evidence = liveCheck ? { ...draft.evidence, live_check: liveCheck } : draft.evidence;
+    let evidence: Record<string, unknown> = liveCheck ? { ...draft.evidence, live_check: liveCheck } : draft.evidence;
+    if (identityVerifier) {
+      const knowledgeHead = site.projectId ? await db.businessKnowledgeDocument.findUnique({ where: { projectId: site.projectId }, select: { logicalId: true, acceptedRevision: true } }) : null;
+      const verifier = record(draft.evidence.verifier);
+      let accepted = null;
+      if (site.projectId && knowledgeHead?.logicalId && knowledgeHead.acceptedRevision != null) {
+        try { accepted = await import("@/lib/projects/business-knowledge").then(({ readBusinessKnowledge }) => readBusinessKnowledge(site.projectId!, knowledgeHead.logicalId, knowledgeHead.acceptedRevision!, "accepted")); } catch { accepted = null; }
+      }
+      const projection = await fetch(draft.targetUrl, { redirect: "follow", headers: { Accept: "text/html,application/xhtml+xml" }, signal: AbortSignal.timeout(20_000) }).then(async (response) => response.ok ? (await import("@/lib/research/crawl-live-check")).schemaAuditProjection(await response.text()) : null).catch(() => null);
+      const check = identityJsonLdMatchesAcceptedRevision(projection, accepted);
+      const passesRevision = verifier.knowledgeRevision === knowledgeHead?.acceptedRevision && verifier.knowledgeDocumentId === knowledgeHead?.logicalId;
+      evidence = { ...draft.evidence, verifier_result: { passed: check.passed && passesRevision, mismatchedFields: check.mismatchedFields, requiredFields: check.requiredFields, acceptedRevision: knowledgeHead?.acceptedRevision ?? null, checked_at: new Date().toISOString() } };
+      if (check.passed && passesRevision) {
+        if (previous) await db.researchAction.update({ where: { id: previous.id }, data: { status: "FULFILLED", verifiedAt: new Date(), evidence: json(evidence) } });
+        liveResolved += 1;
+        continue;
+      }
+    }
     if (liveCheck?.issue_reproduced === false) {
       if (previous) {
         const previousEvidence = record(previous.evidence);
@@ -539,7 +574,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
     const evidence = record(action.evidence);
     const verifier = record(evidence.verifier);
     if (["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)) continue;
-    if (["crawl_issue_absence", "business_identity_comparison", "robots_rule_evaluation", "sitemap_presence"].includes(String(verifier.type))) {
+    if (["crawl_issue_absence", "business_identity_comparison", "robots_rule_evaluation", "sitemap_presence", "identity_jsonld_matches_accepted_revision"].includes(String(verifier.type))) {
       await db.researchAction.update({
         where: { id: action.id },
         data: {
