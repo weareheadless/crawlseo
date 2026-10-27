@@ -12,7 +12,7 @@ const mockDb = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 
-import { ConnectorError, reserveConnectorBudget, settleConnectorBudget, updateConnectorBudgetPolicy } from "@/lib/connectors/service";
+import { ConnectorError, reserveConnectorBudget, reserveProjectConnectorBudget, projectConnectorBudget, settleConnectorBudget, updateConnectorBudgetPolicy } from "@/lib/connectors/service";
 
 const principal = { credentialId: "credential-1", servicePrincipalId: "principal-1", workspaceId: "workspace-1", projectId: "project-1", scopes: ["connector:read", "connector:write"] };
 const site = { id: "site-1", projectId: "project-1", domain: "example.com", project: { id: "project-1", externalProjectId: "external-1", workspaceId: "workspace-1" }, connectorBinding: { projectId: "project-1", status: "ACTIVE", generation: 1, executor: "helloada" } };
@@ -112,5 +112,29 @@ describe("project research budget ledger", () => {
     expect(mockDb.researchBudgetReservation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "reservation-1", projectId: "project-1", status: "RESERVED" },
     }));
+  });
+
+  it("preserves all existing site-scoped reservation terminal states", async () => {
+    for (const status of ["settled", "released", "uncertain"] as const) {
+      mockDb.researchBudgetReservation.findFirst.mockResolvedValueOnce({ id: `r-${status}`, projectId: "project-1", status: "RESERVED", actualCostMicros: null, providerTaskId: null });
+      mockDb.researchBudgetReservation.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockDb.researchBudgetReservation.findUnique.mockResolvedValueOnce({ id: `r-${status}`, status: status.toUpperCase() });
+      expect(await settleConnectorBudget(principal, `r-${status}`, { status, ...(status === "settled" ? { actualCostMicros: "1200" } : {}) })).toMatchObject({ status: status.toUpperCase() });
+    }
+    expect(mockDb.researchBudgetReservation.updateMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("reserves project-scope without resolving or inventing a Site and supports settlement", async () => {
+    mockDb.researchBudgetReservation.findUnique.mockResolvedValue(null);
+    const result = await reserveProjectConnectorBudget(principal, { period: month(), policyRevision: 4, idempotencyKey: "prelaunch:task", amountMicros: "25000", currency: "USD", operation: "dataforseo:keyword_seed" });
+    expect(result).toMatchObject({ siteId: null, projectId: "project-1", status: "RESERVED" });
+    expect(mockDb.site.findFirst).not.toHaveBeenCalled();
+    expect(mockDb.researchBudgetReservation.create).toHaveBeenCalledWith({ data: expect.objectContaining({ projectId: "project-1", siteId: null, status: "RESERVED" }) });
+  });
+
+  it("counts uncertain project reservations against remaining allowance", async () => {
+    mockDb.researchBudgetReservation.findMany.mockResolvedValue([{ status: "UNCERTAIN", amountMicros: BigInt(25000), actualCostMicros: null }]);
+    mockDb.project.findUnique.mockResolvedValue({ monthlyResearchAllowanceMicros: BigInt(100000), maxResearchOperationMicros: BigInt(30000), researchBudgetCurrency: "USD", researchBudgetTimeZone: "UTC", researchBudgetRevision: 4 });
+    expect(await projectConnectorBudget(principal)).toMatchObject({ siteId: null, committedMicros: "25000", remainingMicros: "75000" });
   });
 });

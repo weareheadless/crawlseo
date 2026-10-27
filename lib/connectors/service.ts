@@ -1075,6 +1075,22 @@ export async function connectorBudget(principal: ServicePrincipalContext, siteId
     maxOperationMicros: project.maxResearchOperationMicros?.toString() ?? null };
 }
 
+export async function projectConnectorBudget(principal: ServicePrincipalContext) {
+  const project = await db.project.findUnique({ where: { id: principal.projectId }, select: {
+    monthlyResearchAllowanceMicros: true, maxResearchOperationMicros: true, researchBudgetCurrency: true,
+    researchBudgetTimeZone: true, researchBudgetRevision: true,
+  } });
+  if (!project) throw new ConnectorError("Project not found", 404);
+  const period = periodInTimeZone(project.researchBudgetTimeZone);
+  const rows = await db.researchBudgetReservation.findMany({ where: { projectId: principal.projectId, period }, select: { status: true, amountMicros: true, actualCostMicros: true } });
+  const committed = rows.reduce((sum, row) => sum + (row.status === "SETTLED" ? row.actualCostMicros ?? row.amountMicros : ["RESERVED", "UNCERTAIN"].includes(row.status) ? row.amountMicros : BigInt(0)), BigInt(0));
+  const allowance = project.monthlyResearchAllowanceMicros;
+  return { projectId: principal.projectId, siteId: null, policyRevision: project.researchBudgetRevision, period, timeZone: project.researchBudgetTimeZone,
+    currency: project.researchBudgetCurrency, allowanceMicros: allowance?.toString() ?? null, committedMicros: committed.toString(),
+    remainingMicros: allowance === null ? null : (allowance - committed).toString(), configured: allowance !== null,
+    maxOperationMicros: project.maxResearchOperationMicros?.toString() ?? null };
+}
+
 export async function updateConnectorBudgetPolicy(principal: ServicePrincipalContext, input: {
   siteId: string; expectedRevision: number | null; monthlyAllowanceMicros: string | null; maxOperationMicros?: string | null; currency: string; timeZone: string;
 }) {
@@ -1161,6 +1177,36 @@ export async function reserveConnectorBudget(principal: ServicePrincipalContext,
     if ((error as { code?: string }).code === "P2002" || (error as { code?: string }).code === "P2034") throw new ConnectorError("Budget reservation raced another request; reconcile before retrying", 409);
     throw error;
   }
+}
+
+// Site-less research shares the exact budget rules and receipt ledger while
+// making its ownership scope explicit at project level.
+export async function reserveProjectConnectorBudget(principal: ServicePrincipalContext, input: {
+  period: string; policyRevision: number; idempotencyKey: string; amountMicros: string; currency: string; operation: string; detail?: unknown;
+}) {
+  const amount = BigInt(input.amountMicros);
+  try { return await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${principal.projectId} FOR UPDATE`;
+    const policy = await tx.project.findUnique({ where: { id: principal.projectId }, select: { monthlyResearchAllowanceMicros: true, maxResearchOperationMicros: true, researchBudgetCurrency: true, researchBudgetTimeZone: true, researchBudgetRevision: true } });
+    const prior = await tx.researchBudgetReservation.findUnique({ where: { projectId_idempotencyKey: { projectId: principal.projectId, idempotencyKey: input.idempotencyKey } } });
+    const fingerprint = budgetFingerprint({ projectId: principal.projectId, siteId: null, ...input, amountMicros: input.amountMicros });
+    if (prior) {
+      const oldFingerprint = budgetFingerprint({ projectId: principal.projectId, siteId: prior.siteId, period: prior.period, policyRevision: prior.policyRevision, idempotencyKey: prior.idempotencyKey, amountMicros: prior.amountMicros.toString(), currency: prior.currency, operation: prior.operation, detail: prior.detail ?? undefined });
+      if (prior.siteId !== null || oldFingerprint !== fingerprint) throw new ConnectorError("Budget idempotency key was reused for different work", 409);
+      if (prior.status !== "RELEASED") return prior;
+      throw new ConnectorError("A released budget idempotency key cannot be reused for a new dispatch", 409);
+    }
+    if (!policy || policy.monthlyResearchAllowanceMicros === null) throw new ConnectorError("Monetary research allowance is not configured", 409);
+    if (policy.maxResearchOperationMicros === null || amount > policy.maxResearchOperationMicros) throw new ConnectorError("Research reservation exceeds the configured per-operation ceiling", 429);
+    if (policy.researchBudgetRevision !== input.policyRevision) throw new ConnectorError("Research budget policy changed; refresh before reserving", 409);
+    if (policy.researchBudgetCurrency.toUpperCase() !== input.currency) throw new ConnectorError("Research reservation currency does not match policy", 409);
+    if (periodInTimeZone(policy.researchBudgetTimeZone) !== input.period) throw new ConnectorError("Research reservation period is not current in the policy timezone", 409);
+    const rows = await tx.researchBudgetReservation.findMany({ where: { projectId: principal.projectId, period: input.period, status: { in: ["RESERVED", "UNCERTAIN", "SETTLED"] } }, select: { status: true, amountMicros: true, actualCostMicros: true } });
+    const committed = rows.reduce((sum, row) => sum + (row.status === "SETTLED" ? row.actualCostMicros ?? row.amountMicros : row.amountMicros), BigInt(0));
+    if (committed + amount > policy.monthlyResearchAllowanceMicros) throw new ConnectorError("Monetary research allowance is exhausted for this period", 429);
+    return tx.researchBudgetReservation.create({ data: { projectId: principal.projectId, siteId: null, idempotencyKey: input.idempotencyKey, period: input.period, timeZone: policy.researchBudgetTimeZone, policyRevision: policy.researchBudgetRevision, amountMicros: amount, currency: input.currency, operation: input.operation, status: "RESERVED", detail: input.detail === undefined ? undefined : json(input.detail) } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }); }
+  catch (error) { if (error instanceof ConnectorError) throw error; if ((error as { code?: string }).code === "P2002" || (error as { code?: string }).code === "P2034") throw new ConnectorError("Budget reservation raced another request; reconcile before retrying", 409); throw error; }
 }
 
 export async function settleConnectorBudget(principal: ServicePrincipalContext, reservationId: string, input: {
