@@ -25,7 +25,7 @@ function statusTone(status: string): string {
 }
 
 function actionStatusTone(status: string): string {
-  if (status === "VERIFIED" || status === "DELIVERED") return "bg-signal/10 text-signal";
+  if (status === "VERIFIED" || status === "FULFILLED" || status === "DELIVERED") return "bg-signal/10 text-signal";
   if (status === "FAILED" || status === "DISMISSED") return "bg-danger/15 text-danger";
   if (status === "PROPOSED" || status === "DRAFT_READY") return "bg-warning/15 text-warning";
   return "bg-primary/10 text-primary";

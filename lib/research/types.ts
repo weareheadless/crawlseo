@@ -21,6 +21,7 @@ export const researchActionStatusSchema = z.enum([
   "DELIVERING",
   "DELIVERED",
   "VERIFIED",
+  "FULFILLED",
   "FAILED",
 ]);
 export const automationModeSchema = z.enum(["MANUAL", "ASSISTED", "AUTOMATIC"]);

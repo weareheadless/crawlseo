@@ -91,10 +91,8 @@ export async function recordQuestionCoverage(input: CoverageInput) {
   }
   if (status === "covered" && coverage.actionId) {
     const action = await db.researchAction.findUnique({ where: { id: coverage.actionId }, select: { id: true, status: true } });
-    if (action && !["DISMISSED", "VERIFIED", "FAILED"].includes(action.status)) {
-      // Resolved evidence makes the request obsolete; DISMISSED is the existing
-      // terminal Action state and the coverage transition is the measurable outcome.
-      await updateResearchAction(action.id, { status: "DISMISSED" }, "system:question-coverage");
+    if (action && !["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)) {
+      await updateResearchAction(action.id, { status: "FULFILLED" }, "system:question-coverage");
     }
   }
   return coverage;

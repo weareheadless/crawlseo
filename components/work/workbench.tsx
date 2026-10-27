@@ -68,6 +68,7 @@ const statusTone: Record<string, string> = {
   PUBLISHED: "bg-signal/10 text-signal",
   CLOSED: "bg-muted text-muted-foreground",
   FAILED: "bg-danger/15 text-danger",
+  FULFILLED: "bg-signal/10 text-signal",
 };
 
 export function Workbench({
@@ -116,7 +117,7 @@ export function Workbench({
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Summary label="Inbox" value={counts.inbox} icon={Inbox} />
-        <Summary label="Open actions" value={visibleActions.filter((action) => !["DISMISSED", "VERIFIED", "FAILED"].includes(action.status)).length} icon={ClipboardList} />
+        <Summary label="Open actions" value={visibleActions.filter((action) => !["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)).length} icon={ClipboardList} />
         <Summary label="Opportunities" value={counts.opportunities} icon={Target} />
         <Summary label="Drafts" value={counts.drafts} icon={FileText} />
         <Summary label="Agent tasks" value={counts["agent tasks"]} icon={Bot} />

@@ -69,15 +69,16 @@ function nearDuplicateTitle(left: string, right: string): boolean {
 }
 
 const ACTION_TRANSITIONS: Record<string, string[]> = {
-  PROPOSED: ["APPROVED", "DISMISSED", "FAILED"],
-  APPROVED: ["DRAFTING", "DELIVERY_APPROVED", "DISMISSED", "FAILED"],
-  DRAFTING: ["DRAFT_READY", "FAILED"],
-  DRAFT_READY: ["DELIVERY_APPROVED", "DRAFTING", "DISMISSED", "FAILED"],
-  DELIVERY_APPROVED: ["DELIVERING", "FAILED"],
-  DELIVERING: ["DELIVERED", "FAILED"],
-  DELIVERED: ["VERIFIED", "FAILED"],
+  PROPOSED: ["APPROVED", "DISMISSED", "FULFILLED", "FAILED"],
+  APPROVED: ["DRAFTING", "DELIVERY_APPROVED", "DISMISSED", "FULFILLED", "FAILED"],
+  DRAFTING: ["DRAFT_READY", "FULFILLED", "FAILED"],
+  DRAFT_READY: ["DELIVERY_APPROVED", "DRAFTING", "DISMISSED", "FULFILLED", "FAILED"],
+  DELIVERY_APPROVED: ["DELIVERING", "FULFILLED", "FAILED"],
+  DELIVERING: ["DELIVERED", "FULFILLED", "FAILED"],
+  DELIVERED: ["VERIFIED", "FULFILLED", "FAILED"],
   DISMISSED: [],
   VERIFIED: [],
+  FULFILLED: [],
   FAILED: [],
 };
 
@@ -580,7 +581,7 @@ export async function createResearchAction(
   const existing = await db.researchAction.findUnique({
     where: { siteId_dedupeKey: { siteId, dedupeKey } },
   });
-  const terminalStatuses = new Set(["DISMISSED", "VERIFIED", "FAILED"]);
+  const terminalStatuses = new Set(["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"]);
   if (existing && terminalStatuses.has(existing.status)) return { action: existing, created: false };
 
   // Merge the same open work item across sources (market research, keyword
@@ -588,7 +589,7 @@ export async function createResearchAction(
   const openConflicts = await db.researchAction.findMany({
     where: {
       siteId,
-      status: { notIn: ["DISMISSED", "VERIFIED", "FAILED"] },
+      status: { notIn: ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"] },
       kind: input.kind,
       targetUrl: input.targetUrl ?? null,
     },

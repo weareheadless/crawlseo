@@ -87,7 +87,7 @@ export async function syncSeoOpportunitiesToActions(siteId: string) {
 
   for (const action of plan.actions) {
     const previous = byPlanId.get(action.id) ?? null;
-    if (previous && ["DISMISSED", "VERIFIED", "FAILED"].includes(previous.status)) {
+    if (previous && ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(previous.status)) {
       existing += 1;
       continue;
     }

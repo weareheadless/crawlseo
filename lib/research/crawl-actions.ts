@@ -438,7 +438,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
     const previous = byKey.get(draft.dedupeKey);
     const previousEvidence = previous ? record(previous.evidence) : {};
     const canReactivate = previous?.status === "DISMISSED" && previousEvidence.superseded === true;
-    if (previous && ["DISMISSED", "VERIFIED", "FAILED"].includes(previous.status) && !canReactivate) {
+    if (previous && ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(previous.status) && !canReactivate) {
       existing += 1;
       continue;
     }

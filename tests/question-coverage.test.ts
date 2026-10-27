@@ -42,12 +42,26 @@ describe("question coverage", () => {
     expect(mock.action.mock.calls[0][1].dedupeKey).toBe(mock.action.mock.calls[1][1].dedupeKey);
   });
   it("closes the originating Action on covered evidence and leaves an unresolvable request open", async () => {
+    mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "disputed" }, publicationUse: "approved" } } });
+    await recordQuestionCoverage({ ...base, status: "unresolved", missingEvidence: "Provide verified evidence" });
+    expect(mock.action.mock.calls[0][1].evidence.outcome).toBe("unknown_until_coverage_resolves");
+    mock.revision.mockResolvedValue({ fields: { service: { value: "Repairs", provenance: { status: "owner_confirmed" }, publicationUse: "approved" } } });
     mock.upsert.mockResolvedValue({ id: "c", actionId: "a", status: "COVERED" });
     await recordQuestionCoverage(base);
-    expect(mock.actionUpdate).toHaveBeenCalledWith("a", { status: "DISMISSED" }, "system:question-coverage");
+    expect(mock.actionUpdate).toHaveBeenCalledWith("a", { status: "FULFILLED" }, "system:question-coverage");
     mock.actionUpdate.mockClear();
     mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "disputed" }, publicationUse: "approved" } } });
     await recordQuestionCoverage({ ...base, status: "unresolved", missingEvidence: "Still needed" });
+    expect(mock.actionUpdate).not.toHaveBeenCalled();
+  });
+  it("keeps rejection and failure distinct from fulfillment", async () => {
+    expect(mock.actionUpdate).not.toHaveBeenCalled();
+    mock.upsert.mockResolvedValue({ id: "c", actionId: "a", status: "COVERED" });
+    mock.actionFind.mockResolvedValue({ id: "a", status: "DISMISSED" });
+    await recordQuestionCoverage(base);
+    expect(mock.actionUpdate).not.toHaveBeenCalled();
+    mock.actionFind.mockResolvedValue({ id: "a", status: "FAILED" });
+    await recordQuestionCoverage(base);
     expect(mock.actionUpdate).not.toHaveBeenCalled();
   });
   it("invalidates coverage when section hash changes", async () => {
