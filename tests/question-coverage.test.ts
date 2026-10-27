@@ -6,7 +6,7 @@ vi.mock("@/lib/db", () => ({ db: { contentDraft: { findUnique: mock.draft }, res
 vi.mock("@/lib/research/service", () => ({ createResearchAction: mock.action, updateResearchAction: mock.actionUpdate }));
 import { hashContentDraft, recordDraftCoverage, recordQuestionCoverage } from "@/lib/research/question-coverage";
 
-const base = { projectId: "p", findingId: "f", evidence: { documentId: "d", fieldPath: "service", revision: 2 },
+const base = { projectId: "p", findingId: "f", question: "Which services are available?", evidence: { documentId: "d", fieldPath: "service", revision: 2 },
   section: { key: "faq:service", contentHash: "hash-1" }, service: "repair", audience: "owners", locale: "en-US", status: "covered" as const };
 
 beforeEach(() => {
@@ -21,7 +21,7 @@ beforeEach(() => {
 describe("question coverage", () => {
   it("covers a sourced pain point against explicit service/audience/section/hash", async () => {
     const row = await recordQuestionCoverage(base);
-    expect(row).toMatchObject({ status: "COVERED", service: "repair", audience: "owners", sectionIdentity: "faq:service", contentHash: "hash-1", documentId: "d", fieldPath: "service", evidenceRevision: 2 });
+    expect(row).toMatchObject({ status: "COVERED", question: "which services are available", service: "repair", audience: "owners", sectionIdentity: "faq:service", contentHash: "hash-1", documentId: "d", fieldPath: "service", evidenceRevision: 2 });
   });
   it("does not allow URL/title-only evidence to become covered", async () => {
     mock.revision.mockResolvedValue({ fields: {} });
@@ -69,19 +69,29 @@ describe("question coverage", () => {
     const row = await recordQuestionCoverage({ ...base, section: { key: "faq:service", contentHash: "new" } });
     expect(row).toMatchObject({ status: "UNRESOLVED", reason: "STALE_HASH", contentHash: "new" });
   });
-  it("upserts by project/finding/section on replay", async () => {
+  it("upserts by project/question/section on replay", async () => {
     await recordQuestionCoverage(base); await recordQuestionCoverage(base);
     expect(mock.upsert).toHaveBeenCalledTimes(2);
     expect(mock.upsert.mock.calls[0][0].where).toEqual(mock.upsert.mock.calls[1][0].where);
+    expect(mock.upsert.mock.calls[0][0].where).toHaveProperty("projectId_question_sectionIdentity");
   });
   it("binds accepted draft coverage to its exact deterministic content and reports unlinked questions", async () => {
-    const content = { id: "draft-1", siteId: "s", actionId: "a", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "# Answer" };
+    const content = { id: "draft-1", siteId: "s", actionId: "a", primaryQuery: "Which services are available?", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "# Answer" };
     mock.draft.mockResolvedValue({ ...content, action: { id: "a", findingId: "f", projectId: "p" }, site: { projectId: "p" } });
     mock.finding.mockResolvedValue({ id: "f", summary: "Which services are available?", theme: "repair", runId: "r", run: { siteId: "s" } });
     mock.revision.mockResolvedValue(null);
     mock.upsert.mockImplementation(async (args) => args.create);
     const row = await recordDraftCoverage("draft-1");
-    expect(row).toMatchObject({ status: "UNRESOLVED", sectionIdentity: "draft-1", contentHash: hashContentDraft(content), reason: "NO_EVIDENCE", missingEvidence: expect.stringContaining("Which services") });
+    expect(row).toMatchObject({ status: "UNRESOLVED", question: "which services are available", sectionIdentity: "draft-1", contentHash: hashContentDraft(content), reason: "NO_EVIDENCE", missingEvidence: expect.stringContaining("Which services") });
+  });
+  it("persists accepted draft coverage when no finding exists", async () => {
+    const content = { id: "draft-2", siteId: "s", actionId: null, primaryQuery: "What is the warranty?", title: "Warranty", slug: "warranty", metaTitle: "Warranty", metaDescription: "Warranty information", excerpt: "Warranty", markdown: "# Warranty" };
+    mock.draft.mockResolvedValue({ ...content, action: null, site: { projectId: "p" } });
+    mock.finding.mockResolvedValue(null);
+    mock.revision.mockResolvedValue(null);
+    mock.upsert.mockImplementation(async (args) => args.create);
+    const row = await recordDraftCoverage("draft-2");
+    expect(row).toMatchObject({ projectId: "p", question: "what is the warranty", findingId: null, status: "UNRESOLVED", actionId: "a" });
   });
   it("marks changed draft content stale and updates the same coverage identity", async () => {
     const content = { id: "draft-1", siteId: "s", actionId: "a", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "Changed markdown" };

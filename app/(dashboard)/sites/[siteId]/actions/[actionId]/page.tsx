@@ -69,7 +69,7 @@ export default async function ActionDetailPage({ params }: Props) {
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
   const authority = await getSiteExecutionAuthority(siteId);
   const externallyManaged = authority?.managed ?? false;
-  const coverage = action.questionCoverage;
+  const coverage = action.questionCoverages[0] ?? null;
   const knowledgeRevision = coverage?.documentId && coverage.evidenceRevision != null
     ? await db.businessKnowledgeRevision.findUnique({
         where: { documentId_revision: { documentId: coverage.documentId, revision: coverage.evidenceRevision } },
