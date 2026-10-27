@@ -1,81 +1,100 @@
-# OPS-014 production verification — partially complete, blocked before crawl
+# OPS-014 production verification — incomplete
 
-**Status: incomplete.** One working knowledge revision was written through the
-documented HTTP API. No crawl was started, no gap Actions were produced, and the
-Intelligence page was not authenticated/rendered. The AEO loop is not verified.
+The business profile is stored in production, but OPS-014's audit/action loop is
+not verified. Owner acceptance is blocked by the current test-project identity
+and acceptance contract; all three automatic worker attempts for the requested
+crawl failed before producing issues. The authenticated Intelligence page was
+fetched and confirmed not to render the profile revision or Actions.
 
-## Target and recorded profile
+## Target and profile writes
 
 - Production project: `Ada Provisioning Test` (`ada-provision-test`, ID
   `cmuls0r2n0002oyqfmv86i92z`); workspace `helloada` (ID
-  `cmuls0r2f0000oyqfhaaaf7fp`); site `ada-provision-test.helloada.app` (ID
-  `cmuls0r2v0004oyqfcbjnqwxq`).
-- `GET /crawlseo/api/projects/knowledge` returned `NOT_FOUND` before writing.
-- `POST /crawlseo/api/projects/knowledge` returned HTTP 200 for logical
-  document `business-profile`, revision 1, state `working`, with no accepted
-  revision. It records all six requested dimensions: business name, location,
-  services, differentiator, audience motivation, and prohibited claim. Every
-  positive fact is marked `internal_only`; the prohibited claim is marked
-  `prohibited`. No fact was marked publishable/approved.
-- The request used idempotency key `ops014-ada-provision-test-seed-20261027-v1`
-  and the stated reason labels it an internal test-business profile.
-- A subsequent authenticated API read returned revision 1 and these fields.
-  Production DB counts after the write: **1 document, 1 revision**.
-- The supplied `actor.id` (`ops014-verification`) does not match a row in the
-  production `User` table (read-only check). The API nevertheless accepted and
-  persisted it as `workspace_admin` provenance. Therefore the requested “real
-  actor” condition is **not proven**; do not describe that provenance as
-  verified.
+  `cmuls0r2f0000oyqfhaaaf7fp`, external organization ID `helloada`); site
+  `ada-provision-test.helloada.app` (ID `cmuls0r2v0004oyqfcbjnqwxq`).
+- Initial authenticated `GET /crawlseo/api/projects/knowledge` returned
+  `NOT_FOUND`. The documented `POST /crawlseo/api/projects/knowledge` wrote
+  logical document `business-profile`, revision 1, working. The profile names
+  this as an internal verification fixture and records the requested six
+  fields. All ordinary facts are `internal_only`; the prohibited claim is
+  `prohibited`; none is marked publishable/approved.
+- The initial write used actor `ops014-verification`, as supplied in the
+  earlier instruction. A read-only production User lookup established that ID
+  is not a `User` row. The API nonetheless persisted it as `workspace_admin`.
+  This is an observed provenance-validation gap; the value is not considered a
+  verified actor and has not been used again.
+- Revision 2 was written with the specified, existing admin User ID
+  `cmtbmqohh0000oymfyormqpt2` on all six facts. Revision 2 remains working and
+  `acceptedRevision` is null. The original revision is immutable and still
+  contains the invalid actor ID. Production counts: **1 document, 2 revisions**.
 
-## Why the crawl and UI checks stopped
+## Acceptance boundary
 
-1. The supplied credential carries `project:read`, `document:read`, and
-   `document:write`, but not `crawl:run`. The documented MCP `seo_run_crawl`
-   tool was invoked once with the project credential and returned
-   `Service credential lacks required scope`; no crawl was queued. The site
-   session route cannot be used without a real authenticated user, and no owner
-   is linked to this site.
-2. Even with crawl permission, `lib/crawler/engine.ts` reads only the accepted
-   canonical revision (`acceptedRevision`) for its semantic audit. This write
-   produced a working revision with `acceptedRevision: null`, so a crawl now
-   would report knowledge unavailable, not compare against the seeded profile.
-   The acceptance contract requires a verified owner proof; this project's
-   external organization is `helloada`, and the project has no linked site
-   owner. Do not forge acceptance or insert it directly in the database.
-3. `app/(dashboard)/sites/[siteId]/intelligence/page.tsx` reads latest crawl
-   access issues, visibility observations, question coverage, and research
-   sources; it does not query/render business knowledge revisions or Research
-   Actions. Thus it cannot currently prove the requested profile-revision and
-   gap-Action display. No session was minted or left behind.
+- A documented `document_accept` request with actor type `workspace_admin` and
+  the verified admin ID returned HTTP 403:
+  `Workspace-admin acceptance is not supported through the project API; use the
+  authenticated dashboard workflow`. No acceptance was written.
+- The project has no site-linked user (`Site.userId` is null). The dashboard
+  correction route requires the signed-in user to own every site in the
+  project, so it cannot supply the fallback for this project.
+- The owner proof verifier requires the proof's external organization to equal
+  `helloada:<actorId>`, while this project's registered external organization
+  is `helloada`. No HelloAda owner proof was available, and the verified actor
+  supplied is an admin, not an owner. Do not mint or fabricate an owner proof.
+- `lib/crawler/engine.ts` (`/* Compare published pages with the accepted
+  canonical knowledge document */`) reads only `acceptedRevision`; there is no
+  documented working-revision audit mechanism. The authorized project token
+  therefore cannot make this working document eligible for semantic audit.
 
-## Counts and remaining work
+## Crawl and artefact counts
 
-- Knowledge documents/revisions: **1 / 1** (working, not accepted).
-- New crawl issues by kind: **0** (no new crawl). A pre-existing completed
-  crawl from 2026-10-23 has 4 issues; these predate the knowledge write and are
-  not evidence for OPS-014. No post-seed crawl issue evidence is claimed.
-- New gap Actions by dimension: **0**. Three pre-existing project Actions are
-  `fix_technical_issue`, not Actions generated from the knowledge audit.
-- Still absent: accepted owner-authorized knowledge, a crawl against that
-  accepted revision, audit evidence, gap Actions/verifiers, authenticated
-  Intelligence rendering, question coverage (requires draft approval), and
-  visibility export.
+- The documented project MCP `seo_run_crawl` entrypoint accepted job
+  `cmvqopmi30001oyufid44wyqx` (`site_id` above). The worker made its configured
+  three attempts; all ended `JOB_EXECUTION_FAILED`. Crawl records:
+  - `cmvqopn0b0003oyc1u2i0i0yv` — FAILED, 0 issues.
+  - `cmvqorylk0007oyc1uymind6f` — FAILED, 0 issues.
+  - `cmvqovkn8000boyc175e5omqb` — FAILED, 0 issues.
+- New crawl issues by kind: **none (0 total)**, including
+  `business_schema_semantics` findings. The last completed pre-seed crawl,
+  `cmvl9q9rm0frsoy0kpw4xv3de` (2026-10-23), had 1 each of `BROKEN_LINK`,
+  `MISSING_ROBOTS`, `MISSING_SITEMAP`, and `MISSING_SCHEMA`, and 0 business
+  semantic findings. It predates the profile and is not OPS-014 evidence.
+- New knowledge-gap Actions by dimension: **none (0 total)**; consequently
+  there are no resulting verifier identities to report. Three pre-existing
+  project Actions are all `fix_technical_issue` / `crawl_issue`; none has a
+  persisted verifier identity/result. No Actions were produced by these failed
+  crawls.
+- The worker's `scripts/job-worker.ts` catch maps uncaught crawl errors to the
+  generic `JOB_EXECUTION_FAILED` and does not log the underlying exception.
+  `SyncRun.errorText` also contains only that generic code. The exact underlying
+  crawl failure is therefore not recoverable from the persisted diagnostic;
+  do not retry manually or claim a cause. This diagnostic gap needs a code fix
+  before a safe retry.
 
-## Exact defects / required follow-up
+## Authenticated Intelligence render
 
-- `app/api/projects/knowledge/route.ts` authenticates the service scope and
-  passes caller-supplied `changes` directly to `writeBusinessKnowledge`; that
-  function validates fact shape but does not establish the supplied provenance
-  actor. This contradicts `docs/business-knowledge-writers.md`'s statement that
-  caller JSON cannot claim owner authority. The successful write with an
-  unresolvable `workspace_admin` actor demonstrates this mismatch. Do not
-  hand-repair production; reconcile the already-recorded provenance via the
-  approved audit/repair path.
-- The test project's usable acceptance path and project identity need to be
-  reconciled with the owner-proof contract before semantic crawl verification.
-- The Intelligence page requires a product change to display the requested
-  knowledge revision and resulting audit/Action items. That code change is out
-  of this production-verification scope; do not hand-patch production.
-- Issue a deliberately scoped `crawl:run` credential only after the accepted
-  knowledge path is available, then rerun the documented MCP crawl and verify
-  its persisted issues and Actions end to end.
+- Fetched
+  `https://crawlseo.helloada.app/crawlseo/sites/cmuls0r2v0004oyqfcbjnqwxq/intelligence`
+  with HTTP 200 using a temporary five-minute `Session` for the specified real
+  admin user. The session row was deleted in `finally`; a follow-up query found
+  zero unexpired sessions for that user. The HTML evidence was kept outside the
+  repository at `/home/admin/releases/ops014-intelligence.html` (not committed).
+- Rendered sections include **AI access readiness**, **Visibility observed**,
+  **Questions**, and **Sources**. It showed “No question coverage recorded” and
+  “No research sources yet”. It did **not** show `Ada Provisioning Test`,
+  `business-profile`, a knowledge revision, or any Actions.
+- Exact rendering gap: `app/(dashboard)/sites/[siteId]/intelligence/page.tsx`
+  only loads a completed crawl, visibility observations, question coverage,
+  and research sources (Promise queries at lines 15–19). It has no
+  `BusinessKnowledgeDocument`/`BusinessKnowledgeRevision` query and no
+  `ResearchAction` query/render. This requires a separately scoped code change;
+  production was not hand-patched.
+
+## Outstanding acceptance gaps
+
+Acceptance/owner identity must be reconciled for this registered project before
+the profile can be audited; crawl failures need root-cause diagnostics and a
+fix before another execution. Then rerun one documented crawl and prove
+business-content/schema findings and verifier-bearing gap Actions. The
+Intelligence page requires the separately scoped rendering change. Question
+coverage still needs a draft approval; visibility still needs an export.
