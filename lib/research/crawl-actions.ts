@@ -359,6 +359,14 @@ export function buildCrawlActionDrafts(input: {
       broken_urls: [...group.brokenUrls],
       anchor_texts: [...group.anchors],
       how_to_fix: fix,
+      verifier: {
+        version: 1,
+        type: "crawl_issue_absence",
+        identity: group.key,
+        issueType: group.orphan ? "ORPHAN_PAGE" : group.type,
+        urls: urls.slice(0, group.batch ? 100 : 20),
+        check: "The next completed crawl must not report this issue identity for these URLs.",
+      },
       ...(page ? { page } : {}),
     };
     drafts.push({
@@ -509,6 +517,19 @@ export async function syncCrawlIssuesToActions(siteId: string) {
   for (const action of current) {
     if (draftKeys.has(action.dedupeKey) || action.status !== "PROPOSED") continue;
     const evidence = record(action.evidence);
+    const verifier = record(evidence.verifier);
+    if (verifier.type === "crawl_issue_absence") {
+      await db.researchAction.update({
+        where: { id: action.id },
+        data: {
+          status: "FULFILLED",
+          verifiedAt: new Date(),
+          evidence: json({ ...evidence, verifier_result: { passed: true, crawl_id: crawl.id, checked_at: new Date().toISOString() } }),
+        },
+      });
+      staleDismissed += 1;
+      continue;
+    }
     await db.researchAction.update({
       where: { id: action.id },
       data: {
