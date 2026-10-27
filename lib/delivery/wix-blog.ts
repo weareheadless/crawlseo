@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { recordDraftCoverage } from "@/lib/research/question-coverage";
 import { findUnsplashCover, importUnsplashCover, type UnsplashCover } from "@/lib/delivery/unsplash";
 
 const API_BASE = "https://www.wixapis.com";
@@ -61,6 +62,9 @@ export async function approveWixBlogUpdateForDraft(contentDraftId: string, userI
     },
   });
   if (saved.count !== 1) throw new WixBlogDeliveryError("The candidate changed during approval; review it again", 409);
+  // Wix is currently the only owner-approval transition for ContentDraft; the
+  // coverage service itself is provider-neutral and records the reviewed draft.
+  await recordDraftCoverage(contentDraftId);
   return { draftId: draft.id, candidateHash: hash, actionRevision: draft.action.revision };
 }
 
