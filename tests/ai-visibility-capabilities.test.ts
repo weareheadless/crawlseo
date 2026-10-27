@@ -6,6 +6,7 @@ import {
   providerCapabilityMatrixSchema,
   visibilityFromAccessSignals,
 } from "@/lib/research/ai-visibility-capabilities";
+import { aiVisibilityAdapterRegistry } from "@/lib/research/ai-visibility-import";
 
 const matrix = {
   version: AI_VISIBILITY_CAPABILITY_VERSION,
@@ -26,6 +27,23 @@ describe("AI visibility capability inventory", () => {
     expect(parsed.providers[0].dashboard.availability).toBe("unknown");
   });
 
+  it("records explicit truthful surface states and matches supported exports to adapters", () => {
+    const parsed = providerCapabilityMatrixSchema.parse(AI_VISIBILITY_CAPABILITY_INVENTORY);
+    const adapters = Object.entries(aiVisibilityAdapterRegistry).flatMap(([provider, versions]) =>
+      Object.keys(versions).map((version) => `${provider}/${version}`));
+    for (const provider of parsed.providers) {
+      expect(provider.dashboard.availability).not.toBe("");
+      expect(provider.apiOrExport.availability).not.toBe("");
+      if (provider.apiOrExport.availability === "available") {
+        expect(adapters).toContain(`${provider.provider.toLowerCase()}/ai-visibility-export-v1`);
+      }
+    }
+    expect(parsed.providers.find(({ provider }) => provider === "Perplexity")?.apiOrExport)
+      .toEqual({ availability: "available", details: "ai-visibility-export-v1 importer" });
+    expect(parsed.providers.filter(({ provider }) => provider !== "Perplexity")
+      .every(({ apiOrExport }) => apiOrExport.availability === "unavailable" && apiOrExport.reasonCode === "no_integrated_export")).toBe(true);
+  });
+
   it("represents unobserved surfaces as unknown with reason codes, never numeric zero", () => {
     const parsed = providerCapabilityMatrixSchema.parse(matrix);
     expect(parsed.providers[0].dashboard).toEqual({ availability: "unknown", reasonCode: "not_inventoried" });
@@ -40,6 +58,6 @@ describe("AI visibility capability inventory", () => {
 
   it("replays the stable versioned matrix", () => {
     expect(providerCapabilityMatrixSchema.parse(JSON.parse(JSON.stringify(matrix)))).toEqual(matrix);
-    expect(AI_VISIBILITY_CAPABILITY_VERSION).toBe("ai-capabilities-v1");
+    expect(AI_VISIBILITY_CAPABILITY_VERSION).toBe("ai-capabilities-v2");
   });
 });

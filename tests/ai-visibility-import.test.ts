@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { importAIVisibilityExport, normalizeAIVisibilityExport } from "@/lib/research/ai-visibility-import";
+import { AI_VISIBILITY_CAPABILITY_VERSION } from "@/lib/research/ai-visibility-capabilities";
 
 const item = { question: "best bike shop?", answer: { mentions: ["Acme"], recommendations: ["Acme"], citations: ["https://acme.example"] } };
 const valid = {
@@ -13,7 +14,7 @@ const valid = {
   denominator: 1,
   observations: [{ query: item.question, responseEvidence: { mentionedBrands: ["Acme"], recommendedBrands: ["Acme"], citedUrls: ["https://acme.example"] } }],
 };
-const capabilities = { version: "ai-capabilities-v1" as const, providers: [{
+const capabilities = { version: AI_VISIBILITY_CAPABILITY_VERSION, providers: [{
   provider: "Perplexity", dashboard: { availability: "unknown" as const, reasonCode: "not_inventoried" },
   apiOrExport: { availability: "available" as const, details: "versioned export" }, unavailableSurfaces: [],
 }] };
