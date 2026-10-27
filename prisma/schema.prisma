@@ -88,9 +88,40 @@ model Project {
   businessKnowledgeDocuments BusinessKnowledgeDocument[]
   businessKnowledgeReceipts BusinessKnowledgeReceipt[]
   questionCoverages        QuestionCoverage[]
+  aiVisibilityObservations AIVisibilityObservation[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
+}
+
+enum AIVisibilitySourceKind {
+  provider_export
+  provider_api
+  operator_manual
+}
+
+model AIVisibilityObservation {
+  id                  String                 @id @default(cuid())
+  projectId           String
+  question            String
+  provider            String
+  modelSurface        String
+  observedAt          DateTime
+  questionSetVersion  String
+  sourceKind          AIVisibilitySourceKind
+  rawExportReference  String
+  denominator         Int
+  coverage            Json
+  mentions            Json?
+  recommendations     Json?
+  citations           Json?
+  observationHash     String
+  version             Int
+  createdAt           DateTime               @default(now())
+  project             Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, version], map: "AIVisibilityObservation_version_key")
+  @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, observationHash], map: "AIVisibilityObservation_hash_key")
+  @@index([projectId, provider, observedAt])
 }
 
 model BusinessKnowledgeDocument {
