@@ -502,7 +502,7 @@ async function markActionVerified(actionId: string) {
     where: { id: actionId },
     select: { id: true, status: true },
   });
-  if (!action || ["VERIFIED", "DISMISSED", "FAILED"].includes(action.status)) return;
+  if (!action || ["VERIFIED", "FULFILLED", "DISMISSED", "FAILED"].includes(action.status)) return;
   const pathByStatus: Record<string, ResearchActionStatus[]> = {
     PROPOSED: ["APPROVED", "DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
     APPROVED: ["DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],

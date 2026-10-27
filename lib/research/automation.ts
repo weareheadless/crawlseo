@@ -28,7 +28,7 @@ export function autoAgentDecision(input: {
   source?: string | null;
   kind?: string | null;
 }): AutoAgentDecision {
-  if (["DISMISSED", "VERIFIED", "FAILED"].includes(input.status)) {
+  if (["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(input.status)) {
     return { eligible: false, reason: "terminal_status" };
   }
   if (!["PROPOSED", "APPROVED", "DRAFT_READY"].includes(input.status)) {

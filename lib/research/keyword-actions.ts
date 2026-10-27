@@ -42,7 +42,7 @@ export async function queueKeywordAction(
     where: {
       siteId,
       primaryQuery: keyword,
-      status: { notIn: ["DISMISSED", "VERIFIED", "FAILED"] },
+      status: { notIn: ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"] },
     },
     orderBy: { createdAt: "asc" },
   });

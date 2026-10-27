@@ -80,7 +80,7 @@ export async function automateRunActions(input: {
   const actions = await db.researchAction.findMany({
     where: {
       runId: input.runId,
-      status: { notIn: ["DISMISSED", "VERIFIED", "FAILED"] },
+      status: { notIn: ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"] },
     },
     orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     include: {

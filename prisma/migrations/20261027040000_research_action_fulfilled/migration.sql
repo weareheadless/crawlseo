@@ -1,0 +1,1 @@
+ALTER TYPE "ResearchActionStatus" ADD VALUE 'FULFILLED';

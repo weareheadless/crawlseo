@@ -838,7 +838,7 @@ export async function operateOnAction(principal: ServicePrincipalContext, input:
         include: { finding: { select: { evidenceSourceIds: true } } } });
       if (!action) throw new ConnectorError("Action not found", 404);
       if (action.revision !== input.expectedRevision) throw new ConnectorError("Action revision changed; refresh before retrying", 409);
-      if (input.operation === "accept_preparation" && ["DISMISSED", "VERIFIED", "FAILED"].includes(action.status)) throw new ConnectorError("Terminal Actions cannot be prepared", 409);
+      if (input.operation === "accept_preparation" && ["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)) throw new ConnectorError("Terminal Actions cannot be prepared", 409);
       const execution = await tx.connectorExecutionState.findUnique({ where: { actionId_actionRevision: { actionId: action.id, actionRevision: action.revision } }, select: { ownerDecision: true, status: true } });
       if (execution?.ownerDecision) throw new ConnectorError("An Action with a recorded owner decision cannot be changed", 409);
       if (input.operation === "accept_preparation" && action.preparationStatus === "CANCELLED") throw new ConnectorError("A cancelled Action revision must be reassessed before preparation", 409);

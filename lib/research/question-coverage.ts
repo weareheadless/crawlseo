@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
+import { createResearchAction, updateResearchAction } from "@/lib/research/service";
 
 export type CoverageInput = {
   projectId: string; findingId: string;
@@ -40,7 +41,7 @@ export async function recordDraftCoverage(contentDraftId: string, evidence?: Cov
 
 export async function recordQuestionCoverage(input: CoverageInput) {
   if (input.status === "unresolved" && !input.missingEvidence?.trim()) throw new Error("missingEvidence is required for unresolved coverage");
-  const finding = await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true } });
+  const finding = await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true, summary: true, theme: true, runId: true, run: { select: { siteId: true } } } });
   if (!finding) throw new Error("Finding does not belong to project");
   const rev = input.evidence ? await db.businessKnowledgeRevision.findFirst({ where: { documentId: input.evidence.documentId, revision: input.evidence.revision }, select: { fields: true } }) : null;
   const fields = rev?.fields && typeof rev.fields === "object" ? rev.fields as Record<string, unknown> : {};
@@ -63,7 +64,7 @@ export async function recordQuestionCoverage(input: CoverageInput) {
     }
   }
   if (status === "unresolved" && !missingEvidence) throw new Error("missingEvidence is required for unresolved coverage");
-  return db.questionCoverage.upsert({
+  const coverage = await db.questionCoverage.upsert({
     where: { projectId_findingId_sectionIdentity: { projectId: input.projectId, findingId: input.findingId, sectionIdentity: input.section.key } },
     create: { projectId: input.projectId, findingId: input.findingId, service: input.service, audience: input.audience, locale: input.locale,
       sectionIdentity: input.section.key, contentHash: input.section.contentHash, status: status.toUpperCase() as "COVERED" | "UNRESOLVED",
@@ -74,4 +75,25 @@ export async function recordQuestionCoverage(input: CoverageInput) {
       fieldPath: input.evidence?.fieldPath ?? null, evidenceRevision: input.evidence?.revision ?? null, missingEvidence, reason: reason ?? null,
       requestedAt: status === "unresolved" ? new Date() : null },
   });
+  if (status === "unresolved" && missingEvidence) {
+    const result = await createResearchAction(finding.run.siteId, {
+      runId: finding.runId, findingId: finding.id, source: "ai_visibility_coverage", kind: "missing_evidence",
+      title: `Provide evidence for: ${finding.summary.slice(0, 180)}`,
+      primaryQuery: `${input.projectId}:${input.findingId}:${input.section.key}`,
+      recommendation: `Supply this evidence request: ${missingEvidence}. Close this Action when the same question coverage is supported by confirmed, publication-approved evidence. This request does not assert the underlying fact.`,
+      acceptanceCriteria: ["The question coverage for this section is recorded as covered using confirmed, publication-approved evidence."],
+      evidence: { question_coverage_id: coverage.id, missing_evidence: missingEvidence, outcome: "unknown_until_coverage_resolves" },
+      dedupeKey: `question-coverage:${input.projectId}:${input.findingId}:${input.section.key}`,
+      priority: 50, automationMode: "MANUAL",
+    }, "system:question-coverage");
+    await db.questionCoverage.update({ where: { id: coverage.id }, data: { actionId: result.action.id } });
+    return { ...coverage, actionId: result.action.id };
+  }
+  if (status === "covered" && coverage.actionId) {
+    const action = await db.researchAction.findUnique({ where: { id: coverage.actionId }, select: { id: true, status: true } });
+    if (action && !["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)) {
+      await updateResearchAction(action.id, { status: "FULFILLED" }, "system:question-coverage");
+    }
+  }
+  return coverage;
 }
