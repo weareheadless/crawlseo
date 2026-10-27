@@ -101,6 +101,7 @@ export default async function WorkPage({ params, searchParams }: Props) {
           createdAt: task.createdAt.toISOString(),
         }))}
       />
+      {data.prelaunchRuns.length > 0 && <section className="panel mt-5 p-4"><h2 className="font-heading text-lg font-semibold">Prelaunch SEO research</h2><p className="mt-1 text-sm text-muted-foreground">Stored keyword results and their derived Actions.</p>{data.prelaunchRuns.map((run) => <p key={run.id} className="mt-2 text-sm"><Link className="text-primary underline" href={`/projects/${data.site.projectId}/prelaunch/${run.id}`}>{run.periodStart.toISOString().slice(0, 7)} · {run.status.toLowerCase()} · SEO research</Link></p>)}</section>}
     </div>
   );
 }

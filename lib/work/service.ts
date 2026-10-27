@@ -4,7 +4,7 @@ import { sourceIdsForAction } from "@/lib/research/evidence";
 
 export async function getWorkData(siteId: string) {
   const [site, actions, drafts, agentTasks, runs] = await Promise.all([
-    db.site.findUnique({ where: { id: siteId }, select: { id: true, domain: true } }),
+    db.site.findUnique({ where: { id: siteId }, select: { id: true, domain: true, projectId: true } }),
     db.researchAction.findMany({
       where: { siteId },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
@@ -41,7 +41,8 @@ export async function getWorkData(siteId: string) {
     }),
   ]);
   if (!site) throw new ResearchServiceError("Site not found", 404);
-  return { site, actions, drafts, agentTasks, runs };
+  const prelaunchRuns = site.projectId ? await db.seoResearchRun.findMany({ where: { projectId: site.projectId, siteId: null }, orderBy: { periodStart: "desc" }, take: 10, select: { id: true, periodStart: true, status: true } }) : [];
+  return { site, actions, drafts, agentTasks, runs, prelaunchRuns };
 }
 
 export async function getActionDetail(siteId: string, actionId: string) {
