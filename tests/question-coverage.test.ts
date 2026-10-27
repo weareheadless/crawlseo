@@ -11,7 +11,7 @@ const base = { projectId: "p", findingId: "f", question: "Which services are ava
 
 beforeEach(() => {
   vi.clearAllMocks(); mock.finding.mockResolvedValue({ id: "f", summary: "Question about proof?", theme: "repair", runId: "r", run: { siteId: "s" } });
-  mock.document.mockImplementation(async ({ where }) => ({ id: where.OR[0].id === "internal" ? "internal" : "internal" }));
+  mock.document.mockImplementation(async ({ where }) => ({ id: where.OR[0].id === "business-profile" ? "internal" : where.OR[0].id }));
   mock.revision.mockResolvedValue({ fields: { service: { value: "Repairs", provenance: { status: "owner_confirmed" }, publicationUse: "approved" } } });
   mock.findUnique.mockResolvedValue(null); mock.upsert.mockImplementation(async (args) => ({ id: "c", ...args.create, ...args.update }));
   mock.action.mockResolvedValue({ action: { id: "a", status: "PROPOSED" }, created: true });
