@@ -86,6 +86,7 @@ model Project {
   legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetProject")
   businessKnowledgeDocuments BusinessKnowledgeDocument[]
   businessKnowledgeReceipts BusinessKnowledgeReceipt[]
+  questionCoverages        QuestionCoverage[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -101,6 +102,7 @@ model BusinessKnowledgeDocument {
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   revisions        BusinessKnowledgeRevision[]
   acceptances      BusinessKnowledgeAcceptance[]
+  questionCoverages QuestionCoverage[]
 
   @@unique([projectId, logicalId])
   @@index([projectId, revision])
@@ -698,8 +700,48 @@ model ResearchFinding {
 
   run     ResearchRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
   actions ResearchAction[]
+  questionCoverages QuestionCoverage[]
 
   @@index([runId, type])
+}
+
+enum QuestionCoverageStatus {
+  COVERED
+  UNRESOLVED
+}
+
+enum QuestionCoverageReason {
+  NO_EVIDENCE
+  DISPUTED_EVIDENCE
+  STALE_HASH
+  UNUSABLE_PUBLICATION_USE
+}
+
+model QuestionCoverage {
+  id                 String @id @default(cuid())
+  projectId          String
+  findingId          String
+  service            String
+  audience           String
+  locale             String
+  sectionIdentity    String
+  contentHash        String
+  status             QuestionCoverageStatus
+  documentId         String?
+  fieldPath          String?
+  evidenceRevision   Int?
+  missingEvidence    String?
+  reason             QuestionCoverageReason?
+  requestedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  finding            ResearchFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  document           BusinessKnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, findingId, sectionIdentity])
+  @@index([projectId, status, updatedAt])
+  @@index([documentId, evidenceRevision])
 }
 
 model ResearchAction {
