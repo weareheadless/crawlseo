@@ -86,6 +86,23 @@ describe("canonical business knowledge revisions", () => {
     await expect(writeBusinessKnowledge(writeInput({ idempotencyKey: "new-key-0002" }), principal)).rejects.toMatchObject({ code: "REVISION_CONFLICT", currentRevision: 1 });
   });
 
+  it("records dashboard correction provenance, requires rationale over owner truth, preserves disputes, and replays exactly", async () => {
+    await writeBusinessKnowledge(writeInput(), principal);
+    const corrected = await writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "dashboard-correct-01", reason: "Owner provided corrected name", changes: { businessName: fact("New") } }), principal, { type: "workspace_admin", id: "operator-1" });
+    expect(corrected.revision).toBe(2);
+    expect(corrected.fields.businessName?.provenance).toMatchObject({ kind: "admin_input", status: "admin_confirmed", actor: { type: "workspace_admin", id: "operator-1" } });
+    await expect(writeBusinessKnowledge(writeInput({ expectedRevision: 2, idempotencyKey: "dashboard-correct-02", reason: "", changes: { businessName: fact("No reason") } }), principal, { type: "workspace_admin", id: "operator-1" })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "dashboard-correct-01", reason: "Owner provided corrected name", changes: { businessName: fact("New") } }), principal, { type: "workspace_admin", id: "operator-1" })).resolves.toEqual(corrected);
+    expect(state.head.revision).toBe(2);
+  });
+
+  it("does not resurrect disputed facts as confirmed", async () => {
+    const disputed = { ...fact("Old"), provenance: { ...fact("Old").provenance, status: "disputed" as const } };
+    await writeBusinessKnowledge(writeInput({ changes: { businessName: disputed } }), principal);
+    await expect(writeBusinessKnowledge(writeInput({ expectedRevision: 1, idempotencyKey: "disputed-correction-01", reason: "correction", changes: { businessName: fact("New") } }), principal, { type: "workspace_admin", id: "operator-1" })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(state.head.revision).toBe(1);
+  });
+
   it("hides documents outside the credential project and enforces write scope", async () => {
     await expect(writeBusinessKnowledge({ ...writeInput(), projectId: "other-project", workspaceId: "other-workspace" }, principal)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(writeBusinessKnowledge(writeInput(), { ...principal, scopes: ["document:read"] })).rejects.toBeInstanceOf(BusinessKnowledgeError);
