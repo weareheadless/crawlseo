@@ -412,7 +412,7 @@ export function buildCrawlActionDrafts(input: {
 export async function syncCrawlIssuesToActions(siteId: string) {
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { domain: true },
+    select: { domain: true, projectId: true },
   });
   if (!site) return { created: 0, updated: 0, dismissed: 0, existing: 0, total: 0 };
   const crawl = await db.crawl.findFirst({
@@ -440,7 +440,7 @@ export async function syncCrawlIssuesToActions(siteId: string) {
       },
     }),
     db.researchAction.findMany({
-      where: { siteId, source: "crawl_issue" },
+      where: site.projectId ? { projectId: site.projectId, source: "crawl_issue" } : { siteId, source: "crawl_issue" },
       select: { id: true, status: true, priority: true, dedupeKey: true, evidence: true },
     }),
   ]);
