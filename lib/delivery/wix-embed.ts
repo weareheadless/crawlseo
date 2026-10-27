@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/lib/db";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
@@ -18,6 +18,31 @@ export class WixEmbedDeliveryError extends Error {
 
 const execFileAsync = promisify(execFile);
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
+async function withAtomicPacketFile<T>(
+  taskId: string,
+  componentTag: string,
+  effectToken: string,
+  contents: string,
+  operation: (htmlFile: string) => Promise<T>,
+): Promise<T> {
+  const dir = path.join("/tmp/opencode", `embed-${taskId}`);
+  await mkdir(dir, { recursive: true });
+  const attemptId = randomUUID();
+  const base = `${componentTag}-${effectToken}-${attemptId}`;
+  const htmlFile = path.join(dir, `${base}.html`);
+  const temporaryFile = path.join(dir, `.${base}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporaryFile, contents, { encoding: "utf8", flag: "wx" });
+    await rename(temporaryFile, htmlFile);
+    return await operation(htmlFile);
+  } finally {
+    await Promise.all([
+      rm(temporaryFile, { force: true }),
+      rm(htmlFile, { force: true }),
+    ]);
+  }
+}
 
 type PacketEntry = [tag: string, gzipBase64: string];
 
@@ -295,10 +320,11 @@ export async function applyEmbedDelivery(
   if (wixEmbedEffectToken(effect) !== prepared.token) {
     throw new WixEmbedDeliveryError("The Wix target, binding, source, or live embed changed after review; plan it again", 409);
   }
-  const dir = path.join("/tmp/opencode", `embed-${task.id}`);
-  await mkdir(dir, { recursive: true });
-  const htmlFile = path.join(dir, `${target.componentTag}.html`);
-  await writeFile(htmlFile, nextHtml, "utf8");
+  return withAtomicPacketFile(task.id, target.componentTag!, prepared.token!, nextHtml, async (htmlFile) => {
+  const expectedPacketSha = sha256(await readFile(htmlFile, "utf8"));
+  if (expectedPacketSha !== effect.desiredHtmlSha256) {
+    throw new WixEmbedDeliveryError("Prepared packet bytes changed before delivery", 502);
+  }
   const claimed = await db.agentTask.updateMany({
     where: {
       id: task.id,
@@ -324,8 +350,8 @@ export async function applyEmbedDelivery(
   } catch (error) {
     try {
       const observed = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as { snippet?: { embedData?: { html?: string } } };
-      if (wixEmbedReadbackMatches(observed.snippet?.embedData?.html ?? "", effect.desiredHtmlSha256)) {
-        receipt = { status: "complete", reconciledBy: "readback", desiredSha256: effect.desiredHtmlSha256 };
+      if (wixEmbedReadbackMatches(observed.snippet?.embedData?.html ?? "", expectedPacketSha)) {
+        receipt = { status: "complete", reconciledBy: "readback", desiredSha256: expectedPacketSha };
       }
     } catch { /* preserve the uncertain outcome below */ }
     if (!receipt) receipt = { status: "unknown", error: error instanceof Error ? error.message : "Unknown bridge error" };
@@ -334,10 +360,10 @@ export async function applyEmbedDelivery(
   let readbackMatches = false;
   try {
     const observed = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as { snippet?: { embedData?: { html?: string } } };
-    readbackMatches = wixEmbedReadbackMatches(observed.snippet?.embedData?.html ?? "", effect.desiredHtmlSha256);
+    readbackMatches = wixEmbedReadbackMatches(observed.snippet?.embedData?.html ?? "", expectedPacketSha);
   } catch { /* an unreadable outcome remains unknown */ }
   if (readbackMatches && receiptStatus !== "complete") {
-    receipt = { status: "complete", reconciledBy: "readback", bridgeReceipt: receipt, desiredSha256: effect.desiredHtmlSha256 };
+    receipt = { status: "complete", reconciledBy: "readback", bridgeReceipt: receipt, desiredSha256: expectedPacketSha };
   }
   if (!readbackMatches || (receipt as { status?: unknown } | null)?.status !== "complete") {
     await addAgentArtifact(task.id, {
@@ -383,6 +409,7 @@ export async function applyEmbedDelivery(
     return result;
   });
   return { task: updated, receipt };
+  });
 }
 
 export async function verifyEmbedDelivery(taskId: string, targetKey: string) {
