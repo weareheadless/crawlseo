@@ -8,7 +8,7 @@ const bodySchema = z.object({ brief: z.unknown(), idempotency_key: z.string().mi
 async function auth(req: Request, projectId: string) {
   const token = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
   const principal = await authenticateServiceToken(token);
-  requireProjectScope(principal, "seo:research");
+  requireProjectScope(principal, "seo:research:request");
   if (principal.projectId !== projectId) throw new Error("Project not found");
 }
 function error(error: unknown) {

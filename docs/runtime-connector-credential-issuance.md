@@ -16,4 +16,4 @@ The endpoint requires the site to belong to an active project and workspace, and
 
 Keep the idempotency key stable for retries of one activation request and use a new key for a new activation request. The credential record binds that key to a hash of the site, generation, activation plan hash, and scopes. Reusing the key with different inputs returns a conflict. The secret is returned only when first issued; a retry identifies the existing credential without exposing its token again.
 
-Legacy project provisioning continues to issue the original five MCP scopes (`seo:read`, `seo:research:request`, `analytics:read`, `crawl:read`, and `crawl:run`). Runtime connector access is issued separately through this endpoint.
+Legacy project provisioning continues to issue the original five MCP scopes (`seo:read`, `seo:research:request`, `analytics:read`, `crawl:read`, and `crawl:run`). `seo:research:request` authorizes requesting and retrieving prelaunch research; no separate `seo:research` scope exists. Runtime connector access is issued separately through this endpoint.
