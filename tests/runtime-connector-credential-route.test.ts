@@ -12,7 +12,7 @@ vi.mock("@/lib/auth/service-credentials", () => ({
 import { POST } from "@/app/api/internal/sites/[siteId]/runtime-connector-credentials/route";
 import { DEFAULT_PROVISIONING_SERVICE_SCOPES } from "@/lib/projects/provision-project";
 
-it("keeps legacy provisioning on its original five MCP scopes", () => {
+it("keeps legacy provisioning on its original five service scopes", () => {
   expect(DEFAULT_PROVISIONING_SERVICE_SCOPES).toEqual([
     "seo:read", "seo:research:request", "analytics:read", "crawl:read", "crawl:run",
   ]);
