@@ -1,17 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mock } = vi.hoisted(() => ({ mock: { finding: vi.fn(), revision: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), draft: vi.fn() } }));
+const { mock } = vi.hoisted(() => ({ mock: { finding: vi.fn(), revision: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), draft: vi.fn(), coverageUpdate: vi.fn(), action: vi.fn(), actionFind: vi.fn(), actionUpdate: vi.fn() } }));
 vi.mock("@/lib/db", () => ({ db: { contentDraft: { findUnique: mock.draft }, researchFinding: { findFirst: mock.finding, findUnique: mock.finding }, businessKnowledgeRevision: { findFirst: mock.revision },
-  questionCoverage: { findUnique: mock.findUnique, upsert: mock.upsert } } }));
+  researchAction: { findUnique: mock.actionFind }, questionCoverage: { findUnique: mock.findUnique, upsert: mock.upsert, update: mock.coverageUpdate } } }));
+vi.mock("@/lib/research/service", () => ({ createResearchAction: mock.action, updateResearchAction: mock.actionUpdate }));
 import { hashContentDraft, recordDraftCoverage, recordQuestionCoverage } from "@/lib/research/question-coverage";
 
 const base = { projectId: "p", findingId: "f", evidence: { documentId: "d", fieldPath: "service", revision: 2 },
   section: { key: "faq:service", contentHash: "hash-1" }, service: "repair", audience: "owners", locale: "en-US", status: "covered" as const };
 
 beforeEach(() => {
-  vi.clearAllMocks(); mock.finding.mockResolvedValue({ id: "f" });
+  vi.clearAllMocks(); mock.finding.mockResolvedValue({ id: "f", summary: "Question about proof?", theme: "repair", runId: "r", run: { siteId: "s" } });
   mock.revision.mockResolvedValue({ fields: { service: { value: "Repairs", provenance: { status: "owner_confirmed" }, publicationUse: "approved" } } });
-  mock.findUnique.mockResolvedValue(null); mock.upsert.mockImplementation(async (args) => args.create);
+  mock.findUnique.mockResolvedValue(null); mock.upsert.mockImplementation(async (args) => ({ id: "c", ...args.create, ...args.update }));
+  mock.action.mockResolvedValue({ action: { id: "a", status: "PROPOSED" }, created: true });
+  mock.coverageUpdate.mockImplementation(async (args) => ({ id: "c", ...args.data }));
+  mock.actionFind.mockResolvedValue({ id: "a", status: "PROPOSED" }); mock.actionUpdate.mockResolvedValue({ id: "a", status: "DISMISSED" });
 });
 
 describe("question coverage", () => {
@@ -27,6 +31,24 @@ describe("question coverage", () => {
     mock.revision.mockResolvedValue({ fields: { service: { value: "Repairs", provenance: { status: "disputed" }, publicationUse: "approved" } } });
     const row = await recordQuestionCoverage(base);
     expect(row).toMatchObject({ status: "UNRESOLVED", reason: "DISPUTED_EVIDENCE", missingEvidence: expect.any(String) });
+    expect(mock.action).toHaveBeenCalledTimes(1);
+    expect(mock.action.mock.calls[0][1].recommendation).toContain("does not assert the underlying fact");
+  });
+  it("deduplicates repeated unresolved coverage by its identity", async () => {
+    mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "disputed" }, publicationUse: "approved" } } });
+    await recordQuestionCoverage({ ...base, status: "unresolved", missingEvidence: "Provide verified evidence" });
+    await recordQuestionCoverage({ ...base, status: "unresolved", missingEvidence: "Provide verified evidence" });
+    expect(mock.action).toHaveBeenCalledTimes(2);
+    expect(mock.action.mock.calls[0][1].dedupeKey).toBe(mock.action.mock.calls[1][1].dedupeKey);
+  });
+  it("closes the originating Action on covered evidence and leaves an unresolvable request open", async () => {
+    mock.upsert.mockResolvedValue({ id: "c", actionId: "a", status: "COVERED" });
+    await recordQuestionCoverage(base);
+    expect(mock.actionUpdate).toHaveBeenCalledWith("a", { status: "DISMISSED" }, "system:question-coverage");
+    mock.actionUpdate.mockClear();
+    mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "disputed" }, publicationUse: "approved" } } });
+    await recordQuestionCoverage({ ...base, status: "unresolved", missingEvidence: "Still needed" });
+    expect(mock.actionUpdate).not.toHaveBeenCalled();
   });
   it("invalidates coverage when section hash changes", async () => {
     mock.findUnique.mockResolvedValue({ contentHash: "old" });
@@ -41,7 +63,7 @@ describe("question coverage", () => {
   it("binds accepted draft coverage to its exact deterministic content and reports unlinked questions", async () => {
     const content = { id: "draft-1", siteId: "s", actionId: "a", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "# Answer" };
     mock.draft.mockResolvedValue({ ...content, action: { id: "a", findingId: "f", projectId: "p" }, site: { projectId: "p" } });
-    mock.finding.mockResolvedValue({ id: "f", summary: "Which services are available?", theme: "repair" });
+    mock.finding.mockResolvedValue({ id: "f", summary: "Which services are available?", theme: "repair", runId: "r", run: { siteId: "s" } });
     mock.revision.mockResolvedValue(null);
     mock.upsert.mockImplementation(async (args) => args.create);
     const row = await recordDraftCoverage("draft-1");
@@ -50,10 +72,10 @@ describe("question coverage", () => {
   it("marks changed draft content stale and updates the same coverage identity", async () => {
     const content = { id: "draft-1", siteId: "s", actionId: "a", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "Changed markdown" };
     mock.draft.mockResolvedValue({ ...content, action: { id: "a", findingId: "f", projectId: "p" }, site: { projectId: "p" } });
-    mock.finding.mockResolvedValue({ id: "f", summary: "Question?", theme: "repair" });
+    mock.finding.mockResolvedValue({ id: "f", summary: "Question?", theme: "repair", runId: "r", run: { siteId: "s" } });
     mock.revision.mockResolvedValue(null);
     mock.findUnique.mockResolvedValue({ contentHash: "previous-hash" });
-    mock.upsert.mockImplementation(async (args) => args.update);
+    mock.upsert.mockImplementation(async (args) => ({ id: "c", ...args.update }));
     const row = await recordDraftCoverage("draft-1");
     expect(row).toMatchObject({ status: "UNRESOLVED", reason: "STALE_HASH", contentHash: hashContentDraft(content) });
   });

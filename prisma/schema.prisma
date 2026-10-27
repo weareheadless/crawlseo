@@ -753,6 +753,8 @@ model QuestionCoverage {
   project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   finding            ResearchFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
   document           BusinessKnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  actionId           String? @unique
+  action             ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, findingId, sectionIdentity])
   @@index([projectId, status, updatedAt])
@@ -797,6 +799,7 @@ model ResearchAction {
   project    Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   run        ResearchRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
   finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  questionCoverage QuestionCoverage?
   drafts     ContentDraft[]
   deliveries Delivery[]
   agentTasks AgentTask[]
