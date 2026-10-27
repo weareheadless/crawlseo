@@ -32,7 +32,12 @@ export async function recordDraftCoverage(contentDraftId: string, evidence?: Cov
   const projectId = draft.action?.projectId ?? draft.site?.projectId;
   if (!projectId) return { recorded: 0 };
   const finding = findingId ? await db.researchFinding.findUnique({ where: { id: findingId }, select: { summary: true, theme: true } }) : null;
-  const revision = evidence ? await db.businessKnowledgeRevision.findFirst({ where: { documentId: evidence.documentId, revision: evidence.revision }, select: { fields: true } }) : null;
+  let revision: { fields: unknown } | null = null;
+  if (evidence) {
+    const document = await db.businessKnowledgeDocument.findFirst({ where: { projectId, OR: [{ id: evidence.documentId }, { logicalId: evidence.documentId }] }, select: { id: true } });
+    if (!document) throw new Error(`Unknown evidence document for field ${evidence.fieldPath}`);
+    revision = await db.businessKnowledgeRevision.findFirst({ where: { documentId: document.id, revision: evidence.revision }, select: { fields: true } });
+  }
   const revFields = revision?.fields && typeof revision.fields === "object" ? revision.fields as Record<string, unknown> : {};
   const fact = evidence ? revFields[evidence.fieldPath] as { provenance?: { status?: string }; publicationUse?: string } | undefined : undefined;
   const usableEvidence = Boolean(fact?.provenance && ["owner_confirmed", "admin_confirmed", "verified"].includes(fact.provenance.status ?? "") && fact.publicationUse === "approved");
@@ -52,7 +57,12 @@ export async function recordQuestionCoverage(input: CoverageInput) {
   if (!question) throw new Error("Question is required");
   const finding = input.findingId ? await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true, summary: true, theme: true, runId: true, run: { select: { siteId: true } } } }) : null;
   if (input.findingId && !finding) throw new Error("Finding does not belong to project");
-  const rev = input.evidence ? await db.businessKnowledgeRevision.findFirst({ where: { documentId: input.evidence.documentId, revision: input.evidence.revision }, select: { fields: true } }) : null;
+  let rev: { fields: unknown } | null = null;
+  if (input.evidence) {
+    const document = await db.businessKnowledgeDocument.findFirst({ where: { projectId: input.projectId, OR: [{ id: input.evidence.documentId }, { logicalId: input.evidence.documentId }] }, select: { id: true } });
+    if (!document) throw new Error(`Unknown evidence document for field ${input.evidence.fieldPath}`);
+    rev = await db.businessKnowledgeRevision.findFirst({ where: { documentId: document.id, revision: input.evidence.revision }, select: { fields: true } });
+  }
   const fields = rev?.fields && typeof rev.fields === "object" ? rev.fields as Record<string, unknown> : {};
   const fact = input.evidence ? fields[input.evidence.fieldPath] as { provenance?: { status?: string }; publicationUse?: string } | undefined : undefined;
   if (input.status === "covered" && !fact?.provenance) throw new Error("Referenced evidence field or provenance does not exist");

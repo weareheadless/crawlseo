@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mock } = vi.hoisted(() => ({ mock: { finding: vi.fn(), revision: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), draft: vi.fn(), coverageUpdate: vi.fn(), action: vi.fn(), actionFind: vi.fn(), actionUpdate: vi.fn() } }));
+const { mock } = vi.hoisted(() => ({ mock: { finding: vi.fn(), revision: vi.fn(), document: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), draft: vi.fn(), coverageUpdate: vi.fn(), action: vi.fn(), actionFind: vi.fn(), actionUpdate: vi.fn() } }));
 vi.mock("@/lib/db", () => ({ db: { contentDraft: { findUnique: mock.draft }, researchFinding: { findFirst: mock.finding, findUnique: mock.finding }, businessKnowledgeRevision: { findFirst: mock.revision },
-  researchAction: { findUnique: mock.actionFind }, questionCoverage: { findUnique: mock.findUnique, upsert: mock.upsert, update: mock.coverageUpdate } } }));
+  businessKnowledgeDocument: { findFirst: mock.document }, researchAction: { findUnique: mock.actionFind }, questionCoverage: { findUnique: mock.findUnique, upsert: mock.upsert, update: mock.coverageUpdate } } }));
 vi.mock("@/lib/research/service", () => ({ createResearchAction: mock.action, updateResearchAction: mock.actionUpdate }));
 import { hashContentDraft, recordDraftCoverage, recordQuestionCoverage } from "@/lib/research/question-coverage";
 
@@ -11,6 +11,7 @@ const base = { projectId: "p", findingId: "f", question: "Which services are ava
 
 beforeEach(() => {
   vi.clearAllMocks(); mock.finding.mockResolvedValue({ id: "f", summary: "Question about proof?", theme: "repair", runId: "r", run: { siteId: "s" } });
+  mock.document.mockImplementation(async ({ where }) => ({ id: where.OR[0].id === "internal" ? "internal" : "internal" }));
   mock.revision.mockResolvedValue({ fields: { service: { value: "Repairs", provenance: { status: "owner_confirmed" }, publicationUse: "approved" } } });
   mock.findUnique.mockResolvedValue(null); mock.upsert.mockImplementation(async (args) => ({ id: "c", ...args.create, ...args.update }));
   mock.action.mockResolvedValue({ action: { id: "a", status: "PROPOSED" }, created: true });
@@ -92,6 +93,19 @@ describe("question coverage", () => {
     mock.upsert.mockImplementation(async (args) => args.create);
     const row = await recordDraftCoverage("draft-2");
     expect(row).toMatchObject({ projectId: "p", question: "what is the warranty", findingId: null, status: "UNRESOLVED", actionId: "a" });
+  });
+  it("resolves logical and internal document ids, leaves unpublished facts unresolved, and rejects unknown ids", async () => {
+    const content = { id: "draft-evidence", siteId: "s", actionId: null, primaryQuery: "What is offered?", title: "Offer", slug: "offer", metaTitle: "Offer", metaDescription: "Offer", excerpt: "Offer", markdown: "# Offer" };
+    mock.draft.mockResolvedValue({ ...content, action: { id: "a", findingId: null, projectId: "p" }, site: { projectId: "p" } });
+    mock.document.mockImplementation(async ({ where }) => ({ id: where.OR[0].id === "business-profile" ? "internal" : where.OR[0].id }));
+    mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "owner_confirmed" }, publicationUse: "approved" } } });
+    expect(await recordDraftCoverage(content.id, { documentId: "business-profile", fieldPath: "service", revision: 2 })).toMatchObject({ status: "COVERED" });
+    expect(mock.revision).toHaveBeenLastCalledWith({ where: { documentId: "internal", revision: 2 }, select: { fields: true } });
+    expect(await recordDraftCoverage(content.id, { documentId: "internal", fieldPath: "service", revision: 2 })).toMatchObject({ status: "COVERED" });
+    mock.revision.mockResolvedValue({ fields: { service: { provenance: { status: "owner_confirmed" }, publicationUse: "draft" } } });
+    expect(await recordDraftCoverage(content.id, { documentId: "business-profile", fieldPath: "service", revision: 2 })).toMatchObject({ status: "UNRESOLVED" });
+    mock.document.mockResolvedValue(null);
+    await expect(recordDraftCoverage(content.id, { documentId: "missing", fieldPath: "service", revision: 2 })).rejects.toThrow(/service/);
   });
   it("marks changed draft content stale and updates the same coverage identity", async () => {
     const content = { id: "draft-1", siteId: "s", actionId: "a", title: "Title", slug: "slug", metaTitle: "Meta", metaDescription: "Description", excerpt: "Excerpt", markdown: "Changed markdown" };
