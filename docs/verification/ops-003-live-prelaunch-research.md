@@ -28,6 +28,27 @@ research request was rejected, a read-only Prisma check confirmed the same
 budget, no research run for the selected period, and no October reservations.
 The budget remains configured at those caps as requested.
 
+The successful budget PUT body (service credential redacted):
+
+```json
+{
+  "siteId": "cmuls0r2v0004oyqfcbjnqwxq",
+  "expectedRevision": 1,
+  "monthlyAllowanceMicros": "1000000",
+  "maxOperationMicros": "100000",
+  "currency": "USD",
+  "timeZone": "UTC"
+}
+```
+
+Response: HTTP 200; `policy` returned project/site IDs, revision `2`,
+`monthlyAllowanceMicros: "1000000"`, `maxOperationMicros: "100000"`,
+`currency: "USD"`, and `timeZone: "UTC"`. The preceding budget GET returned
+HTTP 200 with `configured: false`, null allowance/ceiling, and zero committed
+and reserved micros. One preliminary GET mistakenly omitted the `/crawlseo`
+mount prefix and got an HTML 404; it made no mutation and was corrected before
+the successful GET/PUT.
+
 ## Request and exact response
 
 A short-lived project credential was issued through the existing service
@@ -88,8 +109,11 @@ credential bypass, retry, or replay was attempted.
 - The test project had no canonical business-knowledge document at preflight;
   none was created. The contract shape is
   `schemaVersion: "business-knowledge/1"`, `kind: "business_document"`,
-  workspace/project/document IDs, revision/state/timestamps, and canonical
-  fields. No actual document or report shape could be read back.
+  `workspaceId`, `projectId`, `documentId`, `revision`, `state`, `updatedAt`,
+  `acceptedRevision`, and `fields` (optional facts for business name, services,
+  location, service area, differentiators, trust evidence, audience motivations,
+  concerns, conversion goals, voice, and prohibited claims). No actual document
+  or research-report shape could be read back.
 
 ## Remaining acceptance gap and state
 
