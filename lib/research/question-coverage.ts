@@ -48,7 +48,7 @@ export async function recordDraftCoverage(contentDraftId: string, evidence?: Cov
   const changed = Boolean(prior && prior.contentHash !== section.contentHash);
   const summary = finding?.summary ?? (draft.primaryQuery || draft.title);
   const missingEvidence = usableEvidence ? null : `Evidence is needed to answer: ${summary}`;
-  return recordQuestionCoverage({ projectId, question, findingId, siteId: draft.siteId, evidence: usableEvidence ? evidence : undefined, section, service: finding?.theme ?? "general", audience: "site visitors", locale: "und", status: usableEvidence ? "covered" : "unresolved", missingEvidence, reasonCode: usableEvidence ? null : changed ? "stale_hash" : "no_evidence", revalidated: usableEvidence });
+  return recordQuestionCoverage({ projectId, question, findingId, siteId: draft.siteId, evidence: usableEvidence && evidence ? { ...evidence, documentId: (await db.businessKnowledgeDocument.findFirst({ where: { projectId, OR: [{ id: evidence.documentId }, { logicalId: evidence.documentId }] }, select: { id: true } }))!.id } : undefined, section, service: finding?.theme ?? "general", audience: "site visitors", locale: "und", status: usableEvidence ? "covered" : "unresolved", missingEvidence, reasonCode: usableEvidence ? null : changed ? "stale_hash" : "no_evidence", revalidated: usableEvidence });
 }
 
 export async function recordQuestionCoverage(input: CoverageInput) {
@@ -58,9 +58,11 @@ export async function recordQuestionCoverage(input: CoverageInput) {
   const finding = input.findingId ? await db.researchFinding.findFirst({ where: { id: input.findingId, run: { projectId: input.projectId } }, select: { id: true, summary: true, theme: true, runId: true, run: { select: { siteId: true } } } }) : null;
   if (input.findingId && !finding) throw new Error("Finding does not belong to project");
   let rev: { fields: unknown } | null = null;
+  let resolvedEvidence = input.evidence;
   if (input.evidence) {
     const document = await db.businessKnowledgeDocument.findFirst({ where: { projectId: input.projectId, OR: [{ id: input.evidence.documentId }, { logicalId: input.evidence.documentId }] }, select: { id: true } });
     if (!document) throw new Error(`Unknown evidence document for field ${input.evidence.fieldPath}`);
+    resolvedEvidence = { ...input.evidence, documentId: document.id };
     rev = await db.businessKnowledgeRevision.findFirst({ where: { documentId: document.id, revision: input.evidence.revision }, select: { fields: true } });
   }
   const fields = rev?.fields && typeof rev.fields === "object" ? rev.fields as Record<string, unknown> : {};
@@ -87,11 +89,11 @@ export async function recordQuestionCoverage(input: CoverageInput) {
     where: { projectId_question_sectionIdentity: { projectId: input.projectId, question, sectionIdentity: input.section.key } },
     create: { projectId: input.projectId, question, findingId: input.findingId ?? null, service: input.service, audience: input.audience, locale: input.locale,
       sectionIdentity: input.section.key, contentHash: input.section.contentHash, status: status.toUpperCase() as "COVERED" | "UNRESOLVED",
-      documentId: input.evidence?.documentId ?? null, fieldPath: input.evidence?.fieldPath ?? null, evidenceRevision: input.evidence?.revision ?? null,
+      documentId: resolvedEvidence?.documentId ?? null, fieldPath: resolvedEvidence?.fieldPath ?? null, evidenceRevision: resolvedEvidence?.revision ?? null,
       missingEvidence, reason: reason ?? null, requestedAt: status === "unresolved" ? new Date() : null },
     update: { findingId: input.findingId ?? null, service: input.service, audience: input.audience, locale: input.locale, contentHash: input.section.contentHash,
-      status: status.toUpperCase() as "COVERED" | "UNRESOLVED", documentId: input.evidence?.documentId ?? null,
-      fieldPath: input.evidence?.fieldPath ?? null, evidenceRevision: input.evidence?.revision ?? null, missingEvidence, reason: reason ?? null,
+      status: status.toUpperCase() as "COVERED" | "UNRESOLVED", documentId: resolvedEvidence?.documentId ?? null,
+      fieldPath: resolvedEvidence?.fieldPath ?? null, evidenceRevision: resolvedEvidence?.revision ?? null, missingEvidence, reason: reason ?? null,
       requestedAt: status === "unresolved" ? new Date() : null },
   });
   if (status === "unresolved" && missingEvidence) {
