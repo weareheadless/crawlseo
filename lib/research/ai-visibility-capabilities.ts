@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Versioned inventory of evidence surfaces; deliberately contains no visibility metrics. */
-export const AI_VISIBILITY_CAPABILITY_VERSION = "ai-capabilities-v1" as const;
+export const AI_VISIBILITY_CAPABILITY_VERSION = "ai-capabilities-v2" as const;
 
 const surfaceSchema = z.discriminatedUnion("availability", [
   z.object({ availability: z.literal("available"), details: z.string().min(1) }),
@@ -29,12 +29,20 @@ export type ProviderCapabilityMatrix = z.infer<typeof providerCapabilityMatrixSc
 /** Code-level inventory: unknown is kept distinct from unavailable. */
 export const AI_VISIBILITY_CAPABILITY_INVENTORY: ProviderCapabilityMatrix = {
   version: AI_VISIBILITY_CAPABILITY_VERSION,
-  providers: ["ChatGPT", "Claude", "Gemini", "Perplexity"].map((provider) => ({
-    provider,
-    dashboard: { availability: "unknown" as const, reasonCode: "not_inventoried" },
-    apiOrExport: { availability: "unknown" as const, reasonCode: "not_inventoried" },
-    unavailableSurfaces: [],
-  })),
+  providers: [
+    ...["ChatGPT", "Claude", "Gemini"].map((provider) => ({
+      provider,
+      dashboard: { availability: "unknown" as const, reasonCode: "not_inventoried" },
+      apiOrExport: { availability: "unavailable" as const, reasonCode: "no_integrated_export" },
+      unavailableSurfaces: ["apiOrExport"],
+    })),
+    {
+      provider: "Perplexity",
+      dashboard: { availability: "unknown" as const, reasonCode: "not_inventoried" },
+      apiOrExport: { availability: "available" as const, details: "ai-visibility-export-v1 importer" },
+      unavailableSurfaces: [],
+    },
+  ],
 };
 
 // This is an evidence taxonomy, not a result set: no unsupported provider claims are prefilled.
