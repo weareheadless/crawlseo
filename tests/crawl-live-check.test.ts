@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditSchemaSemantics, liveCheckFromHtml } from "@/lib/research/crawl-live-check";
+import { auditSchemaSemantics, liveCheckFromHtml, schemaAuditProjection } from "@/lib/research/crawl-live-check";
 import { persistSchemaSemanticsIssues } from "@/lib/crawler/schema-semantics-persistence";
 
 const page = `<!doctype html><html><head>
@@ -26,6 +26,10 @@ describe("crawl live checks", () => {
   it("reports missing structured data and unavailable inputs as unknown", () => {
     expect(auditSchemaSemantics("<h1>Acme Ltd</h1>", knowledge)[0].status).toBe("unknown");
     expect(auditSchemaSemantics(null, knowledge)[0].status).toBe("unknown");
+    expect(auditSchemaSemantics(schemaAuditProjection(""), knowledge)[0]).toMatchObject({ status: "unknown", code: "AUDIT_INPUT_UNAVAILABLE" });
+    const bounded = schemaAuditProjection(`<main>${"visible ".repeat(1000)}</main><script type="application/ld+json">${JSON.stringify({ name: "Acme Ltd" })}</script>`)!;
+    expect(bounded.visibleText.length).toBeLessThanOrEqual(4000);
+    expect(bounded.jsonLdBlocks.join("").length).toBeLessThanOrEqual(20_000);
   });
   it("persists evidence, stays idempotent, and updates changed results", async () => {
     const rows = new Map<string, { id: string; data: Record<string, unknown> }>();

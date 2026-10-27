@@ -5,7 +5,7 @@ import type { IssueSeverity, IssueType } from "@prisma/client";
 import robotsParser from "robots-parser";
 import { REMEDIATION } from "./remediation";
 import { computeHealthScore } from "./health";
-import { auditSchemaSemantics } from "@/lib/research/crawl-live-check";
+import { auditSchemaSemantics, schemaAuditProjection, type SchemaAuditProjection } from "@/lib/research/crawl-live-check";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { persistSchemaSemanticsIssues } from "./schema-semantics-persistence";
 
@@ -60,7 +60,6 @@ type PageSnapshot = {
   loadMs: number;
   contentHash: string;
   indexable: boolean;
-  auditHtml?: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -674,6 +673,7 @@ async function executeCrawl(
 ): Promise<CrawlResult> {
   const issues: IssueInput[] = [];
   const pages: PageSnapshot[] = [];
+  const auditPages: Array<{ url: string; projection: SchemaAuditProjection | null }> = [];
   const allLinks: LinkInfo[] = [];
   const visited = new Set<string>();
   const queue: string[] = [seedUrl];
@@ -786,6 +786,7 @@ async function executeCrawl(
       if (res?.statusCode === 429) rateLimitedResponses += 1;
 
       if (error || !res) {
+        auditPages.push({ url, projection: null });
         issues.push({
           url,
           type: "BROKEN_LINK",
@@ -798,6 +799,7 @@ async function executeCrawl(
       }
 
       if (!res.contentType.includes("html") && res.statusCode < 400) {
+        auditPages.push({ url, projection: null });
         continue;
       }
 
@@ -813,6 +815,9 @@ async function executeCrawl(
         if (visited.has(finalNormalized)) continue;
         visited.add(finalNormalized);
       }
+
+      const auditProjection = res.contentType.includes("html") ? schemaAuditProjection(res.html) : null;
+      auditPages.push({ url: finalNormalized, projection: auditProjection });
 
       const page = parseHtml(
         finalNormalized,
@@ -838,7 +843,7 @@ async function executeCrawl(
         });
       }
 
-      pages.push({ ...page, auditHtml: res.html });
+      pages.push(page);
       allLinks.push(...page.links);
       issues.push(...issuesFromPage(page));
 
@@ -1038,9 +1043,9 @@ async function executeCrawl(
       catch (error) { knowledgeReason = error instanceof Error ? error.message : "Canonical business knowledge could not be read"; }
     } else knowledgeReason = head ? "No accepted business knowledge revision exists" : "Canonical business knowledge document is missing";
   } else knowledgeReason = "Site is not linked to a project with canonical business knowledge";
-  for (const page of successfulPages) {
+  for (const page of auditPages) {
     const findings = knowledge
-      ? auditSchemaSemantics(page.auditHtml, knowledge)
+      ? auditSchemaSemantics(page.projection, knowledge)
       : [{ code: "BUSINESS_KNOWLEDGE_UNAVAILABLE", field: "businessKnowledge", status: "unknown" as const, evidence: knowledgeReason ?? "Canonical business knowledge unavailable", key: "BUSINESS_KNOWLEDGE_UNAVAILABLE:businessKnowledge", location: "canonical business knowledge API" }];
     for (const finding of findings) {
       issues.push({ url: page.url, type: "MISSING_SCHEMA", severity: finding.status === "mismatch" ? "WARNING" : "INFO",
@@ -1056,16 +1061,14 @@ async function executeCrawl(
   await persistSchemaSemanticsIssues(db, crawlId, semanticsIssues as Array<{ url: string; severity: "INFO" | "WARNING"; message: string; details: Record<string, unknown> }>);
   const toSave = issues.filter((issue) => issue.details?.kind !== "business_schema_semantics").slice(0, 1000);
   if (toSave.length) {
-    for (const i of toSave) {
-      await db.crawlIssue.create({ data: {
+    await db.crawlIssue.createMany({ data: toSave.map((i) => ({
         crawlId,
         url: i.url,
         type: i.type,
         severity: i.severity,
         message: i.message,
         details: (i.details ?? undefined) as undefined | Record<string, string | number | boolean | null>,
-      } });
-    }
+      })) });
   }
 
   // Thin content pages as INFO issues

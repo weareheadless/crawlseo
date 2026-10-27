@@ -2,14 +2,31 @@ import type { CrawlActionDraft } from "@/lib/research/crawl-actions";
 import type { BusinessKnowledgeDocument, BusinessKnowledgeFields } from "@/lib/projects/business-knowledge";
 
 export type SchemaSemanticsFinding = { code: string; field: string; status: "mismatch" | "unknown"; expected?: string; observed?: string; evidence: string; key: string; location?: string };
+export type SchemaAuditProjection = { visibleText: string; jsonLdBlocks: string[] };
+
+/** Keep only bounded evidence needed by the audit; never retain a crawled document. */
+export function schemaAuditProjection(html: string | null | undefined): SchemaAuditProjection | null {
+  if (!html) return null;
+  const jsonLdBlocks: string[] = [];
+  const re = /<script\b(?=[^>]*type=["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi;
+  let block: RegExpExecArray | null;
+  let remaining = 20_000;
+  while ((block = re.exec(html)) && remaining > 0 && jsonLdBlocks.length < 8) {
+    const text = block[1].slice(0, remaining);
+    jsonLdBlocks.push(text);
+    remaining -= text.length;
+  }
+  const visibleText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/\s+/g, " ").trim().slice(0, 4000);
+  return { visibleText, jsonLdBlocks };
+}
 
 /** Detect-only comparison of approved business facts with page-visible text and JSON-LD. */
-export function auditSchemaSemantics(html: string | null | undefined, knowledge: BusinessKnowledgeDocument | null | undefined): SchemaSemanticsFinding[] {
-  if (!html || !knowledge) return [{ code: "AUDIT_INPUT_UNAVAILABLE", field: "page/businessKnowledge", status: "unknown", evidence: !html ? "Published page HTML is unavailable" : "Canonical business knowledge is unavailable", key: "AUDIT_INPUT_UNAVAILABLE:page/businessKnowledge", location: !html ? "page HTML" : "business knowledge API" }];
-  const visible = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/\s+/g, " ").trim();
+export function auditSchemaSemantics(input: string | SchemaAuditProjection | null | undefined, knowledge: BusinessKnowledgeDocument | null | undefined): SchemaSemanticsFinding[] {
+  const projection = typeof input === "string" ? schemaAuditProjection(input) : input;
+  if (!projection || !knowledge) return [{ code: "AUDIT_INPUT_UNAVAILABLE", field: "page/businessKnowledge", status: "unknown", evidence: !projection ? "Published page HTML is unavailable" : "Canonical business knowledge is unavailable", key: "AUDIT_INPUT_UNAVAILABLE:page/businessKnowledge", location: !projection ? "page HTML" : "business knowledge API" }];
+  const visible = projection.visibleText;
   const blocks: unknown[] = [];
-  const re = /<script\b(?=[^>]*type=["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi;
-  for (const match of html.matchAll(re)) { try { const parsed: unknown = JSON.parse(match[1]); blocks.push(...(Array.isArray(parsed) ? parsed : [parsed])); } catch { return [{ code: "INVALID_JSONLD", field: "structuredData", status: "unknown", evidence: "A JSON-LD block could not be parsed", key: "INVALID_JSONLD:structuredData" }]; } }
+  for (const block of projection.jsonLdBlocks) { try { const parsed: unknown = JSON.parse(block); blocks.push(...(Array.isArray(parsed) ? parsed : [parsed])); } catch { return [{ code: "INVALID_JSONLD", field: "structuredData", status: "unknown", evidence: "A JSON-LD block could not be parsed", key: "INVALID_JSONLD:structuredData" }]; } }
   if (!blocks.length) return [{ code: "STRUCTURED_DATA_MISSING", field: "structuredData", status: "unknown", evidence: "No JSON-LD structured data was present to compare", key: "STRUCTURED_DATA_MISSING:structuredData" }];
   const flatten = (item: unknown): Record<string, unknown>[] => {
     if (!item || typeof item !== "object") return [];
