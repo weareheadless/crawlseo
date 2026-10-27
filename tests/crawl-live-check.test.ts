@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveCheckFromHtml } from "@/lib/research/crawl-live-check";
+import { auditSchemaSemantics, liveCheckFromHtml } from "@/lib/research/crawl-live-check";
 
 const page = `<!doctype html><html><head>
 <title>Example listing</title>
@@ -13,6 +13,19 @@ const page = `<!doctype html><html><head>
 </body></html>`;
 
 describe("crawl live checks", () => {
+  const knowledge = { fields: { businessName: { value: "Acme Ltd", publicationUse: "approved", provenance: { status: "owner_confirmed" } } } } as never;
+  it("compares approved facts and returns stable evidence-backed mismatches", () => {
+    const html = '<h1>Acme Ltd</h1><script type="application/ld+json">{"@type":"Organization","name":"Acme Ltd"}</script>';
+    expect(auditSchemaSemantics(html, knowledge)).toEqual([]);
+    const mismatch = '<h1>Wrong Co</h1><script type="application/ld+json">{"@type":"Organization","name":"Wrong Co"}</script>';
+    const first = auditSchemaSemantics(mismatch, knowledge);
+    expect(first.some(f => f.status === "mismatch" && f.evidence.includes("Acme Ltd"))).toBe(true);
+    expect(auditSchemaSemantics(mismatch, knowledge)).toEqual(first);
+  });
+  it("reports missing structured data and unavailable inputs as unknown", () => {
+    expect(auditSchemaSemantics("<h1>Acme Ltd</h1>", knowledge)[0].status).toBe("unknown");
+    expect(auditSchemaSemantics(null, knowledge)[0].status).toBe("unknown");
+  });
   it("reproduces H1, title, description, canonical, schema, and alt checks", () => {
     expect(liveCheckFromHtml("MISSING_H1", page).issue_reproduced).toBe(false);
     expect(liveCheckFromHtml("MULTIPLE_H1", page).issue_reproduced).toBe(false);

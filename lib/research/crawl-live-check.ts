@@ -1,4 +1,39 @@
 import type { CrawlActionDraft } from "@/lib/research/crawl-actions";
+import type { BusinessKnowledgeDocument, BusinessKnowledgeFields } from "@/lib/projects/business-knowledge";
+
+export type SchemaSemanticsFinding = { code: string; field: string; status: "mismatch" | "unknown"; expected?: string; observed?: string; evidence: string; key: string };
+
+/** Detect-only comparison of approved business facts with page-visible text and JSON-LD. */
+export function auditSchemaSemantics(html: string | null | undefined, knowledge: BusinessKnowledgeDocument | null | undefined): SchemaSemanticsFinding[] {
+  if (!html || !knowledge) return [{ code: "AUDIT_INPUT_UNAVAILABLE", field: "page/businessKnowledge", status: "unknown", evidence: !html ? "Published page HTML is unavailable" : "Canonical business knowledge is unavailable", key: "AUDIT_INPUT_UNAVAILABLE:page/businessKnowledge" }];
+  const visible = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/\s+/g, " ").trim();
+  const blocks: unknown[] = [];
+  const re = /<script\b(?=[^>]*type=["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of html.matchAll(re)) { try { const parsed: unknown = JSON.parse(match[1]); blocks.push(...(Array.isArray(parsed) ? parsed : [parsed])); } catch { return [{ code: "INVALID_JSONLD", field: "structuredData", status: "unknown", evidence: "A JSON-LD block could not be parsed", key: "INVALID_JSONLD:structuredData" }]; } }
+  if (!blocks.length) return [{ code: "STRUCTURED_DATA_MISSING", field: "structuredData", status: "unknown", evidence: "No JSON-LD structured data was present to compare", key: "STRUCTURED_DATA_MISSING:structuredData" }];
+  const flatten = (item: unknown): Record<string, unknown>[] => {
+    if (!item || typeof item !== "object") return [];
+    const obj = item as Record<string, unknown>;
+    return [...(Array.isArray(obj["@graph"]) ? obj["@graph"].flatMap(flatten) : []), obj];
+  };
+  const nodes = blocks.flatMap(flatten);
+  const mappings: Array<[keyof BusinessKnowledgeFields, string, string]> = [["businessName", "name", "name"], ["location", "address", "address"]];
+  const findings: SchemaSemanticsFinding[] = [];
+  const valueText = (v: unknown): string => typeof v === "string" ? v : v && typeof v === "object" ? JSON.stringify(v) : "";
+  for (const [field, schemaKey, label] of mappings) {
+    const fact = knowledge.fields[field];
+    if (!fact) continue;
+    if (fact.publicationUse !== "approved" || !["owner_confirmed", "admin_confirmed", "verified"].includes(fact.provenance.status)) {
+      findings.push({ code: "BUSINESS_FACT_NOT_PUBLISHABLE", field, status: "unknown", evidence: `Canonical ${field} is not approved for publication`, key: `BUSINESS_FACT_NOT_PUBLISHABLE:${field}` }); continue;
+    }
+    const expected = Array.isArray(fact.value) ? fact.value.join(", ") : fact.value;
+    for (const [representation, observed] of [["visible", visible], ["structuredData", nodes.map(n => valueText(n[schemaKey])).join(" ")]] as const) {
+      if (!observed) { findings.push({ code: "REPRESENTATION_UNREADABLE", field, status: "unknown", evidence: `${representation} value for ${label} is unavailable`, key: `REPRESENTATION_UNREADABLE:${field}:${representation}` }); continue; }
+      if (!observed.toLocaleLowerCase().includes(expected.toLocaleLowerCase())) findings.push({ code: "BUSINESS_CONTENT_MISMATCH", field, status: "mismatch", expected, observed: observed.slice(0, 240), evidence: `${representation} did not contain the canonical approved ${label} (${expected})`, key: `BUSINESS_CONTENT_MISMATCH:${field}:${representation}` });
+    }
+  }
+  return findings;
+}
 
 const LIVE_CHECKABLE = new Set([
   "MISSING_H1",
