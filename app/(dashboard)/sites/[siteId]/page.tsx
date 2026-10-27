@@ -81,6 +81,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
         {[
           ["Work", "work"],
           ["Research", "research"],
+          ["Intelligence", "intelligence"],
           ["Keywords", "keywords"],
           ["Saved Keywords", "saved-keywords"],
           ["Pages", "pages"],
