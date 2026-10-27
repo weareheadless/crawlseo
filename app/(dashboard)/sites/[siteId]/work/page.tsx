@@ -7,10 +7,11 @@ import { getWorkData } from "@/lib/work/service";
 import { Workbench } from "@/components/work/workbench";
 import { keywordEvidenceForAction, sourceIdsForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction } from "@/lib/ai-seo/opportunity-priority";
+import { actionDimensions, actionDimension, type ActionDimension } from "@/lib/work/categories";
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; dimension?: string; state?: string }>;
 }
 
 const allowedTabs = new Set(["inbox", "actions", "opportunities", "drafts", "agent tasks"]);
@@ -28,6 +29,7 @@ export default async function WorkPage({ params, searchParams }: Props) {
 
   const [data, query] = await Promise.all([getWorkData(siteId), searchParams]);
   const tab = allowedTabs.has(query.tab ?? "") ? query.tab as "inbox" | "actions" | "opportunities" | "drafts" | "agent tasks" : "inbox";
+  const dimension = actionDimensions.includes(query.dimension as ActionDimension) ? query.dimension as ActionDimension : "all";
 
   return (
     <div>
@@ -50,11 +52,14 @@ export default async function WorkPage({ params, searchParams }: Props) {
       <Workbench
         siteId={siteId}
         initialTab={tab}
+        initialDimension={dimension}
+        initialState={query.state ?? "all"}
         actions={data.actions.map((action) => ({
           id: action.id,
           title: action.title,
           source: action.source,
           kind: action.kind,
+          dimension: actionDimension(action),
           format: action.format,
           status: action.status,
           priority: action.priority,
