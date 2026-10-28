@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { DeleteSiteButton } from "@/components/sites/delete-site-button";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
+import { getResearchConfig } from "@/lib/research/policy";
+import { OperationsConfigForm } from "@/components/settings/operations-config-form";
+import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -37,7 +40,7 @@ export default async function SettingsPage({ params }: Props) {
   if (!site) redirect("/sites");
 
   // Check API key status
-  const [apiKeys, platformGrant] = await Promise.all([
+  const [apiKeys, platformGrant, operations, deliveryConfig] = await Promise.all([
     db.apiKey.findMany({
       where: { userId },
       select: { provider: true, updatedAt: true },
@@ -55,6 +58,8 @@ export default async function SettingsPage({ params }: Props) {
           },
         })
       : Promise.resolve(null),
+    getResearchConfig(siteId),
+    getSiteDeliveryConfig(siteId),
   ]);
   const apiKeyStatus: Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }> = {
     dataforseo: { connected: false },
@@ -112,6 +117,16 @@ export default async function SettingsPage({ params }: Props) {
         </div>
 
         {/* External API Keys */}
+        <OperationsConfigForm siteId={siteId} initial={{ cadence: operations.cadence, enabled: operations.enabled, monthlyBudget: operations.monthlyBudget, autoDraft: operations.autoDraft, autoAgent: operations.autoAgent, revision: operations.policy?.revision ?? 0 }} />
+        <section className="panel p-5">
+          <h2 className="font-heading text-lg font-semibold">Delivery connection</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Recorded configuration only; this page does not contact the delivery bridge.</p>
+          {deliveryConfig ? <dl className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
+            <div><dt className="text-muted-foreground">Status</dt><dd>{deliveryConfig.enabled ? "Enabled" : "Disabled"}</dd></div>
+            <div><dt className="text-muted-foreground">Configured adapters</dt><dd>{Array.isArray(deliveryConfig.adapters) ? deliveryConfig.adapters.filter((adapter): adapter is string => typeof adapter === "string").join(", ") || "None" : "None"}</dd></div>
+            <div><dt className="text-muted-foreground">Bridge alias</dt><dd>{deliveryConfig.bridgeAlias || "Not configured"}</dd></div>
+          </dl> : <p className="mt-3 text-sm text-muted-foreground">No delivery connection is recorded.</p>}
+        </section>
         <ApiKeysSection initialStatus={apiKeyStatus} />
 
         {/* Data summary */}
