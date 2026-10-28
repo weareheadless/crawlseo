@@ -1,0 +1,3 @@
+export function keywordRunRows(runs: Array<{ id: string; seed: string; kind: string; status: string; requestedAt: Date; completedAt: Date | null; costMicros: number | null; errorCode: string | null; result: unknown }>) {
+  return runs.map((run) => ({ ...run, requestedAt: run.requestedAt.toISOString(), completedAt: run.completedAt?.toISOString() ?? null, keywordCount: Array.isArray(run.result) && run.status !== "FAILED" ? run.result.length : null, keywords: Array.isArray(run.result) ? [...run.result as Array<{keyword:string;volume:number|null;difficulty:number|null;cpc:number|null}>].sort((a,b)=>(b.volume??-1)-(a.volume??-1)) : [] }));
+}

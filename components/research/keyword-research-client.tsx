@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type KeywordResult = {
   keyword: string;
@@ -24,18 +25,23 @@ export function KeywordResearchClient({
   siteId,
   hasDataForSEO,
   runs = [],
+  selectedRunId = null,
+  selectedResult = null,
 }: {
   siteId: string;
   hasDataForSEO: boolean;
-  runs?: Array<{ id: string; seed: string; kind: string; status: string; completedAt: string | null; costMicros: number | null; errorCode: string | null; result: unknown }>;
+  runs?: Array<{ id: string; seed: string; kind: string; status: string; completedAt: string | null; requestedAt: string; costMicros: number | null; errorCode: string | null; keywordCount: number | null }>;
+  selectedRunId?: string | null;
+  selectedResult?: unknown;
 }) {
-  const [selectedRun, setSelectedRun] = useState("");
-  const [sortDesc, setSortDesc] = useState(true);
-  const selected = runs.find((run) => run.id === (selectedRun || runs[0]?.id));
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selected = runs.find((run) => run.id === (searchParams.get("run") || selectedRunId));
+  const [sort, setSort] = useState<{ key: "volume" | "keyword" | "difficulty" | "cpc"; desc: boolean }>({ key: "volume", desc: true });
   const storedKeywords = useMemo(() => {
-    if (!selected || selected.status !== "COMPLETED" || !Array.isArray(selected.result)) return [];
-    return [...selected.result as KeywordResult[]].sort((a, b) => ((b.volume ?? -1) - (a.volume ?? -1)) * (sortDesc ? 1 : -1));
-  }, [selected, sortDesc]);
+    if (!selected || selected.status !== "COMPLETED" || !Array.isArray(selectedResult)) return [];
+    return [...selectedResult as KeywordResult[]].sort((a, b) => { const av = a[sort.key] ?? (sort.desc ? -Infinity : Infinity), bv = b[sort.key] ?? (sort.desc ? -Infinity : Infinity); return (typeof av === "string" ? av.localeCompare(String(bv)) : Number(av) - Number(bv)) * (sort.desc ? -1 : 1); });
+  }, [selected, selectedResult, sort]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<KeywordResult[]>([]);
@@ -127,7 +133,7 @@ export function KeywordResearchClient({
 
   return (
     <div className="space-y-4">
-      {runs.length > 0 && <section className="panel p-4"><h2 className="mb-3 font-semibold">Saved research runs</h2>{runs.map((run) => <button className={`mr-2 mb-2 rounded border px-3 py-2 text-left text-sm ${selected?.id === run.id ? "border-primary" : "border-border"}`} key={run.id} onClick={() => setSelectedRun(run.id)}>{run.seed} · {run.kind} · {run.status}</button>)}{selected?.status === "FAILED" ? <p className="text-sm text-danger">Run failed: {selected.errorCode ?? "UNKNOWN_ERROR"}</p> : selected?.status === "COMPLETED" && <div className="overflow-x-auto"><button className="my-2 text-xs underline" onClick={() => setSortDesc(!sortDesc)}>Sort volume {sortDesc ? "↓" : "↑"}</button><table className="w-full text-sm"><thead><tr>{["Keyword", "Intent", "Volume", "Difficulty", "CPC", "Competition", "Trend"].map((label) => <th className="px-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{storedKeywords.map((word) => <tr key={word.keyword}><td>{word.keyword}</td><td>{(word as any).intent ?? "—"}</td><td>{word.volume ?? "—"}</td><td>{word.difficulty ?? "—"}</td><td>{word.cpc ?? "—"}</td><td>{word.competition ?? "—"}</td><td>{word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}</td></tr>)}</tbody></table></div>}</section>}
+      {runs.length > 0 && <section className="panel p-4"><h2 className="mb-3 font-semibold">Stored research runs</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{["Seed", "Kind", "Status", "Date", "Keywords", "Cost", "Error"].map((x) => <th key={x} className="px-3 py-2 text-left">{x}</th>)}</tr></thead><tbody>{runs.map((run) => <tr key={run.id} onClick={() => router.push(`?run=${encodeURIComponent(run.id)}`)} className={`cursor-pointer border-t border-border/50 ${selected?.id === run.id ? "bg-muted/40" : ""}`}><td className="px-3 py-2">{run.seed}</td><td>{run.kind}</td><td><span className="rounded-full border px-2 py-0.5 text-xs">{run.status}</span></td><td>{new Date(run.completedAt ?? run.requestedAt).toLocaleDateString()}</td><td>{run.status === "FAILED" ? "—" : run.keywordCount ?? "—"}</td><td>{run.costMicros == null ? "—" : `$${(run.costMicros / 1_000_000).toFixed(4)}`}</td><td className="text-danger">{run.status === "FAILED" ? run.errorCode ?? "UNKNOWN_ERROR" : "—"}</td></tr>)}</tbody></table></div>{selected?.status === "COMPLETED" && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{(["keyword", "intent", "volume", "difficulty", "cpc", "competition", "trend"] as const).map((key) => <th key={key} className="px-3 py-2 text-left">{["keyword", "volume", "difficulty", "cpc"].includes(key) ? <button onClick={() => setSort({ key: key as "keyword" | "volume" | "difficulty" | "cpc", desc: sort.key === key ? !sort.desc : key !== "keyword" })}>{key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}</button> : key}</th>)}</tr></thead><tbody>{storedKeywords.map((word) => <tr key={word.keyword} className="border-t border-border/50"><td>{word.keyword}</td><td>{(word as any).intent ?? "—"}</td><td>{word.volume ?? "—"}</td><td>{word.difficulty ?? "—"}</td><td>{word.cpc ?? "—"}</td><td>{word.competition ?? "—"}</td><td>{word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}</td></tr>)}</tbody></table></div>}</section>}
       {/* Autocomplete fallback banner */}
       {!hasDataForSEO && (
         <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4">
@@ -179,10 +185,9 @@ export function KeywordResearchClient({
       {/* Results */}
       {results.length > 0 && (
         <div className="panel overflow-hidden">
-          {source === "autocomplete" && (
+          {source && (
             <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-              Showing Google Autocomplete suggestions — volume and difficulty data
-              requires DataForSEO
+              {source === "autocomplete" ? "Google Autocomplete (free, no volume data)" : source === "article_research" ? "stored keyword research" : "stored DataForSEO report"}
             </div>
           )}
           <div className="overflow-x-auto">
@@ -298,7 +303,7 @@ export function KeywordResearchClient({
           </div>
           <div className="border-t border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
             {results.length} keyword{results.length !== 1 ? "s" : ""} found
-            {source === "dataforseo" ? " via DataForSEO" : " via Google Autocomplete"}
+            {source === "dataforseo" ? " via stored DataForSEO report" : source === "article_research" ? " via stored keyword research" : " via Google Autocomplete (free, no volume data)"}
           </div>
           {queueError && (
             <div className="border-t border-danger/30 bg-danger/5 px-4 py-2 text-xs text-danger">

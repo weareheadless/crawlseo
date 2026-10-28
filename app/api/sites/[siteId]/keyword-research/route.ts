@@ -25,6 +25,13 @@ export async function GET(
     await resolveDataForSeoReadiness({ userId, projectId: site.projectId });
 
     const url = new URL(req.url);
+    const runId = url.searchParams.get("runId");
+    if (runId) {
+      const run = await db.articleKeywordResearchRun.findFirst({ where: { id: runId, siteId }, select: { status: true, result: true, errorCode: true } });
+      if (!run) return Response.json({ error: "Research run not found" }, { status: 404 });
+      if (run.status !== "COMPLETED") return Response.json({ error: run.status === "FAILED" ? `Research run failed: ${run.errorCode ?? "UNKNOWN_ERROR"}` : "Research run is not complete" }, { status: 409 });
+      return Response.json({ source: "dataforseo", keywords: Array.isArray(run.result) ? run.result : [] });
+    }
     const query = url.searchParams.get("q");
     if (!query) {
       return Response.json({ error: "Missing query parameter: q" }, { status: 400 });
