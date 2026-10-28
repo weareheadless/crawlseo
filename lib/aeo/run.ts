@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { generateQuestionSet, type QuestionSetInput } from "./question-set";
+import { resolveBrandIdentity } from "./brand";
 import { createObservation } from "./observation";
 import { evaluatePerplexityQuestion } from "./perplexity";
 import { evaluateGoogleAiOverviewQuestion } from "./google-ai-overview";
@@ -28,19 +29,20 @@ function countryFor(profile: { country: string | null; constraints: unknown } | 
   if (typeof market === "string" && MARKET_COUNTRY[market.trim().toLowerCase()]) return MARKET_COUNTRY[market.trim().toLowerCase()];
   return profile.country ? profile.country.toUpperCase().slice(0, 2) : null;
 }
-const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : typeof value === "string" ? [value] : [];
 
 async function loadQuestionInput(client: RunDb, projectId: string, siteId: string): Promise<{ input: QuestionSetInput; brand: string | null; aliases: string[] }> {
-  const [business, profile, runs] = await Promise.all([
+  const [business, profile, runs, site] = await Promise.all([
     client.businessKnowledgeDocument.findUnique({ where: { projectId } }),
     client.siteProfile.findUnique({ where: { siteId } }),
     client.researchRun.findMany({ where: { siteId }, include: { findings: { select: { id: true, runId: true, theme: true, summary: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+    client.site.findUnique({ where: { id: siteId }, select: { domain: true, project: { select: { name: true } } } }),
   ]);
   const revision = business?.acceptedRevision == null ? null : await client.businessKnowledgeRevision.findUnique({ where: { documentId_revision: { documentId: business.id, revision: business.acceptedRevision } } });
   const fields = object(revision?.fields);
   const businessInput = business ? { revision: business.revision, acceptedRevision: business.acceptedRevision, documentId: business.id, fields } : null;
   const input: QuestionSetInput = { businessKnowledge: businessInput, profile: profile ? { audience: profile.audience, topics: profile.topics, services: profile.services, market: object(profile.constraints).market, country: countryFor(profile), language: profile.language, locale: profile.language } : null, research: { runs: runs.map((run) => ({ id: run.id, questions: object(run.brief).questions ?? run.topics })), findings: runs.flatMap((run) => run.findings) } };
-  return { input, brand: typeof fields.businessName === "string" ? fields.businessName : null, aliases: strings(fields.brandAliases) };
+  const identity = resolveBrandIdentity({ businessName: fields.businessName, aliases: fields.brandAliases, projectName: site?.project?.name ?? null, domain: site?.domain ?? null });
+  return { input, brand: identity.name, aliases: identity.aliases };
 }
 
 function receipt(row: AeoEvaluationRun): EvaluationReceipt {
