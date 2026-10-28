@@ -49,6 +49,30 @@ function costMicros(value: unknown): number | null {
   const amount = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 1_000_000) : null;
 }
+async function readBoundedBody(response: Response): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new DataForSeoRequestError("request_failed", "DataForSEO SERP response exceeded size limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+}
 
 /** One bounded live SERP call; deliberately no retries because each call may incur spend. */
 export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSerpResponse> {
@@ -78,8 +102,7 @@ export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSer
       if (response.status === 401 || response.status === 403) throw new DataForSeoRequestError("configuration_error", `DataForSEO rejected credentials (HTTP ${response.status})`);
       throw new DataForSeoRequestError("request_failed", `DataForSEO SERP request failed (HTTP ${response.status})`);
     }
-    const raw = await response.text();
-    if (raw.length > MAX_RESPONSE_BYTES) throw new DataForSeoRequestError("request_failed", "DataForSEO SERP response exceeded size limit");
+    const raw = await readBoundedBody(response);
     let root: Record<string, unknown> | null;
     try { root = object(JSON.parse(raw)); } catch { throw new DataForSeoRequestError("request_failed", "DataForSEO returned malformed JSON"); }
     if (!root || Number(root.status_code) !== 20000 || !Array.isArray(root.tasks)) {

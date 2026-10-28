@@ -4,7 +4,7 @@
 
 ## Result and absence semantics
 
-The result has a `state` of `succeeded`, `overview_absent`, `request_failed`, `rate_limited`, or `over_budget`, plus provider, exact question, locale, device, cost in micros, task ID, answer text, citation URLs, referenced domains, brand verdict and safe error text. `over_budget` is reserved for an upstream orchestration decision; this adapter does not own a budget and never dispatches on that state. Citations and domains are deduplicated and bounded.
+The result has a `state` of `succeeded`, `overview_absent`, `request_failed`, `rate_limited`, or `over_budget`, plus provider, exact question, locale, device, cost in micros, task ID, answer text, citation URLs, referenced domains, brand verdict and safe error text. The caller may set `overBudget: true` after applying its run budget policy; the adapter returns `over_budget` before credential lookup or HTTP. The adapter does not own or calculate the budget. Citations and domains are deduplicated and bounded.
 
 `overview_absent` means a valid SERP response contained no `ai_overview` item. It is not an absence of the requested brand and not a failed call. A present overview with an explicitly supplied brand and aliases reports `brandPresent: true|false`; without a brand target it is null. Provider errors, invalid JSON/shape, missing answer text, timeouts and oversized replies never become `overview_absent`. Request failures are outcomes only and must not be persisted as observations. A valid absent-overview SERP can be represented downstream as an answer-absent observation per the UI-050 contract.
 

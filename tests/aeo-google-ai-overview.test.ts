@@ -31,6 +31,7 @@ function serp(items: unknown[]) {
 describe("Google AI Overview evaluation", () => {
   const fetchMock = vi.fn();
   beforeEach(() => {
+    findGrant.mockClear();
     findGrant.mockResolvedValue(credentials);
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset();
@@ -81,6 +82,13 @@ describe("Google AI Overview evaluation", () => {
     findGrant.mockResolvedValueOnce({ apiKey: null, providerCredential: null });
     const result = await evaluateGoogleAiOverviewQuestion(input);
     expect(result).toMatchObject({ state: "request_failed", error: expect.stringContaining("credentials are not configured") });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns over_budget before credential lookup or HTTP", async () => {
+    const result = await evaluateGoogleAiOverviewQuestion({ ...input, overBudget: true });
+    expect(result.state).toBe("over_budget");
+    expect(findGrant).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

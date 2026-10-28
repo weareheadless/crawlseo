@@ -22,6 +22,8 @@ export type EvaluateGoogleAiOverviewInput = {
   device: "desktop" | "mobile";
   brand?: string | null;
   aliases?: string[];
+  /** Caller may deny a paid request after applying the run's budget policy. */
+  overBudget?: boolean;
 };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -59,6 +61,7 @@ function resultBase(input: EvaluateGoogleAiOverviewInput, state: GoogleAiOvervie
 
 /** Ask one pinned Google SERP and normalize the AI Overview evidence without persistence or retries. */
 export async function evaluateGoogleAiOverviewQuestion(input: EvaluateGoogleAiOverviewInput): Promise<GoogleAiOverviewResult> {
+  if (input.overBudget) return resultBase(input, "over_budget", "Google AI Overview request denied by budget policy");
   try {
     const response = await fetchGoogleSerp({
       projectId: input.projectId,
