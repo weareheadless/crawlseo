@@ -80,6 +80,29 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
         }
       />
 
+      <div className="mb-6 flex flex-wrap gap-2">
+        {[
+          ["Work", "work"],
+          ["Research", "research"],
+          ["Intelligence", "intelligence"],
+          ["Keywords", "keywords"],
+          ["Saved Keywords", "saved-keywords"],
+          ["Pages", "pages"],
+          ["Crawl", "crawl"],
+          ["Vitals", "vitals"],
+          ["Alerts", "alerts"],
+          ["Settings", "settings"],
+        ].map(([label, path]) => (
+          <Link
+            key={path}
+            href={`/sites/${siteId}/${path}`}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-atom-caption font-medium text-muted-foreground shadow-[var(--shadow-1)] transition hover:border-primary hover:text-primary"
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
       <div className="mb-6 space-y-4">
         <PipelineNavigation siteId={siteId} />
         <section aria-labelledby="overview-decisions" className="panel p-4 sm:p-5">

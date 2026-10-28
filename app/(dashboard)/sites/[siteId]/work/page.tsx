@@ -52,11 +52,18 @@ export default async function WorkPage({ params, searchParams }: Props) {
         <PipelineNavigation siteId={siteId} currentStage="work" />
         <PipelineStageContext siteId={siteId} currentStage="work" />
       </div>
+      {query.actionId && (
+        <section className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4" aria-label="Selected action">
+          <p className="text-sm">Selected action preserved from the previous workspace.</p>
+          <Link className="text-sm font-medium text-primary underline" href={`/sites/${siteId}/actions/${encodeURIComponent(query.actionId)}`}>
+            Open selected action
+          </Link>
+        </section>
+      )}
       <Workbench
         siteId={siteId}
         initialDimension={dimension}
         initialState={query.state ?? "all"}
-        selectedActionId={query.actionId}
         actions={data.actions.map((action) => ({
           id: action.id,
           title: action.title,
