@@ -19,6 +19,7 @@ const inputClass = "w-full rounded-lg border border-border bg-background px-3 py
 export function ResearchConfigForm({ siteId, initial }: { siteId: string; initial: Config }) {
   const router = useRouter();
   const [config, setConfig] = useState(initial);
+  const [baseline, setBaseline] = useState(initial);
   const [exclusions, setExclusions] = useState(initial.exclusions.join(", "));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +32,18 @@ export function ResearchConfigForm({ siteId, initial }: { siteId: string; initia
     setError(null);
     setNotice(null);
     try {
+      const next = { ...config, exclusions: exclusionList };
+      const values = Object.fromEntries(Object.entries({ providers: next.providers, exclusions: next.exclusions, recencyDays: next.recencyDays, maxSources: next.maxSources }).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(key === "exclusions" ? baseline.exclusions : baseline[key as keyof Config])));
+      if (!Object.keys(values).length) throw new Error("No changes to save.");
       const response = await fetch(`/crawlseo/api/sites/${siteId}/research-policy`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section: "research", values: { providers: config.providers, exclusions: exclusionList, recencyDays: config.recencyDays, maxSources: config.maxSources }, expectedPolicyRevision: config.revision, expectedProfileUpdatedAt: config.profileUpdatedAt }),
+        body: JSON.stringify({ section: "research", values, expectedPolicyRevision: config.revision, expectedProfileUpdatedAt: config.profileUpdatedAt }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error ?? "Could not save research config");
+      if (!response.ok) throw new Error(response.status === 409 ? "Configuration changed elsewhere. Reload this page before saving again." : payload.error ?? "Could not save research config");
+      const refreshed = { ...next, revision: payload.policyRevision ?? config.revision, profileUpdatedAt: payload.profileUpdatedAt ?? config.profileUpdatedAt };
+      setBaseline(refreshed); setConfig(refreshed);
       setNotice("Research configuration saved.");
       router.refresh();
     } catch (caught) {
@@ -75,7 +81,7 @@ export function ResearchConfigForm({ siteId, initial }: { siteId: string; initia
         </div>
       </div>
       <p className="text-xs text-muted-foreground">Topics and business context are managed under <a className="text-primary underline" href={`/sites/${siteId}/business`}>Business</a>. Schedules, budgets and execution permissions are managed in <a className="text-primary underline" href={`/sites/${siteId}/settings`}>Settings</a>.</p>
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       {notice && <p className="text-xs text-signal">{notice}</p>}
       <Button type="submit" disabled={saving}>
         {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}

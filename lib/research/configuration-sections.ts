@@ -17,11 +17,12 @@ function validate(section: ConfigurationSection, values: Record<string, unknown>
     if (["topics", "goals", "services", "competitors", "exclusions", "providers"].includes(key)) {
       const limits: Record<string, number> = { topics: 12, goals: 12, services: 12, competitors: 12, exclusions: 12, providers: 2 };
       const maxLength = key === "exclusions" ? 120 : key === "providers" ? 20 : 120;
-      if (!Array.isArray(value) || value.length < 1 || value.length > limits[key] || value.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > maxLength)) throw new InvalidConfigurationSection(`Invalid ${key}`);
+      const mayClear = ["goals", "services", "competitors", "exclusions"].includes(key);
+      if (!Array.isArray(value) || (!mayClear && value.length < 1) || value.length > limits[key] || value.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > maxLength)) throw new InvalidConfigurationSection(`Invalid ${key}`);
       if (key === "providers" && (value.length < 1 || value.some((item) => !providers.includes(item)))) throw new InvalidConfigurationSection("Unsupported provider");
     } else if (["audience", "market", "language", "brandVoice"].includes(key)) {
       const limits: Record<string, number> = { audience: 300, market: 120, language: 16, brandVoice: 500 };
-      if (typeof value !== "string" || !value.trim() || value.length > limits[key]) throw new InvalidConfigurationSection(`Invalid ${key}`);
+      if (typeof value !== "string" || (key === "language" ? value.trim().length < 2 : false) || value.trim().length > limits[key]) throw new InvalidConfigurationSection(`Invalid ${key}`);
     } else if (key === "recencyDays" || key === "maxSources" || key === "monthlyBudget") {
       const bounds: Record<string, [number, number]> = { recencyDays: [1, 3650], maxSources: [1, 100], monthlyBudget: [0, 500] };
       const [min, max] = bounds[key];
@@ -33,11 +34,13 @@ function validate(section: ConfigurationSection, values: Record<string, unknown>
 }
 
 export async function saveConfigurationSection(siteId: string, section: ConfigurationSection, values: Record<string, unknown>, expectedPolicyRevision?: number, expectedProfileUpdatedAt?: string | null) {
+  values = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Array.isArray(value) ? value.map((entry) => typeof entry === "string" ? entry.trim() : entry) : typeof value === "string" ? value.trim() : value]));
   validate(section, values);
   const changesPolicy = Object.keys(values).some((key) => section !== "business" || key === "goals");
   const changesProfile = Object.keys(values).some((key) => section === "business" || key === "exclusions");
   if ((changesPolicy && expectedPolicyRevision === undefined) || (changesProfile && expectedProfileUpdatedAt === undefined)) throw new ConfigurationPreconditionRequired("Expected revision/timestamp required");
 
+  let initialProfile: Record<string, unknown> | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await db.$transaction(async (tx) => {
@@ -49,7 +52,19 @@ export async function saveConfigurationSection(siteId: string, section: Configur
         if (!site) throw new InvalidConfigurationSection("Site not found");
         if (changesPolicy && (policy?.revision ?? 0) !== expectedPolicyRevision) throw new ConfigurationConflict("Research policy changed; reload before saving");
         const profileStamp = profile?.updatedAt.toISOString() ?? null;
-        if (changesProfile && profileStamp !== expectedProfileUpdatedAt) throw new ConfigurationConflict("Business context changed; reload before saving");
+        const profileRecord = profile as unknown as Record<string, unknown> | null;
+        if (attempt === 0) initialProfile = profileRecord;
+        if (changesProfile && profileStamp !== expectedProfileUpdatedAt) {
+          const originalProfile = initialProfile;
+          const changedKeys = Object.keys(values).filter((key) => ["topics", "audience", "language", "services", "competitors", "brandVoice"].includes(key));
+          const constraintKeys = Object.keys(values).filter((key) => ["market", "goals", "exclusions"].includes(key));
+          const sameTouchedValues = attempt > 0 && originalProfile !== null && changedKeys.every((key) => JSON.stringify(profileRecord?.[key] ?? null) === JSON.stringify(originalProfile[key] ?? null)) && constraintKeys.every((key) => {
+            const current = mergeConstraints(profileRecord?.constraints, {});
+            const initial = mergeConstraints(originalProfile.constraints, {});
+            return JSON.stringify(current[key] ?? null) === JSON.stringify(initial[key] ?? null);
+          });
+          if (!sameTouchedValues) throw new ConfigurationConflict("Business context changed; reload before saving");
+        }
 
         const profilePatch: Record<string, unknown> = {};
         const policyPatch: Record<string, unknown> = {};
@@ -64,23 +79,25 @@ export async function saveConfigurationSection(siteId: string, section: Configur
           policyPatch.exclusions = values.exclusions;
           constraintsPatch.exclusions = values.exclusions;
         }
+        let updatedProfile = profile;
         if (changesProfile) {
           const constraints = mergeConstraints(profile?.constraints, constraintsPatch);
           const data = { ...profilePatch, ...(Object.keys(constraintsPatch).length ? { constraints: constraints as Prisma.InputJsonValue } : {}) };
-          await tx.siteProfile.upsert({ where: { siteId }, create: { siteId, projectId: site.projectId, ...data } as Prisma.SiteProfileUncheckedCreateInput, update: data });
+          updatedProfile = await tx.siteProfile.upsert({ where: { siteId }, create: { siteId, projectId: site.projectId, ...data } as Prisma.SiteProfileUncheckedCreateInput, update: data });
         }
         if (changesPolicy) {
           const data = { ...policyPatch, revision: { increment: 1 } } as Prisma.ResearchPolicyUpdateInput;
           if (policy) await tx.researchPolicy.update({ where: { siteId, revision: expectedPolicyRevision }, data });
           else await tx.researchPolicy.create({ data: { siteId, ...policyPatch, revision: 1 } as Prisma.ResearchPolicyUncheckedCreateInput });
         }
-        return { ok: true };
+        return { ok: true, policyRevision: changesPolicy ? (policy?.revision ?? 0) + 1 : policy?.revision ?? 0, profileUpdatedAt: updatedProfile?.updatedAt?.toISOString() ?? null };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof ConfigurationConflict || error instanceof ConfigurationPreconditionRequired || error instanceof InvalidConfigurationSection) throw error;
       if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2025")) throw new ConfigurationConflict("Configuration changed while saving; reload before saving");
       if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034")) throw error;
-      if (attempt === 2) throw error;
+      if (attempt === 2) throw new ConfigurationConflict("Configuration is changing concurrently; reload and try again");
     }
   }
+  throw new ConfigurationConflict("Configuration is changing concurrently; reload and try again");
 }

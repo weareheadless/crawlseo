@@ -69,8 +69,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ siteId
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((key) => !["section", "values", "expectedPolicyRevision", "expectedProfileUpdatedAt"].includes(key)) || !["business", "research", "operations"].includes(body.section) || !body.values || typeof body.values !== "object" || Array.isArray(body.values) || Object.keys(body.values).length === 0 || (body.expectedPolicyRevision !== undefined && (!Number.isInteger(body.expectedPolicyRevision) || body.expectedPolicyRevision < 0)) || (body.expectedProfileUpdatedAt !== undefined && body.expectedProfileUpdatedAt !== null && (typeof body.expectedProfileUpdatedAt !== "string" || !Number.isFinite(Date.parse(body.expectedProfileUpdatedAt))))) {
       return Response.json({ error: "Invalid configuration section" }, { status: 400 });
     }
-    await saveConfigurationSection(siteId, body.section, body.values, body.expectedPolicyRevision, body.expectedProfileUpdatedAt);
-    return Response.json({ ok: true });
+    const result = await saveConfigurationSection(siteId, body.section, body.values, body.expectedPolicyRevision, body.expectedProfileUpdatedAt);
+    return Response.json(result);
   } catch (error) {
     if (error instanceof ConfigurationConflict || error instanceof ConfigurationPreconditionRequired || error instanceof InvalidConfigurationSection) return Response.json({ error: error.message }, { status: error.status });
     if (error instanceof SyntaxError) return Response.json({ error: "Invalid configuration request" }, { status: 400 });
