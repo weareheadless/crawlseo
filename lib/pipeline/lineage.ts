@@ -26,8 +26,22 @@ export function projectActionLineage(input: ActionLineageProjectionInput, source
   const { id: actionId, siteId } = input;
   const actionHref = sitePath(siteId, "actions", actionId);
 
-  // No producer defines a supported immutable business-pin field in action evidence.
-  const business = link("not_recorded", "No supported pinned business document/revision contract is recorded on actions; historical revision view unavailable.");
+  // crawl-actions persists these exact producer fields. Keep the pin as recorded
+  // evidence, not a claim that the historical document was resolved or accepted.
+  const evidence = input.evidence && typeof input.evidence === "object" && !Array.isArray(input.evidence)
+    ? input.evidence as Record<string, unknown> : {};
+  const documentId = evidence.knowledge_document_id;
+  const revision = evidence.knowledge_revision;
+  const hasPin = typeof documentId === "string" && localId(documentId)
+    && typeof revision === "number" && Number.isSafeInteger(revision) && revision > 0;
+  const business = hasPin
+    ? link("recorded", "Recorded producer pin only; historical document resolution and revision view are unavailable.")
+    : link("not_recorded", "No valid knowledge_document_id/knowledge_revision pin recorded; current knowledge is not historical evidence.");
+  if (hasPin) add({
+    id: `business:${documentId}:${revision}`, kind: "business_revision", label: `Pinned business revision ${revision}`,
+    status: null, occurredAt: null, href: null,
+    details: { documentId, revision, referenceOnly: true },
+  }, actionId, "informed_by");
   const run = input.run && input.runId === input.run.id && input.run.siteId === siteId && input.run.projectId === input.projectId ? input.run : null;
   const finding = input.finding && input.findingId === input.finding.id && run && input.finding.runId === run.id ? input.finding : null;
   if (run) add({ id: run.id, kind: "research_run", label: run.title || "Research run", status: run.status || null, occurredAt: iso(run.createdAt), href: sitePath(siteId, "research", "runs", run.id) }, actionId, "derived_from");

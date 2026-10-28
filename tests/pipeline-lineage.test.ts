@@ -43,6 +43,20 @@ describe("pipeline action lineage", () => {
       expect(value.nodes.some((n) => n.kind === "business_revision")).toBe(false);
     }
   });
+  it("retains the actual immutable knowledge pin written by crawl-actions without linking to current knowledge", () => {
+    const value = projectActionLineage(action({ evidence: { knowledge_document_id: "business-profile", knowledge_revision: 3 } }));
+    expect(value.links.business.state).toBe("recorded");
+    expect(value.nodes.find((node) => node.kind === "business_revision")).toMatchObject({
+      href: null,
+      details: { documentId: "business-profile", revision: 3, referenceOnly: true },
+    });
+  });
+  it("rejects malformed actual knowledge pins", () => {
+    for (const revision of [0, -1, 1.5, "3", null]) {
+      const value = projectActionLineage(action({ evidence: { knowledge_document_id: "business-profile", knowledge_revision: revision } }));
+      expect(value.links.business.state).not.toBe("recorded");
+    }
+  });
   it("tolerates invalid legacy dates", () => {
     const value = projectActionLineage(action({ createdAt: "not-a-date", run: { ...action().run!, createdAt: "broken" } }));
     expect(value.nodes.find((n) => n.kind === "action")?.occurredAt).toBeNull();
