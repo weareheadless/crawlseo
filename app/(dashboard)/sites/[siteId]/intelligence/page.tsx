@@ -3,65 +3,214 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
-import { observedCount, visibilityState } from "@/lib/research/intelligence-view";
+import { provenanceNote, summarizeIntelligence } from "@/lib/research/intelligence-overview";
+import { identityIssues, splitObservations } from "@/lib/research/aeo-geo-view";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
-import { AI_VISIBILITY_CAPABILITY_INVENTORY, providerCapabilityMatrixSchema } from "@/lib/research/ai-visibility-capabilities";
-import { actionDimension } from "@/lib/work/categories";
 
 export default async function IntelligencePage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
   if (!userId) redirect("/login");
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, userId: true, projectId: true, domain: true } });
+
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { id: true, domain: true, projectId: true },
+  });
   if (!site) redirect("/sites");
   const projectId = site.projectId;
-  const [crawl, observations, coverages, sources, knowledge, actions, capabilityRecord] = await Promise.all([
-    db.crawl.findFirst({ where: { siteId, status: "COMPLETED" }, orderBy: { finishedAt: "desc" }, select: { id: true, finishedAt: true, issues: { select: { type: true, details: true } } } }),
-    projectId ? db.aIVisibilityObservation.findMany({ where: { projectId }, orderBy: [{ observedAt: "desc" }, { provider: "asc" }, { modelSurface: "asc" }], take: 200 }) : Promise.resolve([]),
-    projectId ? db.questionCoverage.findMany({ where: { projectId }, include: { finding: { select: { summary: true } }, action: { select: { id: true, title: true } }, document: { select: { logicalId: true } } }, orderBy: { updatedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    projectId ? db.researchSource.findMany({ where: { run: { projectId } }, select: { id: true, provider: true, url: true, title: true, retrievedAt: true, identityId: true }, orderBy: { retrievedAt: "desc" }, take: 200 }) : Promise.resolve([]),
-    projectId ? db.businessKnowledgeDocument.findUnique({ where: { projectId }, select: { logicalId: true, revision: true, acceptedRevision: true } }) : null,
-    db.researchAction.findMany({ where: { siteId }, orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, title: true, status: true, kind: true, source: true, evidence: true, updatedAt: true } }),
-    projectId ? db.connectorContextSnapshot.findUnique({ where: { siteId }, select: { capabilities: true } }) : null,
-  ]);
-  let knowledgeDoc = null;
-  if (knowledge) {
-    try { knowledgeDoc = await readBusinessKnowledge(projectId!, knowledge.logicalId, knowledge.acceptedRevision ?? undefined, knowledge.acceptedRevision ? "accepted" : "working"); }
-    catch { knowledgeDoc = null; }
-  }
-  const capability = providerCapabilityMatrixSchema.safeParse(capabilityRecord?.capabilities ?? AI_VISIBILITY_CAPABILITY_INVENTORY);
-  const prelaunchRuns = projectId ? await db.seoResearchRun.findMany({ where: { projectId, siteId: null }, orderBy: { periodStart: "desc" }, take: 20, select: { id: true, periodStart: true, status: true, actualCostMicros: true } }) : [];
-  const robotsIssue = crawl?.issues.some((issue) => issue.type === "MISSING_ROBOTS" || (issue.details as { kind?: string } | null)?.kind === "ai_crawler_block");
-  const sitemapIssue = crawl?.issues.some((issue) => issue.type === "MISSING_SITEMAP");
-  const grouped = new Map<string, typeof observations>();
-  for (const observation of observations) {
-    const key = `${observation.provider} · ${observation.modelSurface}`;
-    grouped.set(key, [...(grouped.get(key) ?? []), observation]);
+
+  const [keywordCount, actions, researchRuns, keywordRuns, sources, observations, coverage, crawl, knowledge, latestRun] =
+    await Promise.all([
+      db.keyword.count({ where: { siteId } }),
+      db.researchAction.findMany({
+        where: { siteId },
+        select: { id: true, title: true, status: true, kind: true, evidence: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      db.researchRun.count({ where: { siteId } }),
+      db.articleKeywordResearchRun.count({ where: { siteId } }),
+      db.researchSource.count({ where: { run: { siteId } } }),
+      projectId ? db.aIVisibilityObservation.findMany({ where: { projectId }, select: { provider: true, modelSurface: true } }) : Promise.resolve([]),
+      projectId ? db.questionCoverage.findMany({ where: { projectId }, select: { status: true } }) : Promise.resolve([]),
+      db.crawl.findFirst({
+        where: { siteId, status: "COMPLETED" },
+        orderBy: { finishedAt: "desc" },
+        select: { finishedAt: true, issues: { select: { id: true, type: true, details: true } } },
+      }),
+      projectId
+        ? db.businessKnowledgeDocument.findUnique({
+            where: { projectId },
+            select: { logicalId: true, revision: true, acceptedRevision: true },
+          })
+        : null,
+      db.researchRun.findFirst({
+        where: { siteId },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, title: true, status: true, createdAt: true, sourceCount: true, findingCount: true, actionCount: true },
+      }),
+    ]);
+
+  let knowledgeState: string | null = null;
+  if (projectId && knowledge) {
+    try {
+      const document = await readBusinessKnowledge(
+        projectId,
+        knowledge.logicalId,
+        knowledge.acceptedRevision ?? undefined,
+        knowledge.acceptedRevision ? "accepted" : "working"
+      );
+      knowledgeState = `${document.state} revision ${document.revision}`;
+    } catch {
+      knowledgeState = "unreadable";
+    }
   }
 
-  return <div className="space-y-6">
-    <PageHeader eyebrow={site.domain} title="Intelligence" description="Evidence about AI access, observed answer-engine visibility, question coverage and research sources. Access does not imply visibility." />
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Business profile</h2>
-      {!knowledge ? <Empty title="Business profile unavailable" text="No canonical business knowledge document is recorded for this project; profile facts are unknown, not empty." /> : !knowledgeDoc ? <Empty title="Business profile could not be read" text="The canonical knowledge revision is unavailable or invalid; no facts are inferred." /> : <><p className="mt-1 text-sm text-muted-foreground">{knowledgeDoc.state} revision {knowledgeDoc.revision} · changed {new Date(knowledgeDoc.updatedAt).toLocaleString()}</p><div className="mt-3 divide-y divide-border/50">{Object.entries(knowledgeDoc.fields).map(([field, fact]) => <article key={field} className="py-3"><p className="font-medium">{field}</p><p className="break-words text-sm">{Array.isArray(fact.value) ? fact.value.join(", ") : fact.value}</p><p className="mt-1 text-xs text-muted-foreground">{fact.provenance.status} · {fact.provenance.kind} · source {fact.provenance.originSystem}/{fact.provenance.originRecordId}{fact.provenance.status === "owner_confirmed" || fact.provenance.status === "admin_confirmed" || fact.provenance.status === "verified" ? " · confirmed" : " · unaccepted/unconfirmed"}</p></article>)}</div></>}
-    </section>
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Actions</h2>{actions.length === 0 ? <Empty title="No Actions recorded" text="No ResearchAction is linked to this site; this does not establish that no work is needed." /> : <div className="mt-3 divide-y divide-border/50">{actions.map((action) => { const evidence = action.evidence && typeof action.evidence === "object" ? action.evidence as Record<string, unknown> : {}; const verifier = evidence.verifier ?? evidence.verifier_result; return <article key={action.id} className="py-3"><Link className="font-medium text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link><p className="mt-1 text-xs text-muted-foreground">{action.status.toLowerCase()} · dimension {action.kind} · origin gap {String(evidence.originGap ?? evidence.origin_gap ?? "unknown (not recorded)")} · verifier {verifier ? JSON.stringify(verifier) : "unknown (not recorded)"}</p></article>; })}</div>}</section>
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Provider capability matrix</h2>{!capability.success || capability.data.providers.length === 0 ? <Empty title="Capability inventory unavailable" text="No valid provider capability matrix is recorded; dashboard and export support are unknown, not unavailable." /> : <div className="mt-3 space-y-3">{capability.data.providers.map((provider) => <article key={provider.provider} className="rounded-lg bg-muted/30 p-3"><h3 className="font-medium">{provider.provider}</h3><p className="text-sm">Dashboard: {provider.dashboard.availability}{provider.dashboard.availability === "available" ? ` — ${provider.dashboard.details}` : ` — ${provider.dashboard.reasonCode}`}</p><p className="text-sm">API/export: {provider.apiOrExport.availability}{provider.apiOrExport.availability === "available" ? ` — ${provider.apiOrExport.details}` : ` — ${provider.apiOrExport.reasonCode}`}</p><p className="text-xs text-muted-foreground">Unavailable surfaces: {provider.unavailableSurfaces.length ? provider.unavailableSurfaces.join(", ") : "none recorded"}</p></article>)}</div>}</section>
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">AI access readiness</h2><p className="mt-1 text-sm text-muted-foreground">Technical access signals from the latest completed crawl. These do not measure whether AI answers mention your site.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">{[{ label: "Robots / AI crawlers", value: !crawl ? "Unknown — crawl evidence unavailable" : robotsIssue ? "Potential restriction found" : "No blocking issue found" }, { label: "Sitemap", value: !crawl ? "Unknown — crawl evidence unavailable" : sitemapIssue ? "Not found by crawl" : "No missing-sitemap issue found" }, { label: "HTTP reachability", value: crawl ? "Site pages responded during crawl" : "Unknown — run a crawl" }].map(({ label, value }) => <div key={label} className="rounded-lg bg-muted/30 p-3"><p className="text-xs font-medium">{label}</p><p className="mt-1 text-sm">{value}</p><p className="mt-1 text-xs text-muted-foreground">{crawl?.finishedAt ? `Crawl evidence · ${crawl.finishedAt.toLocaleString()}` : "No dated evidence"}</p></div>)}</div>
-      {!crawl && <p className="mt-3 text-sm text-muted-foreground">Run a site crawl to populate these access checks.</p>}
-    </section>
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Visibility observed</h2><p className="mt-1 text-sm text-muted-foreground">Imported observations only; each denominator and count comes from its provider export.</p>
-      {grouped.size === 0 ? <Empty title="Nothing observed yet" text="Visibility is unknown until an authorized provider export is imported. Import an AI visibility export to populate these results; crawl access cannot substitute for an observation." /> : <div className="mt-4 space-y-3">{[...grouped].map(([surface, rows]) => <div key={surface} className="rounded-lg border border-border/60 p-3"><h3 className="font-medium">{surface}</h3>{rows.map((row) => <div key={row.id} className="mt-3 border-t border-border/40 pt-3 text-sm"><p className="font-medium">{row.question}</p><p className="mt-1 text-xs text-muted-foreground">Question set {row.questionSetVersion} · observed {row.observedAt.toLocaleDateString()} · denominator {row.denominator} (provider-reported)</p><p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">{[{ label: "Mentions", value: row.mentions }, { label: "Recommendations", value: row.recommendations }, { label: "Citations", value: row.citations }].map(({ label, value }) => <span key={label}>{label}: {visibilityState(row.coverage) === "Unknown" ? "Unknown" : observedCount(value)}</span>)}</p><p className="mt-1 text-xs text-muted-foreground">{visibilityState(row.coverage)}{visibilityState(row.coverage) === "Unknown" ? " — provider did not supply an observed answer; this is not zero." : ` · provider export v${row.version}`}</p></div>)}</div>)}</div>}
-    </section>
-     <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Intelligence Questions <span className="text-sm font-normal text-muted-foreground">· {coverages.filter((row) => row.status === "COVERED").length} covered · {coverages.filter((row) => row.status === "UNRESOLVED").length} unresolved</span></h2><p className="mt-1 text-sm text-muted-foreground">Research questions and the recorded evidence status for their content section.</p>
-      {prelaunchRuns.length > 0 && <div className="my-3 rounded-lg bg-muted/30 p-3"><p className="text-sm font-medium">Prelaunch keyword research</p>{prelaunchRuns.map((run) => <p key={run.id} className="mt-2 text-sm"><Link className="text-primary underline" href={`/projects/${projectId}/prelaunch/${run.id}`}>{run.periodStart.toISOString().slice(0, 7)} · {run.status.toLowerCase()} · ${((run.actualCostMicros ?? 0) / 1_000_000).toFixed(4)}</Link></p>)}</div>}
-       {coverages.length === 0 ? <Empty title="No question coverage recorded" text="Coverage is recorded when a content draft is accepted and evaluated against confirmed knowledge." /> : <div className="mt-3 divide-y divide-border/50">{coverages.map((coverage) => <article key={coverage.id} className="py-3"><p className="font-medium">{coverage.question || coverage.finding?.summary || "Question identity unavailable for legacy coverage"}</p><p className="mt-1 break-all text-xs text-muted-foreground">{coverage.status === "COVERED" ? `Covered · field ${coverage.fieldPath ?? "unknown"} · revision ${coverage.evidenceRevision ?? "unknown"} · section hash ${coverage.contentHash}` : `Unresolved · ${coverage.missingEvidence ?? "Missing evidence not specified"}`}</p>{coverage.finding && <p className="mt-1 text-xs text-muted-foreground">Finding provenance: {coverage.finding.summary}</p>}{coverage.document && <p className="mt-1 text-xs text-muted-foreground">Knowledge document {coverage.document.logicalId}</p>}{coverage.action ? <Link className="mt-2 inline-block text-sm text-primary underline underline-offset-2" href={`/sites/${siteId}/actions/${coverage.action.id}`}>Action: {coverage.action.title}</Link> : coverage.status === "UNRESOLVED" ? <p className="mt-2 text-xs text-muted-foreground">No linked Action is recorded.</p> : null}</article>)}</div>}
-    </section>
-    <section className="panel p-4 sm:p-5"><h2 className="font-heading text-lg font-semibold">Sources</h2><p className="mt-1 text-sm text-muted-foreground">Research sources associated with this site’s findings.</p>
-      {prelaunchRuns.length > 0 && <div className="my-3 border-b border-border/40 pb-3"><p className="text-sm font-medium">Prelaunch run reports</p>{prelaunchRuns.map((run) => <p key={run.id} className="mt-2 text-sm"><Link className="text-primary underline" href={`/projects/${projectId}/prelaunch/${run.id}`}>{run.periodStart.toISOString().slice(0, 7)} keyword results and tasks</Link></p>)}</div>}
-      {sources.length === 0 ? <Empty title="No research sources yet" text="Sources are recorded when a research run retrieves evidence. Configure research and start a run to populate this list." /> : <div className="mt-3 divide-y divide-border/50">{sources.map((source) => <article key={source.id} className="py-3"><p className="break-words font-medium">{source.title || source.url}</p><p className="mt-1 text-xs text-muted-foreground">{source.provider} · retrieved {source.retrievedAt.toLocaleString()} · {source.identityId ? "Reusable source identity recorded" : "No reuse identity recorded"}</p></article>)}</div>}
-    </section>
-  </div>;
+  const counts = summarizeIntelligence({
+    keywords: keywordCount,
+    actions,
+    researchRuns,
+    keywordRuns,
+    sources,
+    observations: splitObservations(observations).customer.length,
+    coverage,
+  });
+  const note = provenanceNote(counts);
+  const identity = identityIssues(crawl?.issues ?? []);
+  const latestActions = actions.slice(0, 5);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow={site.domain}
+        title="Intelligence"
+        description="What CrawlSEO knows about this site, where it came from, and what is still unknown. Access does not imply visibility."
+      />
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Keywords tracked" value={counts.keywords.toLocaleString()} href={`/sites/${siteId}/keywords`} />
+        <Stat label="Open Actions" value={`${counts.openActions} of ${counts.actions}`} href={`/sites/${siteId}/work`} />
+        <Stat label="Research runs" value={String(counts.researchRuns)} href={`/sites/${siteId}/research`} />
+        <Stat label="Keyword research runs" value={String(counts.keywordRuns)} href={`/sites/${siteId}/keyword-research`} />
+        <Stat label="Sources retrieved" value={String(counts.sources)} href={`/sites/${siteId}/research`} />
+        <Stat label="Visibility observations" value={counts.observations === 0 ? "None imported" : String(counts.observations)} href={`/sites/${siteId}/aeo-geo?tab=visibility`} />
+        <Stat label="Question coverage" value={`${counts.coverage - counts.unresolvedCoverage} of ${counts.coverage}`} href={`/sites/${siteId}/aeo-geo?tab=questions`} />
+        <Stat label="Identity issues" value={String(identity.length)} href={`/sites/${siteId}/aeo-geo?tab=identity`} />
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-3">
+        <Card
+          title="Business profile"
+          href={`/sites/${siteId}/business`}
+          body={
+            knowledge
+              ? `${knowledgeState ?? "unknown"} · accepted ${knowledge.acceptedRevision ?? "none"}`
+              : "No canonical knowledge document recorded. Business facts are unknown, not empty."
+          }
+          cta="Open business profile"
+        />
+        <Card
+          title="AEO / GEO"
+          href={`/sites/${siteId}/aeo-geo`}
+          body={`${identity.length} identity issue${identity.length === 1 ? "" : "s"} · ${counts.observations} visibility observation${counts.observations === 1 ? "" : "s"} imported · ${counts.unresolvedCoverage} unresolved question${counts.unresolvedCoverage === 1 ? "" : "s"}`}
+          cta="Open AEO / GEO workspace"
+        />
+        <Card
+          title="Keyword research"
+          href={`/sites/${siteId}/keyword-research`}
+          body={`${counts.keywordRuns} stored DataForSEO run${counts.keywordRuns === 1 ? "" : "s"} · ${counts.keywords.toLocaleString()} ranking keywords from Search Console`}
+          cta="Open keyword research"
+        />
+      </section>
+
+      <section className="panel p-4 sm:p-5">
+        <h2 className="font-heading text-lg font-semibold">Latest research run</h2>
+        {!latestRun ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No research run is recorded. Configure research to start one.
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-sm">
+              <Link className="font-medium text-primary underline underline-offset-2" href={`/sites/${siteId}/research/runs/${latestRun.id}`}>
+                {latestRun.title}
+              </Link>{" "}
+              · {latestRun.status.toLowerCase()} · {latestRun.createdAt.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {latestRun.sourceCount} sources · {latestRun.findingCount} findings · {latestRun.actionCount} Actions
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="panel p-4 sm:p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-lg font-semibold">Recent Actions</h2>
+          <Link className="text-xs text-primary underline underline-offset-2" href={`/sites/${siteId}/work`}>
+            Open the work queue ({counts.openActions} open)
+          </Link>
+        </div>
+        {latestActions.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No Action is recorded for this site. That does not establish that no work is needed.
+          </p>
+        ) : (
+          <div className="mt-3 divide-y divide-border/50">
+            {latestActions.map((action) => (
+              <article key={action.id} className="py-3">
+                <Link className="font-medium text-primary underline underline-offset-2" href={`/sites/${siteId}/actions/${action.id}`}>
+                  {action.title}
+                </Link>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {action.status.toLowerCase()} · {action.kind} · updated {action.updatedAt.toLocaleDateString()}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+        {note && <p className="mt-3 text-xs text-muted-foreground">{note}</p>}
+      </section>
+
+      <section className="panel p-4 sm:p-5">
+        <h2 className="font-heading text-lg font-semibold">AI access readiness</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Technical access signals from the latest completed crawl. They do not measure whether an answer engine mentions the site.
+        </p>
+        {!crawl ? (
+          <p className="mt-3 text-sm text-muted-foreground">No completed crawl; access is unknown.</p>
+        ) : (
+          <p className="mt-3 text-sm">
+            {identity.length} identity or structured-data issue{identity.length === 1 ? "" : "s"} · crawl{" "}
+            {crawl.finishedAt?.toLocaleString() ?? "date unavailable"} ·{" "}
+            <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=access`}>
+              open access detail
+            </Link>
+          </p>
+        )}
+      </section>
+    </div>
+  );
 }
 
-function Empty({ title, text }: { title: string; text: string }) { return <div className="mt-4 rounded-lg bg-muted/30 p-4"><p className="font-medium">{title}</p><p className="mt-1 text-sm text-muted-foreground">{text}</p></div>; }
+function Stat({ label, value, href }: { label: string; value: string; href: string }) {
+  return (
+    <Link href={href} className="panel block p-4 transition hover:bg-muted/30">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1 font-data text-xl">{value}</p>
+    </Link>
+  );
+}
+
+function Card({ title, body, href, cta }: { title: string; body: string; href: string; cta: string }) {
+  return (
+    <div className="panel flex flex-col justify-between p-4 sm:p-5">
+      <div>
+        <h2 className="font-heading text-lg font-semibold">{title}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+      </div>
+      <Link className="mt-3 text-sm text-primary underline underline-offset-2" href={href}>
+        {cta}
+      </Link>
+    </div>
+  );
+}
