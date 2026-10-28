@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { DeleteSiteButton } from "@/components/sites/delete-site-button";
 import { ApiKeysSection } from "@/components/settings/api-keys-section";
+import { getResearchConfig } from "@/lib/research/policy";
+import { OperationsConfigForm } from "@/components/settings/operations-config-form";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -37,7 +39,7 @@ export default async function SettingsPage({ params }: Props) {
   if (!site) redirect("/sites");
 
   // Check API key status
-  const [apiKeys, platformGrant] = await Promise.all([
+  const [apiKeys, platformGrant, operations] = await Promise.all([
     db.apiKey.findMany({
       where: { userId },
       select: { provider: true, updatedAt: true },
@@ -55,6 +57,7 @@ export default async function SettingsPage({ params }: Props) {
           },
         })
       : Promise.resolve(null),
+    getResearchConfig(siteId),
   ]);
   const apiKeyStatus: Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }> = {
     dataforseo: { connected: false },
@@ -112,6 +115,7 @@ export default async function SettingsPage({ params }: Props) {
         </div>
 
         {/* External API Keys */}
+        <OperationsConfigForm siteId={siteId} initial={{ cadence: operations.cadence, enabled: operations.enabled, monthlyBudget: operations.monthlyBudget, autoDraft: operations.autoDraft, autoAgent: operations.autoAgent, revision: operations.policy?.revision ?? 0 }} />
         <ApiKeysSection initialStatus={apiKeyStatus} />
 
         {/* Data summary */}

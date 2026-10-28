@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
-import { profileFields, profileValue, confirmationStatus } from "@/lib/projects/business-profile-view";
+import { profileValue, confirmationStatus } from "@/lib/projects/business-profile-view";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { getResearchConfig } from "@/lib/research/policy";
+import { BusinessOperationalForm } from "@/components/business/business-operational-form";
 
 export default async function BusinessPage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
@@ -42,19 +43,6 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
       document = null;
     }
   }
-
-  const profileRecord: Record<string, unknown> = profile
-    ? {
-        audience: profile.audience,
-        topics: profile.topics,
-        services: profile.services,
-        competitors: profile.competitors,
-        brandVoice: profile.brandVoice,
-        constraints: profile.constraints,
-        country: profile.country,
-        language: profile.language,
-      }
-    : {};
 
   return (
     <div className="space-y-6">
@@ -108,21 +96,12 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
         </p>
       </section>
 
-      <section className="panel p-4 sm:p-5">
-        <h2 className="font-heading text-lg font-semibold">Site profile</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The operating facts research and content prompts use. &ldquo;Not recorded&rdquo; means nobody has
-          supplied the fact yet.
-        </p>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-          {profileFields.map((field) => (
-            <div key={field} className="rounded-lg bg-muted/30 p-3">
-              <dt className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{field}</dt>
-              <dd className="mt-1 break-words text-sm">{profileValue(profileRecord[field])}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+      <BusinessOperationalForm siteId={siteId} revision={config.policy?.revision ?? 0} profileUpdatedAt={profile?.updatedAt.toISOString() ?? null} initial={{
+        topics: config.topics, audience: config.audience, market: config.market, language: config.language,
+        goals: config.goals, services: Array.isArray(profile?.services) ? profile.services.filter((value): value is string => typeof value === "string") : [],
+        competitors: Array.isArray(profile?.competitors) ? profile.competitors.filter((value): value is string => typeof value === "string") : [],
+        brandVoice: typeof profile?.brandVoice === "string" ? profile.brandVoice : "",
+      }} />
 
       <section className="panel p-4 sm:p-5">
         <h2 className="font-heading text-lg font-semibold">Research configuration</h2>

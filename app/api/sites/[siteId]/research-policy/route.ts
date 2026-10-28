@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { ZodError } from "zod";
 import { userOwnsSite } from "@/lib/auth/research-action-access";
+import { ConfigurationConflict, ConfigurationPreconditionRequired, InvalidConfigurationSection, saveConfigurationSection } from "@/lib/research/configuration-sections";
 
 const schema = z.object({
   topics: z.array(z.string().trim().min(1).max(120)).min(1).max(12),
@@ -55,5 +56,24 @@ export async function PUT(
     }
     console.error("Research config error:", error);
     return Response.json({ error: "Failed to save research config" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
+  const userId = await getUserIdFromCookies();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { siteId } = await params;
+  if (!(await userOwnsSite(siteId, userId))) return Response.json({ error: "Site not found" }, { status: 404 });
+  try {
+    const body = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((key) => !["section", "values", "expectedPolicyRevision", "expectedProfileUpdatedAt"].includes(key)) || !["business", "research", "operations"].includes(body.section) || !body.values || typeof body.values !== "object" || Array.isArray(body.values) || Object.keys(body.values).length === 0 || (body.expectedPolicyRevision !== undefined && (!Number.isInteger(body.expectedPolicyRevision) || body.expectedPolicyRevision < 0)) || (body.expectedProfileUpdatedAt !== undefined && body.expectedProfileUpdatedAt !== null && (typeof body.expectedProfileUpdatedAt !== "string" || !Number.isFinite(Date.parse(body.expectedProfileUpdatedAt))))) {
+      return Response.json({ error: "Invalid configuration section" }, { status: 400 });
+    }
+    await saveConfigurationSection(siteId, body.section, body.values, body.expectedPolicyRevision, body.expectedProfileUpdatedAt);
+    return Response.json({ ok: true });
+  } catch (error) {
+    if (error instanceof ConfigurationConflict || error instanceof ConfigurationPreconditionRequired || error instanceof InvalidConfigurationSection) return Response.json({ error: error.message }, { status: error.status });
+    if (error instanceof SyntaxError) return Response.json({ error: "Invalid configuration request" }, { status: 400 });
+    return Response.json({ error: "Could not save configuration" }, { status: 500 });
   }
 }
