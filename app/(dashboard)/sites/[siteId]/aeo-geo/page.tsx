@@ -5,6 +5,8 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
 import { actionDimension } from "@/lib/work/categories";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
+import { EvaluationPanel } from "@/components/aeo-geo/evaluation-panel";
+import { projectEvaluationSurface } from "@/lib/aeo/surface";
 import {
   accessState,
   groupIssuesByType,
@@ -45,7 +47,7 @@ export default async function AeoGeoPage({
   });
   if (!site) redirect("/sites");
 
-  const [crawl, observationRows, questions, actions] = await Promise.all([
+  const [crawl, observationRows, questions, actions, evaluationRuns, profile] = await Promise.all([
     db.crawl.findFirst({
       where: { siteId, status: "COMPLETED" },
       orderBy: { finishedAt: "desc" },
@@ -53,9 +55,9 @@ export default async function AeoGeoPage({
     }),
     site.projectId
       ? db.aIVisibilityObservation.findMany({
-          where: { projectId: site.projectId },
+           where: { projectId: site.projectId, sourceKind: "provider_api" },
           orderBy: [{ observedAt: "desc" }, { provider: "asc" }, { modelSurface: "asc" }],
-          take: 200,
+           take: 1000,
         })
       : Promise.resolve([]),
     site.projectId
@@ -75,6 +77,9 @@ export default async function AeoGeoPage({
       take: 300,
       select: { id: true, title: true, status: true, kind: true, source: true, evidence: true },
     }),
+    site.projectId ? db.aeoEvaluationRun.findMany({ where: { projectId: site.projectId, siteId }, orderBy: { startedAt: "desc" }, take: 20,
+      select: { runId: true, status: true, failed: true, skippedByCap: true, startedAt: true, questionSetVersion: true } }) : Promise.resolve([]),
+    db.siteProfile.findUnique({ where: { siteId }, select: { competitors: true } }),
   ]);
 
   const access = accessState(crawl);
@@ -83,6 +88,14 @@ export default async function AeoGeoPage({
   const grouped = groupObservations(customer);
   const dimensions = summarizeDimensions(actions, actionDimension);
   const unresolved = questions.filter((row) => row.status !== "COVERED");
+  const competitorUrls = Array.isArray(profile?.competitors) ? profile.competitors.filter((value): value is string => typeof value === "string").map((value) => {
+    try { return new URL(value.includes("://") ? value : `https://${value}`).toString(); } catch { return ""; }
+  }).filter(Boolean) : [];
+  const askedQuestions = [...new Set(observationRows.map((row) => row.question))];
+  const newestVersion = [...observationRows].sort((a,b) => b.observedAt.getTime() - a.observedAt.getTime())[0]?.questionSetVersion;
+  const matchingRuns = evaluationRuns.filter((run) => run.questionSetVersion === newestVersion).slice(0, 2);
+  const surface = projectEvaluationSurface({ projectId: site.projectId ?? "", questions: askedQuestions, observations: observationRows,
+    competitorUrls, maxItems: 20, compareRuns: matchingRuns.length === 2 ? { before: matchingRuns[1].runId, after: matchingRuns[0].runId } : undefined });
 
   const counts: Record<Tab, number> = {
     access: crawl ? 3 : 0,
@@ -117,12 +130,13 @@ export default async function AeoGeoPage({
         ))}
       </nav>
 
+
       {tab === "access" && (
         <section className="panel p-4 sm:p-5">
           <h2 className="font-heading text-lg font-semibold">Access</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Technical signals from the latest completed crawl. They do not measure whether an answer engine
-            mentions the site.
+            mentions the site. <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`}>Review asked answers and citations</Link> for evaluation evidence.
           </p>
           {!crawl ? (
             <p className="mt-4 rounded-lg bg-muted/30 p-4 text-sm">Crawl evidence unavailable; access is unknown.</p>
@@ -149,6 +163,7 @@ export default async function AeoGeoPage({
           <h2 className="font-heading text-lg font-semibold">Identity signals · {identity.length}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Structured data and identity facts that answer engines use to recognise the business.
+            {" "}<Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`}>Compare with observed answer evidence</Link>.
           </p>
           {identity.length === 0 ? (
             <p className="mt-4 rounded-lg bg-muted/30 p-4 text-sm">
@@ -223,6 +238,9 @@ export default async function AeoGeoPage({
       )}
 
       {tab === "questions" && (
+        <div className="space-y-6">
+        <EvaluationPanel siteId={siteId} version={surface.questionSetVersion} locale={surface.locale} askedAt={surface.latestAskedAt}
+          questions={surface.questions} runs={evaluationRuns} competitorDomains={[...new Set(competitorUrls.map((url) => { try { return new URL(url).hostname; } catch { return ""; } }).filter(Boolean))]} />
         <section className="panel p-4 sm:p-5">
           <h2 className="font-heading text-lg font-semibold">
             Question coverage · {questions.length}
@@ -264,6 +282,7 @@ export default async function AeoGeoPage({
             </div>
           )}
         </section>
+        </div>
       )}
 
       {tab === "gaps" && (
