@@ -1,0 +1,48 @@
+import { scrypt as scryptCallback, randomBytes } from "node:crypto";
+import { promisify } from "node:util";
+import { PrismaClient } from "@prisma/client";
+
+const db = new PrismaClient();
+const scrypt = promisify(scryptCallback);
+const now = new Date();
+const ago = new Date(now.getTime() - 7 * 86400000);
+const id = (name: string) => `ui048-${name}`;
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const result = await scrypt(password, salt, 64) as Buffer;
+  return `${salt}:${result.toString("hex")}`;
+}
+
+async function main() {
+  const passwordHash = await hashPassword("pipeline-journey-local-only");
+  const user = await db.user.upsert({ where: { email: "journey@pipeline-journey.test" }, update: { passwordHash }, create: { id: id("user"), email: "journey@pipeline-journey.test", name: "Pipeline Journey Fixture", passwordHash } });
+  await db.session.upsert({ where: { sessionToken: id("local-session-token") }, update: { userId: user.id, expires: new Date(Date.now() + 86400000) }, create: { id: id("session"), sessionToken: id("local-session-token"), userId: user.id, expires: new Date(Date.now() + 86400000) } });
+  const workspace = await db.workspace.upsert({ where: { externalOrganizationId: id("org") }, update: {}, create: { id: id("workspace"), externalOrganizationId: id("org"), name: "Synthetic UI-048 Workspace" } });
+  const project = await db.project.upsert({ where: { workspaceId_externalProjectId: { workspaceId: workspace.id, externalProjectId: id("project") } }, update: {}, create: { id: id("project"), workspaceId: workspace.id, externalProjectId: id("project"), name: "Synthetic Pipeline Journey" } });
+  const site = await db.site.upsert({ where: { projectId_domain: { projectId: project.id, domain: "pipeline-journey.test" } }, update: { userId: user.id }, create: { id: id("site"), userId: user.id, projectId: project.id, domain: "pipeline-journey.test" } });
+
+  const fields = { audience: { value: "Local service buyers", provenance: { kind: "owner_input", status: "owner_confirmed", actor: { type: "owner", id: user.id } } }, services: { value: ["Synthetic home insulation"], provenance: { kind: "owner_input", status: "owner_confirmed", actor: { type: "owner", id: user.id } } }, markets: { value: ["Example City"], provenance: { kind: "owner_input", status: "owner_confirmed", actor: { type: "owner", id: user.id } } }, goals: { value: ["Explain service options"], provenance: { kind: "owner_input", status: "owner_confirmed", actor: { type: "owner", id: user.id } } } };
+  const document = await db.businessKnowledgeDocument.upsert({ where: { projectId: project.id }, update: { revision: 1, acceptedRevision: 1 }, create: { id: id("document"), projectId: project.id, logicalId: id("knowledge"), revision: 1, acceptedRevision: 1 } });
+  await db.businessKnowledgeRevision.upsert({ where: { documentId_revision: { documentId: document.id, revision: 1 } }, update: { fields }, create: { id: id("knowledge-revision"), documentId: document.id, revision: 1, state: "accepted", fields, reason: "Synthetic local fixture", changedFields: ["audience", "services", "markets", "goals"], affectedActionIds: [], serviceCaller: "ui048-fixture" } });
+  await db.siteProfile.upsert({ where: { siteId: site.id }, update: { audience: ["Local service buyers"], topics: ["home insulation"], services: ["Synthetic home insulation"] }, create: { id: id("profile"), siteId: site.id, projectId: project.id, audience: ["Local service buyers"], topics: ["home insulation"], services: ["Synthetic home insulation"] } });
+  await db.researchPolicy.upsert({ where: { siteId: site.id }, update: { revision: 1 }, create: { id: id("policy"), siteId: site.id, providers: ["fixture"], goals: ["Find customer questions"], revision: 1 } });
+
+  const run = await db.researchRun.upsert({ where: { id: id("run") }, update: { status: "COMPLETED", sourceCount: 2, findingCount: 1, actionCount: 1 }, create: { id: id("run"), siteId: site.id, projectId: project.id, kind: "MARKET", trigger: "MANUAL", status: "COMPLETED", title: "Synthetic insulation research", brief: { objective: "Understand buyer questions", fixture: true }, topics: ["home insulation"], recencyDays: 90, policyRevision: 1, providerSet: ["fixture"], report: { fixture: true }, sourceCount: 2, findingCount: 1, actionCount: 1, startedAt: ago, completedAt: now } });
+  const source1 = await db.researchSource.upsert({ where: { id: id("source-1") }, update: {}, create: { id: id("source-1"), runId: run.id, provider: "fixture", url: "https://pipeline-journey.test/fixture/source-1", title: "Synthetic buyer question", excerpt: "What insulation options suit an older home?", contentHash: id("hash-1"), retrievedAt: ago } });
+  const source2 = await db.researchSource.upsert({ where: { id: id("source-2") }, update: {}, create: { id: id("source-2"), runId: run.id, provider: "fixture", url: "https://pipeline-journey.test/fixture/source-2", title: "Synthetic cost discussion", excerpt: "Buyers compare long-term costs.", contentHash: id("hash-2"), retrievedAt: ago } });
+  const finding = await db.researchFinding.upsert({ where: { id: id("finding") }, update: {}, create: { id: id("finding"), runId: run.id, type: "CONTENT_GAP", theme: "Options and cost", summary: "Explain insulation options and long-term costs.", confidence: 90, evidenceSourceIds: [source1.id, source2.id], suggestedActionKind: "CONTENT" } });
+  const action = await db.researchAction.upsert({ where: { siteId_dedupeKey: { siteId: site.id, dedupeKey: id("action-dedupe") } }, update: { status: "VERIFIED", approvedAt: ago, deliveredAt: ago, verifiedAt: now }, create: { id: id("action"), siteId: site.id, projectId: project.id, runId: run.id, findingId: finding.id, source: "research", kind: "CONTENT", format: "article", title: "Explain insulation options and costs", primaryQuery: "home insulation options", recommendation: "Publish a comparison grounded in the recorded questions.", evidence: { source_ids: [source1.id, source2.id], fixture: true }, priority: 80, status: "VERIFIED", approvedBy: user.id, approvedAt: ago, deliveredAt: ago, verifiedAt: now, dedupeKey: id("action-dedupe") } });
+  const draft = await db.contentDraft.upsert({ where: { id: id("draft") }, update: { actionId: action.id }, create: { id: id("draft"), siteId: site.id, actionId: action.id, opportunityKey: id("opportunity"), actionKind: "CONTENT", format: "article", primaryQuery: "home insulation options", intent: "informational", title: "Choosing home insulation options", slug: "home-insulation-options", metaTitle: "Home insulation options", metaDescription: "A synthetic comparison of insulation choices.", excerpt: "Synthetic fixture draft.", markdown: "# Home insulation options\n\nSynthetic fixture content.", brief: { fixture: true }, model: "fixture", provider: "fixture" } });
+  await db.agentTask.upsert({ where: { id: id("attempt") }, update: { actionId: action.id, draftId: draft.id }, create: { id: id("attempt"), siteId: site.id, actionId: action.id, actionRevision: 1, draftId: draft.id, kind: "fixture-review", status: "COMPLETED", title: "Synthetic review attempt", goal: "Verify the fixture draft lineage", prompt: "Synthetic local fixture only", repoPath: "local://pipeline-journey.test", agent: "fixture", result: { fixture: true, completed: true }, completedAt: now } });
+  await db.delivery.upsert({ where: { id: id("delivery") }, update: { status: "VERIFIED", verifiedAt: now, outcomeMeasuredAt: now, outcome: { metric: "fixture engagement", value: "observed", attribution: "not established", fixture: true } }, create: { id: id("delivery"), actionId: action.id, draftId: draft.id, platform: "fixture", externalId: id("receipt"), status: "VERIFIED", payload: { fixture: true }, verifiedAt: now, outcomeMeasuredAt: now, outcome: { metric: "fixture engagement", value: "observed", attribution: "not established", fixture: true } } });
+  for (const [suffix, question, sourceKind, hash] of [["customer", "How do insulation options compare?", "operator_manual", "customer-observation"], ["fixture", "(fixture) insulation observation", "operator_manual", "fixture-observation"]] as const) {
+    await db.aIVisibilityObservation.upsert({ where: { id: id(suffix) }, update: {}, create: { id: id(suffix), projectId: project.id, question, provider: "fixture", modelSurface: "synthetic", observedAt: now, questionSetVersion: "ui048-v1", sourceKind, rawExportReference: `local:${suffix}`, denominator: 1, coverage: { fixture: true }, mentions: { brand: suffix === "customer" }, observationHash: id(hash), version: 1 } });
+  }
+  for (const [suffix, status] of [["covered", "COVERED"], ["unresolved", "UNRESOLVED"]] as const) {
+    await db.questionCoverage.upsert({ where: { projectId_question_sectionIdentity: { projectId: project.id, question: `Synthetic ${suffix} question`, sectionIdentity: id(suffix) } }, update: {}, create: { id: id(`coverage-${suffix}`), projectId: project.id, question: `Synthetic ${suffix} question`, service: "Synthetic home insulation", audience: "Local service buyers", locale: "en-US", sectionIdentity: id(suffix), contentHash: id(`coverage-hash-${suffix}`), status, ...(suffix === "covered" ? { findingId: finding.id } : { missingEvidence: "No fixture evidence for this question.", reason: "NO_EVIDENCE" }) } });
+  }
+  console.log(`Seeded synthetic journey for ${site.domain}; user ${user.email}; action ${action.id}; no provider calls.`);
+}
+
+main().catch((error) => { console.error("Pipeline fixture seed failed", error); process.exitCode = 1; }).finally(() => db.$disconnect());

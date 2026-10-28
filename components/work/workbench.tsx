@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardList, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KeywordEvidenceSummary } from "@/lib/research/evidence";
@@ -65,18 +65,25 @@ export function Workbench({
   siteId,
   initialDimension = "all",
   initialState = "all",
+  selectedActionId,
   actions,
   agentTasks,
 }: {
   siteId: string;
   initialDimension?: ActionDimension | "all";
   initialState?: string;
+  selectedActionId?: string;
   actions: ActionRow[];
   agentTasks: TaskRow[];
 }) {
   const [category, setCategory] = useState<"all" | WorkCategory>("all");
   const [dimension, setDimension] = useState<ActionDimension | "all">(initialDimension);
   const [state, setState] = useState<string>(initialState);
+  useEffect(() => {
+    if (!selectedActionId) return;
+    const target = document.getElementById(`work-action-${selectedActionId}`);
+    target?.scrollIntoView({ block: "center" });
+  }, [selectedActionId]);
   const matchesCategory = (action: ActionRow) => (category === "all" || workCategory(action) === category)
     && (dimension === "all" || action.dimension === dimension) && (state === "all" || action.status === state);
   const visibleActions = actions.filter(matchesCategory);
@@ -122,7 +129,7 @@ export function Workbench({
       <section aria-labelledby="work-actions-heading" className="space-y-2">
         <h2 id="work-actions-heading" className="font-heading text-lg font-semibold">Work actions</h2>
         {visibleActions.length === 0 ? <Empty text={category === "all" ? "No actions yet." : "No actions in this filter."} /> : visibleActions.map((action) => (
-          <ActionCard key={action.id} siteId={siteId} action={action} />
+          <ActionCard key={action.id} siteId={siteId} action={action} selected={action.id === selectedActionId} />
         ))}
       </section>
       {opportunities.length > 0 && <OpportunitiesView siteId={siteId} actions={opportunities} />}
@@ -135,12 +142,15 @@ export function Workbench({
   );
 }
 
-function ActionCard({ siteId, action }: { siteId: string; action: ActionRow }) {
+function ActionCard({ siteId, action, selected = false }: { siteId: string; action: ActionRow; selected?: boolean }) {
   const category = workCategory(action);
   return (
     <Link
+      id={`work-action-${action.id}`}
+      aria-current={selected ? "location" : undefined}
+      data-selected={selected || undefined}
       href={`/sites/${siteId}/actions/${action.id}`}
-      className="panel block p-4 transition hover:border-primary/40"
+      className={cn("panel block scroll-m-8 p-4 transition hover:border-primary/40", selected && "border-primary ring-2 ring-primary/30")}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{action.title}</span>

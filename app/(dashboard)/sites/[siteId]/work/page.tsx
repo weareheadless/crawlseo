@@ -12,7 +12,7 @@ import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ tab?: string; dimension?: string; state?: string }>;
+  searchParams: Promise<{ tab?: string; dimension?: string; state?: string; actionId?: string }>;
 }
 
 
@@ -56,6 +56,7 @@ export default async function WorkPage({ params, searchParams }: Props) {
         siteId={siteId}
         initialDimension={dimension}
         initialState={query.state ?? "all"}
+        selectedActionId={query.actionId}
         actions={data.actions.map((action) => ({
           id: action.id,
           title: action.title,
