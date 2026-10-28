@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Building2, Microscope, Lightbulb, ListChecks, ChartNoAxesCombined, Settings, Globe, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Building2, Microscope, Lightbulb, ListChecks, ChartNoAxesCombined, Settings, Globe, Search, Bookmark, FileText, Bug, Gauge, Bell, SearchCheck, Link as LinkIcon, Sparkles, Radar, Bot, type LucideIcon } from "lucide-react";
 
 export type PipelineNavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
 export type PipelineNavGroup = { label: string; items: PipelineNavItem[] };
@@ -22,6 +22,22 @@ export function buildSidebarGroups(siteId?: string): PipelineNavGroup[] {
     { label: "Work", items: [{ href: `/sites/${siteId}/work`, label: "Work", icon: ListChecks }] },
     { label: "Results", items: [{ href: `/sites/${siteId}/results`, label: "Results", icon: ChartNoAxesCombined }] },
     { label: "Settings", items: [{ href: `/sites/${siteId}/settings`, label: "Settings", icon: Settings }] },
+    { label: "Reports", items: [
+      { href: `/sites/${siteId}/keywords`, label: "Keywords", icon: Search },
+      { href: `/sites/${siteId}/saved-keywords`, label: "Saved Keywords", icon: Bookmark },
+      { href: `/sites/${siteId}/pages`, label: "Pages", icon: FileText },
+      { href: `/sites/${siteId}/crawl`, label: "Crawl / Audit", icon: Bug },
+      { href: `/sites/${siteId}/vitals`, label: "Vitals", icon: Gauge },
+      { href: `/sites/${siteId}/alerts`, label: "Alerts", icon: Bell },
+      { href: `/sites/${siteId}/keyword-research`, label: "Keyword Research", icon: SearchCheck },
+      { href: `/sites/${siteId}/domain-overview`, label: "Domain Overview", icon: Globe },
+      { href: `/sites/${siteId}/backlinks`, label: "Backlinks", icon: LinkIcon },
+      { href: `/sites/${siteId}/aeo-geo`, label: "AEO / GEO", icon: Sparkles },
+      { href: `/sites/${siteId}/intelligence`, label: "Intelligence", icon: Radar },
+      { href: `/sites/${siteId}/content-studio`, label: "Content Studio", icon: FileText },
+      { href: `/sites/${siteId}/opportunities`, label: "Opportunities", icon: Lightbulb },
+      { href: `/sites/${siteId}/mcp`, label: "AI & MCP", icon: Bot },
+    ] },
   ];
 }
 

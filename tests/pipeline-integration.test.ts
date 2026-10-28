@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { buildSidebarGroups } from "@/components/layout/sidebar-nav";
 import { selectedSiteDomain, siteDestination, siteSectionLabel } from "@/components/sites/site-switcher";
@@ -25,9 +25,22 @@ function routeExists(href: string) {
 
 describe("pipeline UI integration", () => {
   it("exposes overview, exactly five stages, and settings", () => {
-    expect(buildSidebarGroups("site-1").map((group) => group.label)).toEqual([
-      "Overview", "Business", "Research", "Findings", "Work", "Results", "Settings",
-    ]);
+    const labels = buildSidebarGroups("site-1").map((group) => group.label);
+    expect(labels.slice(0, 6)).toEqual(["Overview", "Business", "Research", "Findings", "Work", "Results"]);
+    expect(labels.slice(6)).toEqual(["Settings", "Reports"]);
+  });
+
+  it("keeps Content Studio editor and GSC opportunity analysis as contextual pages", () => {
+    const content = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "content-studio", "page.tsx"), "utf8");
+    expect(content).toContain("<ContentStudio");
+    expect(content).toContain('initialSelectedActionId={query.actionId ?? null}');
+    expect(content).toContain('currentStage="work"');
+    expect(content).not.toContain("redirect(`/sites/${siteId}/work");
+
+    const opportunities = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "opportunities", "page.tsx"), "utf8");
+    for (const feature of ["getAllOpportunities", "Striking distance", "Low CTR", "Content decay", "Keyword cannibalization", "Priority feed", "CsvExportButton", 'currentStage="findings"']) {
+      expect(opportunities).toContain(feature);
+    }
   });
 
   it("has a matching page for every sidebar destination", () => {
