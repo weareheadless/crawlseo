@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Search,
   Loader2,
@@ -10,6 +9,18 @@ import {
   ListPlus,
 } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+const SORTABLE = ["keyword", "volume", "difficulty", "cpc"] as const;
+
+function storedRowLabel(run: { keywordCount: number | null; resultLabel: string }): string {
+  const count = run.keywordCount;
+  if (count == null) return "—";
+  if (run.resultLabel === "SERP results") return `${count} SERP result${count === 1 ? "" : "s"}`;
+  return `${count} keyword${count === 1 ? "" : "s"}`;
+}
+type SortKey = (typeof SORTABLE)[number];
 
 type KeywordResult = {
   keyword: string;
@@ -18,15 +29,42 @@ type KeywordResult = {
   cpc: number | null;
   competition: number | null;
   trend: number[] | null;
+  intent?: string | null;
 };
 
 export function KeywordResearchClient({
   siteId,
   hasDataForSEO,
+  runs = [],
+  selectedRunId = null,
+  selectedResult = null,
 }: {
   siteId: string;
   hasDataForSEO: boolean;
+  runs?: Array<{
+    id: string;
+    seed: string;
+    kind: string;
+    status: string;
+    completedAt: string | null;
+    requestedAt: string;
+    costMicros: number | null;
+    errorCode: string | null;
+    keywordCount: number | null;
+    resultLabel: string;
+    keywords: KeywordResult[];
+  }>;
+  selectedRunId?: string | null;
+  selectedResult?: unknown;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selected = runs.find((run) => run.id === (searchParams.get("run") || selectedRunId));
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "volume", desc: true });
+  const storedKeywords = useMemo(() => {
+    if (!selected || selected.status !== "COMPLETED" || !Array.isArray(selectedResult)) return [];
+    return [...selectedResult as KeywordResult[]].sort((a, b) => { const av = a[sort.key] ?? (sort.desc ? -Infinity : Infinity), bv = b[sort.key] ?? (sort.desc ? -Infinity : Infinity); return (typeof av === "string" ? av.localeCompare(String(bv)) : Number(av) - Number(bv)) * (sort.desc ? -1 : 1); });
+  }, [selected, selectedResult, sort]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<KeywordResult[]>([]);
@@ -118,6 +156,124 @@ export function KeywordResearchClient({
 
   return (
     <div className="space-y-4">
+      {runs.length > 0 && (
+        <section className="panel overflow-hidden">
+          <div className="border-b border-border/60 p-4">
+            <h2 className="font-heading text-lg font-semibold">Stored research runs · {runs.length}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Paid DataForSEO results already recorded for this site. Nothing here triggers a new provider call.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Seed</th>
+                  <th className="px-4 py-2 font-medium">Kind</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Date</th>
+                  <th className="px-4 py-2 text-right font-medium">Rows</th>
+                  <th className="px-4 py-2 text-right font-medium">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr
+                    key={run.id}
+                    onClick={() => router.push(`?run=${encodeURIComponent(run.id)}`)}
+                    className={`cursor-pointer border-b border-border/40 transition hover:bg-muted/25 ${
+                      selected?.id === run.id ? "bg-muted/40" : ""
+                    }`}
+                  >
+                    <td className="max-w-md px-4 py-2.5">
+                      <span className="font-medium">{run.seed}</span>
+                      {run.status === "FAILED" && (
+                        <span className="ml-2 text-xs text-warning">
+                          {run.errorCode?.replaceAll("_", " ").toLowerCase() ?? "unknown error"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 font-data text-xs text-muted-foreground">{run.kind}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 font-data text-[10px] uppercase text-muted-foreground">
+                        {run.status.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {new Date(run.completedAt ?? run.requestedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-data text-xs">
+                      {run.status === "FAILED" ? "—" : storedRowLabel(run)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-data text-xs">
+                      {run.costMicros == null ? "—" : `$${(run.costMicros / 1_000_000).toFixed(4)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {selected && selected.status === "COMPLETED" && (
+            <div className="border-t border-border/60">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+                <p className="text-sm font-medium">
+                  {selected.resultLabel} for &ldquo;{selected.seed}&rdquo;
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {selected.keywordCount ?? 0} stored rows · {selected.kind.toLowerCase().replaceAll("_", " ")}
+                </p>
+              </div>
+              {selected.keywords.length === 0 ? (
+                <p className="px-4 pb-4 text-sm text-muted-foreground">
+                  {selected.resultLabel === "SERP results"
+                    ? "This run stored ranked search results, not a keyword list. It is used as source evidence for content, not as keyword volume data."
+                    : "The provider returned no keyword rows for this seed. That is an empty result, not a missing run."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-y border-border/60 text-left text-xs text-muted-foreground">
+                        {SORTABLE.map((key) => (
+                          <th key={key} className="px-4 py-2 font-medium">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSort({ key, desc: sort.key === key ? !sort.desc : key !== "keyword" })
+                              }
+                              className="uppercase tracking-wide transition hover:text-foreground"
+                            >
+                              {key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}
+                            </button>
+                          </th>
+                        ))}
+                        <th className="px-4 py-2 font-medium">INTENT</th>
+                        <th className="px-4 py-2 font-medium">COMPETITION</th>
+                        <th className="px-4 py-2 font-medium">TREND</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {storedKeywords.map((word) => (
+                        <tr key={word.keyword} className="border-b border-border/40">
+                          <td className="px-4 py-2.5 font-medium">{word.keyword}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.volume?.toLocaleString() ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.difficulty ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.cpc == null ? "—" : `$${word.cpc.toFixed(2)}`}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{word.intent ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data text-xs">{word.competition ?? "—"}</td>
+                          <td className="px-4 py-2.5 font-data text-xs text-muted-foreground">
+                            {word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
       {/* Autocomplete fallback banner */}
       {!hasDataForSEO && (
         <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4">
@@ -140,7 +296,7 @@ export function KeywordResearchClient({
         </div>
       )}
 
-      {/* Search input */}
+      <h2 className="font-semibold">On-demand search</h2>
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -169,10 +325,9 @@ export function KeywordResearchClient({
       {/* Results */}
       {results.length > 0 && (
         <div className="panel overflow-hidden">
-          {source === "autocomplete" && (
+          {source && (
             <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-              Showing Google Autocomplete suggestions — volume and difficulty data
-              requires DataForSEO
+              {source === "autocomplete" ? "Google Autocomplete (free, no volume data)" : source === "article_research" ? "stored keyword research" : "stored DataForSEO report"}
             </div>
           )}
           <div className="overflow-x-auto">
@@ -288,7 +443,7 @@ export function KeywordResearchClient({
           </div>
           <div className="border-t border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
             {results.length} keyword{results.length !== 1 ? "s" : ""} found
-            {source === "dataforseo" ? " via DataForSEO" : " via Google Autocomplete"}
+            {source === "dataforseo" ? " via stored DataForSEO report" : source === "article_research" ? " via stored keyword research" : " via Google Autocomplete (free, no volume data)"}
           </div>
           {queueError && (
             <div className="border-t border-danger/30 bg-danger/5 px-4 py-2 text-xs text-danger">
