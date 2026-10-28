@@ -20,6 +20,14 @@ type RunDeps = {
 };
 const defaults: RunDeps = { db, askPerplexity: evaluatePerplexityQuestion, askGoogle: evaluateGoogleAiOverviewQuestion, saveObservation: createObservation, now: () => new Date() };
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const MARKET_COUNTRY: Readonly<Record<string, string>> = { france: "FR", french: "FR", fr: "FR", mexico: "MX", mexican: "MX", mx: "MX", spain: "ES", spanish: "ES", es: "ES", "united states": "US", usa: "US", us: "US", "united kingdom": "GB", uk: "GB", gb: "GB", canada: "CA", ca: "CA", germany: "DE", de: "DE", italy: "IT", it: "IT", portugal: "PT", pt: "PT" };
+/** Google needs a location; the site market is the recorded source, country is the fallback. */
+function countryFor(profile: { country: string | null; constraints: unknown } | null): string | null {
+  if (!profile) return null;
+  const market = object(profile.constraints).market;
+  if (typeof market === "string" && MARKET_COUNTRY[market.trim().toLowerCase()]) return MARKET_COUNTRY[market.trim().toLowerCase()];
+  return profile.country ? profile.country.toUpperCase().slice(0, 2) : null;
+}
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : typeof value === "string" ? [value] : [];
 
 async function loadQuestionInput(client: RunDb, projectId: string, siteId: string): Promise<{ input: QuestionSetInput; brand: string | null; aliases: string[] }> {
@@ -31,7 +39,7 @@ async function loadQuestionInput(client: RunDb, projectId: string, siteId: strin
   const revision = business?.acceptedRevision == null ? null : await client.businessKnowledgeRevision.findUnique({ where: { documentId_revision: { documentId: business.id, revision: business.acceptedRevision } } });
   const fields = object(revision?.fields);
   const businessInput = business ? { revision: business.revision, acceptedRevision: business.acceptedRevision, documentId: business.id, fields } : null;
-  const input: QuestionSetInput = { businessKnowledge: businessInput, profile: profile ? { audience: profile.audience, topics: profile.topics, services: profile.services, market: object(profile.constraints).market, country: profile.country, language: profile.language, locale: profile.language } : null, research: { runs: runs.map((run) => ({ id: run.id, questions: object(run.brief).questions ?? run.topics })), findings: runs.flatMap((run) => run.findings) } };
+  const input: QuestionSetInput = { businessKnowledge: businessInput, profile: profile ? { audience: profile.audience, topics: profile.topics, services: profile.services, market: object(profile.constraints).market, country: countryFor(profile), language: profile.language, locale: profile.language } : null, research: { runs: runs.map((run) => ({ id: run.id, questions: object(run.brief).questions ?? run.topics })), findings: runs.flatMap((run) => run.findings) } };
   return { input, brand: typeof fields.businessName === "string" ? fields.businessName : null, aliases: strings(fields.brandAliases) };
 }
 
