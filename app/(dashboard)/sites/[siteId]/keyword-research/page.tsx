@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { KeywordResearchClient } from "@/components/research/keyword-research-client";
+import { resolveDataForSeoReadiness } from "@/lib/dataforseo/readiness";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -15,14 +16,12 @@ export default async function KeywordResearchPage({ params }: Props) {
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { userId: true, domain: true },
+    select: { userId: true, domain: true, projectId: true },
   });
   if (!site) redirect("/sites");
 
-  const hasDataForSEO = !!(await db.apiKey.findUnique({
-    where: { userId_provider: { userId, provider: "dataforseo" } },
-    select: { id: true },
-  }));
+  const readiness = await resolveDataForSeoReadiness({ userId, projectId: site.projectId });
+  const runs = await db.articleKeywordResearchRun.findMany({ where: { siteId }, orderBy: { requestedAt: "desc" }, take: 50 });
 
   return (
     <div>
@@ -31,7 +30,7 @@ export default async function KeywordResearchPage({ params }: Props) {
         title="Keyword Research"
         description="Discover keyword ideas with search volume, difficulty, and CPC data"
       />
-      <KeywordResearchClient siteId={siteId} hasDataForSEO={hasDataForSEO} />
+      <KeywordResearchClient siteId={siteId} hasDataForSEO={readiness.configured} runs={runs.map((run) => ({ id: run.id, seed: run.seed, kind: run.kind, status: run.status, completedAt: run.completedAt?.toISOString() ?? null, costMicros: run.costMicros, errorCode: run.errorCode, result: run.result }))} />
     </div>
   );
 }

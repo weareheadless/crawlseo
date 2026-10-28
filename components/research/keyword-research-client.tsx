@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Search,
   Loader2,
@@ -10,6 +9,7 @@ import {
   ListPlus,
 } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 type KeywordResult = {
   keyword: string;
@@ -23,10 +23,19 @@ type KeywordResult = {
 export function KeywordResearchClient({
   siteId,
   hasDataForSEO,
+  runs = [],
 }: {
   siteId: string;
   hasDataForSEO: boolean;
+  runs?: Array<{ id: string; seed: string; kind: string; status: string; completedAt: string | null; costMicros: number | null; errorCode: string | null; result: unknown }>;
 }) {
+  const [selectedRun, setSelectedRun] = useState("");
+  const [sortDesc, setSortDesc] = useState(true);
+  const selected = runs.find((run) => run.id === (selectedRun || runs[0]?.id));
+  const storedKeywords = useMemo(() => {
+    if (!selected || selected.status !== "COMPLETED" || !Array.isArray(selected.result)) return [];
+    return [...selected.result as KeywordResult[]].sort((a, b) => ((b.volume ?? -1) - (a.volume ?? -1)) * (sortDesc ? 1 : -1));
+  }, [selected, sortDesc]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<KeywordResult[]>([]);
@@ -118,6 +127,7 @@ export function KeywordResearchClient({
 
   return (
     <div className="space-y-4">
+      {runs.length > 0 && <section className="panel p-4"><h2 className="mb-3 font-semibold">Saved research runs</h2>{runs.map((run) => <button className={`mr-2 mb-2 rounded border px-3 py-2 text-left text-sm ${selected?.id === run.id ? "border-primary" : "border-border"}`} key={run.id} onClick={() => setSelectedRun(run.id)}>{run.seed} · {run.kind} · {run.status}</button>)}{selected?.status === "FAILED" ? <p className="text-sm text-danger">Run failed: {selected.errorCode ?? "UNKNOWN_ERROR"}</p> : selected?.status === "COMPLETED" && <div className="overflow-x-auto"><button className="my-2 text-xs underline" onClick={() => setSortDesc(!sortDesc)}>Sort volume {sortDesc ? "↓" : "↑"}</button><table className="w-full text-sm"><thead><tr>{["Keyword", "Intent", "Volume", "Difficulty", "CPC", "Competition", "Trend"].map((label) => <th className="px-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{storedKeywords.map((word) => <tr key={word.keyword}><td>{word.keyword}</td><td>{(word as any).intent ?? "—"}</td><td>{word.volume ?? "—"}</td><td>{word.difficulty ?? "—"}</td><td>{word.cpc ?? "—"}</td><td>{word.competition ?? "—"}</td><td>{word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}</td></tr>)}</tbody></table></div>}</section>}
       {/* Autocomplete fallback banner */}
       {!hasDataForSEO && (
         <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4">
@@ -140,7 +150,7 @@ export function KeywordResearchClient({
         </div>
       )}
 
-      {/* Search input */}
+      <h2 className="font-semibold">On-demand search</h2>
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

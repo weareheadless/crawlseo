@@ -2,6 +2,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
 import { cachedKeywordReport, getLatestResearchReport } from "@/lib/dataforseo/research";
 import { fetchSuggestions } from "@/lib/google/autocomplete";
+import { resolveDataForSeoReadiness } from "@/lib/dataforseo/readiness";
 
 export async function GET(
   req: Request,
@@ -21,6 +22,7 @@ export async function GET(
     if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
+    await resolveDataForSeoReadiness({ userId, projectId: site.projectId });
 
     const url = new URL(req.url);
     const query = url.searchParams.get("q");
