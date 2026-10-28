@@ -8,6 +8,8 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { PositionBadge, NumCell, CtrCell } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -32,6 +34,7 @@ export default async function OpportunitiesPage({ params }: Props) {
           title="Opportunities"
           description="Quick wins from your GSC data"
         />
+        <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="findings" /></div>
         <EmptyState
           title="Sync GSC first"
           description="Opportunities are computed from keyword and page performance."
@@ -58,6 +61,12 @@ export default async function OpportunitiesPage({ params }: Props) {
           </div>
         }
       />
+
+      <div className="mb-5 space-y-3">
+        <PipelineNavigation siteId={siteId} currentStage="findings" />
+        <PipelineStageContext siteId={siteId} currentStage="findings" />
+      </div>
+      <p className="mb-5 text-sm text-muted-foreground">Contextual GSC opportunity analysis. Review recorded evidence in <Link className="text-primary underline" href={`/sites/${siteId}/findings`}>Findings</Link>.</p>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Mini label="Striking distance" value={data.summary.strikingDistance} />

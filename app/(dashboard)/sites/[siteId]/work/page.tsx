@@ -12,7 +12,7 @@ import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ tab?: string; dimension?: string; state?: string }>;
+  searchParams: Promise<{ tab?: string; dimension?: string; state?: string; actionId?: string }>;
 }
 
 
@@ -52,6 +52,14 @@ export default async function WorkPage({ params, searchParams }: Props) {
         <PipelineNavigation siteId={siteId} currentStage="work" />
         <PipelineStageContext siteId={siteId} currentStage="work" />
       </div>
+      {query.actionId && (
+        <section className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4" aria-label="Selected action">
+          <p className="text-sm">Selected action preserved from the previous workspace.</p>
+          <Link className="text-sm font-medium text-primary underline" href={`/sites/${siteId}/actions/${encodeURIComponent(query.actionId)}`}>
+            Open selected action
+          </Link>
+        </section>
+      )}
       <Workbench
         siteId={siteId}
         initialDimension={dimension}

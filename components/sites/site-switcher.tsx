@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -33,11 +33,34 @@ const SECTION_SEGMENTS = new Set([
   "backlinks",
   "mcp",
   "settings",
+  "findings",
+  "results",
 ]);
+
+export function siteDestination(pathname: string, search: string, siteId: string) {
+  const match = pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/);
+  const legacy = match?.[1];
+  const section = legacy === "content-studio" ? "work" : legacy === "opportunities" ? "findings" : legacy;
+  const suffix = section && SECTION_SEGMENTS.has(section) ? `/${section}` : "";
+  return `/sites/${siteId}${suffix}${search ? `?${search}` : ""}`;
+}
+
+export function siteSectionLabel(pathname: string) {
+  const section = pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/)?.[1];
+  if (!section) return "Overview";
+  const aliases: Record<string, string> = { "aeo-geo": "AEO / GEO", "keyword-research": "Keyword Research", "domain-overview": "Domain Overview", "content-studio": "Work", opportunities: "Findings" };
+  return aliases[section] ?? section.replaceAll("-", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function selectedSiteDomain(sites: Site[], selectedId: string) {
+  return sites.find((site) => site.id === selectedId)?.domain ?? "Select a site";
+}
 
 export function SiteSwitcher({ sites }: { sites: Site[] }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
 
   if (sites.length === 0) return null;
 
@@ -49,24 +72,14 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
   function handleSiteChange(siteId: string | null) {
     if (!siteId) return;
 
-    if (pathname.includes("/sites/")) {
-      const sub = pathname.match(/\/sites\/[^/]+\/([^/]+)/)?.[1];
-      if (sub && SECTION_SEGMENTS.has(sub)) {
-        router.push(`/sites/${siteId}/${sub}`);
-        return;
-      }
-      router.push(`/sites/${siteId}`);
-      return;
-    }
-
-    router.push(`/sites/${siteId}`);
+    router.push(siteDestination(pathname, query, siteId));
   }
 
   if (sites.length === 1) {
     return (
       <div className="rounded-lg border border-border/60 bg-panel/60 px-3 py-2">
         <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          Site
+            {siteSectionLabel(pathname)}
         </p>
         <p className="truncate text-sm font-medium text-foreground">
           {sites[0].domain}
@@ -78,12 +91,12 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
   return (
     <div>
       <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        Switch site
+        {siteSectionLabel(pathname)} · switch site
       </p>
       <Select value={selected} onValueChange={handleSiteChange}>
         <SelectTrigger className="w-full border-border/70 bg-panel">
           <SelectValue>
-            {sites.find((site) => site.id === selected)?.domain ?? "Select a site"}
+            {selectedSiteDomain(sites, selected)}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
