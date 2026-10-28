@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { buildSidebarGroups } from "@/components/layout/sidebar-nav";
-import { siteDestination } from "@/components/sites/site-switcher";
+import { selectedSiteDomain, siteDestination, siteSectionLabel } from "@/components/sites/site-switcher";
 import { resolvePipelineStage } from "@/lib/pipeline/stages";
 import { projectResultEvidence } from "@/lib/pipeline/results";
 
@@ -47,6 +47,9 @@ describe("pipeline UI integration", () => {
   it("keeps switcher site context in the destination and the report label is domain-backed", () => {
     expect(siteDestination("/sites/old/findings", "tab=technical", "new")).toBe("/sites/new/findings?tab=technical");
     expect(siteDestination("/sites/old/opportunities", "dimension=seo", "new")).toBe("/sites/new/findings?dimension=seo");
+    expect(siteSectionLabel("/sites/old/content-studio")).toBe("Work");
+    expect(siteSectionLabel("/sites/old/aeo-geo")).toBe("AEO / GEO");
+    expect(selectedSiteDomain([{ id: "new", domain: "pipeline-journey.test" }], "new")).toBe("pipeline-journey.test");
   });
 
   it("projects the synthetic journey as measured, without claiming attribution", () => {

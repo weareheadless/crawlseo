@@ -45,6 +45,17 @@ export function siteDestination(pathname: string, search: string, siteId: string
   return `/sites/${siteId}${suffix}${search ? `?${search}` : ""}`;
 }
 
+export function siteSectionLabel(pathname: string) {
+  const section = pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/)?.[1];
+  if (!section) return "Overview";
+  const aliases: Record<string, string> = { "aeo-geo": "AEO / GEO", "keyword-research": "Keyword Research", "domain-overview": "Domain Overview", "content-studio": "Work", opportunities: "Findings" };
+  return aliases[section] ?? section.replaceAll("-", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function selectedSiteDomain(sites: Site[], selectedId: string) {
+  return sites.find((site) => site.id === selectedId)?.domain ?? "Select a site";
+}
+
 export function SiteSwitcher({ sites }: { sites: Site[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -67,8 +78,8 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
   if (sites.length === 1) {
     return (
       <div className="rounded-lg border border-border/60 bg-panel/60 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            {pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/)?.[1]?.replaceAll("-", " ") ?? "Overview"}
+        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            {siteSectionLabel(pathname)}
         </p>
         <p className="truncate text-sm font-medium text-foreground">
           {sites[0].domain}
@@ -80,12 +91,12 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
   return (
     <div>
       <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        {pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/)?.[1]?.replaceAll("-", " ") ?? "Overview"} · switch site
+        {siteSectionLabel(pathname)} · switch site
       </p>
       <Select value={selected} onValueChange={handleSiteChange}>
         <SelectTrigger className="w-full border-border/70 bg-panel">
           <SelectValue>
-            {sites.find((site) => site.id === selected)?.domain ?? "Select a site"}
+            {selectedSiteDomain(sites, selected)}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
