@@ -7,6 +7,8 @@ import { actionDimension } from "@/lib/work/categories";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 import { EvaluationPanel } from "@/components/aeo-geo/evaluation-panel";
 import { projectEvaluationSurface } from "@/lib/aeo/surface";
+import { generateQuestionSet } from "@/lib/aeo/question-set";
+import type { QuestionSetInput } from "@/lib/aeo/question-set";
 import {
   accessState,
   groupIssuesByType,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/research/aeo-geo-view";
 
 const tabs = ["access", "identity", "visibility", "questions", "gaps"] as const;
+const objectValue = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 type Tab = (typeof tabs)[number];
 
 const tabLabels: Record<Tab, string> = {
@@ -47,7 +50,7 @@ export default async function AeoGeoPage({
   });
   if (!site) redirect("/sites");
 
-  const [crawl, observationRows, questions, actions, evaluationRuns, profile] = await Promise.all([
+  const [crawl, observationRows, questions, actions, evaluationRuns, profile, business, researchRuns] = await Promise.all([
     db.crawl.findFirst({
       where: { siteId, status: "COMPLETED" },
       orderBy: { finishedAt: "desc" },
@@ -79,8 +82,18 @@ export default async function AeoGeoPage({
     }),
     site.projectId ? db.aeoEvaluationRun.findMany({ where: { projectId: site.projectId, siteId }, orderBy: { startedAt: "desc" }, take: 20,
       select: { runId: true, status: true, failed: true, skippedByCap: true, startedAt: true, questionSetVersion: true } }) : Promise.resolve([]),
-    db.siteProfile.findUnique({ where: { siteId }, select: { competitors: true } }),
+    db.siteProfile.findUnique({ where: { siteId }, select: { competitors: true, audience: true, topics: true, services: true, constraints: true, country: true, language: true } }),
+    site.projectId ? db.businessKnowledgeDocument.findUnique({ where: { projectId: site.projectId } }) : Promise.resolve(null),
+    db.researchRun.findMany({ where: { siteId }, include: { findings: { select: { id: true, runId: true, theme: true, summary: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
+
+  const acceptedRevision = business?.acceptedRevision == null ? null : await db.businessKnowledgeRevision.findUnique({ where: { documentId_revision: { documentId: business.id, revision: business.acceptedRevision } } });
+  const questionInput: QuestionSetInput = {
+    businessKnowledge: business ? { revision: business.revision, acceptedRevision: business.acceptedRevision, documentId: business.id, fields: objectValue(acceptedRevision?.fields) } : null,
+    profile: profile ? { audience: profile.audience, topics: profile.topics, services: profile.services, market: objectValue(profile.constraints).market, country: profile.country, language: profile.language, locale: profile.language } : null,
+    research: { runs: researchRuns.map((run) => ({ id: run.id, questions: objectValue(run.brief).questions ?? run.topics })), findings: researchRuns.flatMap((run) => run.findings) },
+  };
+  const questionSet = generateQuestionSet(questionInput);
 
   const access = accessState(crawl);
   const identity = identityIssues(crawl?.issues ?? []);
@@ -94,7 +107,8 @@ export default async function AeoGeoPage({
   const askedQuestions = [...new Set(observationRows.map((row) => row.question))];
   const newestVersion = [...observationRows].sort((a,b) => b.observedAt.getTime() - a.observedAt.getTime())[0]?.questionSetVersion;
   const matchingRuns = evaluationRuns.filter((run) => run.questionSetVersion === newestVersion).slice(0, 2);
-  const surface = projectEvaluationSurface({ projectId: site.projectId ?? "", questions: askedQuestions, observations: observationRows,
+  const surface = projectEvaluationSurface({ projectId: site.projectId ?? "", questions: askedQuestions, generatedQuestions: questionSet.questions.map((question) => ({ text: question.text, version: questionSet.version })),
+    emptyReason: questionSet.emptyReason, locale: questionSet.locale.language, observations: observationRows,
     competitorUrls, maxItems: 20, compareRuns: matchingRuns.length === 2 ? { before: matchingRuns[1].runId, after: matchingRuns[0].runId } : undefined });
 
   const counts: Record<Tab, number> = {
@@ -239,7 +253,7 @@ export default async function AeoGeoPage({
 
       {tab === "questions" && (
         <div className="space-y-6">
-        <EvaluationPanel siteId={siteId} version={surface.questionSetVersion} locale={surface.locale} askedAt={surface.latestAskedAt}
+        <EvaluationPanel siteId={siteId} version={surface.questionSetVersion} locale={surface.locale} askedAt={surface.latestAskedAt} emptyReason={surface.emptyReason}
           questions={surface.questions} runs={evaluationRuns} competitorDomains={[...new Set(competitorUrls.map((url) => { try { return new URL(url).hostname; } catch { return ""; } }).filter(Boolean))]} />
         <section className="panel p-4 sm:p-5">
           <h2 className="font-heading text-lg font-semibold">

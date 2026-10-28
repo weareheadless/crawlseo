@@ -1,6 +1,6 @@
 import type { ObservationRecord } from "./observation-types";
 
-export type EvaluationVerdict = "no_observation" | "answer_absent" | "brand_absent" | "brand_present" | "no_brand_mention" | "failed" | "over_budget";
+export type EvaluationVerdict = "not_asked" | "no_observation" | "answer_absent" | "brand_absent" | "brand_present" | "no_brand_mention" | "failed" | "over_budget";
 export type SurfaceProjection = {
   surface: string;
   verdict: EvaluationVerdict;
@@ -23,6 +23,9 @@ const key = (row: ObservationRecord) => `${row.question}\0${row.modelSurface}`;
 export function projectEvaluationSurface(input: {
   projectId: string;
   questions: string[];
+  generatedQuestions?: Array<{ text: string; version: string }>;
+  emptyReason?: string;
+  locale?: string | null;
   observations: ObservationRecord[];
   brandOfInterest?: string;
   competitorUrls?: string[];
@@ -34,14 +37,22 @@ export function projectEvaluationSurface(input: {
   const maxItems = Math.max(1, Math.min(100, Math.floor(input.maxItems ?? 20)));
   const rows = input.observations.filter((row) => row.projectId === input.projectId);
   const latest = new Map<string, ObservationRecord>();
-  for (const row of [...rows].sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime())) if (!latest.has(key(row))) latest.set(key(row), row);
-  const chosenVersion = [...latest.values()].sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime())[0]?.questionSetVersion ?? null;
+  for (const row of [...rows].sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime())) if (!latest.has(`${key(row)}\0${row.questionSetVersion}`)) latest.set(`${key(row)}\0${row.questionSetVersion}`, row);
+  const newestObservation = [...rows].sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime())[0];
+  const chosenVersion = input.generatedQuestions?.[0]?.version ?? newestObservation?.questionSetVersion ?? null;
   const comparatorRows = input.compareRuns && chosenVersion ? rows.filter((r) => r.questionSetVersion === chosenVersion && [input.compareRuns!.before, input.compareRuns!.after].includes(r.runId ?? "")) : [];
   const competitorDomains = new Set((input.competitorUrls ?? []).map(domain).filter((d): d is string => Boolean(d)));
-  const questions = [...new Set(input.questions)];
-  const projected = questions.slice(0, maxItems).map((question) => ({ question, surfaces: SURFACES.map((surface): SurfaceProjection => {
-    const observation = latest.get(`${question}\0${surface}`) ?? null;
-    const matches = rows.filter((r) => r.question === question && r.modelSurface === surface && r.questionSetVersion === chosenVersion);
+  const generated = [...new Map((input.generatedQuestions ?? []).map((q) => [q.text, q])).values()];
+  const generatedTexts = new Set(generated.map((q) => q.text));
+  const oldQuestions = [...new Set(input.questions)].filter((question) => !generatedTexts.has(question)).map((question) => {
+    const row = [...rows].filter((item) => item.question === question).sort((a,b) => b.observedAt.getTime()-a.observedAt.getTime())[0];
+    return { text: question, version: row?.questionSetVersion ?? chosenVersion ?? "", origin: "earlier" as const };
+  });
+  const questionDescriptors = [...generated.map((q) => ({ text: q.text, version: q.version, origin: "generated" as const })), ...oldQuestions];
+  const questions = questionDescriptors.map((q) => q.text);
+  const projected = questionDescriptors.slice(0, maxItems).map(({ text: question, version, origin }) => ({ question, questionSetVersion: version, origin, surfaces: SURFACES.map((surface): SurfaceProjection => {
+    const observation = latest.get(`${question}\0${surface}\0${version}`) ?? null;
+    const matches = rows.filter((r) => r.question === question && r.modelSurface === surface && r.questionSetVersion === version);
     const before = input.compareRuns && chosenVersion ? matches.filter((r) => r.runId === input.compareRuns!.before).sort((a,b) => b.observedAt.getTime()-a.observedAt.getTime())[0] : undefined;
     const after = input.compareRuns && chosenVersion ? matches.filter((r) => r.runId === input.compareRuns!.after).sort((a,b) => b.observedAt.getTime()-a.observedAt.getTime())[0] : undefined;
     const citations = stringList(observation?.citedSources);
@@ -50,9 +61,9 @@ export function projectEvaluationSurface(input: {
     const citedDomains = [...new Set(citations.map(domain).filter((d): d is string => Boolean(d)))];
     const failed = input.outcomes?.find((outcome) => outcome.projectId === input.projectId && outcome.question === question && outcome.surface === surface && (!input.compareRuns || outcome.runId === input.compareRuns.after));
     const brands = stringList(observation?.mentionedBrands).map((v) => v.toLocaleLowerCase());
-    const verdict: EvaluationVerdict = !observation ? failed?.state ?? "no_observation" : observation.aiAnswerPresent === false ? "answer_absent" : input.brandOfInterest ? (brands.includes(input.brandOfInterest.toLocaleLowerCase()) ? "brand_present" : "brand_absent") : brands.length ? "brand_present" : "no_brand_mention";
+    const verdict: EvaluationVerdict = !observation ? (failed?.state ?? (origin === "generated" ? "not_asked" : "no_observation")) : observation.aiAnswerPresent === false ? "answer_absent" : input.brandOfInterest ? (brands.includes(input.brandOfInterest.toLocaleLowerCase()) ? "brand_present" : "brand_absent") : brands.length ? "brand_present" : "no_brand_mention";
     const visibleCitations = citations.slice(0, maxItems);
     return { surface, verdict, observation, answerExcerpt: observation?.answerText?.slice(0, 600) ?? null, citedUrls: visibleCitations, citedDomains: citedDomains.slice(0, maxItems), citedDomainsFrequency: [...frequencies].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0])).slice(0,maxItems).map(([d,count]) => ({ domain: d, count })), competitorOverlapCount: citations.filter((url) => { const d = domain(url); return d !== null && competitorDomains.has(d); }).length, competitorDomains: citedDomains.filter((d) => competitorDomains.has(d)).slice(0,maxItems), citationsTruncated: citations.length > maxItems || citedDomains.length > maxItems, diff: before && after ? { citationAdded: stringList(after.citedSources).filter((url) => !stringList(before.citedSources).includes(url)).slice(0,maxItems), citationRemoved: stringList(before.citedSources).filter((url) => !stringList(after.citedSources).includes(url)).slice(0,maxItems), answerChanged: before.answerText !== after.answerText } : null };
   }) }));
-  return { projectId: input.projectId, questionSetVersion: chosenVersion, locale: [...latest.values()].sort((a,b)=>b.observedAt.getTime()-a.observedAt.getTime())[0]?.locale ?? null, latestAskedAt: [...latest.values()].sort((a,b)=>b.observedAt.getTime()-a.observedAt.getTime())[0]?.observedAt ?? null, questions: projected, truncatedQuestions: questions.length > maxItems, truncationLimit: maxItems, comparisonVersionMatched: comparatorRows.length > 0 };
+  return { projectId: input.projectId, questionSetVersion: chosenVersion, locale: input.locale ?? newestObservation?.locale ?? null, emptyReason: input.emptyReason ?? null, latestAskedAt: newestObservation?.observedAt ?? null, questions: projected, truncatedQuestions: questions.length > maxItems, truncationLimit: maxItems, comparisonVersionMatched: comparatorRows.length > 0 };
 }

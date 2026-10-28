@@ -17,6 +17,31 @@ describe("projectEvaluationSurface", () => {
     expect(result.questions[0].surfaces[0].verdict).toBe("no_observation");
   });
 
+  it("projects generated questions with a truthful not-asked verdict and no citations", () => {
+    const result = projectEvaluationSurface({ projectId: "p1", questions: [], generatedQuestions: [{ text: "Where can I find bread?", version: "v-current" }], locale: "en", observations: [] });
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].questionSetVersion).toBe("v-current");
+    expect(result.questions[0].surfaces.map((s) => s.verdict)).toEqual(["not_asked", "not_asked"]);
+    expect(result.questions[0].surfaces.every((s) => s.citedUrls.length === 0 && s.observation === null)).toBe(true);
+  });
+
+  it("merges generated and observed questions without duplicates, retaining older-set questions", () => {
+    const result = projectEvaluationSurface({ projectId: "p1", questions: ["Where can I find bread?", "Old question?"], generatedQuestions: [{ text: "Where can I find bread?", version: "v2" }], observations: [
+      row({ question: "Where can I find bread?", questionSetVersion: "v1" }),
+      row({ id: "o2", question: "Old question?", questionSetVersion: "v1" }),
+    ] });
+    expect(result.questions.map((q) => q.question)).toEqual(["Where can I find bread?", "Old question?"]);
+    expect(result.questions[0].surfaces[0].verdict).toBe("not_asked");
+    expect(result.questions[1].origin).toBe("earlier");
+    expect(result.questions[1].questionSetVersion).toBe("v1");
+  });
+
+  it("retains the explicit no-business-data empty reason", () => {
+    const result = projectEvaluationSurface({ projectId: "p1", questions: [], generatedQuestions: [], emptyReason: "no_business_data", observations: [] });
+    expect(result.questions).toEqual([]);
+    expect(result.emptyReason).toBe("no_business_data");
+  });
+
   it("distinguishes absent answers, brand absence and brand presence", () => {
     const result = projectEvaluationSurface({ projectId: "p1", brandOfInterest: "Acme", questions: ["Which bakery?"], observations: [
       row({ aiAnswerPresent: false, answerText: null, citedSources: null, mentionedBrands: null }),
