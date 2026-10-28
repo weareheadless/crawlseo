@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 import { getSiteExecutionAuthority } from "@/lib/research/execution-authority";
 import { ExternalExecutionNotice } from "@/components/work/external-execution-notice";
+import { readActionLineage } from "@/lib/pipeline/lineage";
+import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
 
 interface Props {
   params: Promise<{ siteId: string; actionId: string }>;
@@ -38,8 +40,10 @@ export default async function ActionDetailPage({ params }: Props) {
   if (!userId) redirect("/login");
 
   let action;
+  let lineage;
   try {
     action = await getActionDetail(siteId, actionId);
+    lineage = await readActionLineage(siteId, actionId);
   } catch {
     redirect(`/sites/${siteId}/work`);
   }
@@ -69,13 +73,8 @@ export default async function ActionDetailPage({ params }: Props) {
   const preferredTarget = deliveryTargets.find((target) => target.key === preferredEmbedTargetKey);
   const authority = await getSiteExecutionAuthority(siteId);
   const externallyManaged = authority?.managed ?? false;
+  // Do not resolve businessKnowledgeRevision.findUnique from QuestionCoverage: coverage.fieldPath is not a historical pin.
   const coverage = action.questionCoverages[0] ?? null;
-  const knowledgeRevision = coverage?.documentId && coverage.evidenceRevision != null
-    ? await db.businessKnowledgeRevision.findUnique({
-        where: { documentId_revision: { documentId: coverage.documentId, revision: coverage.evidenceRevision } },
-        select: { revision: true, fields: true },
-      })
-    : null;
 
   return (
     <div>
@@ -95,16 +94,20 @@ export default async function ActionDetailPage({ params }: Props) {
           </div>
         }
       />
+      <div className="mb-5 space-y-3">
+        <PipelineNavigation siteId={siteId} currentStage="work" />
+        <PipelineStageContext siteId={siteId} currentStage="work" />
+      </div>
 
       <section className="panel mb-5 p-5" aria-label="Action provenance">
         <h2 className="font-heading text-lg font-semibold">Why this Action exists</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{actionDimension(action).toUpperCase()} · provenance from recorded research and coverage.</p>
+        <p className="mt-1 text-xs text-muted-foreground">{actionDimension(action).toUpperCase()} · only recorded lineage is shown; missing links are not inferred.</p>
         <ol className="mt-4 space-y-3 border-l border-border pl-4 text-sm">
           <li>
-            <strong>Knowledge revision and field:</strong>{" "}
-            {coverage?.document && coverage.evidenceRevision != null && coverage.fieldPath ? (
-              <Link className="text-primary underline" href={`/sites/${siteId}/intelligence`}>Knowledge {coverage.document.logicalId}, revision {coverage.evidenceRevision}, field {coverage.fieldPath}{knowledgeRevision ? ` (${Object.prototype.hasOwnProperty.call(record(knowledgeRevision.fields), coverage.fieldPath) ? "field recorded" : "field missing from revision"})` : " (revision missing)"}</Link>
-            ) : <span className="text-muted-foreground">Missing hop: no knowledge revision/field is linked to this Action.</span>}
+            <strong>Business revision:</strong>{" "}
+            {lineage.nodes.filter((node) => node.kind === "business_revision").length > 0
+              ? lineage.nodes.filter((node) => node.kind === "business_revision").map((node) => <span key={node.id} className="text-muted-foreground">{node.label} (reference only; historical document not resolved)</span>)
+               : <span className="text-muted-foreground">Not recorded; no historical business revision is attached. Missing hop: no knowledge revision/field is linked as historical provenance.</span>}
           </li>
           <li><strong>Research finding:</strong>{" "}{action.finding ? <Link className="text-primary underline" href={`/sites/${siteId}/research/runs/${action.runId ?? action.finding.runId}`}>{action.finding.summary}</Link> : <span className="text-muted-foreground">Missing hop: no research finding is linked.</span>}</li>
           <li><strong>Sources and retrieval dates:</strong>{" "}{action.evidenceSources.length ? <ul className="mt-1 list-disc pl-5">{action.evidenceSources.map((source) => <li key={source.id}><a className="text-primary underline" href={source.url} target="_blank" rel="noreferrer">{source.title || source.url}</a> · retrieved {source.retrievedAt.toISOString().slice(0, 10)}</li>)}</ul> : <span className="text-muted-foreground">Missing hop: no source is linked to the finding or Action.</span>}</li>
@@ -112,6 +115,18 @@ export default async function ActionDetailPage({ params }: Props) {
           <li><strong>Action:</strong> {action.title} · {action.status.toLowerCase().replaceAll("_", " ")}</li>
           <li><strong>Outcome:</strong>{" "}{action.deliveries.length ? action.deliveries.map((delivery) => `${delivery.status.toLowerCase()} (${delivery.createdAt.toISOString().slice(0, 10)})`).join("; ") : ["VERIFIED", "FULFILLED", "FAILED", "DISMISSED"].includes(action.status) ? action.status.toLowerCase() : "Missing hop: no outcome is recorded yet."}</li>
         </ol>
+        <details className="mt-4 rounded-lg border border-border/60 bg-muted/10 p-3">
+          <summary className="cursor-pointer font-data text-[10px] uppercase tracking-wide text-muted-foreground">Full recorded lineage</summary>
+          <ol className="mt-3 space-y-2 text-xs">
+            {lineage.nodes.map((node) => <li key={`${node.kind}:${node.id}`} className="flex flex-wrap gap-x-2">
+              <span className="font-semibold">{node.kind.replaceAll("_", " ")}</span>
+              {node.href ? <Link href={node.href} className="text-primary underline">{node.label}</Link> : <span>{node.label}</span>}
+              <span className="text-muted-foreground">{node.status ?? "status not recorded"}{node.occurredAt ? ` · ${new Date(node.occurredAt).toLocaleString()}` : ""}</span>
+              {node.kind === "business_revision" && <span className="text-warning">Reference only; historical URL/content unresolved.</span>}
+            </li>)}
+          </ol>
+          <p className="mt-3 text-[11px] text-muted-foreground">Drafts {lineage.lists.drafts.returned}/{lineage.lists.drafts.limit}{lineage.lists.drafts.hasMore ? " (truncated)" : ""} · attempts {lineage.lists.agentAttempts.returned}/{lineage.lists.agentAttempts.limit}{lineage.lists.agentAttempts.hasMore ? " (truncated)" : ""} · delivery {lineage.links.delivery.state} · verification {lineage.links.verification.state} · outcome {lineage.links.outcome.state}</p>
+        </details>
       </section>
 
       {editorial && (
@@ -377,7 +392,10 @@ export default async function ActionDetailPage({ params }: Props) {
           )}
 
           <section className="panel p-5">
-            <h2 className="font-heading text-lg font-semibold">{blogTarget ? "Blog update content" : "Content drafts"}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-heading text-lg font-semibold">{blogTarget ? "Blog update content" : "Content drafts"}</h2>
+              <Link href={`/sites/${siteId}/content-studio?actionId=${encodeURIComponent(action.id)}`} className="text-xs text-primary underline underline-offset-2">Open Content Studio in this action context</Link>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Drafts are generated from the evidence sources above. Verify those links before publishing.
             </p>
