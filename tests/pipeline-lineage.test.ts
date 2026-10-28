@@ -2,52 +2,79 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { db } = vi.hoisted(() => ({ db: { researchAction: { findFirst: vi.fn() }, researchSource: { findMany: vi.fn() } } }));
 vi.mock("@/lib/db", () => ({ db }));
-
 import { readActionLineage, projectActionLineage } from "@/lib/pipeline/lineage";
+import type { ActionLineageProjectionInput } from "@/lib/pipeline/lineage-types";
 
-const action = (override: Record<string, unknown> = {}) => ({
-  id: "a1", siteId: "s1", projectId: "p1", title: "Improve page", source: "legacy", kind: "CONTENT", status: "VERIFIED", revision: 2,
+const action = (override: Partial<ActionLineageProjectionInput> = {}): ActionLineageProjectionInput => ({
+  id: "a1", siteId: "s1", projectId: "p1", title: "Improve page", status: "VERIFIED", revision: 2,
   runId: "r1", findingId: "f1", evidence: { source_ids: ["src1"] }, createdAt: new Date("2025-01-01"), approvedAt: null,
-  deliveredAt: new Date("2025-01-02"), verifiedAt: new Date("2025-01-03"), run: { id: "r1", title: "Run", status: "COMPLETED", createdAt: new Date("2024-12-01") },
+  deliveredAt: new Date("2025-01-02"), verifiedAt: new Date("2025-01-03"), run: { id: "r1", siteId: "s1", projectId: "p1", title: "Run", status: "COMPLETED", createdAt: new Date("2024-12-01") },
   finding: { id: "f1", runId: "r1", summary: "Finding", createdAt: new Date("2024-12-02"), evidenceSourceIds: ["src1"] },
-  drafts: [{ id: "d1", title: "Draft", status: "READY", createdAt: new Date("2025-01-01"), wixApprovedAt: null }],
-  agentTasks: [{ id: "t1", status: "COMPLETED", createdAt: new Date("2025-01-01"), startedAt: null, completedAt: null, actionRevision: 1, errorCode: "PRIVATE" }],
+  drafts: [{ id: "d1", siteId: "s1", title: "Draft", status: "READY", createdAt: new Date("2025-01-01") }],
+  agentTasks: [{ id: "t1", siteId: "s1", status: "COMPLETED", createdAt: new Date("2025-01-01"), actionRevision: 1 }],
   deliveries: [{ id: "delivery1", status: "DELIVERED", createdAt: new Date("2025-01-02"), verifiedAt: null, outcome: null, outcomeMeasuredAt: null }],
-  questionCoverages: [], ...override,
+  ...override,
+});
+const source = (override: Partial<{ id: string; runId: string; projectId: string; title: string; url: string; provider: string; retrievedAt: Date }> = {}) => ({
+  id: "src1", runId: "r1", projectId: "p1", title: "Source", url: "https://example.com", provider: "news", retrievedAt: new Date("2024-12-01"), ...override,
 });
 
 describe("pipeline action lineage", () => {
-  beforeEach(() => { vi.clearAllMocks(); db.researchSource.findMany.mockResolvedValue([{ id: "src1", runId: "r1", title: "Source", url: "https://example.com", provider: "news", retrievedAt: new Date("2024-12-01") }]); });
-  it("rejects wrong-site and missing actions by scoped lookup", async () => {
+  beforeEach(() => { vi.clearAllMocks(); db.researchSource.findMany.mockResolvedValue([source()]); });
+  it("rejects missing and wrong-site actions with a site-scoped lookup", async () => {
     db.researchAction.findFirst.mockResolvedValue(null);
     await expect(readActionLineage("s2", "a1")).rejects.toMatchObject({ status: 404 });
     expect(db.researchAction.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "a1", siteId: "s2" } }));
   });
-  it("projects legacy actions and never guesses a business revision", () => {
-    const result = projectActionLineage(action({ runId: null, findingId: null, run: null, finding: null, evidence: {}, deliveredAt: null, verifiedAt: null, deliveries: [] }) as never);
-    expect(result.links.business).toMatchObject({ state: "not_recorded" });
-    expect(result.nodes.filter((node) => node.kind === "research_run")).toHaveLength(0);
-    expect(result.links.research).toMatchObject({ state: "not_recorded" });
+  it("uses only supported site-local detail paths and rejects malformed identifiers", () => {
+    const value = projectActionLineage(action(), [source()]);
+    expect(value.nodes.find((n) => n.kind === "action")?.href).toBe("/sites/s1/actions/a1");
+    expect(value.nodes.find((n) => n.kind === "research_run")?.href).toBe("/sites/s1/research/runs/r1");
+    expect(value.nodes.find((n) => n.kind === "finding")?.href).toBeNull();
+    expect(value.nodes.find((n) => n.kind === "draft")?.href).toBeNull();
+    expect(value.nodes.find((n) => n.kind === "agent_attempt")?.href).toBeNull();
+    const unsafe = projectActionLineage(action({ siteId: "../elsewhere", id: "a1" }));
+    expect(unsafe.nodes.find((n) => n.kind === "action")?.href).toBeNull();
   });
-  it("keeps retries and draft versions distinct and strips private task fields", () => {
-    const value = action({ agentTasks: [{ id: "t1", status: "FAILED", createdAt: new Date(), actionRevision: 1, errorCode: "SECRET" }, { id: "t2", status: "COMPLETED", createdAt: new Date(), actionRevision: 2, errorCode: null }], drafts: [{ id: "d1", title: "v1", status: "READY", createdAt: new Date() }, { id: "d2", title: "v2", status: "READY", createdAt: new Date() }] });
-    const result = projectActionLineage(value as never);
-    expect(result.nodes.filter((node) => node.kind === "agent_attempt")).toHaveLength(2);
-    expect(result.nodes.filter((node) => node.kind === "draft")).toHaveLength(2);
-    expect(JSON.stringify(result)).not.toContain("SECRET");
+  it("does not claim business revision pinning for undocumented or malformed evidence shapes", () => {
+    for (const evidence of [{ business_document_id: "doc", business_revision: "not-a-revision" }, { business_knowledge: { documentId: "doc", revision: 4 } }, {}]) {
+      const value = projectActionLineage(action({ evidence }));
+      expect(value.links.business.state).not.toBe("recorded");
+      expect(value.nodes.some((n) => n.kind === "business_revision")).toBe(false);
+    }
   });
-  it("does not expose cross-run sources and distinguishes delivery, verification and measurement", async () => {
+  it("tolerates invalid legacy dates", () => {
+    const value = projectActionLineage(action({ createdAt: "not-a-date", run: { ...action().run!, createdAt: "broken" } }));
+    expect(value.nodes.find((n) => n.kind === "action")?.occurredAt).toBeNull();
+    expect(value.nodes.find((n) => n.kind === "research_run")?.occurredAt).toBeNull();
+  });
+  it("queries cited sources inside the exact site and project run and returns same-run evidence only", async () => {
     db.researchAction.findFirst.mockResolvedValue(action());
-    db.researchSource.findMany.mockResolvedValue([{ id: "src1", runId: "foreign", title: "Foreign", url: "https://foreign.example", provider: "news", retrievedAt: new Date() }]);
-    const result = await readActionLineage("s1", "a1");
-    expect(result.nodes.some((node) => node.id === "src1")).toBe(false);
-    expect(result.links.delivery.state).toBe("recorded");
-    expect(result.links.verification.state).toBe("recorded");
-    expect(result.links.outcome.state).toBe("not_recorded");
+    const value = await readActionLineage("s1", "a1");
+    expect(db.researchSource.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: ["src1"] }, runId: "r1", run: { is: { siteId: "s1", projectId: "p1" } } }),
+    }));
+    expect(value.nodes.some((n) => n.id === "src1" && n.kind === "source")).toBe(true);
+    db.researchSource.findMany.mockResolvedValue([source({ runId: "r-foreign", projectId: "p-foreign" })]);
+    expect((await readActionLineage("s1", "a1")).nodes.some((n) => n.kind === "source")).toBe(false);
   });
-  it("marks delivered-but-unverified and verified-but-unmeasured", () => {
-    const result = projectActionLineage(action({ verifiedAt: null, status: "DELIVERED", deliveries: [{ id: "x", status: "DELIVERED", createdAt: new Date(), verifiedAt: null, outcome: null, outcomeMeasuredAt: null }] }) as never);
-    expect(result.links.verification.state).toBe("not_recorded");
-    expect(result.links.outcome.state).toBe("not_recorded");
+  it("excludes foreign child rows and discloses capped lists with hasMore", () => {
+    const drafts = Array.from({ length: 101 }, (_, i) => ({ id: `d${i}`, siteId: i === 100 ? "elsewhere" : "s1", title: "Draft", status: "READY", createdAt: new Date() }));
+    const agents = Array.from({ length: 101 }, (_, i) => ({ id: `t${i}`, siteId: i === 100 ? "elsewhere" : "s1", status: "COMPLETED", createdAt: new Date(), actionRevision: i }));
+    const deliveries = Array.from({ length: 21 }, (_, i) => ({ id: `delivery${i}`, status: "DELIVERED", createdAt: new Date(), verifiedAt: null, outcome: null, outcomeMeasuredAt: null }));
+    const value = projectActionLineage(action({ drafts, agentTasks: agents, deliveries }));
+    expect(value.nodes.filter((n) => n.kind === "draft")).toHaveLength(100);
+    expect(value.lists.drafts).toEqual({ returned: 100, limit: 100, hasMore: true });
+    expect(value.lists.agentAttempts).toEqual({ returned: 100, limit: 100, hasMore: true });
+    expect(value.lists.deliveries).toEqual({ returned: 20, limit: 20, hasMore: true });
+    expect(value.nodes.some((n) => n.id === "d100" || n.id === "t100")).toBe(false);
+  });
+  it("keeps delivery, recorded verification and measured outcome distinct", () => {
+    const delivered = projectActionLineage(action({ verifiedAt: null, status: "DELIVERED", deliveries: [{ id: "x", status: "DELIVERED", createdAt: new Date(), verifiedAt: null, outcome: null, outcomeMeasuredAt: null }] }));
+    expect(delivered.links.delivery.state).toBe("recorded");
+    expect(delivered.links.verification.state).toBe("not_recorded");
+    const verified = projectActionLineage(action({ verifiedAt: new Date(), deliveries: [{ id: "x", status: "DELIVERED", createdAt: new Date(), verifiedAt: new Date(), outcome: null, outcomeMeasuredAt: null }] }));
+    expect(verified.links.verification.state).toBe("recorded");
+    expect(verified.links.outcome.state).toBe("not_recorded");
   });
 });
