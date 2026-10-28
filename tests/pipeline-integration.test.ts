@@ -5,6 +5,7 @@ import { buildSidebarGroups } from "@/components/layout/sidebar-nav";
 import { selectedSiteDomain, siteDestination, siteSectionLabel } from "@/components/sites/site-switcher";
 import { resolvePipelineStage } from "@/lib/pipeline/stages";
 import { projectResultEvidence } from "@/lib/pipeline/results";
+import { splitObservations } from "@/lib/research/aeo-geo-view";
 
 const app = path.join(process.cwd(), "app");
 function pages(dir = app): string[] {
@@ -55,5 +56,11 @@ describe("pipeline UI integration", () => {
   it("projects the synthetic journey as measured, without claiming attribution", () => {
     const result = projectResultEvidence({ actionId: "a", title: "Improve service page", status: "DELIVERED", updatedAt: new Date(), deliveryStatus: "VERIFIED", deliveredAt: new Date(), verifiedAt: new Date(), measuredAt: new Date(), outcomeRecorded: true });
     expect(result.result).toBe("measured_unattributed");
+    const observations = splitObservations([
+      { id: "customer", provider: "local-manual", modelSurface: "synthetic" },
+      { id: "fixture", provider: "fixture", modelSurface: "fixture" },
+    ]);
+    expect(observations.customer.map(({ id }) => id)).toEqual(["customer"]);
+    expect(observations.fixtures.map(({ id }) => id)).toEqual(["fixture"]);
   });
 });
