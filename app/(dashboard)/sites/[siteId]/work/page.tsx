@@ -8,13 +8,13 @@ import { Workbench } from "@/components/work/workbench";
 import { keywordEvidenceForAction, sourceIdsForAction } from "@/lib/research/evidence";
 import { opportunityPriorityForAction } from "@/lib/ai-seo/opportunity-priority";
 import { actionDimensions, actionDimension, type ActionDimension } from "@/lib/work/categories";
+import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
 
 interface Props {
   params: Promise<{ siteId: string }>;
   searchParams: Promise<{ tab?: string; dimension?: string; state?: string }>;
 }
 
-const allowedTabs = new Set(["inbox", "actions", "opportunities", "drafts", "agent tasks"]);
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -28,7 +28,6 @@ export default async function WorkPage({ params, searchParams }: Props) {
   if (!userId) redirect("/login");
 
   const [data, query] = await Promise.all([getWorkData(siteId), searchParams]);
-  const tab = allowedTabs.has(query.tab ?? "") ? query.tab as "inbox" | "actions" | "opportunities" | "drafts" | "agent tasks" : "inbox";
   const dimension = actionDimensions.includes(query.dimension as ActionDimension) ? query.dimension as ActionDimension : "all";
 
   return (
@@ -49,9 +48,12 @@ export default async function WorkPage({ params, searchParams }: Props) {
           </div>
         }
       />
+      <div className="mb-5 space-y-3">
+        <PipelineNavigation siteId={siteId} currentStage="work" />
+        <PipelineStageContext siteId={siteId} currentStage="work" />
+      </div>
       <Workbench
         siteId={siteId}
-        initialTab={tab}
         initialDimension={dimension}
         initialState={query.state ?? "all"}
         actions={data.actions.map((action) => ({
@@ -87,14 +89,6 @@ export default async function WorkPage({ params, searchParams }: Props) {
           drafts: action._count.drafts,
           agentTasks: action._count.agentTasks,
           deliveries: action._count.deliveries,
-        }))}
-        drafts={data.drafts.map((draft) => ({
-          id: draft.id,
-          actionId: draft.actionId,
-          title: draft.title,
-          format: draft.format,
-          status: draft.status,
-          createdAt: draft.createdAt.toISOString(),
         }))}
         agentTasks={data.agentTasks.map((task) => ({
           id: task.id,

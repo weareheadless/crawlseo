@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bot, ClipboardList, FileText, Inbox, Target } from "lucide-react";
+import { ClipboardList, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KeywordEvidenceSummary } from "@/lib/research/evidence";
 import { actionDimensions, workCategory, workCategoryLabel, type ActionDimension, type WorkCategory } from "@/lib/work/categories";
@@ -34,15 +34,6 @@ type ActionRow = {
   deliveries: number;
 };
 
-type DraftRow = {
-  id: string;
-  actionId: string | null;
-  title: string;
-  format: string;
-  status: string;
-  createdAt: string;
-};
-
 type TaskRow = {
   id: string;
   actionId: string | null;
@@ -53,8 +44,6 @@ type TaskRow = {
   createdAt: string;
 };
 
-const tabs = ["inbox", "actions", "opportunities", "drafts", "agent tasks"] as const;
-type Tab = (typeof tabs)[number];
 
 const statusTone: Record<string, string> = {
   PROPOSED: "bg-warning/15 text-warning",
@@ -74,61 +63,32 @@ const statusTone: Record<string, string> = {
 
 export function Workbench({
   siteId,
-  initialTab = "inbox",
   initialDimension = "all",
   initialState = "all",
   actions,
-  drafts,
   agentTasks,
 }: {
   siteId: string;
-  initialTab?: Tab;
   initialDimension?: ActionDimension | "all";
   initialState?: string;
   actions: ActionRow[];
-  drafts: DraftRow[];
   agentTasks: TaskRow[];
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
   const [category, setCategory] = useState<"all" | WorkCategory>("all");
   const [dimension, setDimension] = useState<ActionDimension | "all">(initialDimension);
   const [state, setState] = useState<string>(initialState);
-  const actionCategory = new Map(actions.map((action) => [action.id, workCategory(action)]));
   const matchesCategory = (action: ActionRow) => (category === "all" || workCategory(action) === category)
     && (dimension === "all" || action.dimension === dimension) && (state === "all" || action.status === state);
-  const matchesTask = (task: TaskRow) => category === "all"
-    || Boolean(task.actionId && actionCategory.get(task.actionId) === category);
-  const matchesDraft = (draft: DraftRow) => category === "all"
-    || Boolean(draft.actionId && actionCategory.get(draft.actionId) === category);
-
   const visibleActions = actions.filter(matchesCategory);
-  const inboxActions = visibleActions.filter((action) =>
-    ["PROPOSED", "DRAFT_READY", "APPROVED"].includes(action.status),
-  );
-  const inboxTasks = agentTasks.filter((task) =>
-    matchesTask(task) && ["AWAITING_REVIEW", "CHANGES_REQUESTED", "READY"].includes(task.status),
-  );
-  const visibleTasks = agentTasks.filter(matchesTask);
-  const visibleDrafts = drafts.filter(matchesDraft);
   const opportunities = visibleActions.filter((action) => action.opportunity);
   const technicalCount = actions.filter((action) => workCategory(action) === "technical").length;
   const contentCount = actions.length - technicalCount;
-  const counts: Record<Tab, number> = {
-    inbox: inboxActions.length + inboxTasks.length,
-    actions: visibleActions.length,
-    opportunities: opportunities.length,
-    drafts: visibleDrafts.length,
-    "agent tasks": visibleTasks.length,
-  };
-
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Summary label="Inbox" value={counts.inbox} icon={Inbox} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Summary label="Open actions" value={visibleActions.filter((action) => !["DISMISSED", "VERIFIED", "FULFILLED", "FAILED"].includes(action.status)).length} icon={ClipboardList} />
-        <Summary label="Opportunities" value={counts.opportunities} icon={Target} />
-        <Summary label="Drafts" value={counts.drafts} icon={FileText} />
-        <Summary label="Agent tasks" value={counts["agent tasks"]} icon={Bot} />
+        <Summary label="Actions in view" value={visibleActions.length} icon={Target} />
+        <Summary label="Standalone tasks" value={agentTasks.length} icon={ClipboardList} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5">
@@ -159,77 +119,18 @@ export function Workbench({
         </select>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-border/60 pb-2">
-        {tabs.map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setTab(value)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition",
-              tab === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {value}
-            <span className="ml-1.5 font-data text-[10px] opacity-60">
-              {counts[value]}
-            </span>
-          </button>
+      <section aria-labelledby="work-actions-heading" className="space-y-2">
+        <h2 id="work-actions-heading" className="font-heading text-lg font-semibold">Work actions</h2>
+        {visibleActions.length === 0 ? <Empty text={category === "all" ? "No actions yet." : "No actions in this filter."} /> : visibleActions.map((action) => (
+          <ActionCard key={action.id} siteId={siteId} action={action} />
         ))}
-      </div>
-
-      {tab === "inbox" && (
-        <div className="space-y-3">
-          {inboxActions.length === 0 && inboxTasks.length === 0 ? (
-            <Empty text="Nothing needs review." />
-          ) : (
-            <>
-              {inboxActions.map((action) => <ActionCard key={action.id} siteId={siteId} action={action} />)}
-              {inboxTasks.map((task) => <TaskCard key={task.id} siteId={siteId} task={task} />)}
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === "actions" && (
-        <div className="space-y-2">
-          {visibleActions.length === 0 ? <Empty text={category === "all" ? "No actions yet." : "No actions in this filter."} /> : visibleActions.map((action) => (
-            <ActionCard key={action.id} siteId={siteId} action={action} />
-          ))}
-        </div>
-      )}
-
-      {tab === "opportunities" && <OpportunitiesView siteId={siteId} actions={opportunities} />}
-
-      {tab === "drafts" && (
-        <div className="space-y-2">
-          {visibleDrafts.length === 0 ? <Empty text={category === "all" ? "No content drafts yet." : "No drafts in this filter."} /> : visibleDrafts.map((draft) => (
-            <Link
-              key={draft.id}
-              href={draft.actionId ? `/sites/${siteId}/actions/${draft.actionId}` : `/sites/${siteId}/content-studio`}
-              className="panel flex items-start justify-between gap-3 p-4 transition hover:border-primary/40"
-            >
-              <div>
-                <p className="text-sm font-medium">{draft.title}</p>
-                <p className="mt-1 font-data text-[10px] text-muted-foreground">
-                  {draft.format} · {new Date(draft.createdAt).toLocaleString()}
-                </p>
-              </div>
-              <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", statusTone[draft.status] ?? "bg-muted text-muted-foreground")}>
-                {draft.status.toLowerCase()}
-              </span>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {tab === "agent tasks" && (
-        <div className="space-y-2">
-          {visibleTasks.length === 0 ? <Empty text={category === "all" ? "No agent tasks yet." : "No agent tasks in this filter."} /> : visibleTasks.map((task) => (
-            <TaskCard key={task.id} siteId={siteId} task={task} />
-          ))}
-        </div>
-      )}
+      </section>
+      {opportunities.length > 0 && <OpportunitiesView siteId={siteId} actions={opportunities} />}
+      {agentTasks.length > 0 && <section id="standalone-tasks" aria-labelledby="standalone-tasks-heading" className="space-y-2">
+        <h2 id="standalone-tasks-heading" className="font-heading text-lg font-semibold">Standalone agent tasks</h2>
+        <p className="text-xs text-muted-foreground">These legacy tasks have no recorded parent action; no parent is inferred.</p>
+        {agentTasks.map((task) => <TaskCard key={task.id} siteId={siteId} task={task} />)}
+      </section>}
     </div>
   );
 }
@@ -476,7 +377,7 @@ function MiniFact({ label, value }: { label: string; value: string }) {
 function TaskCard({ siteId, task }: { siteId: string; task: TaskRow }) {
   return (
     <Link
-      href={task.actionId ? `/sites/${siteId}/actions/${task.actionId}` : `/sites/${siteId}/work?tab=agent+tasks`}
+      href={task.actionId ? `/sites/${siteId}/actions/${task.actionId}` : `/sites/${siteId}/work#standalone-tasks`}
       className="panel block p-4 transition hover:border-primary/40"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -491,7 +392,7 @@ function TaskCard({ siteId, task }: { siteId: string; task: TaskRow }) {
   );
 }
 
-function Summary({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Inbox }) {
+function Summary({ label, value, icon: Icon }: { label: string; value: number; icon: typeof ClipboardList }) {
   return (
     <div className="panel flex items-center justify-between p-4">
       <div>

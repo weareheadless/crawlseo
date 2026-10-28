@@ -126,15 +126,19 @@ export function ContentStudio({
   plan,
   initialDrafts,
   writerReady,
+  initialSelectedActionId,
 }: {
   siteId: string;
   domain: string;
   plan: ContentActionPlan;
   initialDrafts: ContentDraftView[];
   writerReady: boolean;
+  initialSelectedActionId: string | null;
 }) {
   const [drafts, setDrafts] = useState(initialDrafts);
-  const [selectedActionId, setSelectedActionId] = useState(plan.actions[0]?.id ?? null);
+  const [selectedActionId, setSelectedActionId] = useState(
+    plan.actions.some((action) => action.id === initialSelectedActionId) ? initialSelectedActionId : plan.actions[0]?.id ?? null,
+  );
   const [selectedDraftId, setSelectedDraftId] = useState(initialDrafts[0]?.id ?? null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
