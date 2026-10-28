@@ -277,6 +277,84 @@
    "initialReadiness": "Blocked by dependencies",
    "title": "[UI-041] Website intelligence panel in the HelloAda room",
    "deliveryTrack": "Wave 2: visible intelligence"
+  },
+  {
+   "id": "UI-042",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/94",
+   "dependsOn": [],
+   "initialReadiness": "Ready",
+   "title": "[UI-042] Stage contract and reusable pipeline navigation",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-043",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/95",
+   "dependsOn": [],
+   "initialReadiness": "Ready",
+   "title": "[UI-043] Scoped recorded lineage from evidence to verification",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-044",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/96",
+   "dependsOn": [],
+   "initialReadiness": "Ready",
+   "title": "[UI-044] One configuration owner and editor per setting",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-045",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/97",
+   "dependsOn": [
+    "UI-042",
+    "UI-043",
+    "UI-044"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-045] Connect Research and Findings to inputs and Work",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-046",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/98",
+   "dependsOn": [
+    "UI-042",
+    "UI-043"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-046] Consolidate drafts and agent execution inside Work",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-047",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/99",
+   "dependsOn": [
+    "UI-042",
+    "UI-043"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-047] Results and decision-oriented project overview",
+   "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-048",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/100",
+   "dependsOn": [
+    "UI-044",
+    "UI-045",
+    "UI-046",
+    "UI-047"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-048] Integrate pipeline navigation and qualify the journey",
+   "deliveryTrack": "Pipeline experience"
   }
  ],
  "designVersion": "0.2"
