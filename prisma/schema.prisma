@@ -117,6 +117,16 @@ model AIVisibilityObservation {
   citations           Json?
   observationHash     String
   version             Int
+  answerText          String?                @db.VarChar(12000)
+  promptText          String?                @db.VarChar(4000)
+  locale              String?                @db.VarChar(35)
+  country             String?                @db.VarChar(2)
+  device              String?                @db.VarChar(32)
+  aiAnswerPresent     Boolean?
+  modelVersion        String?                @db.VarChar(128)
+  runId               String?                @db.VarChar(128)
+  citedSources        Json?
+  mentionedBrands     Json?
   createdAt           DateTime               @default(now())
   project             Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, version], map: "AIVisibilityObservation_version_key")
