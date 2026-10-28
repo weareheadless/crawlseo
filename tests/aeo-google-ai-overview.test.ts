@@ -92,3 +92,35 @@ describe("Google AI Overview evaluation", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("Google AI Overview markdown citations", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    findGrant.mockClear();
+    findGrant.mockResolvedValue({ apiKey: { encryptedLogin: "l", encryptedPassword: "p" }, providerCredential: null });
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("extracts inline markdown citation links when references are absent", async () => {
+    fetchMock.mockResolvedValue(ok(serp([{
+      type: "ai_overview",
+      asynchronous_ai_overview: true,
+      markdown: "True beachfront is rare.[[1]](https://example.com/a) See [guide](https://example.org/b?x=1).",
+      items: null,
+      references: null,
+    }])));
+    const result = await evaluateGoogleAiOverviewQuestion(input);
+    expect(result.state).toBe("succeeded");
+    expect(result.citations).toEqual(["https://example.com/a", "https://example.org/b?x=1"]);
+    expect(result.answerText).toContain("True beachfront is rare");
+  });
+
+  it("requests asynchronous AI Overview content explicitly", async () => {
+    fetchMock.mockResolvedValue(ok(serp([])));
+    await evaluateGoogleAiOverviewQuestion(input);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body[0].load_async_ai_overview).toBe(true);
+  });
+});
