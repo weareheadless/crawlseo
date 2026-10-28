@@ -9,6 +9,9 @@ import {
   mkdir,
   open,
   readFile,
+  readlink,
+  readdir,
+  realpath,
   rename,
   rm,
   stat,
@@ -48,6 +51,27 @@ export function parseArgs(args) {
     releaseDir: path.resolve(values.get("--release-dir")),
     envFile: path.resolve(values.get("--env-file")),
   };
+}
+
+/**
+ * Standalone output may contain symlinks into the build checkout. A release must
+ * survive deletion of that checkout, so replace every symlink with a real copy.
+ */
+export async function dereferenceTree(root) {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const target = path.join(root, entry.name);
+    const info = await lstat(target);
+    if (info.isSymbolicLink()) {
+      const resolved = await realpath(target);
+      const resolvedInfo = await stat(resolved);
+      await rm(target, { recursive: true, force: true });
+      await cp(resolved, target, { recursive: resolvedInfo.isDirectory(), force: true });
+      if (resolvedInfo.isDirectory()) await dereferenceTree(target);
+    } else if (info.isDirectory()) {
+      await dereferenceTree(target);
+    }
+  }
 }
 
 async function requireFile(file, label) {
@@ -91,6 +115,7 @@ export async function stage({ source, buildDir, releaseDir, envFile }) {
     await rm(tempDir, { recursive: true });
     await cp(standaloneDir, tempDir, { recursive: true, force: false, errorOnExist: true });
     await mkdir(path.join(tempDir, ".next"), { recursive: true });
+    await dereferenceTree(path.join(tempDir, ".next", "node_modules"));
     await rm(path.join(tempDir, ".next", "static"), { recursive: true, force: true });
     await cp(staticDir, path.join(tempDir, ".next", "static"), {
       recursive: true,

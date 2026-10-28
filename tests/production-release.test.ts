@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs, stage } from "../scripts/stage-production-web.mjs";
@@ -88,5 +88,26 @@ describe("production web release slots", () => {
   it("requires explicit staging inputs", () => {
     expect(() => parseArgs([])).toThrow("Missing required option");
     expect(() => parseArgs(["--source", "/tmp/source"])).toThrow("Missing required option");
+  });
+});
+
+describe("release symlink safety", () => {
+  it("replaces symlinks in the staged .next/node_modules with real files", async () => {
+    const root = await tempRoot();
+    const { source, buildDir, envFile } = await makeBuild(root);
+    const clientDir = path.join(buildDir, "standalone", "node_modules", "@prisma", "client");
+    await mkdir(clientDir, { recursive: true });
+    await writeFile(path.join(clientDir, "default.js"), "module.exports = {};\n");
+    await mkdir(path.join(buildDir, "standalone", ".next", "node_modules", "@prisma"), { recursive: true });
+    await symlink(clientDir, path.join(buildDir, "standalone", ".next", "node_modules", "@prisma", "client-hash"));
+    const releaseDir = path.join(root, "releases", "web", "abc-1");
+    await stage({ source, buildDir, releaseDir, envFile });
+    const staged = path.join(releaseDir, ".next", "node_modules", "@prisma", "client-hash");
+    const info = await lstat(staged);
+    expect(info.isSymbolicLink()).toBe(false);
+    expect(await readFile(path.join(staged, "default.js"), "utf8")).toContain("module.exports");
+    // The staged copy must survive deleting the build checkout.
+    await rm(buildDir, { recursive: true, force: true });
+    expect(await readFile(path.join(staged, "default.js"), "utf8")).toContain("module.exports");
   });
 });
