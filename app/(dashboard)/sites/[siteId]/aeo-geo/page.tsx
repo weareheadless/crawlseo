@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { PageHeader } from "@/components/ui/page-header";
 import { actionDimension } from "@/lib/work/categories";
+import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 import {
   accessState,
   groupIssuesByType,
@@ -98,6 +99,8 @@ export default async function AeoGeoPage({
         title="AEO / GEO"
         description="Answer-engine access, identity signals, observed visibility and the gaps that follow. Access does not imply visibility."
       />
+      <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="findings" /></div>
+      <div className="-mt-3 mb-4 text-sm"><Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/findings`}>View all Findings →</Link></div>
 
       <nav className="flex flex-wrap gap-1 rounded-lg border border-border/60 bg-panel/60 p-1 text-sm">
         {tabs.map((item) => (

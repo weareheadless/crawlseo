@@ -6,6 +6,8 @@ import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import { getResearchRun } from "@/lib/research/service";
 import { jsonStringArray, sourceIdsForAction } from "@/lib/research/evidence";
 import { SourceCitations, SourceList } from "@/components/research/source-evidence";
+import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
+import { formatResearchCost, recordedRunInputState } from "@/lib/pipeline/findings";
 
 interface Props {
   params: Promise<{ siteId: string; runId: string }>;
@@ -55,6 +57,7 @@ export default async function ResearchRunPage({ params }: Props) {
   const automationDrafts = objectArray(automation?.drafts);
   const automationTasks = objectArray(automation?.agentTasks);
   const automationSkipped = objectArray(automation?.skipped);
+  const inputState = recordedRunInputState({ brief: run.brief, topics: run.topics, providers: run.providerSet, policyRevision: run.policyRevision });
 
   return (
     <div>
@@ -74,12 +77,14 @@ export default async function ResearchRunPage({ params }: Props) {
           </div>
         }
       />
+      <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="research" /></div>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Fact label="Status" value={run.status.toLowerCase()} tone={statusTone(run.status)} />
         <Fact label="Sources" value={String(run.sources.length)} />
         <Fact label="Findings" value={String(run.findings.length)} />
         <Fact label="Actions" value={String(run.actions.length)} />
+        <Fact label="Cost" value={formatResearchCost(run.costMicros)} />
       </div>
 
       <section className="panel mb-5 p-5">
@@ -87,7 +92,7 @@ export default async function ResearchRunPage({ params }: Props) {
           <div>
             <h2 className="font-heading text-lg font-semibold">What the AI investigated</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              These are the configured topics and providers used for this run. The source list below is the evidence the model received.
+              {inputState === "brief" ? "Recorded run brief and input fields are shown below." : inputState === "stored_fields" ? "Stored run input fields are shown below; no brief snapshot is recorded." : "No historical input snapshot is recorded. Current configuration must not be treated as what this run used."} A policy revision is only a recorded pin, not a resolved historical configuration. The source list below is the evidence stored for the run.
             </p>
           </div>
           {run.errorCode && (
@@ -97,10 +102,13 @@ export default async function ResearchRunPage({ params }: Props) {
           )}
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Fact label="Topics" value={topics.join(", ") || "Not stored"} />
-          <Fact label="Providers" value={providers.join(", ") || "Not stored"} />
+          <Fact label="Recorded topics" value={topics.join(", ") || "Not stored"} />
+          <Fact label="Recorded providers" value={providers.join(", ") || "Not stored"} />
           <Fact label="Recency" value={`${run.recencyDays} days`} />
           <Fact label="Model" value={run.model || (typeof report?.synthesis === "object" && report.synthesis && "model" in report.synthesis ? String((report.synthesis as Record<string, unknown>).model ?? "Not stored") : "Not stored")} />
+          <Fact label="Policy revision" value={run.policyRevision == null ? "Not pinned" : String(run.policyRevision)} />
+          <Fact label="Started" value={run.startedAt?.toLocaleString() ?? "Not recorded"} />
+          <Fact label="Completed" value={run.completedAt?.toLocaleString() ?? "Not recorded"} />
         </div>
         {sourceErrors.length > 0 && (
           <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3">

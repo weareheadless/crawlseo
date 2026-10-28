@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { KeywordResearchClient } from "@/components/research/keyword-research-client";
 import { resolveDataForSeoReadiness } from "@/lib/dataforseo/readiness";
 import { keywordRunRows } from "@/lib/dataforseo/keyword-run-view";
+import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -30,9 +31,10 @@ export default async function KeywordResearchPage({ params, searchParams }: Prop
     <div>
       <PageHeader
         eyebrow={site.domain}
-        title="Keyword Research"
-        description="Discover keyword ideas with search volume, difficulty, and CPC data"
+        title="Keyword Research · stored runs"
+        description="Review recorded keyword, SERP and market run results. This page is a research lens, not a paid research runner."
       />
+      <div className="mb-4"><PipelineNavigation siteId={siteId} currentStage="research" /></div>
       <KeywordResearchClient siteId={siteId} hasDataForSEO={readiness.configured} runs={keywordRunRows(runs)} selectedRunId={chosen?.id ?? null} selectedResult={chosen?.result ?? null} />
     </div>
   );
