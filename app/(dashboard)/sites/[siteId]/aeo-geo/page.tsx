@@ -305,6 +305,16 @@ export default async function AeoGeoPage({
           <p className="mt-4 text-xs text-muted-foreground">
             Actions live in the shared work queue; this page does not create or change them.
           </p>
+          {identity.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {identity.length} crawl issue{identity.length === 1 ? "" : "s"} about schema or identity are
+              currently classified as technical work, so they do not appear in the AEO count above.{" "}
+              <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=identity`}>
+                Review them in Identity
+              </Link>
+              .
+            </p>
+          )}
         </section>
       )}
     </div>
