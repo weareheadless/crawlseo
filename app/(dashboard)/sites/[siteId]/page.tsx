@@ -17,6 +17,8 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { getAllOpportunities } from "@/lib/seo-opportunities";
 import { TimeframeSelect } from "@/components/sites/timeframe-select";
 import { parseSeoTimeframe } from "@/lib/seo-timeframes";
+import { readPipelineOverview } from "@/lib/pipeline/overview";
+import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 
 interface SitePageProps {
   params: Promise<{ siteId: string }>;
@@ -54,6 +56,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
     orderBy: { date: "desc" },
     select: { perfScore: true, lcp: true, url: true },
   });
+  const pipeline = await readPipelineOverview(siteId);
 
   const opportunities =
     site._count.keywords > 0
@@ -98,6 +101,47 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
             {label}
           </Link>
         ))}
+      </div>
+
+      <div className="mb-6 space-y-4">
+        <PipelineNavigation siteId={siteId} />
+        <section aria-labelledby="overview-decisions" className="panel p-4 sm:p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="overview-decisions" className="font-heading text-lg font-semibold">Site overview · decisions and active work</h2>
+            <span className="text-xs text-muted-foreground">Activity window: last {pipeline.windowDays} days</span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div><h3 className="text-sm font-semibold">What do we know?</h3>
+              <p className="mt-2 text-sm">
+                {pipeline.business
+                  ? `Canonical knowledge revision ${pipeline.business.revision}${pipeline.business.acceptedRevision == null ? " (not accepted)" : ` · accepted ${pipeline.business.acceptedRevision}`}`
+                  : "No canonical business knowledge is recorded yet."}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {pipeline.profile
+                  ? `Operational context: ${pipeline.profile.topicCount} topic${pipeline.profile.topicCount === 1 ? "" : "s"}${pipeline.profile.hasAudience ? ", audience set" : ", audience not recorded"}`
+                  : "No operational business context is recorded."}
+              </p>
+            </div>
+            <div><h3 className="text-sm font-semibold">What improved?</h3>
+              {pipeline.measured.length ? <ul className="mt-2 space-y-2">{pipeline.measured.map((item) => <li key={item.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${item.id}`}>{item.title}</Link> · measurement recorded {item.measuredAt?.toLocaleDateString()} (not attributed)</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No measured outcome is linked to work yet.</p>}
+            </div>
+            <div><h3 className="text-sm font-semibold">What is running?</h3>
+              {pipeline.runs.length ? <ul className="mt-2 space-y-2">{pipeline.runs.map((run) => <li key={run.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/research/runs/${run.id}`}>{run.title}</Link> · {run.status.toLowerCase()} · {run.createdAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No research run currently queued or running.</p>}
+              {pipeline.runsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
+            </div>
+            <div><h3 className="text-sm font-semibold">What needs a decision?</h3>
+              {pipeline.actions.length ? <ul className="mt-2 space-y-2">{pipeline.actions.map((action) => <li key={action.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link> · {action.preparationStatus === "BLOCKED" ? "blocked input" : ["DRAFT_READY", "DELIVERY_APPROVED", "APPROVED"].includes(action.status) ? "needs review / decision" : action.status.toLowerCase()} · updated {action.updatedAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No recently active work in the decision queue; this does not mean no work is needed.</p>}
+              {pipeline.actionsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            <Link className="text-primary underline" href={`/sites/${siteId}/business`}>Review business context</Link>
+            <Link className="text-primary underline" href={`/sites/${siteId}/research`}>Review research</Link>
+            <Link className="text-primary underline" href={`/sites/${siteId}/work`}>Open Work</Link>
+            <Link className="text-primary underline" href={`/sites/${siteId}/results`}>Review Results</Link>
+          </div>
+        </section>
       </div>
 
       {site._count.keywords === 0 ? (

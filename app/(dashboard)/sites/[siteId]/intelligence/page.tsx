@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { provenanceNote, summarizeIntelligence } from "@/lib/research/intelligence-overview";
 import { identityIssues, splitObservations } from "@/lib/research/aeo-geo-view";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 
 export default async function IntelligencePage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
@@ -85,6 +86,12 @@ export default async function IntelligencePage({ params }: { params: Promise<{ s
         title="Intelligence"
         description="What CrawlSEO knows about this site, where it came from, and what is still unknown. Access does not imply visibility."
       />
+      <PipelineNavigation siteId={siteId} currentStage="findings" />
+      <section className="panel p-4 sm:p-5">
+        <h2 className="font-heading text-lg font-semibold">Intelligence reports</h2>
+        <p className="mt-1 text-sm text-muted-foreground">This page is a read-only evidence lens. Use the site overview for current decisions and Results for recorded delivery and observations.</p>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm"><Link className="text-primary underline" href={`/sites/${siteId}`}>Site overview</Link><Link className="text-primary underline" href={`/sites/${siteId}/results`}>Results</Link></div>
+      </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Keywords tracked" value={counts.keywords.toLocaleString()} href={`/sites/${siteId}/keywords`} />
