@@ -14,6 +14,27 @@ interface Site {
   domain: string;
 }
 
+const SECTION_SEGMENTS = new Set([
+  "work",
+  "content-studio",
+  "opportunities",
+  "keywords",
+  "saved-keywords",
+  "pages",
+  "crawl",
+  "vitals",
+  "alerts",
+  "intelligence",
+  "business",
+  "aeo-geo",
+  "research",
+  "keyword-research",
+  "domain-overview",
+  "backlinks",
+  "mcp",
+  "settings",
+]);
+
 export function SiteSwitcher({ sites }: { sites: Site[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -30,7 +51,7 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
 
     if (pathname.includes("/sites/")) {
       const sub = pathname.match(/\/sites\/[^/]+\/([^/]+)/)?.[1];
-      if (sub && ["keywords", "pages", "crawl", "vitals", "opportunities", "alerts"].includes(sub)) {
+      if (sub && SECTION_SEGMENTS.has(sub)) {
         router.push(`/sites/${siteId}/${sub}`);
         return;
       }
@@ -61,7 +82,9 @@ export function SiteSwitcher({ sites }: { sites: Site[] }) {
       </p>
       <Select value={selected} onValueChange={handleSiteChange}>
         <SelectTrigger className="w-full border-border/70 bg-panel">
-          <SelectValue />
+          <SelectValue>
+            {sites.find((site) => site.id === selected)?.domain ?? "Select a site"}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {sites.map((site) => (
