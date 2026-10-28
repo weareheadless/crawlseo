@@ -37,7 +37,7 @@ export function generateQuestionSet(input: QuestionSetInput, options: { limit?: 
   const offer = services[0] ?? topics[0];
   const businessPresent = Boolean(name || services.length || topics.length || location || differentiator || trust || concern || factValues(fields, "audienceMotivations").length);
   const locale = { country: input.profile?.country ?? null, language: input.profile?.language ?? input.profile?.locale ?? null };
-  if (!businessPresent) return { contract: "aeo-question-set/1", version: hash({ contract: "aeo-question-set/1", input, locale }), locale, questions: [], provenance: [{ kind: "not_recorded" }], emptyReason: "no_business_data" };
+  if (!businessPresent) return { contract: "aeo-question-set/1", version: hash({ contract: "aeo-question-set/1", locale, questions: [], provenance: [{ kind: "not_recorded" }], emptyReason: "no_business_data" }), locale, questions: [], provenance: [{ kind: "not_recorded" }], emptyReason: "no_business_data" };
 
   const businessSource: QuestionProvenance[] = business?.acceptedRevision != null
     ? [{ kind: "business_knowledge", ...(business.documentId ? { documentId: business.documentId } : {}), revision: business.acceptedRevision }]
