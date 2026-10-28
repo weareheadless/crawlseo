@@ -22,6 +22,11 @@ describe("generateQuestionSet", () => {
     expect(result.questions.every((q) => q.id && q.provenance.length > 0)).toBe(true);
     expect(result.questions.some((q) => q.provenance.some((p) => p.kind === "business_knowledge" && p.revision === 3))).toBe(true);
     expect(result.questions.some((q) => q.provenance.some((p) => p.kind === "research_finding" && p.id === "finding-1"))).toBe(true);
+    const findingQuestion = result.questions.find((q) => q.text.includes("Couples compare album"));
+    expect(findingQuestion?.provenance).toEqual([{ kind: "research_finding", id: "finding-1", runId: "run-1" }]);
+    const templateQuestion = result.questions.find((q) => q.text.startsWith("Where can I find"));
+    expect(templateQuestion?.provenance.some((p) => p.kind === "research_finding" || p.kind === "research_run")).toBe(false);
+    expect(result.questions.every((q) => !/[?.!]{2,}$/.test(q.text))).toBe(true);
   });
   it("represents unrecorded inputs and refuses to invent questions without business data", () => {
     const result = generateQuestionSet({ profile: { language: "fr", country: "CA" } });
@@ -35,5 +40,10 @@ describe("generateQuestionSet", () => {
     const result = generateQuestionSet(input);
     expect(result.questions.filter((q) => q.text.toLowerCase().includes("how much does wedding photography cost")).length).toBe(1);
     expect(generateQuestionSet(site("Oak Studio")).questions).not.toEqual(result.questions);
+  });
+  it("hashes canonical output rather than input key order or irrelevant fields", () => {
+    const left = { businessKnowledge: { acceptedRevision: 2, fields: { services: { value: ["consulting"] }, businessName: { value: "North" } } }, profile: { country: "GB", language: "en" } };
+    const right = { profile: { language: "en", country: "GB" }, businessKnowledge: { fields: { businessName: { value: "North" }, services: { value: ["consulting"] } }, acceptedRevision: 2 }, ignored: "extra" };
+    expect(generateQuestionSet(left).version).toBe(generateQuestionSet(right).version);
   });
 });

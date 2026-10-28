@@ -39,32 +39,34 @@ export function generateQuestionSet(input: QuestionSetInput, options: { limit?: 
   const locale = { country: input.profile?.country ?? null, language: input.profile?.language ?? input.profile?.locale ?? null };
   if (!businessPresent) return { contract: "aeo-question-set/1", version: hash({ contract: "aeo-question-set/1", input, locale }), locale, questions: [], provenance: [{ kind: "not_recorded" }], emptyReason: "no_business_data" };
 
-  const provenance: QuestionProvenance[] = [];
-  if (business?.acceptedRevision != null) provenance.push({ kind: "business_knowledge", ...(business.documentId ? { documentId: business.documentId } : {}), revision: business.acceptedRevision });
-  else provenance.push({ kind: "not_recorded" });
-  for (const run of input.research?.runs ?? []) provenance.push({ kind: "research_run", id: run.id });
-  for (const finding of input.research?.findings ?? []) provenance.push({ kind: "research_finding", id: finding.id, ...(finding.runId ? { runId: finding.runId } : {}) });
-  if (input.profile && (audience.length || topics.length || services.length || location)) provenance.push({ kind: "profile" });
-  if (input.research?.runs?.length === 0 && input.research?.findings?.length === 0) provenance.push({ kind: "not_recorded" });
-  const candidates: Array<[QuestionIntent, string]> = [];
-  if (offer) candidates.push(["discovery", `Where can I find ${offer}${name ? ` from ${name}` : ""}?`]);
-  if (offer) candidates.push(["comparison", `How does ${name ?? "this business"} compare with other ${offer} providers?`]);
-  if (offer) candidates.push(["suitability", `Is ${offer} right for ${audience[0] ?? "my needs"}?`]);
-  if (offer && location) candidates.push(["local", `Who offers ${offer} in ${location}?`]);
-  if (offer) candidates.push(["trust_risk", `Is ${name ?? offer} trustworthy, and what should I know before choosing?`]);
-  if (offer && differentiator) candidates.push(["comparison", `What makes ${name ?? "this business"} different for ${offer}?`]);
-  if (offer && concern) candidates.push(["trust_risk", `How does ${name ?? "this business"} address ${concern}?`]);
-  if (offer && trust) candidates.push(["trust_risk", `What verified evidence supports ${name ?? "this business"}'s claims about ${trust}?`]);
-  for (const run of input.research?.runs ?? []) for (const q of strings(run.questions)) candidates.push(["discovery", q]);
-  for (const finding of input.research?.findings ?? []) if (finding.summary?.trim()) candidates.push([/compar|alternat/i.test(`${finding.theme} ${finding.summary}`) ? "comparison" : "suitability", finding.summary.trim()]);
+  const businessSource: QuestionProvenance[] = business?.acceptedRevision != null
+    ? [{ kind: "business_knowledge", ...(business.documentId ? { documentId: business.documentId } : {}), revision: business.acceptedRevision }]
+    : [];
+  const profileSource: QuestionProvenance[] = input.profile ? [{ kind: "profile" }] : [];
+  const templateSource = (fromProfile = false): QuestionProvenance[] => {
+    const sources = [...businessSource, ...(fromProfile ? profileSource : [])];
+    return sources.length ? sources : [{ kind: "not_recorded" }];
+  };
+  const candidates: Array<[QuestionIntent, string, QuestionProvenance[]]> = [];
+  if (offer) candidates.push(["discovery", `Where can I find ${offer}${name ? ` from ${name}` : ""}?`, templateSource(!factValues(fields, "services").length)]);
+  if (offer) candidates.push(["comparison", `How does ${name ?? "this business"} compare with other ${offer} providers?`, templateSource(!factValues(fields, "services").length)]);
+  if (offer) candidates.push(["suitability", `Is ${offer} right for ${audience[0] ?? "my needs"}?`, templateSource(!factValues(fields, "services").length || !audience.length)]);
+  if (offer && location) candidates.push(["local", `Who offers ${offer} in ${location}?`, templateSource(!factValues(fields, "services").length || !factValues(fields, "location").length)]);
+  if (offer) candidates.push(["trust_risk", `Is ${name ?? offer} trustworthy, and what should I know before choosing?`, templateSource(!factValues(fields, "services").length)]);
+  if (offer && differentiator) candidates.push(["comparison", `What makes ${name ?? "this business"} different for ${offer}?`, templateSource(false)]);
+  if (offer && concern) candidates.push(["trust_risk", `How does ${name ?? "this business"} address ${concern}?`, templateSource(false)]);
+  if (offer && trust) candidates.push(["trust_risk", `What verified evidence supports ${name ?? "this business"}'s claims about ${trust}?`, templateSource(false)]);
+  for (const run of input.research?.runs ?? []) for (const q of strings(run.questions)) candidates.push(["discovery", q, [{ kind: "research_run", id: run.id }]]);
+  for (const finding of input.research?.findings ?? []) if (finding.summary?.trim()) candidates.push([/compar|alternat/i.test(`${finding.theme} ${finding.summary}`) ? "comparison" : "suitability", finding.summary.trim(), [{ kind: "research_finding", id: finding.id, ...(finding.runId ? { runId: finding.runId } : {}) }]]);
   const unique = new Map<string, GeneratedQuestion>();
-  for (const [intent, text] of candidates) {
-    const question = buildQuestion(text, intent, provenance);
+  for (const [intent, text, sources] of candidates) {
+    const question = buildQuestion(text, intent, sources);
     const key = question.text.toLocaleLowerCase();
     if (!unique.has(key)) unique.set(key, question);
   }
   const max = Math.max(1, Math.min(20, Math.floor(options.limit ?? 12)));
   const questions = [...unique.values()].slice(0, max);
-  const version = hash({ contract: "aeo-question-set/1", input, locale, provenance, questions });
+  const provenance = [...new Map(questions.flatMap((question) => question.provenance).map((source) => [JSON.stringify(source), source])).values()];
+  const version = hash({ contract: "aeo-question-set/1", locale, questions: questions.map(({ id, text, intent, provenance: questionSources }) => ({ id, text, intent, provenance: questionSources })), provenance });
   return { contract: "aeo-question-set/1", version, locale, questions, provenance };
 }
