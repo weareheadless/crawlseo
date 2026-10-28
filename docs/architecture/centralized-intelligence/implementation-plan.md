@@ -138,3 +138,16 @@ Read the owning issue, its relevant requirement sections and direct artifacts, n
 UI-018 can pass for the HelloAda content slice without AI monitoring or Wix/Webflow. Later capabilities report their own actual tests/pilots and remain unadvertised until qualified. Merged and Verified stay distinct. No coding issue implicitly authorizes paid research, customer migration or production effects.
 
 No first-release exit criterion requires every long-term requirement to be implemented. Track each requirement as first-slice, later-owned, or execution-blocked with evidence. See [review.md](review.md) for simplifications and remaining uncertainty.
+
+
+## Pipeline experience implementation
+
+Approved product sequence: Business -> Research -> Findings -> Work -> Results. Implementation plan: [pipeline-implementation-plan.md](../../pipeline-implementation-plan.md). Existing historical work above remains intact.
+
+- [UI-042](https://github.com/weareheadless/crawlseo/issues/94): Stage contract and reusable pipeline navigation. Dependencies: none.
+- [UI-043](https://github.com/weareheadless/crawlseo/issues/95): Scoped recorded lineage from evidence to verification. Dependencies: none.
+- [UI-044](https://github.com/weareheadless/crawlseo/issues/96): One configuration owner and editor per setting. Dependencies: none.
+- [UI-045](https://github.com/weareheadless/crawlseo/issues/97): Connect Research and Findings to inputs and Work. Dependencies: UI-042, UI-043, UI-044.
+- [UI-046](https://github.com/weareheadless/crawlseo/issues/98): Consolidate drafts and agent execution inside Work. Dependencies: UI-042, UI-043.
+- [UI-047](https://github.com/weareheadless/crawlseo/issues/99): Results and decision-oriented project overview. Dependencies: UI-042, UI-043.
+- [UI-048](https://github.com/weareheadless/crawlseo/issues/100): Integrate pipeline navigation and qualify the journey. Dependencies: UI-044, UI-045, UI-046, UI-047.
