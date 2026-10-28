@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { GeneratedQuestion, QuestionIntent, QuestionProvenance, QuestionSet } from "./question-set-types";
+import { looksLikeQuestion, questionFromTheme } from "./brand";
 
 type RecordValue = Record<string, unknown>;
 export type QuestionSetInput = {
@@ -56,8 +57,20 @@ export function generateQuestionSet(input: QuestionSetInput, options: { limit?: 
   if (offer && differentiator) candidates.push(["comparison", `What makes ${name ?? "this business"} different for ${offer}?`, templateSource(false)]);
   if (offer && concern) candidates.push(["trust_risk", `How does ${name ?? "this business"} address ${concern}?`, templateSource(false)]);
   if (offer && trust) candidates.push(["trust_risk", `What verified evidence supports ${name ?? "this business"}'s claims about ${trust}?`, templateSource(false)]);
-  for (const run of input.research?.runs ?? []) for (const q of strings(run.questions)) candidates.push(["discovery", q, [{ kind: "research_run", id: run.id }]]);
-  for (const finding of input.research?.findings ?? []) if (finding.summary?.trim()) candidates.push([/compar|alternat/i.test(`${finding.theme} ${finding.summary}`) ? "comparison" : "suitability", finding.summary.trim(), [{ kind: "research_finding", id: finding.id, ...(finding.runId ? { runId: finding.runId } : {}) }]]);
+  for (const run of input.research?.runs ?? []) for (const q of strings(run.questions)) {
+    // Recorded research text is often a statement; only ask question-shaped text verbatim.
+    if (looksLikeQuestion(q)) candidates.push(["discovery", q, [{ kind: "research_run", id: run.id }]]);
+  }
+  for (const finding of input.research?.findings ?? []) {
+    const source: QuestionProvenance[] = [{ kind: "research_finding", id: finding.id, ...(finding.runId ? { runId: finding.runId } : {}) }];
+    const summary = finding.summary?.trim() ?? "";
+    const theme = finding.theme?.trim() ?? "";
+    if (summary && looksLikeQuestion(summary)) candidates.push([/compar|alternat/i.test(`${theme} ${summary}`) ? "comparison" : "suitability", summary, source]);
+    else {
+      const generated = questionFromTheme(theme || summary);
+      if (generated) candidates.push([/compar|alternat/i.test(`${theme} ${summary}`) ? "comparison" : "suitability", generated, source]);
+    }
+  }
   const unique = new Map<string, GeneratedQuestion>();
   for (const [intent, text, sources] of candidates) {
     const question = buildQuestion(text, intent, sources);

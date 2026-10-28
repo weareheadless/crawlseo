@@ -22,8 +22,10 @@ describe("generateQuestionSet", () => {
     expect(result.questions.every((q) => q.id && q.provenance.length > 0)).toBe(true);
     expect(result.questions.some((q) => q.provenance.some((p) => p.kind === "business_knowledge" && p.revision === 3))).toBe(true);
     expect(result.questions.some((q) => q.provenance.some((p) => p.kind === "research_finding" && p.id === "finding-1"))).toBe(true);
-    const findingQuestion = result.questions.find((q) => q.text.includes("Couples compare album"));
+    const findingQuestion = result.questions.find((q) => q.provenance.some((p) => p.kind === "research_finding" && p.id === "finding-1"));
     expect(findingQuestion?.provenance).toEqual([{ kind: "research_finding", id: "finding-1", runId: "run-1" }]);
+    // A statement summary is not asked verbatim; it becomes a buyer question from its theme.
+    expect(result.questions.some((q) => q.text.includes("Couples compare album"))).toBe(false);
     const templateQuestion = result.questions.find((q) => q.text.startsWith("Where can I find"));
     expect(templateQuestion?.provenance.some((p) => p.kind === "research_finding" || p.kind === "research_run")).toBe(false);
     expect(result.questions.every((q) => !/[?.!]{2,}$/.test(q.text))).toBe(true);
