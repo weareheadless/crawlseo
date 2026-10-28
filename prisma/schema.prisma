@@ -89,6 +89,7 @@ model Project {
   businessKnowledgeReceipts BusinessKnowledgeReceipt[]
   questionCoverages        QuestionCoverage[]
   aiVisibilityObservations AIVisibilityObservation[]
+  aeoEvaluationRuns        AeoEvaluationRun[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -132,6 +133,34 @@ model AIVisibilityObservation {
   @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, version], map: "AIVisibilityObservation_version_key")
   @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, observationHash], map: "AIVisibilityObservation_hash_key")
   @@index([projectId, provider, observedAt])
+}
+
+model AeoEvaluationRun {
+  id                 String   @id @default(cuid())
+  projectId          String
+  siteId             String
+  runId              String
+  trigger            String
+  actionId           String?
+  questionSetVersion String
+  providers          Json
+  cap                Int
+  asked              Int      @default(0)
+  stored             Int      @default(0)
+  answerAbsent       Int      @default(0)
+  failed             Int      @default(0)
+  skippedByCap       Int      @default(0)
+  costMicros         Int      @default(0)
+  status             String   @default("running")
+  errorCode          String?
+  startedAt          DateTime @default(now())
+  finishedAt         DateTime?
+  createdAt          DateTime @default(now())
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site               Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, runId])
+  @@index([siteId, startedAt])
 }
 
 model BusinessKnowledgeDocument {
@@ -1203,6 +1232,7 @@ model Site {
   legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetSite")
   legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceSite")
   legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetSite")
+  aeoEvaluationRuns          AeoEvaluationRun[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])
