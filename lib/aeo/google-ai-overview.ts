@@ -51,6 +51,17 @@ function collectUrls(value: unknown, output: string[], depth = 0): void {
   }
   for (const key of ["items", "references", "sources", "citations"]) collectUrls(item[key], output, depth + 1);
 }
+/** Inline markdown links are the only citation evidence when the AI Overview returns markdown. */
+function markdownCitations(text: string): string[] {
+  const urls: string[] = [];
+  const pattern = /\]\((https?:\/\/[^)\s]+)\)|(?<![("])\bhttps?:\/\/[^\s<>"')]+/g;
+  for (const match of text.matchAll(pattern)) {
+    const raw = (match[1] ?? match[0]).replace(/[.,;:!?]+$/, "");
+    try { const url = new URL(raw); if (url.protocol === "http:" || url.protocol === "https:") urls.push(url.toString()); } catch { /* ignore */ }
+  }
+  return [...new Set(urls)];
+}
+
 function resultBase(input: EvaluateGoogleAiOverviewInput, state: GoogleAiOverviewState, error: string | null = null): GoogleAiOverviewResult {
   return {
     state, provider: "google_ai_overview", question: input.question,
@@ -85,7 +96,7 @@ export async function evaluateGoogleAiOverviewQuestion(input: EvaluateGoogleAiOv
     if (!answerText) return { ...resultBase(input, "request_failed", "DataForSEO AI Overview item contained no answer text"), costMicros: response.costMicros, taskId: response.taskId };
     const urls: string[] = [];
     collectUrls(overview, urls);
-    const citations = [...new Set(urls)].slice(0, 100);
+    const citations = [...new Set([...urls, ...markdownCitations(answerText)])].slice(0, 100);
     const referencedDomains = [...new Set(citations.flatMap((url) => {
       try { return [new URL(url).hostname.toLowerCase().replace(/^www\./, "")]; } catch { return []; }
     }))].slice(0, 100);

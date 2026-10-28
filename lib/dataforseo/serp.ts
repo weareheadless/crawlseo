@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { decrypt, decryptCredential } from "@/lib/encryption";
 
 const ENDPOINT = "https://api.dataforseo.com/v3/serp/google/organic/live/advanced";
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_RESPONSE_BYTES = 2_000_000;
 
 export type GoogleSerpInput = {
@@ -95,6 +95,8 @@ export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSer
         os: input.device === "desktop" ? "windows" : "android",
         depth: 10,
         group_organic_results: true,
+        // AI Overview content is generated asynchronously; without this the item is a placeholder.
+        load_async_ai_overview: true,
       }]),
     });
     if (!response.ok) {
