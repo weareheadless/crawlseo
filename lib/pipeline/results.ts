@@ -5,14 +5,15 @@ export type ResultEvidence = {
   actionId: string; title: string; status: string; updatedAt: Date;
   deliveryStatus: string | null; deliveredAt: Date | null; verifiedAt: Date | null;
   measuredAt: Date | null; outcomeRecorded: boolean;
-  result: "not_delivered" | "delivered_unverified" | "verification_recorded" | "verified_unmeasured" | "measured_unattributed";
+  result: "not_delivered" | "delivered_unverified" | "verified_unmeasured" | "measured_unattributed";
 };
 
 export function projectResultEvidence(input: Omit<ResultEvidence, "result">): ResultEvidence {
+  // Measurement is the strongest recorded evidence; it still does not establish attribution.
   let result: ResultEvidence["result"] = "not_delivered";
-  if (input.deliveredAt || input.deliveryStatus) {
-    result = input.verifiedAt ? "verification_recorded" : "delivered_unverified";
-  }
+  if (input.measuredAt || input.outcomeRecorded) result = "measured_unattributed";
+  else if (input.verifiedAt) result = "verified_unmeasured";
+  else if (input.deliveredAt || input.deliveryStatus) result = "delivered_unverified";
   return { ...input, result };
 }
 

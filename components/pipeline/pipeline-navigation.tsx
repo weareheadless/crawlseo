@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PIPELINE_STAGES, buildStageUrl, type PipelineStageId } from "@/lib/pipeline/stages";
 
-export function PipelineNavigation({ siteId, currentStage }: { siteId: string; currentStage: PipelineStageId }) {
+export function PipelineNavigation({ siteId, currentStage = null }: { siteId: string; currentStage?: PipelineStageId | null }) {
   return (
     <nav aria-label="Site pipeline" className="panel p-3">
       <ol className="flex flex-wrap gap-2" aria-label="Pipeline stages">

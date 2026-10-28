@@ -5,7 +5,6 @@ type Results = Awaited<ReturnType<typeof readPipelineResults>>;
 const labels = {
   not_delivered: "No delivery receipt recorded",
   delivered_unverified: "Delivered · verification not recorded",
-  verification_recorded: "Verification timestamp recorded · result unknown",
   verified_unmeasured: "Verified · no measured outcome linked",
   measured_unattributed: "Measurement recorded · causal impact not established",
 } as const;
