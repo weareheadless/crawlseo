@@ -18,6 +18,11 @@ import {
   SearchCheck,
   Microscope,
   ListChecks,
+  Sparkles,
+  Building2,
+  Radar,
+  Layers,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +64,8 @@ export function SidebarNav({
         items: [
           { href: `/sites/${activeSiteId}`, label: "Overview", icon: LayoutDashboard, exact: true },
           { href: `/sites/${activeSiteId}/work`, label: "Work", icon: ListChecks },
+          { href: `/sites/${activeSiteId}/content-studio`, label: "Content Studio", icon: Layers },
+          { href: `/sites/${activeSiteId}/opportunities`, label: "Opportunities", icon: Lightbulb },
           { href: `/sites/${activeSiteId}/keywords`, label: "Keywords", icon: Search },
           { href: `/sites/${activeSiteId}/saved-keywords`, label: "Saved Keywords", icon: Bookmark },
           { href: `/sites/${activeSiteId}/pages`, label: "Pages", icon: FileText },
@@ -71,8 +78,11 @@ export function SidebarNav({
 
   const researchNav: NavGroup | null = activeSiteId
     ? {
-        label: "Research",
+        label: "Intelligence",
         items: [
+          { href: `/sites/${activeSiteId}/intelligence`, label: "Intelligence", icon: Radar },
+          { href: `/sites/${activeSiteId}/business`, label: "Business profile", icon: Building2 },
+          { href: `/sites/${activeSiteId}/aeo-geo`, label: "AEO / GEO", icon: Sparkles },
           { href: `/sites/${activeSiteId}/research`, label: "Research", icon: Microscope },
           { href: `/sites/${activeSiteId}/keyword-research`, label: "Keyword Research", icon: SearchCheck },
           { href: `/sites/${activeSiteId}/domain-overview`, label: "Domain Overview", icon: Globe },
