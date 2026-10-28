@@ -12,6 +12,16 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const SORTABLE = ["keyword", "volume", "difficulty", "cpc"] as const;
+
+function storedRowLabel(run: { keywordCount: number | null; resultLabel: string }): string {
+  const count = run.keywordCount;
+  if (count == null) return "—";
+  if (run.resultLabel === "SERP results") return `${count} SERP result${count === 1 ? "" : "s"}`;
+  return `${count} keyword${count === 1 ? "" : "s"}`;
+}
+type SortKey = (typeof SORTABLE)[number];
+
 type KeywordResult = {
   keyword: string;
   volume: number | null;
@@ -19,6 +29,7 @@ type KeywordResult = {
   cpc: number | null;
   competition: number | null;
   trend: number[] | null;
+  intent?: string | null;
 };
 
 export function KeywordResearchClient({
@@ -30,14 +41,26 @@ export function KeywordResearchClient({
 }: {
   siteId: string;
   hasDataForSEO: boolean;
-  runs?: Array<{ id: string; seed: string; kind: string; status: string; completedAt: string | null; requestedAt: string; costMicros: number | null; errorCode: string | null; keywordCount: number | null }>;
+  runs?: Array<{
+    id: string;
+    seed: string;
+    kind: string;
+    status: string;
+    completedAt: string | null;
+    requestedAt: string;
+    costMicros: number | null;
+    errorCode: string | null;
+    keywordCount: number | null;
+    resultLabel: string;
+    keywords: KeywordResult[];
+  }>;
   selectedRunId?: string | null;
   selectedResult?: unknown;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = runs.find((run) => run.id === (searchParams.get("run") || selectedRunId));
-  const [sort, setSort] = useState<{ key: "volume" | "keyword" | "difficulty" | "cpc"; desc: boolean }>({ key: "volume", desc: true });
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "volume", desc: true });
   const storedKeywords = useMemo(() => {
     if (!selected || selected.status !== "COMPLETED" || !Array.isArray(selectedResult)) return [];
     return [...selectedResult as KeywordResult[]].sort((a, b) => { const av = a[sort.key] ?? (sort.desc ? -Infinity : Infinity), bv = b[sort.key] ?? (sort.desc ? -Infinity : Infinity); return (typeof av === "string" ? av.localeCompare(String(bv)) : Number(av) - Number(bv)) * (sort.desc ? -1 : 1); });
@@ -133,7 +156,124 @@ export function KeywordResearchClient({
 
   return (
     <div className="space-y-4">
-      {runs.length > 0 && <section className="panel p-4"><h2 className="mb-3 font-semibold">Stored research runs</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{["Seed", "Kind", "Status", "Date", "Keywords", "Cost", "Error"].map((x) => <th key={x} className="px-3 py-2 text-left">{x}</th>)}</tr></thead><tbody>{runs.map((run) => <tr key={run.id} onClick={() => router.push(`?run=${encodeURIComponent(run.id)}`)} className={`cursor-pointer border-t border-border/50 ${selected?.id === run.id ? "bg-muted/40" : ""}`}><td className="px-3 py-2">{run.seed}</td><td>{run.kind}</td><td><span className="rounded-full border px-2 py-0.5 text-xs">{run.status}</span></td><td>{new Date(run.completedAt ?? run.requestedAt).toLocaleDateString()}</td><td>{run.status === "FAILED" ? "—" : run.keywordCount ?? "—"}</td><td>{run.costMicros == null ? "—" : `$${(run.costMicros / 1_000_000).toFixed(4)}`}</td><td className="text-danger">{run.status === "FAILED" ? run.errorCode ?? "UNKNOWN_ERROR" : "—"}</td></tr>)}</tbody></table></div>{selected?.status === "COMPLETED" && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{(["keyword", "intent", "volume", "difficulty", "cpc", "competition", "trend"] as const).map((key) => <th key={key} className="px-3 py-2 text-left">{["keyword", "volume", "difficulty", "cpc"].includes(key) ? <button onClick={() => setSort({ key: key as "keyword" | "volume" | "difficulty" | "cpc", desc: sort.key === key ? !sort.desc : key !== "keyword" })}>{key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}</button> : key}</th>)}</tr></thead><tbody>{storedKeywords.map((word) => <tr key={word.keyword} className="border-t border-border/50"><td>{word.keyword}</td><td>{(word as any).intent ?? "—"}</td><td>{word.volume ?? "—"}</td><td>{word.difficulty ?? "—"}</td><td>{word.cpc ?? "—"}</td><td>{word.competition ?? "—"}</td><td>{word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}</td></tr>)}</tbody></table></div>}</section>}
+      {runs.length > 0 && (
+        <section className="panel overflow-hidden">
+          <div className="border-b border-border/60 p-4">
+            <h2 className="font-heading text-lg font-semibold">Stored research runs · {runs.length}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Paid DataForSEO results already recorded for this site. Nothing here triggers a new provider call.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Seed</th>
+                  <th className="px-4 py-2 font-medium">Kind</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Date</th>
+                  <th className="px-4 py-2 text-right font-medium">Rows</th>
+                  <th className="px-4 py-2 text-right font-medium">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr
+                    key={run.id}
+                    onClick={() => router.push(`?run=${encodeURIComponent(run.id)}`)}
+                    className={`cursor-pointer border-b border-border/40 transition hover:bg-muted/25 ${
+                      selected?.id === run.id ? "bg-muted/40" : ""
+                    }`}
+                  >
+                    <td className="max-w-md px-4 py-2.5">
+                      <span className="font-medium">{run.seed}</span>
+                      {run.status === "FAILED" && (
+                        <span className="ml-2 text-xs text-warning">
+                          {run.errorCode?.replaceAll("_", " ").toLowerCase() ?? "unknown error"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 font-data text-xs text-muted-foreground">{run.kind}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 font-data text-[10px] uppercase text-muted-foreground">
+                        {run.status.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {new Date(run.completedAt ?? run.requestedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-data text-xs">
+                      {run.status === "FAILED" ? "—" : storedRowLabel(run)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-data text-xs">
+                      {run.costMicros == null ? "—" : `$${(run.costMicros / 1_000_000).toFixed(4)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {selected && selected.status === "COMPLETED" && (
+            <div className="border-t border-border/60">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+                <p className="text-sm font-medium">
+                  {selected.resultLabel} for &ldquo;{selected.seed}&rdquo;
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {selected.keywordCount ?? 0} stored rows · {selected.kind.toLowerCase().replaceAll("_", " ")}
+                </p>
+              </div>
+              {selected.keywords.length === 0 ? (
+                <p className="px-4 pb-4 text-sm text-muted-foreground">
+                  {selected.resultLabel === "SERP results"
+                    ? "This run stored ranked search results, not a keyword list. It is used as source evidence for content, not as keyword volume data."
+                    : "The provider returned no keyword rows for this seed. That is an empty result, not a missing run."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-y border-border/60 text-left text-xs text-muted-foreground">
+                        {SORTABLE.map((key) => (
+                          <th key={key} className="px-4 py-2 font-medium">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSort({ key, desc: sort.key === key ? !sort.desc : key !== "keyword" })
+                              }
+                              className="uppercase tracking-wide transition hover:text-foreground"
+                            >
+                              {key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}
+                            </button>
+                          </th>
+                        ))}
+                        <th className="px-4 py-2 font-medium">INTENT</th>
+                        <th className="px-4 py-2 font-medium">COMPETITION</th>
+                        <th className="px-4 py-2 font-medium">TREND</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {storedKeywords.map((word) => (
+                        <tr key={word.keyword} className="border-b border-border/40">
+                          <td className="px-4 py-2.5 font-medium">{word.keyword}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.volume?.toLocaleString() ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.difficulty ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data">{word.cpc == null ? "—" : `$${word.cpc.toFixed(2)}`}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{word.intent ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-right font-data text-xs">{word.competition ?? "—"}</td>
+                          <td className="px-4 py-2.5 font-data text-xs text-muted-foreground">
+                            {word.trend?.length ? `${word.trend[0]} → ${word.trend.at(-1)}` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
       {/* Autocomplete fallback banner */}
       {!hasDataForSEO && (
         <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4">
