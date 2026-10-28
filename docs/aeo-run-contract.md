@@ -1,6 +1,6 @@
 # AEO evaluation run contract (UI-053)
 
-`runEvaluation` performs weekly and action-triggered evaluations using the UI-049 question set and UI-051/052 provider adapters. `AeoEvaluationRun` is the durable receipt and idempotency record, uniquely keyed by `(projectId, runId)`. Scheduled IDs are `weekly:<siteId>:<ISO-week-in-project-timezone>`; action IDs are `action:<actionId>`. A prior receipt is returned without new calls, including failed or incomplete runs.
+`runEvaluation` performs weekly and action-triggered evaluations using the UI-049 question set and UI-051/052 provider adapters. `AeoEvaluationRun` is the durable receipt and idempotency record, uniquely keyed by `(projectId, runId)`. Scheduled IDs are `weekly:<siteId>:<ISO-week-in-project-timezone>`; action IDs are `action:<actionId>:r<revision>`. Re-asks are idempotent per action revision, not forever per action: replaying a revision returns its prior receipt, while a higher revision permits a new run and observation. A prior receipt is returned without new calls, including failed or incomplete runs.
 
 The cap is a count of paid request attempts, not a monetary amount: default 30, maximum 60 per run; action re-asks are capped at one request per provider. The cap is checked before every adapter call. Failed, rate-limited and over-budget responses increment run failure counts but are never observations. Successful answers and explicit answer-absence states are stored as observations. Receipts record actual estimated cost in micros when supplied by the provider.
 

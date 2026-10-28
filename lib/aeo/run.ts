@@ -42,7 +42,7 @@ function receipt(row: AeoEvaluationRun): EvaluationReceipt {
 /** Run a bounded, persisted AEO evaluation. A unique durable run row is claimed before any provider call. */
 export async function runEvaluation(input: RunEvaluationInput, deps: RunDeps = defaults): Promise<EvaluationReceipt> {
   if (!input.projectId || !input.siteId) throw new Error("projectId and siteId are required");
-  if (input.trigger === "action" && !input.actionId?.trim()) throw new Error("actionId is required for action-triggered runs");
+  if (input.trigger === "action" && (!input.actionId?.trim() || !Number.isInteger(input.actionRevision) || (input.actionRevision ?? 0) < 1)) throw new Error("actionId and a positive actionRevision are required for action-triggered runs");
   const cap = normalizeAeoCap(input.cap);
   const providers = [...new Set(input.providers ?? ["perplexity", "google"])] as ObservationProvider[];
   if (!providers.length || providers.some((p) => !["perplexity", "google"].includes(p))) throw new Error("At least one supported provider is required");
@@ -57,7 +57,7 @@ export async function runEvaluation(input: RunEvaluationInput, deps: RunDeps = d
   }
   const version = input.questionSetVersion ?? questionSet.version;
   const start = deps.now();
-  const runId = input.trigger === "scheduled" ? `weekly:${input.siteId}:${isoWeek(start, input.timeZone ?? "UTC")}` : `action:${input.actionId}`;
+  const runId = input.trigger === "scheduled" ? `weekly:${input.siteId}:${isoWeek(start, input.timeZone ?? "UTC")}` : `action:${input.actionId}:r${input.actionRevision}`;
   const runModel = deps.db.aeoEvaluationRun;
   let row: AeoEvaluationRun;
   try {

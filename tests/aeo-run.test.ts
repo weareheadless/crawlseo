@@ -32,6 +32,7 @@ function mockDeps(overrides: Record<string, unknown> = {}) {
     siteProfile: { findUnique: vi.fn().mockResolvedValue({ topics: ["hair salons"], services: [], audience: "local customers", language: "en", country: "US" }) },
     researchRun: { findMany: vi.fn().mockResolvedValue([]) },
     site: { findUnique: vi.fn().mockResolvedValue({ domain: "example.com" }) },
+    aIVisibilityObservation: { findMany: vi.fn(async ({ where }: { where: { runId: string } }) => stored.filter((observation) => observation.runId === where.runId).map((observation) => ({ id: observation.id }))) },
     aeoEvaluationRun,
   };
   const client = Object.assign(base, overrides);
@@ -53,7 +54,7 @@ describe("AEO evaluation runs", () => {
     const harness = mockDeps();
     depsMocks.askPerplexity.mockResolvedValue(okP("answer_absent"));
     depsMocks.askGoogle.mockResolvedValue({ ...okG(), state: "request_failed" });
-    const receipt = await runEvaluation({ projectId: "p", siteId: "s", trigger: "action", actionId: "a1", question: "Which salon?", providers: ["perplexity", "google"] }, harness.deps);
+    const receipt = await runEvaluation({ projectId: "p", siteId: "s", trigger: "action", actionId: "a1", actionRevision: 1, question: "Which salon?", providers: ["perplexity", "google"] }, harness.deps);
     expect(receipt).toMatchObject({ asked: 2, stored: 1, answerAbsent: 1, failed: 1, skippedByCap: 0, costMicros: 35 });
     expect(harness.stored).toHaveLength(1);
     expect(harness.stored[0]).toMatchObject({ aiAnswerPresent: false, requestStatus: "succeeded" });
@@ -67,6 +68,18 @@ describe("AEO evaluation runs", () => {
     const replay = await runEvaluation(input, harness.deps);
     expect(replay).toMatchObject({ runId: first.runId, asked: 1, failed: 1, stored: 0 });
     expect(depsMocks.askPerplexity).toHaveBeenCalledTimes(1);
+  });
+  it("replays once per action revision and asks again for a higher revision", async () => {
+    const harness = mockDeps(); depsMocks.askPerplexity.mockResolvedValue(okP());
+    const input = { projectId: "p", siteId: "s", trigger: "action" as const, actionId: "a1", actionRevision: 4, question: "Which salon?", providers: ["perplexity" as const] };
+    const first = await runEvaluation(input, harness.deps);
+    const replay = await runEvaluation(input, harness.deps);
+    expect(replay).toMatchObject({ runId: "action:a1:r4", asked: 1, stored: 1, observationIds: first.observationIds });
+    expect(depsMocks.askPerplexity).toHaveBeenCalledTimes(1);
+    const nextRevision = await runEvaluation({ ...input, actionRevision: 5 }, harness.deps);
+    expect(nextRevision.runId).toBe("action:a1:r5");
+    expect(depsMocks.askPerplexity).toHaveBeenCalledTimes(2);
+    expect(harness.stored.map((observation) => observation.runId)).toEqual(["action:a1:r4", "action:a1:r5"]);
   });
   it("applies the pure paid-request cap", () => {
     expect(applyCap(4, 5, 3)).toEqual({ allowed: 2, skipped: 2 });

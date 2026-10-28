@@ -7,7 +7,7 @@ export type EvaluationReceipt = {
   startedAt: string; finishedAt: string; status?: string; observationIds?: string[];
 };
 export type RunEvaluationInput = {
-  projectId: string; siteId: string; trigger: EvaluationTrigger; actionId?: string;
+  projectId: string; siteId: string; trigger: EvaluationTrigger; actionId?: string; actionRevision?: number;
   cap?: number; providers?: ObservationProvider[]; questionSetVersion?: string;
   timeZone?: string;
   /** Internal action re-ask override. */

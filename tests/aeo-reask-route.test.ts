@@ -15,7 +15,7 @@ describe("POST /api/sites/[siteId]/aeo/re-ask", () => {
   beforeEach(() => {
     vi.clearAllMocks(); mocks.userId.mockResolvedValue("u"); mocks.ownsSite.mockResolvedValue(true);
     mocks.siteFind.mockResolvedValue({ id: "s", projectId: "p", project: { status: "ACTIVE" } });
-    mocks.actionFind.mockResolvedValue({ id: "a", siteId: "s", primaryQuery: "Which service?", title: "Action title" });
+    mocks.actionFind.mockResolvedValue({ id: "a", siteId: "s", revision: 3, primaryQuery: "Which service?", title: "Action title" });
     mocks.evaluate.mockResolvedValue({ asked: 2, observationIds: ["o"] });
   });
   it("authenticates before access and rejects unauthenticated callers", async () => {
@@ -37,7 +37,7 @@ describe("POST /api/sites/[siteId]/aeo/re-ask", () => {
   it("uses one-call-per-provider cap and primary query", async () => {
     const response = await route.POST(req({ actionId: "a" }), ctx);
     expect(response.status).toBe(200);
-    expect(mocks.evaluate).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", siteId: "s", actionId: "a", question: "Which service?", cap: 2 }));
+    expect(mocks.evaluate).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", siteId: "s", actionId: "a", actionRevision: 3, question: "Which service?", cap: 2 }));
     expect(await response.json()).toMatchObject({ asked: 2, observationIds: ["o"] });
   });
   it("has no GET evaluation side effect", async () => {
