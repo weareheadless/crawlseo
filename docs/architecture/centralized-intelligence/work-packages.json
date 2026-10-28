@@ -355,6 +355,86 @@
    "initialReadiness": "Blocked by dependencies",
    "title": "[UI-048] Integrate pipeline navigation and qualify the journey",
    "deliveryTrack": "Pipeline experience"
+  },
+  {
+   "id": "UI-049",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/109",
+   "dependsOn": [],
+   "initialReadiness": "Ready",
+   "title": "[UI-049] Versioned question sets from business data and research",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "UI-050",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/110",
+   "dependsOn": [],
+   "initialReadiness": "Ready",
+   "title": "[UI-050] Store asked answers, citations and surface metadata",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "UI-051",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/111",
+   "dependsOn": [
+    "UI-049",
+    "UI-050"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-051] Perplexity evaluator with absence and failure states",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "UI-052",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/112",
+   "dependsOn": [
+    "UI-049",
+    "UI-050"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-052] Google AI Overviews evaluator through DataForSEO",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "UI-053",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/113",
+   "dependsOn": [
+    "UI-051",
+    "UI-052"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-053] Weekly evaluation runs, caps and action-triggered re-ask",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "UI-054",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/114",
+   "dependsOn": [
+    "UI-050",
+    "UI-053"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[UI-054] AEO/GEO evaluation surface with answer evidence",
+   "deliveryTrack": "AEO/GEO evaluation"
+  },
+  {
+   "id": "OPS-015",
+   "repository": "weareheadless/crawlseo",
+   "issue": "https://github.com/weareheadless/crawlseo/issues/115",
+   "dependsOn": [
+    "UI-051",
+    "UI-052",
+    "UI-053",
+    "UI-054"
+   ],
+   "initialReadiness": "Blocked by dependencies",
+   "title": "[OPS-015] Pilot AEO/GEO evaluation on the two live sites",
+   "deliveryTrack": "AEO/GEO evaluation"
   }
  ],
  "designVersion": "0.2"

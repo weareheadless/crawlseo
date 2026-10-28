@@ -151,3 +151,16 @@ Approved product sequence: Business -> Research -> Findings -> Work -> Results. 
 - [UI-046](https://github.com/weareheadless/crawlseo/issues/98): Consolidate drafts and agent execution inside Work. Dependencies: UI-042, UI-043.
 - [UI-047](https://github.com/weareheadless/crawlseo/issues/99): Results and decision-oriented project overview. Dependencies: UI-042, UI-043.
 - [UI-048](https://github.com/weareheadless/crawlseo/issues/100): Integrate pipeline navigation and qualify the journey. Dependencies: UI-044, UI-045, UI-046, UI-047.
+
+
+## AEO/GEO evaluation loop
+
+Plan: [aeo-geo-evaluation-plan.md](../../aeo-geo-evaluation-plan.md). One observation contract, two evaluators: AEO from our own surfaces, GEO from whether an engine selects and cites us. Weekly cadence, action-triggered re-ask, hard per-site caps.
+
+- [UI-049](https://github.com/weareheadless/crawlseo/issues/109): Versioned question sets from business data and research. Depends on none.
+- [UI-050](https://github.com/weareheadless/crawlseo/issues/110): Store asked answers, citations and surface metadata. Depends on none.
+- [UI-051](https://github.com/weareheadless/crawlseo/issues/111): Perplexity evaluator with absence and failure states. Depends on UI-049, UI-050.
+- [UI-052](https://github.com/weareheadless/crawlseo/issues/112): Google AI Overviews evaluator through DataForSEO. Depends on UI-049, UI-050.
+- [UI-053](https://github.com/weareheadless/crawlseo/issues/113): Weekly evaluation runs, caps and action-triggered re-ask. Depends on UI-051, UI-052.
+- [UI-054](https://github.com/weareheadless/crawlseo/issues/114): AEO/GEO evaluation surface with answer evidence. Depends on UI-050, UI-053.
+- [OPS-015](https://github.com/weareheadless/crawlseo/issues/115): Pilot AEO/GEO evaluation on the two live sites. Depends on UI-051, UI-052, UI-053, UI-054.
