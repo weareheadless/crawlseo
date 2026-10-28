@@ -116,7 +116,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
               {pipeline.runsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
             </div>
             <div><h3 className="text-sm font-semibold">What needs a decision?</h3>
-              {pipeline.actions.length ? <ul className="mt-2 space-y-2">{pipeline.actions.map((action) => <li key={action.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link> · {action.status.toLowerCase()} · updated {action.updatedAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No recently active work in the decision queue; this does not mean no work is needed.</p>}
+              {pipeline.actions.length ? <ul className="mt-2 space-y-2">{pipeline.actions.map((action) => <li key={action.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link> · {action.preparationStatus === "BLOCKED" ? "blocked input" : ["DRAFT_READY", "DELIVERY_APPROVED", "APPROVED"].includes(action.status) ? "needs review / decision" : action.status.toLowerCase()} · updated {action.updatedAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No recently active work in the decision queue; this does not mean no work is needed.</p>}
               {pipeline.actionsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
             </div>
           </div>
