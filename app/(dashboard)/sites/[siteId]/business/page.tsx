@@ -91,8 +91,8 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
           </>
         )}
         <p className="mt-3 text-sm text-muted-foreground">
-          Corrections are made through the existing intake and research path; this page is read-only and does
-          not keep a second profile store.
+          Canonical facts are read-only here and change only through the existing intake and acceptance path.
+          The operational context below is separate and does not confirm canonical facts.
         </p>
       </section>
 

@@ -16,7 +16,7 @@ export default async function ResearchConfigPage({ params }: { params: Promise<{
       <PageHeader
         eyebrow="Research configuration"
         title="Guide the research"
-        description="Set research topics, audience, market, and supported sources. The engine creates a bounded query plan from this configuration."
+        description="Set the sources, recency window and exclusions the research engine uses. Audience, topics and market belong to the business profile."
         actions={
           <Link href={`/sites/${siteId}/research`} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
             Back to Research
