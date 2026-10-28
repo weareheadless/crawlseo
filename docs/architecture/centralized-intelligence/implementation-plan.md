@@ -94,6 +94,31 @@ flowchart TD
 | [UI-017](https://github.com/weareheadless/helloada/issues/11) | helloada | Preserve one intelligence project identity across selector bootstrap and handoff | UI-002 | Blocked by dependencies |
 | [UI-018](https://github.com/weareheadless/crawlseo/issues/26) | crawlseo | Verify the first HelloAda content intelligence release | UI-008, UI-012, UI-016, UI-017 | Blocked by dependencies |
 
+## Wave 2: make the intelligence visible
+
+Added 2026-10-27 after the UI audit in [../../ui-intelligence-experience-audit.md](../../ui-intelligence-experience-audit.md). The backend contracts from UI-001..UI-011 are closed and producing data (44,704 keywords, 293 Actions, 24 completed DataForSEO keyword runs, 7 research runs). The dashboard does not present it: the only intelligence surface is unlinked from navigation, reads as a compliance log, and the keyword/business/AEO-GEO data has no owning page.
+
+Wave 2 changes presentation and credential resolution only. No new store, no new provider, no paid research is triggered by rendering these pages.
+
+| Work | Repo | Bounded deliverable | Dependencies | Readiness |
+| --- | --- | --- | --- | --- |
+| [UI-036](https://github.com/weareheadless/crawlseo/issues/83) | crawlseo | Resolve DataForSEO readiness through the platform grant and render stored keyword research runs with results | None | Ready |
+| [UI-037](https://github.com/weareheadless/crawlseo/issues/84) | crawlseo | Give the business profile a real page: knowledge document, site profile facts, provenance, correction path | None | Ready |
+| [UI-038](https://github.com/weareheadless/crawlseo/issues/85) | crawlseo | Build the AEO/GEO workspace: access, identity/schema, visibility, questions, gaps, as tabs with counts | None | Ready |
+| [UI-039](https://github.com/weareheadless/crawlseo/issues/87) | crawlseo | Rebuild Intelligence as an overview of counts and links; move raw action dumps behind filters | UI-036, UI-037, UI-038 | Blocked by dependencies |
+| [UI-040](https://github.com/weareheadless/crawlseo/issues/86) | crawlseo | Navigation and shell correctness: link every built surface, fix the site switcher label | None | Ready |
+| [UI-041](https://github.com/weareheadless/helloada/issues/19) | helloada | Website intelligence panel fed by the CrawlSEO/site-agent read contract | UI-036, UI-037, UI-038 | Blocked by dependencies |
+
+Execution order: UI-036, UI-037, UI-038 and UI-040 are independent and may run in parallel on disjoint files. UI-039 follows because it links to the new pages. UI-041 follows the CrawlSEO surfaces and needs one bounded read contract from site-agent.
+
+Presentation requirements for every Wave 2 issue:
+
+- Show the real count next to every section heading, and distinguish "unknown" (no observation) from zero.
+- Link each rendered fact to the record that produced it (run, crawl, observation, document revision).
+- Never instruct the user to configure a credential the platform already holds.
+- No placeholder or fixture rows in a customer surface; fixture-only data must say so.
+- Every new page is reachable from the sidebar in the same PR that adds it.
+
 ## Existing work and execution boundaries
 
 - CrawlSEO #3 remains the parent initiative; #14 already has an atomic research-profile endpoint in the baseline. UI-004 extends the remaining handoff rather than rebuilding it.
