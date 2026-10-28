@@ -1,0 +1,9 @@
+# AEO/GEO observation contract (UI-050)
+
+An `AIVisibilityObservation` with `sourceKind=provider_api` is one successful, asked answer. Provider imports remain `provider_export`; this table does not turn request failures or budget denials into observations. The additive columns retain the exact bounded prompt/answer and locale, country, device, answer-presence verdict, model version, run ID, cited URLs and mentioned brands. A successful response with `aiAnswerPresent=false` is an observation; its mentions and citations remain null (absence is not zero mentions). Failed and over-budget requests are run outcomes owned by evaluator/orchestration work, not observations.
+
+`createObservation` validates the question-set version, supported provider/surface, locale, prompt, timestamp and response consistency. The identity hash covers project, question, provider, surface, question-set version, asked-at and evidence; duplicate writes are idempotent. Reads require project ID, cap result size and only include provider API observations. Run comparison is restricted to the requested question-set version. AEO (answerability/correctness on our own surfaces) and GEO (presence, recommendations and source selection) must remain separate; no combined score is defined here.
+
+## UI-051/052/054 integration
+
+Evaluators pass only successful requests to the writer, recording their explicit absent-answer result normally. They must report failures/over-budget separately and must not fabricate observations. UI-054 should render each question/surface independently: no observation, answer absent, answer with no brand mention, or answer with mentions; show answer excerpt, citations, asked date and run. Citation overlap is a set intersection against explicit competitor/source URLs, not a visibility score. Compare only matching question-set versions and retain citations as evidence. Provider credentials and paid-call orchestration are outside this contract.
