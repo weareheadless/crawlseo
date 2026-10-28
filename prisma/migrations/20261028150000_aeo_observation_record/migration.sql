@@ -1,5 +1,3 @@
-ALTER TYPE "AIVisibilitySourceKind" ADD VALUE 'provider_api';
-
 ALTER TABLE "AIVisibilityObservation"
   ADD COLUMN "answerText" VARCHAR(12000),
   ADD COLUMN "promptText" VARCHAR(4000),

@@ -32,6 +32,7 @@ describe("AEO observation record", () => {
     expect(projectObservation(base).verdict).toBe("answer_absent");
     expect(projectObservation({ ...base, aiAnswerPresent: true, answerText: "answer", mentionedBrands: [] }).verdict).toBe("no_brand_mention");
     expect(projectObservation({ ...base, aiAnswerPresent: true, answerText: "answer", mentionedBrands: ["Rival"] }, [], "Acme").verdict).toBe("brand_absent");
+    expect(projectObservation({ ...base, aiAnswerPresent: true, answerText: "answer", mentionedBrands: ["Acme"] }, [], "Acme").verdict).toBe("answer_present");
   });
   it("project-scopes bounded latest reads and comparison to one question-set version", async () => {
     const findMany = vi.fn().mockResolvedValue([]); const db = client(findMany);
