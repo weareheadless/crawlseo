@@ -16,13 +16,23 @@ export type FindingRow = {
 };
 export type FindingDimension = ActionDimension | "all";
 
-/** Pure projection: counts always describe the returned rows; fixtures are never customer actions. */
+export function recordedRunInputState(input: { brief: unknown; topics: unknown; providers: unknown; policyRevision?: number | null }): "brief" | "stored_fields" | "not_recorded" {
+  const hasBrief = input.brief !== null && typeof input.brief === "object" && !Array.isArray(input.brief);
+  const hasStoredLists = (Array.isArray(input.topics) && input.topics.length > 0) || (Array.isArray(input.providers) && input.providers.length > 0);
+  if (hasBrief) return "brief";
+  return hasStoredLists ? "stored_fields" : "not_recorded";
+}
+
+export function formatResearchCost(costMicros: number | null): string {
+  return costMicros == null || !Number.isFinite(costMicros) ? "Not recorded" : `$${(costMicros / 1_000_000).toFixed(4)}`;
+}
+
+/** Pure projection over canonical actions. Fixture markers apply to imported observations, not actions. */
 export function projectFindings<T extends FindingRow>(rows: readonly T[], options: { limit?: number; dimension?: FindingDimension } = {}) {
   const limit = Math.max(1, Math.min(options.limit ?? FINDINGS_LIMIT, FINDINGS_LIMIT));
-  const customer = rows.filter((row) => row.source !== "fixture" && row.projectId !== "fixture");
-  const filtered = customer.filter((row) => options.dimension === undefined || options.dimension === "all" || actionDimension(row) === options.dimension);
+  const filtered = rows.filter((row) => options.dimension === undefined || options.dimension === "all" || actionDimension(row) === options.dimension);
   const returned = filtered.slice(0, limit);
-  return { rows: returned, count: returned.length, limit, hasMore: filtered.length > limit, available: customer.length > 0 };
+  return { rows: returned, count: returned.length, limit, hasMore: filtered.length > limit, available: rows.length > 0 };
 }
 
 /** Read only canonical actions and their recorded finding/run relation, always scoped to the site. */
