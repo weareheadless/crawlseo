@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, copyFile, cp, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, lstat, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -25,6 +25,16 @@ export async function stageWorker({ source, releaseDir, sha, envFile = undefined
     if (envFile) {
       await copyFile(envFile, path.join(tmp, ".env"));
       await chmod(path.join(tmp, ".env"), 0o600);
+    }
+    // `cp` with dereference copies `node_modules/.bin/tsx` as a standalone file, but
+    // it is a symlink into `../tsx/dist` and imports its siblings relatively, so the
+    // copy cannot resolve them and the worker dies with ERR_MODULE_NOT_FOUND.
+    // Restore the symlink the start script expects.
+    const tsxBin = path.join(tmp, "node_modules/.bin/tsx");
+    const tsxTarget = path.join(tmp, "node_modules/tsx/dist/cli.mjs");
+    if (await lstat(tsxTarget).catch(() => null)) {
+      await rm(tsxBin, { force: true });
+      await symlink("../tsx/dist/cli.mjs", tsxBin);
     }
     await writeFile(path.join(tmp, "RELEASE_SHA"), `${sha}\n`, { flag: "wx" });
     await rename(tmp, releaseDir);
