@@ -45,6 +45,16 @@ export const DETECTOR_THRESHOLDS = {
   hysteresis: 3,
   /** open opportunities per project before overflow parks (plan §3) */
   openCap: 100,
+  /** pages sharing one issue before it becomes a single site-level opportunity */
+  siteLevelIssuePages: 10,
+  /** pages sharing one issue that make it systemic enough to act on */
+  systemicIssuePages: 3,
+  /**
+   * Declared worth of a page-level defect with no recorded traffic. Impressions
+   * are the honest basis; this proxy keeps a no-traffic page from inheriting the
+   * 120 searches/month query fallback (plan §2.3, §10).
+   */
+  technicalImpactVolume: 10,
 } as const;
 
 /**
@@ -88,6 +98,63 @@ export function businessValueFromKnowledge(evidence: Evidence[]): { value: numbe
   return byKind(evidence, "knowledge_fact").length > 0
     ? { value: 0.9, source: "knowledge" }
     : { value: 0.5, source: "unknown" };
+}
+
+/** First-party impressions recorded per URL: the demand a page-level defect risks. */
+export function pageDemandByUrl(evidence: Evidence[]): Map<string, number> {
+  const demand = new Map<string, number>();
+  for (const row of byKind(evidence, "keyword_rank")) {
+    const url = dim(row, "url");
+    if (!url) continue;
+    const impressions = num(row, "first_party:impressions") ?? 0;
+    if (impressions <= 0) continue;
+    demand.set(url, (demand.get(url) ?? 0) + impressions);
+  }
+  return demand;
+}
+
+type PageIssue = {
+  candidate: DetectorCandidate;
+  pageUrl: string;
+  issueKey: string;
+};
+
+/**
+ * Plan §3 grouping: one opportunity per page normally; when `minPages` pages
+ * share the same issue, one site-level opportunity that a single delivery
+ * closes. The pages stay in the evidence edges, so the detail page still lists
+ * them.
+ */
+export function collapsePageIssues(
+  issues: PageIssue[],
+  opts: { minPages: number; siteTitle: (issueKey: string, count: number) => string }
+): DetectorCandidate[] {
+  const groups = new Map<string, PageIssue[]>();
+  for (const issue of issues) {
+    groups.set(issue.issueKey, [...(groups.get(issue.issueKey) ?? []), issue]);
+  }
+  const out: DetectorCandidate[] = [];
+  for (const [issueKey, group] of groups) {
+    if (group.length < opts.minPages) {
+      for (const issue of group) out.push(issue.candidate);
+      continue;
+    }
+    const first = group[0].candidate;
+    const pages = group.map((issue) => issue.pageUrl);
+    const volume = group.reduce((sum, issue) => sum + (issue.candidate.scoreInputs.worth.volume ?? 0), 0);
+    out.push({
+      ...first,
+      title: opts.siteTitle(issueKey, group.length),
+      summary: `${group.length} pages share this issue, so one delivery closes all of them: ${pages.slice(0, 3).join(", ")}${pages.length > 3 ? "…" : ""}.`,
+      dedupKey: `${first.type}:site:${issueKey}`,
+      howEvidenceIds: [...new Set(group.flatMap((issue) => issue.candidate.howEvidenceIds))].slice(0, 50),
+      scoreInputs: {
+        ...first.scoreInputs,
+        worth: { ...first.scoreInputs.worth, volume: volume > 0 ? volume : null },
+      },
+    });
+  }
+  return out;
 }
 
 /**
@@ -350,46 +417,95 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O7_technical_defect",
-    detect: (evidence) =>
-      byKind(evidence, "onpage_crawl")
-        .filter((row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability")
-        .map((row) => ({
-          type: "O7_technical_defect" as const,
-          title: `${humanizeIssue(dim(row, "issueType"))} on ${dim(row, "url") ?? "site"}`,
-          summary: `Crawl found ${plural(num(row, "first_party:issueCount") ?? 0, "issue", "issues")} with crawlability or user impact on this page.`,
-          dedupKey: `O7:${dim(row, "url")}:${dim(row, "issueType") ?? ""}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: [],
-          howEvidenceIds: [row.id],
-          scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.5 },
-            winProbability: { playTypeFactor: 0.9 },
-            effort: { playTypeBase: 3, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
-          }),
-        })),
+    detect: (evidence) => {
+      const demand = pageDemandByUrl(evidence);
+      const crawlable = byKind(evidence, "onpage_crawl").filter(
+        (row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability"
+      );
+      // Plan §3: a defect with no traffic is only worth acting on when the same
+      // issue is systemic (>= 3 pages), otherwise it is noise on a dead page.
+      const issueCounts = new Map<string, number>();
+      for (const row of crawlable) {
+        const key = dim(row, "issueType") ?? "issue";
+        issueCounts.set(key, (issueCounts.get(key) ?? 0) + 1);
+      }
+      const issues: PageIssue[] = [];
+      for (const row of crawlable) {
+        const url = dim(row, "url") ?? "site";
+        const issueType = dim(row, "issueType") ?? "issue";
+        const pageImpressions = demand.get(url) ?? 0;
+        if (pageImpressions === 0 && (issueCounts.get(issueType) ?? 0) < DETECTOR_THRESHOLDS.systemicIssuePages) continue;
+        issues.push({
+          pageUrl: url,
+          issueKey: issueType,
+          candidate: {
+            type: "O7_technical_defect" as const,
+            title: `${humanizeIssue(issueType)} on ${url}`,
+            summary: `Crawl found ${plural(num(row, "first_party:issueCount") ?? 0, "issue", "issues")} with crawlability or user impact on this page.`,
+            dedupKey: `O7:${url}:${issueType}`,
+            clusterSlug: dim(row, "cluster"),
+            whyEvidenceIds: [],
+            howEvidenceIds: [row.id],
+            scoreInputs: scoreDefaults({
+              worth: {
+                volume: pageImpressions > 0 ? pageImpressions : DETECTOR_THRESHOLDS.technicalImpactVolume,
+                ctrAtPosition: null,
+                businessValue: businessValueFromKnowledge(evidence).value,
+                volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
+              },
+              winProbability: { playTypeFactor: 0.9 },
+              effort: { playTypeBase: 3, sizeFactor: 1 },
+              freshness: freshnessFactor(row.observedAt, new Date()),
+            }),
+          },
+        });
+      }
+      return collapsePageIssues(issues, {
+        minPages: DETECTOR_THRESHOLDS.siteLevelIssuePages,
+        siteTitle: (issueKey, count) => `${humanizeIssue(issueKey)} on ${count} pages`,
+      });
+    },
   },
   {
     type: "O8_structured_data_gap",
     detect: (evidence) => {
       const knowledge = byKind(evidence, "knowledge_fact");
-      return byKind(evidence, "onpage_crawl")
+      const demand = pageDemandByUrl(evidence);
+      const issues: PageIssue[] = byKind(evidence, "onpage_crawl")
         .filter((row) => dim(row, "schemaMissing") === "true" && dim(row, "impact") === "structured_data")
-        .map((row) => ({
-          type: "O8_structured_data_gap" as const,
-          title: `Missing structured data on ${dim(row, "url") ?? "page"}`,
-          summary: `No ${dim(row, "schemaType") ?? "identity"} schema on this page, so answer engines and rich results cannot read who the business is.`,
-          dedupKey: `O8:${dim(row, "url")}:${dim(row, "schemaType") ?? ""}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: knowledge.slice(0, 1).map((k) => k.id),
-          howEvidenceIds: [row.id],
-          scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: businessValueFromKnowledge(evidence).value },
-            winProbability: { playTypeFactor: 1.0 },
-            effort: { playTypeBase: 2, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
-          }),
-        }));
+        .map((row) => {
+          const url = dim(row, "url") ?? "page";
+          const schemaType = dim(row, "schemaType") ?? "identity";
+          const pageImpressions = demand.get(url) ?? 0;
+          return {
+            pageUrl: url,
+            issueKey: schemaType,
+            candidate: {
+              type: "O8_structured_data_gap" as const,
+              title: `Missing structured data on ${url}`,
+              summary: `No ${schemaType} schema on this page, so answer engines and rich results cannot read who the business is.`,
+              dedupKey: `O8:${url}:${schemaType}`,
+              clusterSlug: dim(row, "cluster"),
+              whyEvidenceIds: knowledge.slice(0, 1).map((k) => k.id),
+              howEvidenceIds: [row.id],
+              scoreInputs: scoreDefaults({
+                worth: {
+                  volume: pageImpressions > 0 ? pageImpressions : DETECTOR_THRESHOLDS.technicalImpactVolume,
+                  ctrAtPosition: null,
+                  businessValue: businessValueFromKnowledge(evidence).value,
+                  volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
+                },
+                winProbability: { playTypeFactor: 1.0 },
+                effort: { playTypeBase: 2, sizeFactor: 1 },
+                freshness: freshnessFactor(row.observedAt, new Date()),
+              }),
+            },
+          };
+        });
+      return collapsePageIssues(issues, {
+        minPages: DETECTOR_THRESHOLDS.siteLevelIssuePages,
+        siteTitle: (_issueKey, count) => `Missing structured data on ${count} pages`,
+      });
     },
   },
   {
@@ -625,9 +741,14 @@ export async function runDetectors(
 
   let created = 0;
   let updated = 0;
+  const produced = new Map<OpportunityType, Set<string>>();
+  const remember = (candidate: DetectorCandidate) => {
+    produced.set(candidate.type, (produced.get(candidate.type) ?? new Set()).add(candidate.dedupKey));
+  };
   for (const detector of DETECTORS) {
     if (disabledTypes.has(detector.type)) continue;
     for (const candidate of detector.detect(evidence, { now })) {
+      remember(candidate);
       const result = await upsertOpportunity(db, {
         projectId,
         type: candidate.type,
@@ -646,6 +767,7 @@ export async function runDetectors(
     }
   }
   for (const candidate of await clusterPlayDetector(db, projectId, now)) {
+    remember(candidate);
     const result = await upsertOpportunity(db, {
       projectId,
       type: candidate.type,
@@ -664,8 +786,35 @@ export async function runDetectors(
   }
 
   const parked = await applyHysteresis(db, { threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
+  const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
-  return { created, updated, parked: [...parked, ...capped], disabled };
+  return { created, updated, parked: [...parked, ...superseded, ...capped], disabled };
+}
+
+/**
+ * Plan §3: "noise is superseded, not accumulated."
+ *
+ * A detector that ran and no longer emits a key means that opportunity is gone
+ * (grouped into a site-level one, or below a threshold now). Its `detected` row
+ * parks with a reason; accepted work is never touched. Without this, changing a
+ * detector leaves the old rows on the board forever.
+ */
+export async function retireStaleDetected(
+  db: DetectorDb,
+  opts: { projectId: string; produced: Map<OpportunityType, Set<string>>; detectedBy: string }
+): Promise<string[]> {
+  if (opts.produced.size === 0) return [];
+  const existing = await db.opportunity.findMany({
+    where: { projectId: opts.projectId, status: "detected", type: { in: [...opts.produced.keys()] } },
+    select: { id: true, type: true, dedupKey: true },
+  });
+  const stale = existing.filter((row) => !(opts.produced.get(row.type)?.has(row.dedupKey) ?? false));
+  if (stale.length === 0) return [];
+  await db.opportunity.updateMany({
+    where: { id: { in: stale.map((row) => row.id) }, status: "detected" },
+    data: { status: "parked", parkReason: "superseded", decidedBy: opts.detectedBy, decidedAt: new Date() },
+  });
+  return stale.map((row) => row.id);
 }
 
 /**
@@ -676,15 +825,17 @@ export async function applyOpenCap(
   db: DetectorDb,
   opts: { projectId: string; cap: number; detectedBy: string }
 ): Promise<string[]> {
+  // Only machine-detected work is capped. A human accepted these; parking them
+  // would silently undo a decision.
   const open = await db.opportunity.findMany({
-    where: { projectId: opts.projectId, status: { in: ["detected", "accepted", "in_progress"] } },
+    where: { projectId: opts.projectId, status: "detected" },
     select: { id: true, scoreValue: true },
     orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "asc" }],
   });
   const overflow = open.slice(opts.cap);
   if (overflow.length === 0) return [];
   await db.opportunity.updateMany({
-    where: { id: { in: overflow.map((row) => row.id) } },
+    where: { id: { in: overflow.map((row) => row.id) }, status: "detected" },
     data: { status: "parked", parkReason: "cap", decidedBy: opts.detectedBy, decidedAt: new Date() },
   });
   return overflow.map((row) => row.id);

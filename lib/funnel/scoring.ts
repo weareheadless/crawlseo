@@ -15,6 +15,13 @@ export type ScoreInputs = {
     volume: number | null; // searches/month (provider), or proxy from GSC impressions
     ctrAtPosition: number | null; // 0–1
     businessValue: number; // 0–1, from the why leg (knowledge/research grounding)
+    /**
+     * Where `volume` came from. `impact_proxy` is the declared stand-in for a
+     * page-level defect with no recorded traffic; it is not a search volume and
+     * must stay visible (plan §2.3).
+     */
+    volumeSource?: "first_party" | "provider" | "impact_proxy" | "unknown";
+    businessValueSource?: "knowledge" | "cluster" | "topic" | "unknown";
   };
   /** win probability components (0–1 each) */
   winProbability: {

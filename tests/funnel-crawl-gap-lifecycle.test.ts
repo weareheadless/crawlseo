@@ -93,9 +93,20 @@ const crawlIssue = {
   metrics: { "first_party:issueCount": { value: 1, unit: "count", source: "first_party" } },
 };
 
+// A page-level defect is worth acting on because the page has demand (plan §2.3);
+// without it the opportunity correctly parks below the hysteresis threshold.
+const pageDemand = {
+  id: "ev-demand",
+  kind: "keyword_rank",
+  observedAt: AT,
+  producer: "search_console",
+  dimensions: { url: "https://example.com/", query: "example" },
+  metrics: { "first_party:impressions": { value: 200, unit: "count", source: "first_party" } },
+};
+
 describe("crawl gap → work lifecycle (ported from the retired action factory)", () => {
   it("turns a crawl gap into an opportunity, a task, a delivery and an outcome", async () => {
-    const { db, opportunities, tasks } = mockDb([crawlIssue]);
+    const { db, opportunities, tasks } = mockDb([crawlIssue, pageDemand]);
 
     await runDetectors(db, "p1", { now: AT });
     expect(opportunities.size).toBe(1);

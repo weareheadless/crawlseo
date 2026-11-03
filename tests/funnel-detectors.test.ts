@@ -41,8 +41,10 @@ function seedAllTypes(): SeedRow[] {
     // O6 fact mismatch
     row("e-o6", "onpage_crawl", { url: "https://x.com/hours", question: "opening hours", field: "hours", factMismatch: "true" }, {}),
     row("e-o6-why", "knowledge_fact", { question: "opening hours" }, {}),
-    // O7 technical defect
+    // O7 technical defect: the page has recorded demand, which is what makes a
+    // page-level defect worth acting on (spine plan §3).
     row("e-o7", "onpage_crawl", { url: "https://x.com/broken", issueType: "broken_link", impact: "crawlability" }, { "provider:issueCount": metric(4, "count") }),
+    row("e-o7-demand", "keyword_rank", { query: "broken page", url: "https://x.com/broken" }, { "first_party:impressions": metric(300, "count", "first_party") }),
     // O8 structured data gap
     row("e-o8", "onpage_crawl", { url: "https://x.com/services", schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
     row("e-o8-why", "knowledge_fact", { question: "who are you" }, {}),
@@ -221,5 +223,93 @@ describe("funnel detectors (wave 1 definition of done)", () => {
     await runDetectors(db as never, "p1", { now: NOW });
     expect(db.evidenceRecord.findMany).toHaveBeenCalled();
     expect(Object.keys(db).some((key) => /rawProviderResponse|dataforseo|fetch|http/.test(key))).toBe(false);
+  });
+});
+
+describe("page-level defect economics (spine plan §2.3, §3)", () => {
+  const crawl = (id: string, url: string, issueType: string, extra: Record<string, unknown> = {}) =>
+    row(id, "onpage_crawl", { url, issueType, impact: "crawlability", ...extra }, { "provider:issueCount": metric(1, "count") });
+
+  it("skips a no-demand defect when the issue is not systemic", async () => {
+    const { db, created } = mockDb([crawl("c1", "https://x.com/dead", "broken_link")]);
+    await runDetectors(db as never, "p1", { now: NOW });
+    expect(created.some((row) => row.type === "O7_technical_defect")).toBe(false);
+  });
+
+  it("keeps a no-demand defect when the same issue spans three pages", async () => {
+    const seed = [
+      crawl("c1", "https://x.com/a", "broken_link"),
+      crawl("c2", "https://x.com/b", "broken_link"),
+      crawl("c3", "https://x.com/c", "broken_link"),
+    ];
+    const { db, created } = mockDb(seed);
+    await runDetectors(db as never, "p1", { now: NOW });
+    expect(created.filter((row) => row.type === "O7_technical_defect")).toHaveLength(3);
+  });
+
+  it("takes a defect's worth from the page's impressions, not a query volume", async () => {
+    const seed = [
+      crawl("c1", "https://x.com/traffic", "missing_description"),
+      row("r1", "keyword_rank", { query: "q", url: "https://x.com/traffic" }, { "first_party:impressions": metric(420, "count", "first_party") }),
+    ];
+    const { db, created } = mockDb(seed);
+    await runDetectors(db as never, "p1", { now: NOW });
+    const o7 = created.find((row) => row.type === "O7_technical_defect");
+    const worth = (o7?.scoreInputs as { worth: { volume: number; volumeSource: string } }).worth;
+    expect(worth.volume).toBe(420);
+    expect(worth.volumeSource).toBe("first_party");
+  });
+
+  it("collapses ten pages sharing a schema gap into one site-level opportunity", async () => {
+    const seed = Array.from({ length: 12 }, (_, i) =>
+      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") })
+    );
+    const { db, created } = mockDb(seed);
+    await runDetectors(db as never, "p1", { now: NOW });
+    const o8 = created.filter((row) => row.type === "O8_structured_data_gap");
+    expect(o8).toHaveLength(1);
+    expect(String(o8[0].title)).toContain("12 pages");
+  });
+
+  it("parks overflow above the open cap instead of growing without bound", async () => {
+    // Distinct issue types so grouping cannot collapse them, and demand on every
+    // page so the §3 no-traffic rule does not filter them: this test is about the
+    // open cap, not the other two rules.
+    const seed = Array.from({ length: 130 }, (_, i) => [
+      row(`d${i}`, "onpage_crawl", { url: `https://x.com/d${i}`, issueType: `issue_${i}`, impact: "crawlability" }, { "provider:issueCount": metric(1, "count") }),
+      row(`r${i}`, "keyword_rank", { query: `q${i}`, url: `https://x.com/d${i}` }, { "first_party:impressions": metric(50, "count", "first_party") }),
+    ]).flat();
+    const { db } = mockDb(seed);
+    const result = await runDetectors(db as never, "p1", { now: NOW });
+    // 130 distinct pages, no single issue reaching the site-level threshold
+    expect(result.created + result.updated).toBeGreaterThanOrEqual(130);
+    expect(result.parked.length).toBeGreaterThan(0);
+  });
+});
+
+describe("superseding stale detected rows (spine plan §3)", () => {
+  it("parks a detected opportunity the detector no longer emits", async () => {
+    const { retireStaleDetected } = await import("@/lib/funnel/detectors");
+    const rows = [
+      { id: "old-page", type: "O8_structured_data_gap", dedupKey: "O8:https://x.com/a:LocalBusiness" },
+      { id: "accepted", type: "O8_structured_data_gap", dedupKey: "O8:https://x.com/b:LocalBusiness" },
+    ];
+    const parkedIds: string[] = [];
+    const db = {
+      opportunity: {
+        findMany: vi.fn(async () => [rows[0]]),
+        updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: { status: string } }) => {
+          parkedIds.push(...args.where.id.in);
+          return { count: args.where.id.in.length };
+        }),
+      },
+    };
+    const superseded = await retireStaleDetected(db as never, {
+      projectId: "p1",
+      produced: new Map([["O8_structured_data_gap", new Set(["O8:site:LocalBusiness"])]]),
+      detectedBy: "test",
+    });
+    expect(superseded).toEqual(["old-page"]);
+    expect(parkedIds).toEqual(["old-page"]);
   });
 });
