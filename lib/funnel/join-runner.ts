@@ -97,6 +97,46 @@ export function matchKnowledgeFact(
   return best;
 }
 
+/**
+ * The phrase a collection should run for. A finding's `theme` or `question` is a
+ * search phrase; the opportunity title is a sentence about it.
+ */
+/**
+ * A collection query has to look like a search phrase. A finding theme is a
+ * sentence ("Preuves absentes sur la clientèle B2B…") and the provider bills a
+ * call that returns nothing, so it is refused before spending.
+ */
+function usableQuery(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return trimmed.length >= 3 && trimmed.length <= 60 && trimmed.split(/\s+/).length <= 8;
+}
+
+async function queryForOpportunity(
+  db: Pick<PrismaClient, "evidenceEdge" | "evidenceRecord">,
+  opportunityId: string,
+  title: string
+): Promise<string | null> {
+  const edges = await db.evidenceEdge.findMany({
+    where: { toType: "opportunity", toId: opportunityId, relation: "supporting" },
+    select: { fromId: true },
+  });
+  if (edges.length > 0) {
+    const evidence = await db.evidenceRecord.findMany({
+      where: { id: { in: edges.map((edge) => edge.fromId) } },
+      select: { dimensions: true },
+    });
+    for (const row of evidence) {
+      const dimensions = (row.dimensions ?? {}) as { theme?: unknown; question?: unknown; painPointSummary?: unknown };
+      for (const candidate of [dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
+        if (usableQuery(candidate)) return (candidate as string).trim();
+      }
+    }
+  }
+  const fallback = title.replace(/^[^:]*:\s*/, "").replace(/^"|"$/g, "").trim();
+  return usableQuery(fallback) ? fallback : null;
+}
+
 /** Stored score inputs minus the completeness the join recomputes. */
 function joinInputs(stored: unknown): Omit<ScoreInputs, "evidenceCompleteness"> | null {
   if (!stored || typeof stored !== "object") return null;
@@ -115,7 +155,7 @@ type OpportunityRow = {
 };
 
 export async function runJoinFollowUps(
-  db: JoinDb & Pick<PrismaClient, "evidenceRecord" | "demandMapCluster">,
+  db: JoinDb & Pick<PrismaClient, "evidenceRecord" | "demandMapCluster" | "evidenceEdge">,
   opts: {
     projectId: string;
     siteId?: string | null;
@@ -185,12 +225,19 @@ export async function runJoinFollowUps(
     }
 
     // Missing how leg: run the declared collection when this type has one.
-    const query = opportunity.title.replace(/^[^:]*:\s*/, "").replace(/^"|"$/g, "").slice(0, 120);
+    // The query comes from the evidence that produced the opportunity (a finding's
+    // theme or question), not from its display title.
+    const query = await queryForOpportunity(db, opportunity.id, opportunity.title);
+    if (!query) {
+      result.skipped.push({ opportunityId: opportunity.id, leg: "how", reason: "no usable query: the source phrase is a sentence, not a search phrase" });
+      continue;
+    }
+    // O5 is never missing a how leg: the question-coverage row *is* its how leg.
+    // Its follow-up is the play (ask the question), not a join.
     const collector =
       opportunity.type === "O13_user_pain_point" ? collectors.keywordMetrics
         : opportunity.type === "O14_offer_positioning_gap" ? collectors.serpSnapshots
-          : opportunity.type === "O5_aeo_presence_gap" ? collectors.aiVisibility
-            : undefined;
+          : undefined;
     if (!collector) {
       result.skipped.push({ opportunityId: opportunity.id, leg: "how", reason: `no collection is defined for ${opportunity.type}` });
       continue;

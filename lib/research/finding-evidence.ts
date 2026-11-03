@@ -35,8 +35,15 @@ type StoredFinding = {
  * `painPoint` and `positioningGap`, so those flags are set from the finding
  * type rather than guessed from prose.
  */
-const PAIN_POINT_TYPES = new Set(["PAIN_POINT", "CUSTOMER_NEED", "OBJECTION", "FRICTION"]);
-const POSITIONING_TYPES = new Set(["COMPETITOR", "POSITIONING", "MARKET_GAP", "OPPORTUNITY"]);
+// The research runner emits the enum's types, not the detector's original
+// vocabulary. These sets accept both, so a CONCERN is a pain point and a
+// POSITIONING_GAP is a positioning gap without a second finding pipeline.
+const PAIN_POINT_TYPES = new Set([
+  "PAIN_POINT", "CUSTOMER_NEED", "FRICTION", "OBJECTION", "CONCERN", "MISCONCEPTION", "QUESTION", "CONTENT_GAP",
+]);
+const POSITIONING_TYPES = new Set([
+  "COMPETITOR", "POSITIONING", "MARKET_GAP", "OPPORTUNITY", "POSITIONING_GAP", "COMPETITOR_GAP",
+]);
 
 export function findingDimensions(finding: StoredFinding): Record<string, string | number | boolean | null> {
   const isPainPoint = PAIN_POINT_TYPES.has(finding.type);

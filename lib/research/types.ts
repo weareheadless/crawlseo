@@ -10,6 +10,8 @@ export const researchFindingTypeSchema = z.enum([
   "TREND",
   "MISCONCEPTION",
   "CONTENT_GAP",
+  "POSITIONING_GAP",
+  "COMPETITOR_GAP",
 ]);
 export const researchActionStatusSchema = z.enum([
   "PROPOSED",

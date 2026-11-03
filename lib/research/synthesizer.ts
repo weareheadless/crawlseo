@@ -56,6 +56,8 @@ const FINDING_TYPES = new Set<ResearchFindingType>([
   "TREND",
   "MISCONCEPTION",
   "CONTENT_GAP",
+  "POSITIONING_GAP",
+  "COMPETITOR_GAP",
 ]);
 const ACTION_FORMATS = new Set(["article", "page_update", "metadata"]);
 const AUTOMATION_MODES = new Set(["MANUAL", "ASSISTED", "AUTOMATIC"]);

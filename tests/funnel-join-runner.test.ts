@@ -43,6 +43,7 @@ function fakeDb(seed: {
       ),
     },
     evidenceEdge: {
+      findMany: vi.fn(async () => []),
       upsert: vi.fn(async (args: { create: Record<string, unknown> }) => {
         edges.push(args.create);
         return { id: `edge-${edges.length}` };
@@ -148,7 +149,7 @@ describe("join follow-up execution", () => {
   it("does not spend when the ceiling is zero", async () => {
     const { db } = fakeDb({
       opportunities: [
-        opportunity({ id: "opp-13", type: "O13_user_pain_point", title: "User pain point without content: x", evidenceCompleteness: "why" }),
+        opportunity({ id: "opp-13", type: "O13_user_pain_point", title: "User pain point without content: abat-jour", evidenceCompleteness: "why" }),
       ],
     });
     const collector = vi.fn(async () => ({ evidence: [], spentMicros: 0 }));

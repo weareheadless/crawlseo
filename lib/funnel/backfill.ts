@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type EvidenceDb, type MetricValue } from "@/lib/funnel/evidence";
 import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
+import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
 import { runDetectors } from "@/lib/funnel/detectors";
 import { discoverClusters } from "@/lib/funnel/cluster-discovery";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
@@ -229,7 +230,7 @@ export async function refreshFunnelForSite(
   db: RefreshDb,
   siteId: string,
   opts: { detectedBy?: string } = {}
-): Promise<BackfillResult & { created: number; updated: number; parked: number; knowledgeFacts: number }> {
+): Promise<BackfillResult & { created: number; updated: number; parked: number; knowledgeFacts: number; questionCoverage: number }> {
   const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true, domain: true } });
   if (!site?.projectId) {
     return {
@@ -242,15 +243,25 @@ export async function refreshFunnelForSite(
       updated: 0,
       parked: 0,
       knowledgeFacts: 0,
+      questionCoverage: 0,
     };
   }
   const backfill = await backfillSiteEvidence(db, siteId, { projectId: site.projectId });
   // The why leg: owner-written business facts become evidence before detection,
   // so O6/O8 can attach them in the same run.
   const knowledge = await bridgeBusinessKnowledgeToEvidence(db as never, { projectId: site.projectId, siteId });
+  // O5 needs a question set and an unobserved marker; both come from knowledge.
+  const coverage = await bridgeQuestionCoverageToEvidence(db as never, { projectId: site.projectId, siteId });
   // Clusters first: a discovered cluster lets the board group work by need and
   // lets the cluster play fire in the same run.
   await discoverClusters(db, site.projectId, { siteId });
   const detection = await runDetectors(db, site.projectId, { detectedBy: opts.detectedBy ?? "funnel-refresh" });
-  return { ...backfill, knowledgeFacts: knowledge.stored, created: detection.created, updated: detection.updated, parked: detection.parked.length };
+  return {
+    ...backfill,
+    knowledgeFacts: knowledge.stored,
+    questionCoverage: coverage.stored,
+    created: detection.created,
+    updated: detection.updated,
+    parked: detection.parked.length,
+  };
 }

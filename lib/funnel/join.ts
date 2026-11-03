@@ -28,7 +28,7 @@ const FOLLOW_UP_COLLECTION: Record<string, { why: string; how: string }> = {
   O2_striking_distance: { why: "link keyword to business knowledge / offer relevance", how: "" },
   O3_content_gap: { why: "research grounding from market research", how: "" },
   O4_aeo_citation_gap: { why: "", how: "" },
-  O5_aeo_presence_gap: { why: "", how: "schedule AI visibility evaluation for the question" },
+  O5_aeo_presence_gap: { why: "link question to business knowledge / offer relevance", how: "schedule AI visibility evaluation for the question" },
   O6_business_fact_mismatch: { why: "", how: "" },
   O7_technical_defect: { why: "", how: "" },
   O8_structured_data_gap: { why: "", how: "" },
@@ -51,7 +51,11 @@ export async function computeFollowUps(db: JoinDb, projectId: string): Promise<F
     const missing = opportunity.evidenceCompleteness === "why" ? "how" : opportunity.evidenceCompleteness === "how" ? "why" : null;
     if (!missing) continue;
     const collection = FOLLOW_UP_COLLECTION[opportunity.type]?.[missing];
+    // Every missing why leg can be joined from business knowledge, so it is a
+    // follow-up even when the table has no label for it. A missing how leg needs a
+    // declared collection, otherwise there is nothing to run.
     if (collection) requests.push({ opportunityId: opportunity.id, missingLeg: missing, collection });
+    else if (missing === "why") requests.push({ opportunityId: opportunity.id, missingLeg: "why", collection: "link business knowledge / offer relevance" });
   }
   return requests;
 }

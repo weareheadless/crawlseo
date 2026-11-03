@@ -1311,6 +1311,9 @@ enum ResearchFindingType {
   TREND
   MISCONCEPTION
   CONTENT_GAP
+  /// Gap-typed findings the O14 detector accepts.
+  POSITIONING_GAP
+  COMPETITOR_GAP
 }
 
 enum ResearchActionStatus {

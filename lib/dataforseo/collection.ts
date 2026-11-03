@@ -4,6 +4,9 @@ import { executeDataForSeoKeywordOverview, executeDataForSeoOrganicSerp, perform
 import { ingestAiVisibility, type AiVisibilityObservation } from "@/lib/dataforseo/ai-visibility-adapter";
 import { storeEvidenceRecord } from "@/lib/funnel/evidence";
 import { decryptCredential } from "@/lib/encryption";
+import { projectConnectorBudget, reserveProjectConnectorBudget, settleConnectorBudget, ConnectorError } from "@/lib/connectors/service";
+import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
+import { createHash } from "node:crypto";
 
 /**
  * Paid collection primitives (plan §2.2, Wave 0.5).
@@ -38,14 +41,64 @@ export type CollectionDb = Pick<PrismaClient, "rawProviderResponse" | "evidenceR
 
 const microsOf = (value: number | null | undefined) => (value == null ? 0 : value);
 
-export async function collectKeywordMetrics(db: CollectionDb, input: CollectionInput): Promise<CollectionOutput> {
-  const overview = await executeDataForSeoKeywordOverview({
-    projectId: input.projectId,
-    keywords: input.queries,
-    languageCode: input.languageCode,
-    locationCode: input.locationCode,
+/**
+ * Every paid call reserves against the project's DS-08 allowance before it runs
+ * and settles the actual cost after. Without this the monthly ledger never sees
+ * the spend (Atelier showed $0.50 remaining after ~$0.16 had been spent).
+ *
+ * The reservation idempotency key is per (operation, target, period), so the
+ * ledger counts a target once per budget period even if it is collected twice.
+ * A prior settled reservation is not settled again.
+ */
+async function withBudget<T>(
+  projectId: string,
+  input: { operation: string; detail: Record<string, unknown>; run: () => Promise<T>; costOf: (result: T) => number }
+): Promise<{ result: T; spentMicros: number; skippedSettle: boolean }> {
+  const principal = { projectId } as ServicePrincipalContext;
+  const budget = await projectConnectorBudget(principal);
+  if (!budget.configured || !budget.allowanceMicros || budget.currency !== "USD") {
+    throw new ConnectorError("A USD research allowance is required before paid collection", 409);
+  }
+  const period = budget.period;
+  const key = `collect:${input.operation}:${createHash("sha256").update(JSON.stringify({ ...input.detail, period })).digest("hex").slice(0, 32)}`;
+  const reservation = await reserveProjectConnectorBudget(principal, {
+    period,
+    policyRevision: budget.policyRevision,
+    idempotencyKey: key,
+    amountMicros: budget.maxOperationMicros ?? "0",
+    currency: "USD",
+    operation: input.operation,
+    detail: input.detail,
   });
-  const spent = microsOf(overview.costMicros);
+  const alreadySettled = reservation.status !== "RESERVED";
+  try {
+    const result = await input.run();
+    const spentMicros = input.costOf(result);
+    if (!alreadySettled) {
+      await settleConnectorBudget(principal, reservation.id, { status: "settled", actualCostMicros: String(spentMicros) });
+    }
+    return { result, spentMicros, skippedSettle: alreadySettled };
+  } catch (error) {
+    if (!alreadySettled) {
+      await settleConnectorBudget(principal, reservation.id, { status: "released", detail: { reason: "provider_failure" } });
+    }
+    throw error;
+  }
+}
+
+export async function collectKeywordMetrics(db: CollectionDb, input: CollectionInput): Promise<CollectionOutput> {
+  const { result: overview, spentMicros: spent } = await withBudget(input.projectId, {
+    operation: "dataforseo:keyword_metrics",
+    detail: { queries: input.queries.slice(0, 20), locale: `${input.languageCode}:${input.locationCode}` },
+    run: () =>
+      executeDataForSeoKeywordOverview({
+        projectId: input.projectId,
+        keywords: input.queries,
+        languageCode: input.languageCode,
+        locationCode: input.locationCode,
+      }),
+    costOf: (result) => microsOf(result.costMicros),
+  });
   const raw = await db.rawProviderResponse.create({
     data: {
       provider: "dataforseo",
@@ -92,13 +145,19 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
   const domain = (input.domain ?? "").replace(/^www\./, "");
 
   for (const query of input.queries) {
-    const serp = await executeDataForSeoOrganicSerp({
-      projectId: input.projectId,
-      keyword: query,
-      languageCode: input.languageCode,
-      locationCode: input.locationCode,
+    const { result: serp, spentMicros: callSpent } = await withBudget(input.projectId, {
+      operation: "dataforseo:serp_snapshot",
+      detail: { query, locale: `${input.languageCode}:${input.locationCode}` },
+      run: () =>
+        executeDataForSeoOrganicSerp({
+          projectId: input.projectId,
+          keyword: query,
+          languageCode: input.languageCode,
+          locationCode: input.locationCode,
+        }),
+      costOf: (result) => microsOf(result.costMicros),
     });
-    spent += microsOf(serp.costMicros);
+    spent += callSpent;
     const raw = await db.rawProviderResponse.create({
       data: {
         provider: "dataforseo",
@@ -141,11 +200,16 @@ export async function collectBacklinkProfile(
   db: CollectionDb,
   input: { projectId: string; siteId: string | null; domain: string }
 ): Promise<CollectionOutput> {
-  const backlinks = await performDataForSeoOperation(input.projectId, {
-    kind: "BACKLINKS_OVERVIEW",
-    domain: input.domain.replace(/^www\./, ""),
+  const { result: backlinks, spentMicros: spent } = await withBudget(input.projectId, {
+    operation: "dataforseo:backlink_profile",
+    detail: { domain: input.domain.replace(/^www\./, "") },
+    run: () =>
+      performDataForSeoOperation(input.projectId, {
+        kind: "BACKLINKS_OVERVIEW",
+        domain: input.domain.replace(/^www\./, ""),
+      }),
+    costOf: (result) => microsOf(result.costMicros),
   });
-  const spent = microsOf(backlinks.costMicros);
   const raw = await db.rawProviderResponse.create({
     data: {
       provider: "dataforseo",
@@ -200,37 +264,17 @@ export async function collectAiVisibility(
 
   const calls: Array<{ question: string; answer: string; citations: string[]; model: string | null; costUsd: number; taskId: string; payload: unknown }> = [];
   for (const question of input.queries) {
-    const res = await fetch("https://api.dataforseo.com/v3/ai_optimization/chat_gpt/llm_responses/live", {
-      method: "POST",
-      headers: { Authorization: auth, "Content-Type": "application/json" },
-      body: JSON.stringify([{ user_prompt: `${question}. Cite les sources.`, model_name: "gpt-4o-mini", max_output_tokens: 400, web_search: true }]),
+    const { result: call } = await withBudget(input.projectId, {
+      operation: "dataforseo:ai_visibility",
+      detail: { question, locale: `${input.languageCode}:${input.locationCode}` },
+      run: () => askChatGpt(auth, question),
+      costOf: (result) => Math.round((result?.costUsd ?? 0) * 1_000_000),
     });
-    const json = (await res.json()) as {
-      status_code?: number;
-      tasks?: Array<{ id?: string; status_code?: number; cost?: number; result?: Array<Record<string, unknown>> }>;
-    };
-    const task = json.tasks?.[0];
-    const result = task?.result?.[0];
-    if (json.status_code !== 20000 || task?.status_code !== 20000 || !result) continue;
-    const items = (result.items ?? []) as Array<{ sections?: Array<{ type?: string; text?: string }> }>;
-    const answer = items
-      .flatMap((item) => item.sections ?? [])
-      .filter((section) => section.type === "text" && typeof section.text === "string")
-      .map((section) => section.text as string)
-      .join("\n")
-      .trim();
-    const citations = ((result.search_results ?? []) as Array<{ url?: string }>).map((row) => row.url).filter((url): url is string => Boolean(url));
-    calls.push({
-      question,
-      answer,
-      citations,
-      model: typeof result.model_name === "string" ? result.model_name : null,
-      costUsd: Number(task.cost ?? 0),
-      taskId: task.id ?? "",
-      payload: result,
-    });
+    if (!call) continue;
+    calls.push(call);
   }
   if (calls.length === 0) return { evidence: [], spentMicros: 0 };
+  const spent = Math.round(calls.reduce((sum, call) => sum + call.costUsd, 0) * 1_000_000);
 
   const askedAt = new Date();
   const observations: AiVisibilityObservation[] = calls.map((call) => {
@@ -251,7 +295,6 @@ export async function collectAiVisibility(
       rawExportReference: `dataforseo:${call.taskId}`,
     };
   });
-  const spent = Math.round(calls.reduce((sum, call) => sum + call.costUsd, 0) * 1_000_000);
   await ingestAiVisibility(db as never, observations, {
     projectId: input.projectId,
     siteId: input.siteId,
@@ -266,4 +309,41 @@ export async function collectAiVisibility(
     select: { id: true, kind: true, observedAt: true, dimensions: true, metrics: true },
   });
   return { evidence: stored as CollectedEvidence[], spentMicros: spent };
+}
+
+type AiCall = { question: string; answer: string; citations: string[]; model: string | null; costUsd: number; taskId: string; payload: unknown };
+
+/** One ChatGPT answer with web search; the only shape that can cite sources. */
+async function askChatGpt(auth: string, question: string): Promise<AiCall | null> {
+  const res = await fetch("https://api.dataforseo.com/v3/ai_optimization/chat_gpt/llm_responses/live", {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify([{ user_prompt: `${question}. Cite les sources.`, model_name: "gpt-4o-mini", max_output_tokens: 400, web_search: true }]),
+  });
+  const json = (await res.json()) as {
+    status_code?: number;
+    tasks?: Array<{ id?: string; status_code?: number; cost?: number; result?: Array<Record<string, unknown>> }>;
+  };
+  const task = json.tasks?.[0];
+  const result = task?.result?.[0];
+  if (json.status_code !== 20000 || task?.status_code !== 20000 || !result) return null;
+  const items = (result.items ?? []) as Array<{ sections?: Array<{ type?: string; text?: string }> }>;
+  const answer = items
+    .flatMap((item) => item.sections ?? [])
+    .filter((section) => section.type === "text" && typeof section.text === "string")
+    .map((section) => section.text as string)
+    .join("\n")
+    .trim();
+  const citations = ((result.search_results ?? []) as Array<{ url?: string }>)
+    .map((row) => row.url)
+    .filter((url): url is string => Boolean(url));
+  return {
+    question,
+    answer,
+    citations,
+    model: typeof result.model_name === "string" ? result.model_name : null,
+    costUsd: Number(task.cost ?? 0),
+    taskId: task.id ?? "",
+    payload: result,
+  };
 }
