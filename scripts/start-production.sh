@@ -17,6 +17,18 @@ if [[ ${CRAWLSEO_WEB_RELEASE_DIR+x} ]]; then
   fi
 
   cd "$release_dir"
+  # The release carries its own .env. Source it so server-side code sees the same
+  # configuration the worker does — without this, a flag like
+  # CRAWLSEO_LEGACY_FUNNEL_FREEZE was set in .env but never reached the process.
+  for env_file in .env.local .env; do
+    if [ -f "$env_file" ]; then
+      set -a
+      # shellcheck disable=SC1090
+      source "$env_file"
+      set +a
+      break
+    fi
+  done
   exec node server.js
 fi
 

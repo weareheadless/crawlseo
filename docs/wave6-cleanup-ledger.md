@@ -158,6 +158,28 @@ it just enters as demand rather than as a hand-made task. One factory remains
 gated: `lib/crawler/technical-actions.ts`, whose reassess endpoint carries
 revision/approval semantics that need their own cutover.
 
+## Step 2a — the freeze was never actually live (found and fixed)
+
+`CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` was in `/SEO/.env`, and every "verified"
+check I ran read that value from a shell that had sourced it. The running
+processes never had it:
+
+- `stage-production-worker.mjs` never copied a `.env` into the worker release, so
+  `start-worker-production.sh` sourced nothing and the worker — the process that
+  writes the legacy tables — ran with the flag off.
+- `start-production.sh`'s release branch never sourced the release `.env` either,
+  so the web process hosting the technical-reassess endpoint ran with it off too.
+
+Fixed in both places: the worker release now carries `.env` (mode 0600) and both
+start scripts source it. Verified from `/proc/<pid>/environ`, not from a shell:
+
+```
+web (pid 3230538): strict; worker (pid 3229682): strict
+```
+
+`scripts/wave6-status.ts` now reads the flag from the live pm2 processes, so this
+class of mistake fails a check instead of passing silently.
+
 ## Step 2 evidence — the standing check
 
 `npx tsx scripts/legacy-write-watch.ts [--hours N]` reports what actually

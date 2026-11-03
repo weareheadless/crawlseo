@@ -51,6 +51,24 @@ const GATED_FACTORIES = [
   },
 ];
 
+/** Read the flag from the live pm2 processes, not from `.env`. */
+export function runningProcessFreezeState(pm2Pids = "/home/admin/.pm2/pids"): Array<{ app: string; pid: number | null; strict: boolean }> {
+  const apps = [
+    { app: "web", file: "crawlseo-6.pid" },
+    { app: "worker", file: "crawlseo-worker-8.pid" },
+  ];
+  return apps.map(({ app, file }) => {
+    try {
+      const pid = Number(readFileSync(path.join(pm2Pids, file), "utf8").trim());
+      if (!pid) return { app, pid: null, strict: false };
+      const environ = readFileSync(`/proc/${pid}/environ`, "utf8");
+      return { app, pid, strict: environ.split("\0").includes("CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict") };
+    } catch {
+      return { app, pid: null, strict: false };
+    }
+  });
+}
+
 export async function wave6Status(db: PrismaClient, opts: { root?: string; hours?: number } = {}): Promise<Wave6Status> {
   const root = opts.root ?? process.cwd();
   const exists = (relative: string) => existsSync(path.join(root, relative));
@@ -71,7 +89,11 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
   });
 
   // Step 2 — freeze flipped, and what it can honestly cover.
+  // `.env` is not the same thing as the running process: a release without a
+  // .env, or a start script that never sources one, leaves the flag off in the
+  // process that actually writes. That happened, so the check reads /proc.
   const strict = process.env.CRAWLSEO_LEGACY_FUNNEL_FREEZE === "strict";
+  const processFlags = runningProcessFreezeState();
   const findings = await auditLegacyWriters(root);
   const scheduled = await scheduledWriters(findings, root);
   const scheduledByTable = writersByTable(scheduled);
@@ -89,6 +111,14 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
     name: "strict freeze flipped",
     status: strict ? "complete" : "open",
     detail: strict ? "CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict" : "freeze is off",
+  });
+  checks.push({
+    step: 2,
+    name: "freeze present in the running processes",
+    status: processFlags.every((entry) => entry.strict) ? "complete" : "open",
+    detail: processFlags
+      .map((entry) => `${entry.app}${entry.pid ? ` (pid ${entry.pid})` : ""}: ${entry.pid ? (entry.strict ? "strict" : "flag absent") : "not running"}`)
+      .join("; "),
   });
   checks.push({
     step: 2,

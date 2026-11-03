@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { cp, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-export async function stageWorker({ source, releaseDir, sha }) {
+export async function stageWorker({ source, releaseDir, sha, envFile = undefined }) {
   const actualSha = execFileSync("git", ["-C", source, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   if (!/^[0-9a-f]{40}$/.test(sha) || sha !== actualSha) throw new Error(`Worker source SHA mismatch: expected ${sha}, found ${actualSha}`);
   await readFile(path.join(source, "package.json"), "utf8");
@@ -18,12 +18,24 @@ export async function stageWorker({ source, releaseDir, sha }) {
     for (const item of ["scripts", "mcp", "lib", "prisma", "node_modules", "package.json", "package-lock.json", "tsconfig.json", "next.config.ts", "next-env.d.ts"]) {
       if (await lstat(path.join(source, item)).catch(() => null)) await cp(path.join(source, item), path.join(tmp, item), { recursive: true, dereference: true });
     }
+    // The worker start script sources `.env` from the release directory, so a
+    // release without one runs on whatever pm2 captured at start time — which is
+    // how CRAWLSEO_LEGACY_FUNNEL_FREEZE silently failed to reach the process that
+    // writes the legacy tables.
+    if (envFile) {
+      await copyFile(envFile, path.join(tmp, ".env"));
+      await chmod(path.join(tmp, ".env"), 0o600);
+    }
     await writeFile(path.join(tmp, "RELEASE_SHA"), `${sha}\n`, { flag: "wx" });
     await rename(tmp, releaseDir);
   } catch (error) { await rm(tmp, { recursive: true, force: true }); throw error; }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
-  const [source, releaseDir, sha] = process.argv.slice(2);
-  stageWorker({ source, releaseDir, sha }).catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
+  const args = process.argv.slice(2);
+  const envIndex = args.indexOf("--env-file");
+  const envFile = envIndex >= 0 ? args[envIndex + 1] : undefined;
+  const positional = envIndex >= 0 ? args.filter((_, i) => i !== envIndex && i !== envIndex + 1) : args;
+  const [source, releaseDir, sha] = positional;
+  stageWorker({ source, releaseDir, sha, envFile }).catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
 }
