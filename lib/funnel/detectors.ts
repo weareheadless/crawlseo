@@ -389,6 +389,14 @@ const DETECTORS: Detector[] = [
         byKind(evidence, "knowledge_fact").filter((row) => byQuestion(row) !== ""),
         byQuestion
       );
+      // A question's worth is its search demand where we have it; the sample count
+      // is only a fallback, because one AI answer is not demand.
+      const volumeByQuery = new Map<string, number>();
+      for (const row of byKind(evidence, "keyword_metrics")) {
+        const query = dim(row, "query");
+        const volume = num(row, "provider:volume");
+        if (query && volume != null) volumeByQuery.set(query, volume);
+      }
       return byKind(evidence, "ai_visibility_observation")
         .filter((row) => {
           const cited = num(row, "provider:citedCount") ?? 0;
@@ -407,7 +415,11 @@ const DETECTORS: Detector[] = [
             whyEvidenceIds: why,
             howEvidenceIds: [row.id],
             scoreInputs: scoreDefaults({
-              worth: { volume: num(row, "provider:askCount") ?? 0, ctrAtPosition: null, businessValue: 0.8 },
+              worth: {
+              volume: volumeByQuery.get(question) ?? num(row, "provider:askCount") ?? num(row, "provider:samples") ?? 0,
+              ctrAtPosition: null,
+              businessValue: 0.8,
+            },
               winProbability: { playTypeFactor: 0.7 },
               effort: { playTypeBase: 8, sizeFactor: 1 },
               freshness: freshnessFactor(row.observedAt, new Date()),

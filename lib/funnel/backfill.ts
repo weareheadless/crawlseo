@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type EvidenceDb, type MetricValue } from "@/lib/funnel/evidence";
+import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
 import { runDetectors } from "@/lib/funnel/detectors";
 import { discoverClusters } from "@/lib/funnel/cluster-discovery";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
@@ -217,7 +218,7 @@ export async function backfillSiteEvidence(
   return result;
 }
 
-export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandMapCluster" | "keyword">;
+export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandMapCluster" | "keyword" | "businessKnowledgeDocument">;
 
 /**
  * Refresh the funnel for one site: backfill evidence from first-party stores,
@@ -228,7 +229,7 @@ export async function refreshFunnelForSite(
   db: RefreshDb,
   siteId: string,
   opts: { detectedBy?: string } = {}
-): Promise<BackfillResult & { created: number; updated: number; parked: number }> {
+): Promise<BackfillResult & { created: number; updated: number; parked: number; knowledgeFacts: number }> {
   const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true, domain: true } });
   if (!site?.projectId) {
     return {
@@ -240,12 +241,16 @@ export async function refreshFunnelForSite(
       created: 0,
       updated: 0,
       parked: 0,
+      knowledgeFacts: 0,
     };
   }
   const backfill = await backfillSiteEvidence(db, siteId, { projectId: site.projectId });
+  // The why leg: owner-written business facts become evidence before detection,
+  // so O6/O8 can attach them in the same run.
+  const knowledge = await bridgeBusinessKnowledgeToEvidence(db as never, { projectId: site.projectId, siteId });
   // Clusters first: a discovered cluster lets the board group work by need and
   // lets the cluster play fire in the same run.
   await discoverClusters(db, site.projectId, { siteId });
   const detection = await runDetectors(db, site.projectId, { detectedBy: opts.detectedBy ?? "funnel-refresh" });
-  return { ...backfill, created: detection.created, updated: detection.updated, parked: detection.parked.length };
+  return { ...backfill, knowledgeFacts: knowledge.stored, created: detection.created, updated: detection.updated, parked: detection.parked.length };
 }
