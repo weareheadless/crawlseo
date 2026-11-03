@@ -57,19 +57,22 @@ Inspected on 2026-11-03. The two remaining families are not equally risky:
 | Readers | screen (already switched), runner, one callerless API branch | one page: `projects/[projectId]/prelaunch/[runId]` |
 | Data in evidence | yes (bridged) | yes (bridged, 3 keyword observations) |
 
-**The site-scoped SEO research path is dead code.** `requestResearchReport` — the
-only entry point that would enqueue a site-scoped `SEO_RESEARCH` job — has no
-callers anywhere in `app/`, `lib/` or `scripts/`. So `runSeoResearch`'s site branch
-is unreachable, and every `seoResearchRun` row comes from
-`requestPrelaunchResearch`.
+**Correction (2026-11-03).** An earlier pass in this document called the
+site-scoped path dead code because `requestResearchReport` had no callers in
+`app/`, `lib/` or `scripts/`. That was wrong: the search omitted `mcp/`, and
+`mcp/project-tools.ts` exposes `requestResearchReport`, `getResearchReportStatus`
+and `listResearchReports` as project-scoped MCP tools served by the running
+`crawlseo-mcp` process. The site-scoped path is **live** and reachable by
+site-agent, so it must not be deleted; it needs the same cutover as the rest.
 
-That makes the prelaunch family the safe cutover:
+What still makes the prelaunch family first: one row, dormant, a single reader
+page, and its data already bridged. Nothing else is "free".
 
-1. **Delete the dead site branch.** Remove `requestResearchReport`,
-   `ensureResearchJob`'s site path and `runSeoResearch`'s site handling, plus the
-   job handler branch that calls it. Nothing enqueues it, so nothing can notice.
-2. **Shadow the one run.** Write it into `ResearchRun` as kind `PRELAUNCH` with the
+The cutover for this family:
+
+1. **Shadow the one run.** Write it into `ResearchRun` as kind `PRELAUNCH` with the
    same `syncArticleRunToResearchRun` shape (1 row, no backfill risk).
+2. **Switch the one reader.** The prelaunch page reads `ResearchRun` + evidence.
 3. **Switch the one reader.** `projects/[projectId]/prelaunch/[runId]` reads
    `ResearchRun` + evidence instead of `SeoResearchRun` + tasks.
 4. **Write switch.** `requestPrelaunchResearch` and `runPrelaunchResearch` write and
