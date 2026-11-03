@@ -21,6 +21,8 @@ export type SynthesisSource = {
 export type SynthesizedFinding = {
   type: ResearchFindingType;
   theme: string;
+  /** The search phrase the finding wants validated, when it names one. */
+  primaryQuery?: string;
   summary: string;
   confidence: number;
   sentiment?: string;
@@ -217,6 +219,7 @@ export async function synthesizeResearch(input: {
     findings.push({
       type,
       theme,
+      primaryQuery: text(row.primary_query, 300) || undefined,
       summary,
       confidence: clampInt(row.confidence),
       sentiment: text(row.sentiment, 40) || undefined,

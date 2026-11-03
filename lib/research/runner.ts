@@ -412,6 +412,8 @@ export async function runResearchRun(runId: string) {
             domain: site.domain,
             languageCode: competitorLocale.languageCode,
             locationCode: competitorLocale.locationCode,
+            // Paid calls keep their payload and cost for provenance.
+            db: db as never,
           });
           for (const source of sources) addCollected(source);
         } catch (error) {
@@ -490,7 +492,14 @@ export async function runResearchRun(runId: string) {
         const sourceIds = finding.sourceIndexes
           .map((sourceIndex) => savedSources[sourceIndex]?.id)
           .filter((id): id is string => Boolean(id));
-        const savedFinding = await createResearchFinding(run.id, finding, sourceIds);
+        // The model often puts the search phrase on the action rather than the
+        // finding; the action is linked by finding_index, so use it as a fallback.
+        const actionQuery = synthesis.actions.find((action) => action.findingIndex === index)?.primaryQuery;
+        const savedFinding = await createResearchFinding(
+          run.id,
+          { ...finding, primaryQuery: finding.primaryQuery ?? actionQuery },
+          sourceIds
+        );
         findingIdByIndex.set(index, savedFinding.id);
         sourceIdsByFindingIndex.set(index, sourceIds);
       }

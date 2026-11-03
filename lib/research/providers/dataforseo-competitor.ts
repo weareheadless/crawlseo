@@ -31,6 +31,8 @@ export type ResearchProviderSource = {
   metadata?: Record<string, unknown>;
 };
 
+import type { PrismaClient } from "@prisma/client";
+
 export type CompetitorProviderInput = {
   projectId: string;
   /** The run's query plan. Labs needs several keywords to return competitors. */
@@ -40,6 +42,8 @@ export type CompetitorProviderInput = {
   locationCode: number;
   device?: "desktop" | "mobile";
   limit?: number;
+  /** Optional sink for the raw payloads, so a paid research call has provenance. */
+  db?: Pick<PrismaClient, "rawProviderResponse">;
 };
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -72,7 +76,7 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
 
   // 1. Who ranks for each query right now.
   for (const query of queries.slice(0, 5)) {
-    const serp = await withResearchBudget(input.projectId, {
+    const serpCall = await withResearchBudget(input.projectId, {
       operation: "dataforseo:research_serp",
       detail: { query, locale: `${input.languageCode}:${input.locationCode}`, device: input.device ?? "desktop" },
       run: () =>
@@ -84,7 +88,24 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
           device: input.device,
         }),
       costOf: (result) => result.costMicros ?? 0,
-    }).then((outcome) => outcome.result);
+    });
+    const serp = serpCall.result;
+    if (input.db) {
+      await input.db.rawProviderResponse.create({
+        data: {
+          provider: "dataforseo",
+          product: "serp",
+          endpoint: "google/organic/live/advanced",
+          providerTaskId: serp.providerTaskId,
+          locale: `${input.languageCode}:${input.locationCode}`,
+          requestedAt: new Date(),
+          deliveredAt: new Date(),
+          costMicros: BigInt(serpCall.spentMicros),
+          status: "succeeded",
+          payload: serp.result as never,
+        },
+      }).catch(() => undefined);
+    }
 
     for (const item of serp.result.organic.slice(0, input.limit ?? 10)) {
       if (!item.url || host(item.url) === own) continue;
