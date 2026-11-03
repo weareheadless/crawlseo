@@ -17,7 +17,7 @@ import { syncGSCDataForProject, syncGSCDataForSite } from "@/lib/workers/gsc-syn
 import { syncGA4DataForProject } from "@/lib/workers/ga4-sync";
 import { syncVitalsForProject, syncVitalsForSite } from "@/lib/workers/vitals-sync";
 import { runSiteCrawl } from "@/lib/crawler/engine";
-import { syncCrawlIssuesToActions } from "@/lib/research/crawl-actions";
+import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runPrelaunchResearch } from "@/lib/dataforseo/prelaunch-runner";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
@@ -97,10 +97,12 @@ async function executeJob(
       if (!site) throw new JobExecutionError("SITE_NOT_FOUND");
       const crawlId = typeof payload.crawlId === "string" ? payload.crawlId : undefined;
       await runSiteCrawl(job.siteId, site.domain, integer(payload.maxPages, 200), crawlId);
+      // Wave 6 cutover: the crawl now feeds the funnel directly. The legacy
+      // action producer is retired; its table stays frozen and readable.
       try {
-        await syncCrawlIssuesToActions(job.siteId);
+        await refreshFunnelForSite(db, job.siteId, { detectedBy: "crawl-job" });
       } catch (error) {
-        console.error("[CrawlSEO worker] crawl action sync failed", error);
+        console.error("[CrawlSEO worker] funnel refresh after crawl failed", error);
       }
       return;
     }

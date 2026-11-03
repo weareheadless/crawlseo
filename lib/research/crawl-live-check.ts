@@ -1,4 +1,22 @@
-import type { CrawlActionDraft } from "@/lib/research/crawl-actions";
+/**
+ * The shape a live check needs. It used to live in the legacy crawl action
+ * factory; the factory is retired (Wave 6) so the type lives with its consumer.
+ */
+export type CrawlActionDraft = {
+  dedupeKey: string;
+  title: string;
+  targetUrl: string;
+  recommendation: string;
+  priority: number;
+  issueType: string;
+  kind: "fix_technical_issue" | "fix_broken_link" | "fix_business_identity_jsonld";
+  fixMode: "site_code" | "blog_content";
+  severity: string;
+  groupKey: string;
+  groupLabel: string;
+  affectedPages: number;
+  evidence: Record<string, unknown>;
+};
 import type { BusinessKnowledgeDocument, BusinessKnowledgeFields } from "@/lib/projects/business-knowledge";
 
 export type SchemaSemanticsFinding = { code: string; field: string; status: "mismatch" | "unknown"; expected?: string; observed?: string; evidence: string; key: string; location?: string };

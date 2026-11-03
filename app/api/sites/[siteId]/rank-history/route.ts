@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
+import { buildRankHistory } from "@/lib/funnel/metric-semantics";
 
 export async function GET(
   req: Request,
@@ -67,48 +68,10 @@ export async function GET(
       }),
     ]);
 
-    // Merge data by date, preferring RankSnapshot when both exist
-    const byDate = new Map<
-      string,
-      { date: string; position: number; clicks: number; impressions: number }
-    >();
-
-    // Aggregate keyword rows by date (may have multiple per date for different devices/countries)
-    for (const row of keywordRows) {
-      const dateStr = row.date.toISOString().split("T")[0];
-      const existing = byDate.get(dateStr);
-      if (existing) {
-        existing.clicks += row.clicks;
-        existing.impressions += row.impressions;
-        // Use weighted average for position
-        existing.position =
-          (existing.position * (existing.impressions - row.impressions) +
-            row.position * row.impressions) /
-          existing.impressions;
-      } else {
-        byDate.set(dateStr, {
-          date: dateStr,
-          position: row.position,
-          clicks: row.clicks,
-          impressions: row.impressions,
-        });
-      }
-    }
-
-    // Overlay RankSnapshot data (takes precedence)
-    for (const snap of snapshots) {
-      const dateStr = snap.date.toISOString().split("T")[0];
-      byDate.set(dateStr, {
-        date: dateStr,
-        position: snap.position,
-        clicks: snap.clicks,
-        impressions: snap.impressions,
-      });
-    }
-
-    const history = [...byDate.values()].sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
+    // DS-05: no unlabelled precedence overlay. Search Console average position
+    // and a sampled SERP rank are different measurements, so both series are
+    // returned tagged rather than one silently overwriting the other.
+    const history = buildRankHistory({ gsc: keywordRows, sampled: snapshots });
 
     return Response.json(history);
   } catch (error) {
