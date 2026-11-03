@@ -17,9 +17,7 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { getAllOpportunities } from "@/lib/seo-opportunities";
 import { TimeframeSelect } from "@/components/sites/timeframe-select";
 import { parseSeoTimeframe } from "@/lib/seo-timeframes";
-import { readPipelineOverview } from "@/lib/pipeline/overview";
-import { getFunnelCounts } from "@/lib/funnel/views";
-import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
+import { getFunnelOverview } from "@/lib/funnel/views";
 
 interface SitePageProps {
   params: Promise<{ siteId: string }>;
@@ -58,13 +56,12 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
     orderBy: { date: "desc" },
     select: { perfScore: true, lcp: true, url: true },
   });
-  const pipeline = await readPipelineOverview(siteId);
 
   const opportunities =
     site._count.keywords > 0
       ? await getAllOpportunities(siteId)
       : null;
-  const funnel = site.projectId ? await getFunnelCounts(db, site.projectId) : null;
+  const funnel = site.projectId ? await getFunnelOverview(db, site.projectId) : null;
 
   return (
     <div>
@@ -86,10 +83,10 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
       {/* The funnel, in order. Each stage links to its surface. */}
       <ol className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-5">
         {[
-          { label: "Demand map", value: funnel ? `${funnel.total} opportunities` : "no project", href: `/sites/${siteId}/demand` },
-          { label: "Opportunities", value: funnel ? `${funnel.detected} detected` : "—", href: `/sites/${siteId}/opportunities` },
-          { label: "Work", value: funnel ? `${funnel.accepted + funnel.inProgress} accepted` : "—", href: `/sites/${siteId}/work` },
-          { label: "Delivery", value: funnel ? `${funnel.closed} closed` : "—", href: `/sites/${siteId}/work` },
+          { label: "Demand map", value: funnel ? `${funnel.clusters} clusters` : "no project", href: `/sites/${siteId}/demand` },
+          { label: "Opportunities", value: funnel ? `${funnel.counts.detected} detected` : "—", href: `/sites/${siteId}/opportunities` },
+          { label: "Work", value: funnel ? `${funnel.counts.accepted + funnel.counts.inProgress} accepted` : "—", href: `/sites/${siteId}/work` },
+          { label: "Delivery", value: funnel ? `${funnel.counts.closed} closed` : "—", href: `/sites/${siteId}/work` },
           { label: "Evidence", value: funnel ? `${funnel.evidenceTotal} records` : "—", href: `/sites/${siteId}/evidence` },
         ].map((stage, index) => (
           <li key={stage.label}>
@@ -106,46 +103,80 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
         ))}
       </ol>
 
-      <div className="mb-6 space-y-4">
-        <PipelineNavigation siteId={siteId} />
-        <section aria-labelledby="overview-decisions" className="panel p-4 sm:p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="overview-decisions" className="font-heading text-lg font-semibold">Site overview · decisions and active work</h2>
-            <span className="text-xs text-muted-foreground">Activity window: last {pipeline.windowDays} days</span>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div><h3 className="text-sm font-semibold">What do we know?</h3>
-              <p className="mt-2 text-sm">
-                {pipeline.business
-                  ? `Canonical knowledge revision ${pipeline.business.revision}${pipeline.business.acceptedRevision == null ? " (not accepted)" : ` · accepted ${pipeline.business.acceptedRevision}`}`
-                  : "No canonical business knowledge is recorded yet."}
+      {/* The funnel decides; legacy decision panels are gone from this page. */}
+      {funnel && (
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          <section className="panel p-4 sm:p-5" aria-labelledby="overview-next">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 id="overview-next" className="font-heading text-lg font-semibold">What to play next</h2>
+              <Link className="text-xs text-primary hover:underline" href={`/sites/${siteId}/opportunities`}>
+                All opportunities →
+              </Link>
+            </div>
+            {funnel.topOpportunities.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Nothing detected yet. Refresh from stored evidence on the Opportunities board to detect work.
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {pipeline.profile
-                  ? `Operational context: ${pipeline.profile.topicCount} topic${pipeline.profile.topicCount === 1 ? "" : "s"}${pipeline.profile.hasAudience ? ", audience set" : ", audience not recorded"}`
-                  : "No operational business context is recorded."}
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {funnel.topOpportunities.map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={`/sites/${siteId}/opportunities/${row.id}`}
+                      className="block rounded-lg border border-border px-3 py-2 transition hover:border-primary/40"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.title}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{row.score ?? "—"}</span>
+                      </div>
+                      {row.reason && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{row.reason}</p>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="panel p-4 sm:p-5" aria-labelledby="overview-running">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 id="overview-running" className="font-heading text-lg font-semibold">In flight</h2>
+              <Link className="text-xs text-primary hover:underline" href={`/sites/${siteId}/work`}>
+                Open Work →
+              </Link>
+            </div>
+            {funnel.tasks.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No task yet. Accepting an opportunity is the only way work enters the queue.
               </p>
-            </div>
-            <div><h3 className="text-sm font-semibold">What improved?</h3>
-              {pipeline.measured.length ? <ul className="mt-2 space-y-2">{pipeline.measured.map((item) => <li key={item.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${item.id}`}>{item.title}</Link> · measurement recorded {item.measuredAt?.toLocaleDateString()} (not attributed)</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No measured outcome is linked to work yet.</p>}
-            </div>
-            <div><h3 className="text-sm font-semibold">What is running?</h3>
-              {pipeline.runs.length ? <ul className="mt-2 space-y-2">{pipeline.runs.map((run) => <li key={run.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/research/runs/${run.id}`}>{run.title}</Link> · {run.status.toLowerCase()} · {run.createdAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No research run currently queued or running.</p>}
-              {pipeline.runsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
-            </div>
-            <div><h3 className="text-sm font-semibold">What needs a decision?</h3>
-              {pipeline.actions.length ? <ul className="mt-2 space-y-2">{pipeline.actions.map((action) => <li key={action.id} className="text-sm"><Link className="text-primary underline" href={`/sites/${siteId}/actions/${action.id}`}>{action.title}</Link> · {action.preparationStatus === "BLOCKED" ? "blocked input" : ["DRAFT_READY", "DELIVERY_APPROVED", "APPROVED"].includes(action.status) ? "needs review / decision" : action.status.toLowerCase()} · updated {action.updatedAt.toLocaleDateString()}</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No recently active work in the decision queue; this does not mean no work is needed.</p>}
-              {pipeline.actionsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing first 20; list truncated.</p>}
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-            <Link className="text-primary underline" href={`/sites/${siteId}/business`}>Review business context</Link>
-            <Link className="text-primary underline" href={`/sites/${siteId}/research`}>Review research</Link>
-            <Link className="text-primary underline" href={`/sites/${siteId}/work`}>Open Work</Link>
-            <Link className="text-primary underline" href={`/sites/${siteId}/results`}>Review Results</Link>
-          </div>
-        </section>
-      </div>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {funnel.tasks.map((task) => (
+                  <li key={task.id}>
+                    <Link
+                      href={`/sites/${siteId}/opportunities/${task.opportunityId}`}
+                      className="block rounded-lg border border-border px-3 py-2 transition hover:border-primary/40"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{task.title}</span>
+                        <span className="text-[11px] text-muted-foreground">{task.status.replaceAll("_", " ")}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        executor {task.assignedTo}
+                        {task.agentPreparedById ? " · prepared by agent" : ""}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {funnel.recentVerdicts.length > 0 && (
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                Outcomes: {funnel.recentVerdicts.map((v) => `${v.count} ${v.verdict.replaceAll("_", " ")}`).join(" · ")}
+              </p>
+            )}
+          </section>
+        </div>
+      )}
 
       {site._count.keywords === 0 ? (
         <EmptyState

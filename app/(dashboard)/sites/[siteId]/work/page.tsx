@@ -51,10 +51,13 @@ export default async function WorkPage({ params }: Props) {
     );
   }
 
-  const [tasks, accepted] = await Promise.all([
+  const [tasks, acceptedAll] = await Promise.all([
     listTasks(db, site.projectId),
     listOpportunities(db, { projectId: site.projectId, statuses: ["accepted", "in_progress"] }),
   ]);
+  // An accepted opportunity that already has a task is shown once, as the task.
+  const taskedOpportunities = new Set(tasks.map((task) => task.opportunityId));
+  const accepted = acceptedAll.filter((row) => !taskedOpportunities.has(row.id));
 
   const grouped = STATE_ORDER.map((state) => ({ state, rows: tasks.filter((task) => task.status === state) })).filter(
     (group) => group.rows.length > 0
@@ -120,7 +123,7 @@ export default async function WorkPage({ params }: Props) {
                         <ScoreBadge score={task.opportunityScore} />
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                        <span>for {task.opportunityTitle}</span>
+                        <span>{OPPORTUNITY_LABELS[task.opportunityType].label}</span>
                         <span>· executor {task.assignedTo}</span>
                         {task.agentPreparedById && <span>· prepared by agent</span>}
                         {task.humanConfirmedBy && <span>· confirmed by {task.humanConfirmedBy}</span>}

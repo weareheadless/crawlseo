@@ -50,6 +50,11 @@ export default async function DemandMapPage({ params }: Props) {
 
   const clusters = await listDemandClusters(db, site.projectId);
   const openTotal = clusters.reduce((sum, cluster) => sum + cluster.openOpportunities, 0);
+  // Opportunities exist before clusters do. Saying "0 open" while the board has
+  // work would be a lie, so the unclustered remainder is stated explicitly.
+  const unclustered = await db.opportunity.count({
+    where: { projectId: site.projectId, clusterId: null, status: { in: ["detected", "accepted", "in_progress"] } },
+  });
 
   return (
     <div>
@@ -60,7 +65,7 @@ export default async function DemandMapPage({ params }: Props) {
         actions={<RefreshFunnelButton siteId={siteId} />}
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="panel px-4 py-3">
           <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">Clusters</p>
           <p className="mt-1 font-heading text-2xl font-semibold">{clusters.length}</p>
@@ -70,8 +75,12 @@ export default async function DemandMapPage({ params }: Props) {
           <p className="mt-1 font-heading text-2xl font-semibold">{clusters.filter((cluster) => cluster.tracked).length}</p>
         </div>
         <div className="panel px-4 py-3">
-          <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">Open opportunities</p>
+          <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">In a cluster</p>
           <p className="mt-1 font-heading text-2xl font-semibold">{openTotal}</p>
+        </div>
+        <div className="panel px-4 py-3">
+          <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">Not yet clustered</p>
+          <p className="mt-1 font-heading text-2xl font-semibold">{unclustered}</p>
         </div>
       </div>
 
