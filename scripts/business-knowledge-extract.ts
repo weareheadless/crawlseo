@@ -19,7 +19,7 @@ import { PrismaClient } from "@prisma/client";
 import { writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 
-const MAX_PAGES = 6;
+const MAX_PAGES = 10;
 const MAX_CHARS_PER_PAGE = 6_000;
 
 function parseArgs(argv: string[]) {
@@ -110,7 +110,26 @@ async function main() {
     .filter((row) => row.url)
     .sort((a, b) => b.impressions - a.impressions)
     .map((row) => row.url);
-  const urls = [...new Set([`https://${site.domain.replace(/^https?:\/\//, "")}/`, ...ranked])].slice(0, MAX_PAGES);
+  // Traffic pages alone miss service sections that rarely rank (tapisserie was
+  // absent from the extracted services because its page was not fetched). Add one
+  // representative per top-level path from the sitemap.
+  const origin = `https://${site.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+  const sitemapSections: string[] = [];
+  try {
+    const xml = await (await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(15_000) })).text();
+    const locs = [...xml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((match) => match[1].trim());
+    const seen = new Set<string>();
+    for (const loc of locs) {
+      const path = new URL(loc).pathname.replace(/^\/+/, "");
+      const section = path.split("/")[0] || "/";
+      if (seen.has(section)) continue;
+      seen.add(section);
+      sitemapSections.push(loc);
+    }
+  } catch {
+    // No sitemap: traffic pages and the root are still enough to start.
+  }
+  const urls = [...new Set([`${origin}/`, ...ranked, ...sitemapSections])].slice(0, MAX_PAGES);
 
   const pages: Array<{ url: string; text: string; title: string }> = [];
   for (const url of urls) {

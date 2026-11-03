@@ -282,6 +282,7 @@ export async function ingestResearchFinding(
         runId,
         type: input.type,
         theme: input.theme,
+        primaryQuery: input.primaryQuery ?? null,
         summary: input.summary,
         confidence: input.confidence,
         sentiment: input.sentiment,
@@ -442,6 +443,7 @@ export async function createResearchFinding(
   input: {
     type: IngestResearchFindingInput["type"];
     theme: string;
+    primaryQuery?: string;
     summary: string;
     confidence: number;
     sentiment?: string;
@@ -465,6 +467,7 @@ export async function createResearchFinding(
         runId,
         type: input.type,
         theme: input.theme,
+        primaryQuery: input.primaryQuery ?? null,
         summary: input.summary,
         confidence: input.confidence,
         sentiment: input.sentiment,

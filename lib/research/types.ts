@@ -61,6 +61,8 @@ export const researchSourceInputSchema = z.object({
 export const ingestResearchFindingSchema = z.object({
   type: researchFindingTypeSchema,
   theme: shortText(240),
+  /// The phrase to validate against search demand, when the finding names one.
+  primaryQuery: shortText(300).optional(),
   summary: z.string().trim().min(20).max(4000),
   confidence: z.number().int().min(0).max(100).default(50),
   sentiment: z.string().trim().max(40).optional(),

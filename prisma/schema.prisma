@@ -1107,6 +1107,8 @@ model ResearchFinding {
   runId               String
   type                ResearchFindingType
   theme               String
+  /// The search phrase the finding wants validated (synthesizer `primary_query`).
+  primaryQuery        String?
   summary             String
   confidence          Int                 @default(50)
   sentiment           String?

@@ -24,6 +24,8 @@ export type CollectionInput = {
   languageCode: string;
   locationCode: number;
   domain?: string;
+  /** SERP device; rankings differ between desktop and mobile. */
+  device?: "desktop" | "mobile";
 };
 
 export type CollectedEvidence = {
@@ -154,6 +156,7 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
           keyword: query,
           languageCode: input.languageCode,
           locationCode: input.locationCode,
+          device: input.device,
         }),
       costOf: (result) => microsOf(result.costMicros),
     });
@@ -180,7 +183,12 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
       "provider:organicResults": { value: items.length, unit: "count", source: "provider" },
     };
     if (ourPosition > 0) metrics["provider:position"] = { value: ourPosition, unit: "rank", source: "provider" };
-    const dimensions = { query, competitorCovered: covered ? "true" : "false", topUrl: items[0]?.url ?? null };
+    const dimensions = {
+      query,
+      device: input.device ?? "desktop",
+      competitorCovered: covered ? "true" : "false",
+      topUrl: items[0]?.url ?? null,
+    };
     const stored = await storeEvidenceRecord(db, {
       projectId: input.projectId,
       siteId: input.siteId,

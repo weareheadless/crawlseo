@@ -70,7 +70,7 @@ export async function bridgeBusinessKnowledgeToEvidence(
       result.skipped.push({ field, reason: "no usable value" });
       continue;
     }
-    await storeEvidenceRecord(db, {
+    const stored = await storeEvidenceRecord(db, {
       projectId: opts.projectId,
       siteId: opts.siteId ?? null,
       kind: "knowledge_fact",
@@ -87,6 +87,18 @@ export async function bridgeBusinessKnowledgeToEvidence(
         provenanceKind: fact?.provenance?.kind ?? "unknown",
       },
       metrics: {},
+    });
+    // A new revision supersedes the previous fact for the same field, so the why
+    // leg never attaches a stale value.
+    await db.evidenceRecord.updateMany({
+      where: {
+        projectId: opts.projectId,
+        kind: "knowledge_fact",
+        supersededById: null,
+        id: { not: stored.id },
+        dimensions: { path: ["field"], equals: field },
+      },
+      data: { supersededById: stored.id },
     });
     result.stored += 1;
   }

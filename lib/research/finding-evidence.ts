@@ -22,6 +22,7 @@ type StoredFinding = {
   runId: string;
   type: string;
   theme: string;
+  primaryQuery?: string | null;
   summary: string;
   confidence: number;
   sentiment: string | null;
@@ -53,6 +54,8 @@ export function findingDimensions(finding: StoredFinding): Record<string, string
     runId: finding.runId,
     findingType: finding.type,
     theme: finding.theme,
+    // The phrase to validate; the join runner collects on this, not on the theme.
+    query: finding.primaryQuery ?? null,
     // The detectors read these two flags; a finding without a winnable gap
     // stays context and never becomes a task.
     painPoint: isPainPoint ? "true" : null,
@@ -82,6 +85,7 @@ export async function bridgeFindingsToEvidence(
       runId: true,
       type: true,
       theme: true,
+      primaryQuery: true,
       summary: true,
       confidence: true,
       sentiment: true,

@@ -523,6 +523,8 @@ export async function executeDataForSeoOrganicSerp(input: {
   keyword: string;
   languageCode: string;
   locationCode: number;
+  /** SERP device. Rankings are device-specific, so it is explicit, not implied. */
+  device?: "desktop" | "mobile";
 }): Promise<DataForSeoSerpResearchResult> {
   const credentials = await credentialsForProject(input.projectId);
   const response = await dataforseoPostWithMeta(
@@ -533,8 +535,8 @@ export async function executeDataForSeoOrganicSerp(input: {
       keyword: input.keyword,
       language_code: input.languageCode,
       location_code: input.locationCode,
-      device: "desktop",
-      os: "windows",
+      device: input.device ?? "desktop",
+      os: input.device === "mobile" ? "android" : "windows",
       depth: 10,
       group_organic_results: true,
     }]

@@ -86,7 +86,9 @@ export function matchKnowledgeFact(
   opportunity: { title: string; summary: string | null; clusterSlug?: string | null },
   facts: JoinEvidence[]
 ): { fact: JoinEvidence; shared: string[] } | null {
-  const wanted = tokens(`${opportunity.title} ${opportunity.summary ?? ""} ${opportunity.clusterSlug ?? ""}`);
+  // URLs in the title contain the brand name, which would match every page.
+  const text = `${opportunity.title} ${opportunity.summary ?? ""} ${opportunity.clusterSlug ?? ""}`.replace(/https?:\/\/\S+/g, " ");
+  const wanted = tokens(text);
   let best: { fact: JoinEvidence; shared: string[] } | null = null;
   for (const fact of facts) {
     const shared = [...factTokens(fact)].filter((token) => wanted.has(token));
@@ -127,8 +129,10 @@ async function queryForOpportunity(
       select: { dimensions: true },
     });
     for (const row of evidence) {
-      const dimensions = (row.dimensions ?? {}) as { theme?: unknown; question?: unknown; painPointSummary?: unknown };
-      for (const candidate of [dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
+      const dimensions = (row.dimensions ?? {}) as { query?: unknown; theme?: unknown; question?: unknown; painPointSummary?: unknown };
+      // `query` is the finding's primary_query: the phrase research wants
+      // validated. It comes before the theme, which is a sentence.
+      for (const candidate of [dimensions.query, dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
         if (usableQuery(candidate)) return (candidate as string).trim();
       }
     }
