@@ -25,6 +25,7 @@ import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
+import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 import { bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 
 loadEnvConfig(process.cwd());
@@ -196,6 +197,18 @@ async function executeJob(
           // One home for raw provider data: once the payload is in the evidence
           // store, drop the duplicate copy from the run row.
           if (bridged.stored > 0) await releaseBridgedRunResult(db as never, stored);
+          // DS-02 step 2: dual-write the final state into the unified run table so
+          // the later read switch needs no backfill.
+          const shadowSource = await db.articleKeywordResearchRun.findUnique({
+            where: { id: researchRunId },
+            select: {
+              id: true, projectId: true, siteId: true, idempotencyKey: true, ideaSummary: true, seed: true,
+              kind: true, language: true, country: true, providerLanguageCode: true, providerLocationCode: true,
+              status: true, providerTaskId: true, costMicros: true, errorCode: true, requestedAt: true,
+              attemptedAt: true, completedAt: true, parentRunId: true,
+            },
+          });
+          if (shadowSource) await syncArticleRunToResearchRun(db as never, shadowSource);
         }
       } catch (error) {
         console.error("[CrawlSEO worker] keyword evidence bridge failed", error);

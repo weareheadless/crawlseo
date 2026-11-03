@@ -1020,6 +1020,14 @@ model ResearchRun {
   requestedBy   String?
   startedAt     DateTime?
   completedAt   DateTime?
+  /// DS-02 bookkeeping moved off the per-family run tables.
+  idempotencyKey       String?
+  parentRunId          String?
+  seed                 String?
+  providerTaskId       String?
+  providerLanguageCode String?
+  providerLocationCode Int?
+  attemptedAt          DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -1033,6 +1041,8 @@ model ResearchRun {
   @@index([siteId, status])
   @@index([projectId, createdAt])
   @@unique([siteId, scheduleKey])
+  @@unique([projectId, kind, idempotencyKey])
+  @@unique([parentRunId])
 }
 
 model ResearchSourceIdentity {
@@ -1269,6 +1279,10 @@ enum ResearchRunKind {
   MARKET
   SEO
   MIXED
+  /// DS-02: the article keyword family, unified into this table.
+  ARTICLE_KEYWORD
+  /// DS-02: project-scoped prelaunch research (no site).
+  PRELAUNCH
 }
 
 enum ResearchTrigger {

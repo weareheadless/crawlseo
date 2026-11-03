@@ -17,6 +17,17 @@ requested the day before this spec. Refactoring it inside a cleanup pass would p
 a paid feature at risk for checklist progress, so the remaining work is written
 down here instead of half-done.
 
+## Progress
+
+| Step | State |
+|---|---|
+| 1. Schema only | **done** — `ResearchRun` gained `idempotencyKey`, `parentRunId`, `seed`, `providerTaskId`, `providerLanguageCode`, `providerLocationCode`, `attemptedAt`, the two unique constraints, and `ARTICLE_KEYWORD`/`PRELAUNCH` kinds. Migration `20261103150000_ds02_run_unification_schema` with a `down.sql`. |
+| 2. Dual-write | **done for the article family** — `syncArticleRunToResearchRun` writes the final state at job completion; the 26 existing runs were backfilled, so the shadow has full parity. |
+| 3. Read switch | next — needs creation-time shadows as well, or in-flight runs disappear from the screen. |
+| 4. Write switch | after 3 |
+| 5. Freeze | after 4 |
+| 6. Drop | after 5 |
+
 ## What already moved (so the cutover is smaller)
 
 | Piece | State |
