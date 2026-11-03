@@ -169,6 +169,39 @@ per-check semantics, not a replacement for our crawler. Our crawler stays the
 authority for `MISSING_SCHEMA`, `MIXED_CONTENT` and thin content; provider
 `title_too_long` covers a gap we have.
 
+## Second and third sites
+
+atelier-harmonie had to be crawled again first: its recent crawl jobs failed and
+the last completed one analysed a single page. A direct crawl produced 60 pages
+(71 sitemap URLs), and a queued crawl through the worker now completes too, so the
+site was usable. oceanicvibes has only 9 pages — the site is that small, not a
+crawler fault — so it cannot meet the 20-page floor.
+
+| Site | Pages | Agreement | Provider only | Ours only |
+|---|---|---|---|---|
+| susimacdonald.com | 30 | `MISSING_ALT`, `MISSING_DESCRIPTION`, `MISSING_H1` | `THIN_CONTENT`, `TITLE_TOO_LONG` | `MISSING_SCHEMA`, `MIXED_CONTENT`, `DUPLICATE_DESCRIPTION`, `SLOW_PAGE` |
+| atelier-harmonie.com | 30 | none | `TITLE_TOO_LONG` (22) | `MISSING_ALT` (29), `MISSING_SCHEMA` (30), `DUPLICATE_DESCRIPTION` (9), `MULTIPLE_H1` (3), `MISSING_SITEMAP` (1) |
+| oceanicvibes.com | 12 | `MISSING_CANONICAL` (5 vs 4) | `CLIENT_ERROR` (3) | `MISSING_SCHEMA` (19), `DUPLICATE_TITLE` (2), `DUPLICATE_DESCRIPTION` (2), `MISSING_SITEMAP`, `SLOW_PAGE` |
+
+What the three together show:
+
+- **`TITLE_TOO_LONG` is a consistent provider-only finding** (22 on atelier, 21 on
+  susimacdonald). Our crawler does not implement it. That is a gap worth closing
+  on our side rather than adopting theirs.
+- **`MISSING_SCHEMA` is ours on every site**, by design: the provider cannot see
+  JSON-LD.
+- **`MISSING_CANONICAL` agrees** on oceanicvibes, which validates the polarity fix
+  (`canonical: true` means the tag exists).
+- **`MISSING_ALT` is not stable across sites or runs** (4=4 on susimacdonald without
+  JS, 29 ours vs 0 theirs on atelier). The two crawlers see different image sets;
+  this check cannot move to provider data.
+- **`CLIENT_ERROR` is provider-only on oceanicvibes** (3 pages). Our crawler records
+  those pages differently; unresolved.
+
+Three sites, three different disagreement patterns. That is the strongest argument
+against a wholesale switch: the checks are not interchangeable, and which one
+agrees depends on the site's markup.
+
 ## OnPage API shape (corrected)
 
 - There is **no `task_get`** for OnPage. Results are retrieved with
