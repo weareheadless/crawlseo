@@ -24,10 +24,23 @@ function routeExists(href: string) {
 }
 
 describe("pipeline UI integration", () => {
-  it("exposes overview, exactly five stages, and settings", () => {
-    const labels = buildSidebarGroups("site-1").map((group) => group.label);
-    expect(labels.slice(0, 6)).toEqual(["Overview", "Business", "Research", "Findings", "Work", "Results"]);
-    expect(labels.slice(6)).toEqual(["Settings", "Reports"]);
+  it("exposes exactly five funnel stages in order, plus settings", () => {
+    const groups = buildSidebarGroups("site-1");
+    const labels = groups.map((group) => group.label);
+    expect(labels).toEqual(["Workspace", "Funnel", "Context", "Evidence sources", "Settings", "Legacy"]);
+    // The funnel group is the five stages of docs/seo-funnel-spine-plan.md §5, in order.
+    const funnel = groups.find((group) => group.label === "Funnel")!;
+    expect(funnel.items.map((item) => item.label)).toEqual([
+      "Overview",
+      "Demand map",
+      "Opportunities",
+      "Work",
+      "Evidence",
+    ]);
+    expect(funnel.items[0].exact).toBe(true);
+    // Tools are demoted to evidence producers, not competing top-level stages.
+    const sources = groups.find((group) => group.label === "Evidence sources")!;
+    expect(sources.items.map((item) => item.label)).toEqual(["Keywords", "Crawl / Audit", "Vitals", "AEO / GEO", "Research"]);
   });
 
   it("keeps Content Studio editor and GSC opportunity analysis as contextual pages", () => {
@@ -37,9 +50,15 @@ describe("pipeline UI integration", () => {
     expect(content).toContain('currentStage="work"');
     expect(content).not.toContain("redirect(`/sites/${siteId}/work");
 
+    // The funnel board replaces the old analysis page; the analysis is preserved
+    // read-only under Legacy so no capability is lost.
     const opportunities = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "opportunities", "page.tsx"), "utf8");
-    for (const feature of ["getAllOpportunities", "Striking distance", "Low CTR", "Content decay", "Keyword cannibalization", "Priority feed", "CsvExportButton", 'currentStage="findings"']) {
+    for (const feature of ["listOpportunities", "getFunnelCounts", "RefreshFunnelButton", "CompletenessChip", "ScoreBadge"]) {
       expect(opportunities).toContain(feature);
+    }
+    const legacy = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "legacy-opportunities", "page.tsx"), "utf8");
+    for (const feature of ["getAllOpportunities", "Striking distance", "Low CTR", "Content decay", "Keyword cannibalization", "CsvExportButton"]) {
+      expect(legacy).toContain(feature);
     }
   });
 

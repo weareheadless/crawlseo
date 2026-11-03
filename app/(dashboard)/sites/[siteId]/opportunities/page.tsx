@@ -1,260 +1,207 @@
-import { getUserIdFromCookies } from "@/lib/session-helper";
-import { db } from "@/lib/db";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAllOpportunities } from "@/lib/seo-opportunities";
+
+import { db } from "@/lib/db";
+import { getUserIdFromCookies } from "@/lib/session-helper";
+import { listOpportunities, getFunnelCounts, type OpportunityRow } from "@/lib/funnel/views";
+import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { CsvExportButton } from "@/components/ui/csv-export-button";
-import { DataLagBadge } from "@/components/ui/data-lag-badge";
-import { PositionBadge, NumCell, CtrCell } from "@/components/ui/data-table";
+import {
+  CompletenessChip,
+  DimensionChip,
+  ScoreBadge,
+  StatusChip,
+  relativeTime,
+} from "@/components/funnel/badges";
+import { RefreshFunnelButton } from "@/components/funnel/refresh-button";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
-import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
+import type { OpportunityStatus } from "@prisma/client";
 
 interface Props {
   params: Promise<{ siteId: string }>;
+  searchParams: Promise<{ status?: string; leg?: string; type?: string; q?: string }>;
 }
 
-export default async function OpportunitiesPage({ params }: Props) {
+const STATUS_TABS: Array<{ key: string; label: string; statuses?: OpportunityStatus[] }> = [
+  { key: "open", label: "Open", statuses: ["detected", "accepted", "in_progress"] },
+  { key: "detected", label: "Detected", statuses: ["detected"] },
+  { key: "accepted", label: "Accepted", statuses: ["accepted", "in_progress"] },
+  { key: "parked", label: "Parked", statuses: ["parked"] },
+  { key: "all", label: "All" },
+];
+
+export default async function OpportunitiesPage({ params, searchParams }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
   if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { userId: true, domain: true, _count: { select: { keywords: true } } },
+    select: { userId: true, domain: true, projectId: true },
   });
   if (!site) redirect("/sites");
 
-  if (site._count.keywords === 0) {
+  if (!site.projectId) {
     return (
       <div>
-        <PageHeader
-          eyebrow={site.domain}
-          title="Opportunities"
-          description="Quick wins from your GSC data"
-        />
-        <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="findings" /></div>
+        <PageHeader eyebrow={site.domain} title="Opportunities" description="Every task on this site starts here." />
         <EmptyState
-          title="Sync GSC first"
-          description="Opportunities are computed from keyword and page performance."
-          actionLabel="Back to overview"
-          actionHref={`/sites/${siteId}`}
+          title="This site is not attached to a project yet"
+          description="The funnel is project-scoped: evidence, opportunities and tasks all belong to a project. Attach the site to a project to start detecting work."
+          actionLabel="Open sites"
+          actionHref="/sites"
         />
       </div>
     );
   }
 
-  const data = await getAllOpportunities(siteId);
+  const query = await searchParams;
+  const tab = STATUS_TABS.find((entry) => entry.key === (query.status ?? "open")) ?? STATUS_TABS[0];
+  const [rows, counts] = await Promise.all([
+    listOpportunities(db, {
+      projectId: site.projectId,
+      statuses: tab.statuses,
+      completeness: query.leg && query.leg !== "all" ? [query.leg] : undefined,
+      search: query.q,
+    }),
+    getFunnelCounts(db, site.projectId),
+  ]);
 
   return (
     <div>
       <PageHeader
         eyebrow={site.domain}
         title="Opportunities"
-        description="Striking distance, low CTR, content decay, and keyword cannibalization"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <DataLagBadge />
-            <CsvExportButton siteId={siteId} type="keywords" />
-            <CsvExportButton siteId={siteId} type="pages" />
-          </div>
-        }
+        description="What we could win, why it matters, and what it costs. Accept one to turn it into a task."
+        actions={<RefreshFunnelButton siteId={siteId} />}
       />
 
-      <div className="mb-5 space-y-3">
-        <PipelineNavigation siteId={siteId} currentStage="findings" />
-        <PipelineStageContext siteId={siteId} currentStage="findings" />
+      {/* Stage strip: the funnel in one line, every number a link. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Detected", value: counts.detected, href: `/sites/${siteId}/opportunities?status=detected`, tone: "info" },
+          { label: "Accepted", value: counts.accepted + counts.inProgress, href: `/sites/${siteId}/opportunities?status=accepted`, tone: "primary" },
+          { label: "Both legs", value: counts.bothLegs, href: `/sites/${siteId}/opportunities?status=all&leg=both`, tone: "success" },
+          { label: "Parked", value: counts.parked, href: `/sites/${siteId}/opportunities?status=parked`, tone: "warning" },
+        ].map((cell) => (
+          <Link
+            key={cell.label}
+            href={cell.href}
+            className="panel px-4 py-3 transition hover:border-primary/40"
+          >
+            <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">{cell.label}</p>
+            <p className="mt-1 font-heading text-2xl font-semibold text-foreground">{cell.value}</p>
+          </Link>
+        ))}
       </div>
-      <p className="mb-5 text-sm text-muted-foreground">Contextual GSC opportunity analysis. Review recorded evidence in <Link className="text-primary underline" href={`/sites/${siteId}/findings`}>Findings</Link>.</p>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Mini label="Striking distance" value={data.summary.strikingDistance} />
-        <Mini label="Low CTR" value={data.summary.lowCtr} />
-        <Mini label="Content decay" value={data.summary.contentDecay} />
-        <Mini label="Cannibalization" value={data.summary.cannibalization} />
-      </div>
-
-      {data.feed.length > 0 && (
-        <div className="panel mb-6 p-5">
-          <h3 className="font-heading text-lg font-semibold">Priority feed</h3>
-          <ul className="mt-4 space-y-3">
-            {data.feed.map((item, i) => (
-              <li
-                key={`${item.type}-${item.title}-${i}`}
-                className="flex flex-col gap-1 border-b border-border/40 pb-3 last:border-0 sm:flex-row sm:items-start sm:justify-between"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <TypeBadge type={item.type} />
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
-                        item.severity === "high" && "bg-danger/15 text-danger",
-                        item.severity === "medium" && "bg-warning/15 text-warning",
-                        item.severity === "low" && "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {item.severity}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-medium text-foreground break-all">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">{item.detail}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+      {/* One filter row. Not two, not a tab pile. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <nav aria-label="Opportunity status" className="flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
+          {STATUS_TABS.map((entry) => (
+            <Link
+              key={entry.key}
+              href={`/sites/${siteId}/opportunities?status=${entry.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+              aria-current={entry.key === tab.key ? "page" : undefined}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                entry.key === tab.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {entry.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
+          {[
+            { key: "all", label: "All evidence" },
+            { key: "both", label: "Both legs" },
+            { key: "why", label: "Why only" },
+            { key: "how", label: "How only" },
+          ].map((entry) => (
+            <Link
+              key={entry.key}
+              href={`/sites/${siteId}/opportunities?status=${tab.key}${entry.key === "all" ? "" : `&leg=${entry.key}`}`}
+              aria-current={(query.leg ?? "all") === entry.key ? "page" : undefined}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                (query.leg ?? "all") === entry.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {entry.label}
+            </Link>
+          ))}
         </div>
-      )}
-
-      <div className="space-y-6">
-        <Section title="Striking distance (pos 4–20)">
-          {data.striking.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None right now</p>
-          ) : (
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                  <th className="py-2 text-left">Query</th>
-                  <th className="py-2 text-right">Pos</th>
-                  <th className="py-2 text-right">Impr.</th>
-                  <th className="py-2 text-right">Clicks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {data.striking.map((k) => (
-                  <tr key={k.query}>
-                    <td className="py-2 font-medium">{k.query}</td>
-                    <td className="py-2 text-right">
-                      <PositionBadge position={k.position} />
-                    </td>
-                    <td className="py-2 text-right">
-                      <NumCell value={k.impressions} />
-                    </td>
-                    <td className="py-2 text-right">
-                      <NumCell value={k.clicks} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Section>
-
-        <Section title="Low CTR vs expected">
-          {data.lowCtr.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None right now</p>
-          ) : (
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                  <th className="py-2 text-left">Query</th>
-                  <th className="py-2 text-right">Pos</th>
-                  <th className="py-2 text-right">CTR</th>
-                  <th className="py-2 text-right">Expected</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {data.lowCtr.map((k) => (
-                  <tr key={k.query}>
-                    <td className="py-2 font-medium">{k.query}</td>
-                    <td className="py-2 text-right">
-                      <PositionBadge position={k.position} />
-                    </td>
-                    <td className="py-2 text-right">
-                      <CtrCell ctr={k.ctr} />
-                    </td>
-                    <td className="py-2 text-right font-data text-muted-foreground">
-                      {(k.expectedCtr * 100).toFixed(1)}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Section>
-
-        <Section title="Content decay (pages −25%+ clicks)">
-          {data.decay.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No decaying pages</p>
-          ) : (
-            <ul className="space-y-2">
-              {data.decay.map((p) => (
-                <li key={p.url} className="flex justify-between gap-4 text-sm">
-                  <span className="truncate break-all text-foreground">{p.url}</span>
-                  <span className="shrink-0 font-data text-danger">
-                    {p.changePct.toFixed(0)}%
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
-
-        <Section title="Keyword cannibalization">
-          {data.cannibal.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No multi-URL queries detected</p>
-          ) : (
-            <ul className="space-y-4">
-              {data.cannibal.map((c) => (
-                <li key={c.query}>
-                  <p className="font-medium text-foreground">{c.query}</p>
-                  <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
-                    {c.pages.map((p) => (
-                      <li key={p.url} className="flex justify-between gap-2">
-                        <span className="truncate">{p.url}</span>
-                        <span className="font-data shrink-0">
-                          pos {p.position.toFixed(1)} · {p.clicks} clk
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+        <span className="text-xs text-muted-foreground">
+          {rows.length} {rows.length === 1 ? "opportunity" : "opportunities"}
+        </span>
       </div>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title={counts.total === 0 ? "Nothing detected yet" : "Nothing matches this view"}
+          description={
+            counts.total === 0
+              ? "Detectors read the evidence already stored for this site — crawl results and Search Console. Refresh to project that evidence into the funnel and detect opportunities. No paid calls are made."
+              : "Try another status or evidence filter."
+          }
+        />
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <OpportunityCard siteId={siteId} row={row} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-function Mini({ label, value }: { label: string; value: number }) {
+function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow }) {
+  const label = OPPORTUNITY_LABELS[row.type];
   return (
-    <div className="panel p-4">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 font-heading text-2xl font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
+    <Link
+      href={`/sites/${siteId}/opportunities/${row.id}`}
+      className="panel group block px-4 py-3 transition hover:border-primary/40"
+    >
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[11px] font-semibold text-primary">{label.code}</span>
+            <h3 className="font-heading text-base font-semibold text-foreground group-hover:text-primary">{row.title}</h3>
+            <StatusChip status={row.status} />
+          </div>
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="panel overflow-x-auto p-5">
-      <h3 className="mb-4 font-heading text-lg font-semibold">{title}</h3>
-      {children}
-    </div>
-  );
-}
+          {/* The reason. Always visible, never behind a click. */}
+          <p className="mt-1.5 text-sm text-foreground/85">
+            {row.reason ? (
+              <>
+                <span className="text-muted-foreground">Because </span>
+                {row.reason}
+              </>
+            ) : (
+              <span className="text-[var(--a-warning-700)]">No supporting evidence recorded</span>
+            )}
+          </p>
 
-function TypeBadge({ type }: { type: string }) {
-  const labels: Record<string, string> = {
-    striking_distance: "Striking",
-    low_ctr: "Low CTR",
-    content_decay: "Decay",
-    cannibalization: "Cannibal",
-  };
-  return (
-    <span className="rounded-md bg-signal-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal">
-      {labels[type] || type}
-    </span>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <DimensionChip dimension={row.dimension} />
+            <CompletenessChip completeness={row.completeness} />
+            {row.clusterSlug && <span className="text-[11px] text-muted-foreground">cluster · {row.clusterSlug}</span>}
+            <span className="text-[11px] text-muted-foreground">
+              {row.evidenceCount} evidence {row.evidenceCount === 1 ? "record" : "records"} · detected {relativeTime(row.firstDetectedAt)}
+            </span>
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <ScoreBadge score={row.score} />
+          <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">score</p>
+        </div>
+      </div>
+    </Link>
   );
 }
