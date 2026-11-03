@@ -71,7 +71,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
               { role: "user", content: input.user },
             ],
           }),
-          signal: AbortSignal.timeout(input.timeoutMs ?? 90_000),
+          signal: AbortSignal.timeout(input.timeoutMs ?? 120_000),
         });
 
         if (response.status === 429 || response.status >= 500) {
@@ -97,7 +97,9 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
     } catch (error) {
       const failure = error instanceof Error ? error : new ChatError(String(error));
       lastError = failure;
-      const retryable = failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500);
+      // A timeout is transient like a 5xx: the upstream was slow, not wrong.
+      const timedOut = failure.name === "TimeoutError" || /aborted|timeout/i.test(failure.message);
+      const retryable = timedOut || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
       if (!retryable) throw failure;
       if (attempt < attempts - 1) await sleep(backoffMs(attempt, failure.retryAfterMs));
     }
