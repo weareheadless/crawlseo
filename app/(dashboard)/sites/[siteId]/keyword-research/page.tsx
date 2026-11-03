@@ -6,6 +6,7 @@ import { KeywordResearchClient } from "@/components/research/keyword-research-cl
 import { resolveDataForSeoReadiness } from "@/lib/dataforseo/readiness";
 import { keywordRunRows } from "@/lib/dataforseo/keyword-run-view";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
+import { keywordRowsForScreen } from "@/lib/dataforseo/keyword-evidence-view";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -26,6 +27,9 @@ export default async function KeywordResearchPage({ params, searchParams }: Prop
   const readiness = await resolveDataForSeoReadiness({ userId, projectId: site.projectId });
   const runs = await db.articleKeywordResearchRun.findMany({ where: { siteId }, orderBy: { requestedAt: "desc" }, take: 50 });
   const chosen = runs.find((run) => run.id === requestedRun) ?? runs.find((run) => run.status === "COMPLETED");
+  // DS-02: rows come from the evidence store; the stored result is only a
+  // fallback for runs that predate the bridge or recorded no cost.
+  const selected = chosen ? await keywordRowsForScreen(db, chosen) : null;
 
   return (
     <div>
@@ -35,7 +39,7 @@ export default async function KeywordResearchPage({ params, searchParams }: Prop
         description="Review recorded keyword, SERP and market run results. This page is a research lens, not a paid research runner."
       />
       <div className="mb-4"><PipelineNavigation siteId={siteId} currentStage="research" /></div>
-      <KeywordResearchClient siteId={siteId} hasDataForSEO={readiness.configured} runs={keywordRunRows(runs)} selectedRunId={chosen?.id ?? null} selectedResult={chosen?.result ?? null} />
+      <KeywordResearchClient siteId={siteId} hasDataForSEO={readiness.configured} runs={keywordRunRows(runs)} selectedRunId={chosen?.id ?? null} selectedResult={selected?.rows ?? null} />
     </div>
   );
 }

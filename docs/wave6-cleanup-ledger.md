@@ -153,6 +153,23 @@ fails loudly with its own stack in the log — the freeze is the diagnostic.
 `prelaunchResearchRequest` is excluded from create-blocking because its paid
 request endpoint is still a live feature.
 
+## DS-02 progress — the keyword research read path moved to evidence
+
+The screen no longer needs the run's duplicated `result` blob:
+
+- `lib/dataforseo/keyword-evidence-view.ts` resolves a stored run's raw response
+  and returns its `keyword_metrics` evidence as table rows (highest volume first).
+- A run that was never bridged (no recorded cost, or predating the bridge) falls
+  back to its stored result, and a read failure degrades to that fallback rather
+  than blanking the page — so nothing disappears from the UI.
+- Measured on production: 24 completed runs, the 8 that hold keyword rows all now
+  serve them from evidence (10 rows). The other 16 stored SERP results, not
+  keyword lists, and render as before.
+
+That is the read half of DS-02 for this family. The run row is now a job record
+only, so `result` can be dropped from it once the write side moves too — which is
+the remaining half, along with the same change for `seoResearchRun`/`Task`.
+
 ## Step 3c — two more factories retired
 
 Both remaining action factories behind a live UI caller were cut over, so the
