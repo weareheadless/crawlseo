@@ -174,6 +174,29 @@ async function executeJob(
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("RESEARCH_RUN_ID_REQUIRED");
       await runResearchRun(researchRunId);
+      // A scheduled run is the monthly one: collect the how leg for the gaps it
+      // found, inside a bounded share of the monthly allowance. Manual runs stay
+      // free so a test does not spend.
+      const scheduled = await db.researchRun.findUnique({
+        where: { id: researchRunId },
+        select: { trigger: true, projectId: true, siteId: true },
+      });
+      if (scheduled?.trigger === "SCHEDULED" && scheduled.projectId) {
+        try {
+          const joins = await runJoinFollowUps(db as never, {
+            projectId: scheduled.projectId,
+            siteId: scheduled.siteId,
+            maxSpendMicros: 300_000,
+          });
+          if (joins.joined.length > 0 || joins.skipped.length > 0) {
+            console.log(
+              `[CrawlSEO worker] scheduled joins: joined=${joins.joined.length} skipped=${joins.skipped.length} spent=$${(joins.spentMicros / 1e6).toFixed(4)}`
+            );
+          }
+        } catch (error) {
+          console.error("[CrawlSEO worker] scheduled join follow-ups failed", error);
+        }
+      }
       return;
     }
     case JobKind.AGENT_TASK: {
