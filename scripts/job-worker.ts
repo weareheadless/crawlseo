@@ -27,6 +27,7 @@ import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
+import { runJoinFollowUps } from "@/lib/funnel/join-runner";
 
 loadEnvConfig(process.cwd());
 
@@ -106,6 +107,19 @@ async function executeJob(
         await refreshFunnelForSite(db, job.siteId, { detectedBy: "crawl-job" });
       } catch (error) {
         console.error("[CrawlSEO worker] funnel refresh after crawl failed", error);
+      }
+      // Join free why legs from business knowledge. The how-leg collections are
+      // paid, so the automatic path spends nothing; a human runs the script with a
+      // ceiling when a how leg is worth collecting.
+      if (projectId) {
+        try {
+          const joins = await runJoinFollowUps(db as never, { projectId, siteId: job.siteId, maxSpendMicros: 0 });
+          if (joins.joined.length > 0) {
+            console.log(`[CrawlSEO worker] joined ${joins.joined.length} missing leg(s) for ${job.siteId}`);
+          }
+        } catch (error) {
+          console.error("[CrawlSEO worker] join follow-ups failed", error);
+        }
       }
       return;
     }
