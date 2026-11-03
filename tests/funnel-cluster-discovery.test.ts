@@ -5,6 +5,7 @@ import {
   discoverClusters,
   jaccard,
   normalizeQuery,
+  proposeCompetitorClusters,
   proposeKnowledgeClusters,
   proposeLexicalClusters,
   proposeSerpClusters,
@@ -126,12 +127,12 @@ function fakeDb() {
   let counter = 0;
   const db = {
     demandMapCluster: {
-      findMany: vi.fn(async (args: { where: { projectId: string; supersededById: null } }) =>
-        clusters.filter((row) => row.projectId === args.where.projectId && row.supersededById == null)
+      findMany: vi.fn(async (args: { where: { projectId: string; supersededAt: null } }) =>
+        clusters.filter((row) => row.projectId === args.where.projectId && row.supersededAt == null)
       ),
       create: vi.fn(async (args: { data: Record<string, unknown> }) => {
         counter += 1;
-        const row = { id: `c-${counter}`, supersededById: null, ...args.data };
+        const row = { id: `c-${counter}`, supersededAt: null, supersededById: null, ...args.data };
         clusters.push(row);
         return { id: row.id };
       }),
@@ -178,6 +179,34 @@ const proposal = (over: Partial<ClusterProposal> = {}): ClusterProposal => ({
   ...over,
 });
 
+describe("cluster discovery: competitor ownership signal", () => {
+  const row = (query: string, competitors: string[], ourPosition: number | null) => ({ query, competitors, ourPosition, observedAt: AT });
+
+  it("groups queries competitors own and we do not rank for", () => {
+    const proposals = proposeCompetitorClusters([
+      row("freediving course", ["rival-a", "rival-b"], null),
+      row("freediving class", ["rival-a", "rival-b"], null),
+      row("boat engine", ["other"], null),
+    ]);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].proposedBy).toBe("competitor_ownership");
+    expect(proposals[0].members).toHaveLength(2);
+    expect(proposals[0].identityKey.startsWith("competitor:")).toBe(true);
+  });
+
+  it("ignores queries where we already rank", () => {
+    const proposals = proposeCompetitorClusters([
+      row("freediving course", ["rival-a"], 4),
+      row("freediving class", ["rival-a"], 9),
+    ]);
+    expect(proposals).toHaveLength(0);
+  });
+
+  it("needs at least two queries behind the same rival set", () => {
+    expect(proposeCompetitorClusters([row("lonely query", ["rival-a"], null)])).toHaveLength(0);
+  });
+});
+
 describe("cluster reconciliation", () => {
   it("creates a cluster and its membership evidence", async () => {
     const { db, clusters, evidence } = fakeDb();
@@ -197,12 +226,14 @@ describe("cluster reconciliation", () => {
     expect(clusters[0].proposedBy).toBe("gsc_query");
   });
 
-  it("is idempotent: the same proposal twice creates no duplicate cluster", async () => {
-    const { db, clusters } = fakeDb();
+  it("is idempotent: the same proposal twice creates no duplicate cluster or membership", async () => {
+    const { db, clusters, evidence } = fakeDb();
     await reconcileClusters(db, "p1", [proposal()]);
+    const membershipsAfterFirst = evidence.length;
     const second = await reconcileClusters(db, "p1", [proposal()]);
     expect(second.created).toBe(0);
     expect(clusters).toHaveLength(1);
+    expect(evidence).toHaveLength(membershipsAfterFirst);
   });
 
   it("merges a differently named proposal that shares its members", async () => {
@@ -242,7 +273,10 @@ describe("cluster reconciliation", () => {
     ]);
     expect(second.superseded).toBe(1);
     expect(clusters).toHaveLength(2);
-    expect(clusters.some((row) => row.supersededById != null)).toBe(true);
+    const retired = clusters.find((row) => row.supersededAt != null);
+    expect(retired).toBeTruthy();
+    // Retired, not deleted, and never a self-reference.
+    expect(retired!.supersededById).not.toBe(retired!.id);
   });
 
   it("keeps a curated cluster with no members instead of superseding it", async () => {
@@ -253,7 +287,7 @@ describe("cluster reconciliation", () => {
     });
     const result = await reconcileClusters(db, "p1", [proposal()]);
     expect(result.superseded).toBe(0);
-    expect(clusters.find((row) => row.slug === "curated")?.supersededById).toBeNull();
+    expect(clusters.find((row) => row.slug === "curated")?.supersededAt).toBeNull();
   });
 
   it("gives two clusters with the same name distinct slugs", async () => {
@@ -274,6 +308,16 @@ describe("cluster reconciliation", () => {
 });
 
 describe("discoverClusters end to end (stored evidence only)", () => {
+  it("never touches a provider or raw-payload store", async () => {
+    const { db } = fakeDb();
+    const probes = { rawProviderResponse: { findUnique: vi.fn(), findMany: vi.fn() }, keyword: { findMany: vi.fn().mockResolvedValue([]) } };
+    const client = { ...(db as unknown as Record<string, unknown>), ...probes } as never;
+    await discoverClusters(client, "p1");
+    // Discovery reads the evidence store only: no raw provider payload, no paid table.
+    expect(probes.rawProviderResponse.findUnique).not.toHaveBeenCalled();
+    expect(probes.rawProviderResponse.findMany).not.toHaveBeenCalled();
+  });
+
   it("reads rank evidence and produces clusters without any provider call", async () => {
     const { db, clusters } = fakeDb();
     const withRanks = {

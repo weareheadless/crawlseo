@@ -108,6 +108,7 @@ export default async function DemandMapPage({ params }: Props) {
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                     <span>{cluster.members} queries</span>
                     <span>coverage {(coverage * 100).toFixed(0)}%</span>
+                    <span>{cluster.bestPosition == null ? "not ranking" : `best #${Math.round(cluster.bestPosition)}`}</span>
                     <span>{cluster.openOpportunities} open opportunities</span>
                     <span>via {cluster.proposedBy}</span>
                   </div>

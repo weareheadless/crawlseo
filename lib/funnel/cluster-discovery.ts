@@ -232,6 +232,41 @@ export function proposeSerpClusters(
   return proposals.sort((a, b) => b.members.length - a.members.length);
 }
 
+/**
+ * Signal 4: queries where competitors hold the top results and we are absent.
+ * Demand we do not serve yet — the only signal that can produce a cluster play
+ * while our own coverage is high.
+ */
+export function proposeCompetitorClusters(
+  rows: Array<{ query: string; competitors: string[]; ourPosition: number | null; observedAt: Date }>
+): ClusterProposal[] {
+  const owned = rows.filter((row) => row.competitors.length > 0 && row.ourPosition == null);
+  if (owned.length === 0) return [];
+  // Group by the competitor set: the same rivals winning the same need.
+  const byCompetitors = new Map<string, typeof owned>();
+  for (const row of owned) {
+    const key = [...row.competitors].sort().join("|");
+    byCompetitors.set(key, [...(byCompetitors.get(key) ?? []), row]);
+  }
+  const proposals: ClusterProposal[] = [];
+  for (const [key, group] of byCompetitors) {
+    if (group.length < 2) continue;
+    const observedAt = group.reduce<Date>((latest, row) => (row.observedAt > latest ? row.observedAt : latest), new Date(0));
+    const label = key.split("|").slice(0, 2).join(", ");
+    proposals.push({
+      identityKey: `competitor:${createHash("sha256").update(key).digest("hex").slice(0, 16)}`,
+      name: `Competitors own: ${label}`,
+      topicSummary: `${group.length} queries where ${label} hold the top results and we are absent.`,
+      intent: inferIntent(group.map((row) => row.query)),
+      proposedBy: "competitor_ownership",
+      confidence: Math.min(1, group.length / 8),
+      members: group.map((row) => row.query),
+      observedAt: observedAt.getTime() === 0 ? new Date() : observedAt,
+    });
+  }
+  return proposals.sort((a, b) => b.members.length - a.members.length);
+}
+
 /** Signal 3: the questions business knowledge says customers ask. */
 export function proposeKnowledgeClusters(
   questions: Array<{ question: string; observedAt: Date }>
@@ -279,7 +314,7 @@ export async function reconcileClusters(
   const result: ReconcileResult = { created: 0, merged: 0, superseded: 0, memberships: 0 };
 
   const existing = await db.demandMapCluster.findMany({
-    where: { projectId, supersededById: null },
+    where: { projectId, supersededAt: null },
     select: { id: true, slug: true, identityKey: true, name: true, confidence: true },
   });
   // Membership is read from evidence so reconciliation never invents members.
@@ -363,14 +398,19 @@ export async function reconcileClusters(
     }
   }
 
-  // A cluster that no longer receives members is superseded, not deleted.
+  // A cluster that no longer receives members is retired, not deleted. When its
+  // members moved into another cluster we name that successor; otherwise the
+  // retirement timestamp alone records it.
   for (const row of existing) {
     if (touched.has(row.slug)) continue;
     const members = membersBySlug.get(row.slug) ?? [];
     if (members.length === 0) continue; // never had members: leave for curation
+    const successor = existing.find(
+      (candidate) => candidate.slug !== row.slug && touched.has(candidate.slug) && jaccard(members, membersBySlug.get(candidate.slug) ?? []) >= DISCOVERY_THRESHOLDS.mergeThreshold
+    );
     await db.demandMapCluster.update({
       where: { id: row.id },
-      data: { supersededById: row.id },
+      data: { supersededAt: new Date(), supersededById: successor?.id ?? null },
     });
     result.superseded += 1;
   }
@@ -415,6 +455,7 @@ export async function discoverClusters(
     ),
     ...proposeLexicalClusters([...queries.entries()].map(([query, observedAt]) => ({ query, observedAt }))),
     ...proposeKnowledgeClusters(await knowledgeQuestions(db, projectId)),
+    ...proposeCompetitorClusters(await competitorOwnership(db, projectId)),
   ];
 
   const result = await reconcileClusters(db, projectId, proposals);
@@ -435,6 +476,46 @@ async function serpSnapshots(
     if (!dims.query || urls.length === 0) return [];
     return [{ query: dims.query, urls, observedAt: row.observedAt }];
   });
+}
+
+async function competitorOwnership(
+  db: DiscoverDb,
+  projectId: string
+): Promise<Array<{ query: string; competitors: string[]; ourPosition: number | null; observedAt: Date }>> {
+  const [competitorRows, rankRows] = await Promise.all([
+    db.evidenceRecord.findMany({
+      where: { projectId, kind: "competitor_rank", supersededById: null },
+      select: { dimensions: true, metrics: true, observedAt: true },
+    }),
+    db.evidenceRecord.findMany({
+      where: { projectId, kind: "keyword_rank", supersededById: null },
+      select: { dimensions: true, metrics: true },
+    }),
+  ]);
+  const ourPosition = new Map<string, number>();
+  for (const row of rankRows) {
+    const dims = (row.dimensions ?? {}) as { query?: string };
+    const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
+    const position = metrics["provider:position"]?.value ?? metrics["first_party:position"]?.value ?? null;
+    if (dims.query && position != null) ourPosition.set(dims.query, position);
+  }
+  const byQuery = new Map<string, { competitors: Set<string>; observedAt: Date }>();
+  for (const row of competitorRows) {
+    const dims = (row.dimensions ?? {}) as { query?: string; competitor?: string; domain?: string };
+    if (!dims.query) continue;
+    const competitor = dims.competitor ?? dims.domain;
+    if (!competitor) continue;
+    const entry = byQuery.get(dims.query) ?? { competitors: new Set<string>(), observedAt: row.observedAt };
+    entry.competitors.add(competitor);
+    if (row.observedAt > entry.observedAt) entry.observedAt = row.observedAt;
+    byQuery.set(dims.query, entry);
+  }
+  return [...byQuery.entries()].map(([query, entry]) => ({
+    query,
+    competitors: [...entry.competitors],
+    ourPosition: ourPosition.get(query) ?? null,
+    observedAt: entry.observedAt,
+  }));
 }
 
 async function knowledgeQuestions(db: DiscoverDb, projectId: string): Promise<Array<{ question: string; observedAt: Date }>> {

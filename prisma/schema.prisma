@@ -328,6 +328,9 @@ model DemandMapCluster {
   /// 0–1. Raised when another signal corroborates the same members.
   confidence        Float         @default(0)
   tracked           Boolean       @default(false)
+  /// Set when the cluster is retired. `supersededById` names a successor when
+  /// one exists; a retired cluster with no successor keeps this timestamp only.
+  supersededAt      DateTime?
   supersededById    String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -341,6 +344,7 @@ model DemandMapCluster {
   @@unique([projectId, identityKey])
   @@index([projectId])
   @@index([supersededById])
+  @@index([supersededAt])
 }
 
 model Task {

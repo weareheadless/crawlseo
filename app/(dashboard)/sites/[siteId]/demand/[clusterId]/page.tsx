@@ -53,7 +53,7 @@ export default async function ClusterPage({ params }: Props) {
       confidence: true,
       tracked: true,
       businessRelevance: true,
-      supersededById: true,
+      supersededAt: true,
       createdAt: true,
     },
   });
@@ -106,7 +106,7 @@ export default async function ClusterPage({ params }: Props) {
           {relevance.relevance === "none" || !relevance.relevance ? "not endorsed" : relevance.relevance}
         </Chip>
         {cluster.tracked && <Chip tone="success">tracked</Chip>}
-        {cluster.supersededById && <Chip tone="warning">superseded</Chip>}
+        {cluster.supersededAt && <Chip tone="warning">retired</Chip>}
         <span className="text-[11px] text-muted-foreground">{members.length} queries</span>
         <span className="text-[11px] text-muted-foreground">coverage {(coverage * 100).toFixed(0)}%</span>
         <span className="text-[11px] text-muted-foreground">confidence {cluster.confidence.toFixed(2)}</span>

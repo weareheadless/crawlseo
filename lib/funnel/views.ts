@@ -438,12 +438,14 @@ export type DemandClusterRow = {
   members: number;
   /** Members with a recorded rank, i.e. we have a page competing. */
   covered: number;
+  /** Best recorded position across the members, null when we rank for none. */
+  bestPosition: number | null;
   openOpportunities: number;
 };
 
 export async function listDemandClusters(db: FunnelDb, projectId: string): Promise<DemandClusterRow[]> {
   const clusters = await db.demandMapCluster.findMany({
-    where: { projectId, supersededById: null },
+    where: { projectId, supersededAt: null },
     orderBy: { slug: "asc" },
     select: {
       id: true,
@@ -478,13 +480,14 @@ export async function listDemandClusters(db: FunnelDb, projectId: string): Promi
     where: { projectId, kind: "keyword_rank", supersededById: null },
     select: { dimensions: true, metrics: true },
   });
-  const ranked = new Set<string>();
+  const ranked = new Map<string, number>();
   for (const row of ranks) {
     const dims = (row.dimensions ?? {}) as { query?: string };
     const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
-    if (dims.query && (metrics["provider:position"]?.value ?? metrics["first_party:position"]?.value) != null) {
-      ranked.add(dims.query);
-    }
+    const position = metrics["provider:position"]?.value ?? metrics["first_party:position"]?.value ?? null;
+    if (!dims.query || position == null) continue;
+    const current = ranked.get(dims.query);
+    if (current == null || position < current) ranked.set(dims.query, position);
   }
 
   return clusters.map((cluster) => {
@@ -493,6 +496,11 @@ export async function listDemandClusters(db: FunnelDb, projectId: string): Promi
       ...cluster,
       members: members.size,
       covered: [...members].filter((query) => ranked.has(query)).length,
+      bestPosition: [...members].reduce<number | null>((best, query) => {
+        const position = ranked.get(query);
+        if (position == null) return best;
+        return best == null || position < best ? position : best;
+      }, null),
       openOpportunities: countByCluster.get(cluster.id) ?? 0,
     };
   });
