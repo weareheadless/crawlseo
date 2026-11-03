@@ -1523,7 +1523,6 @@ model Site {
   vitals                     VitalsReport[]
   alerts                     Alert[]
   savedKeywords              SavedKeyword[]
-  rankSnapshots              RankSnapshot[]
   evidenceRecords            EvidenceRecord[]
   integrationGrants          IntegrationGrant[]
   analyticsSnapshots         AnalyticsSnapshot[]
@@ -1767,23 +1766,6 @@ model SavedKeyword {
 }
 
 // ============ RANK TRACKING ============
-
-model RankSnapshot {
-  id          String   @id @default(cuid())
-  siteId      String
-  query       String
-  position    Float
-  clicks      Int      @default(0)
-  impressions Int      @default(0)
-  page        String?
-  date        DateTime
-
-  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
-
-  @@unique([siteId, query, date])
-  @@index([siteId, date])
-  @@index([siteId, query, date])
-}
 
 // ============ CRAWLER ============
 

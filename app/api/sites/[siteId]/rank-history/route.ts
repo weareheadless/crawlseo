@@ -52,20 +52,33 @@ export async function GET(
         },
         orderBy: { date: "asc" },
       }),
-      db.rankSnapshot.findMany({
-        where: {
-          siteId,
-          query,
-          date: { gte: startDate },
-        },
-        select: {
-          date: true,
-          position: true,
-          clicks: true,
-          impressions: true,
-        },
-        orderBy: { date: "asc" },
-      }),
+      // Sampled SERP ranks now live in the evidence store (DS-05 keeps them as a
+      // separate series from the Search Console average position).
+      db.evidenceRecord
+        .findMany({
+          where: {
+            siteId,
+            kind: "keyword_rank",
+            supersededById: null,
+            observedAt: { gte: startDate },
+            dimensions: { path: ["query"], equals: query },
+          },
+          select: { observedAt: true, metrics: true },
+          orderBy: { observedAt: "asc" },
+        })
+        .then((rows) =>
+          rows.flatMap((row) => {
+            const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
+            const position = metrics["provider:position"]?.value;
+            if (position == null) return [];
+            return [{
+              date: row.observedAt,
+              position,
+              clicks: metrics["provider:clicks"]?.value ?? 0,
+              impressions: metrics["provider:impressions"]?.value ?? 0,
+            }];
+          })
+        ),
     ]);
 
     // DS-05: no unlabelled precedence overlay. Search Console average position

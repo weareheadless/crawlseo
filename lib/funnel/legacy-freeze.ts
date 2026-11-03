@@ -26,12 +26,16 @@ export type FrozenFunnelModel = (typeof FROZEN_FUNNEL_MODELS)[number];
 
 /**
  * Tables proven to have **no writer at all** (scripts/legacy-writer-audit.ts), so
- * the strict freeze may cover them today. `prelaunchResearchRequest` has no
- * scheduled writer but is still written by the paid prelaunch request endpoint,
- * so freezing it would break incubation and it stays out. Freezing is per-table
- * on purpose: freezing a table whose producer still runs breaks that producer.
+ * the strict freeze may cover them today.
+ *
+ * Empty right now, and that is the honest state: `rankSnapshot` was the only
+ * proven-write-free table and it has been dropped (its data moved to the
+ * evidence store). The mechanism stays armed — the next table joins this list
+ * when its migration lands, and `prelaunchResearchRequest` stays out because the
+ * paid prelaunch request endpoint still writes it. Freezing is per-table on
+ * purpose: freezing a table whose producer still runs breaks that producer.
  */
-export const FROZEN_NOW: readonly FrozenFunnelModel[] = ["rankSnapshot"] as const;
+export const FROZEN_NOW: readonly FrozenFunnelModel[] = [] as const;
 
 /** Tables the strict freeze covers: proven-retired only. */
 export function frozenModelsFor(strict: boolean): readonly string[] {

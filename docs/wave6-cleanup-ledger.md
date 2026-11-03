@@ -96,6 +96,22 @@ restores it), which is the first half of retiring `researchAction`.
 | `tests/pipeline-lineage.test.ts` | requirement **ported**: `tests/action-provenance-render.test.ts` now asserts the funnel page shows both legs, names producers, and states a missing hop |
 | rank-history precedence overlay | replaced by `buildRankHistory`, which keeps both series tagged (DS-05) |
 
+## Step 3b — the frozen table was dropped, in its own reversible migration
+
+`RankSnapshot` was the only table proven write-free, and it held **0 rows** in
+production. Its reader (the rank-history sampled series) now reads `keyword_rank`
+evidence instead, which is where sampled ranks belong per DS-05, so the table was
+dropped in migration `20261103120000_drop_rank_snapshot`.
+
+The drop is deliberately separate from the code change and reversible:
+`prisma/migrations/20261103120000_drop_rank_snapshot/down.sql` restores the exact
+table, indexes and foreign key.
+
+With it gone, `FROZEN_NOW` is empty — the honest state, since no legacy table is
+both write-free and still present. The mechanism stays armed: the next table
+joins the set when its migration lands, and the guard test fails if one with a
+producer is added.
+
 ## Correction to the original ledger
 
 `RankSnapshot` was listed for deletion as duplication. DS-05 proved the opposite:

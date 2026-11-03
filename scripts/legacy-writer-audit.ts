@@ -21,8 +21,7 @@ export type LegacyTable =
   | "seoResearchRun"
   | "seoResearchTask"
   | "articleKeywordResearchRun"
-  | "prelaunchResearchRequest"
-  | "rankSnapshot";
+  | "prelaunchResearchRequest";
 
 export type WriterFinding = {
   table: LegacyTable;
@@ -39,7 +38,6 @@ const PATTERN = new RegExp(`(?:db|tx|client|prisma)\\.(${[
   "seoResearchTask",
   "articleKeywordResearchRun",
   "prelaunchResearchRequest",
-  "rankSnapshot",
 ].join("|")})\\.${WRITE_METHODS}\\b`, "g");
 
 const SEARCH_ROOTS = ["app", "lib", "scripts"];
@@ -123,7 +121,7 @@ export function writersByTable(findings: WriterFinding[]): Record<string, Writer
  * Tables that are provably write-free and can therefore be frozen strictly.
  * Kept explicit so a new writer cannot silently widen the freeze.
  */
-export const FROZEN_TABLES: LegacyTable[] = ["rankSnapshot"];
+export const FROZEN_TABLES: LegacyTable[] = [];
 
 /**
  * Every legacy table still has a producer, so none can be frozen yet. The

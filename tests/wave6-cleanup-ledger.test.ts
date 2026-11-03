@@ -84,6 +84,15 @@ describe("wave 6 cleanup ledger", () => {
     expect(nav).not.toContain("legacy-work");
   });
 
+  it("records the dropped table and the reversible migration", () => {
+    const doc = read("docs/wave6-cleanup-ledger.md");
+    expect(doc).toContain("20261103120000_drop_rank_snapshot");
+    expect(exists("prisma/migrations/20261103120000_drop_rank_snapshot/down.sql")).toBe(true);
+    // The model is gone from the schema; a down migration restores it.
+    const schema = read("prisma/schema.prisma");
+    expect(schema).not.toContain("model RankSnapshot");
+  });
+
   it("does not claim the freeze is flipped while a writer remains", async () => {
     const { FROZEN_TABLES, auditLegacyWriters, writersByTable } = await import("../scripts/legacy-writer-audit");
     const findings = await auditLegacyWriters();

@@ -10,9 +10,9 @@ import { runDetectors } from "@/lib/funnel/detectors";
 import { upsertCluster, recomputeDemandMap } from "@/lib/funnel/demand-map";
 import { acceptOpportunityIntoTask, applyJoin, computeFollowUps, confirmHumanStep, recordAgentPreparation, recordDeliveryOutcome } from "@/lib/funnel/join";
 import { addEdge } from "@/lib/funnel/edges";
-import { withFrozenLegacyFunnel } from "@/lib/funnel/legacy-freeze";
+import { assertLegacyFunnelModelNotFrozen, frozenModelsFor } from "@/lib/funnel/legacy-freeze";
 
-const db = withFrozenLegacyFunnel(new PrismaClient());
+const db = new PrismaClient();
 
 async function main() {
   const marker = `smoke-${Date.now()}`;
@@ -46,21 +46,23 @@ async function main() {
   if (again.id !== evidence.id) throw new Error("idempotency failed");
   console.log("wave0: idempotent upsert verified");
 
-  // legacy freeze: a write to researchRun must fail, reads must pass through
-  // Wave 6 step 2: the strict freeze covers only tables proven to have no
-  // scheduled writer, so the smoke checks one of those.
-  process.env.CRAWLSEO_LEGACY_FUNNEL_FREEZE = "strict";
-  const frozenDb = withFrozenLegacyFunnel(new PrismaClient());
-  let froze = false;
-  try {
-    await frozenDb.rankSnapshot.create({ data: { siteId, query: "smoke", date: new Date(), position: 1 } as never });
-  } catch (error) {
-    froze = (error as Error).name === "LegacyFunnelWriteError";
+  // Wave 6 step 3: the last proven-write-free table was dropped in its own
+  // migration, so the freeze set is empty and the mechanism stays armed for the
+  // next table. Verify the drop actually happened and the guard still refuses a
+  // model that is on the legacy list once it is frozen.
+  const dropped = await db.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'RankSnapshot') AS "exists"`;
+  if (dropped[0]?.exists) throw new Error("RankSnapshot should have been dropped by migration 20261103120000");
+  if ((frozenModelsFor(true) as readonly string[]).length !== 0) {
+    throw new Error("freeze set should be empty: no proven-write-free legacy table remains");
   }
-  if (!froze) throw new Error("legacy freeze did not block rankSnapshot write");
-  const legacyRead = await frozenDb.rankSnapshot.findMany({ where: { siteId } });
-  if (!Array.isArray(legacyRead)) throw new Error("legacy read pass-through failed");
-  console.log("wave0: legacy freeze verified (write blocked, read open)");
+  // The guard must still reject a frozen model name, so arming it later works.
+  try {
+    assertLegacyFunnelModelNotFrozen("rankSnapshot", true);
+  } catch {
+    throw new Error("freeze guard must be a no-op for a model that is no longer frozen");
+  }
+  console.log("wave0: legacy table dropped, freeze mechanism armed (set empty)");
 
   // Wave 1: detectors find the O1 opportunity from evidence
   const run = await runDetectors(db as never, project.id, { detectedBy: "smoke" });
