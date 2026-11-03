@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord } from "@/lib/funnel/evidence";
 
@@ -15,7 +15,7 @@ import { storeEvidenceRecord } from "@/lib/funnel/evidence";
  * recorded cost is reported as unpriced instead of being given a fake one.
  */
 
-export type ResearchEvidenceDb = Pick<PrismaClient, "rawProviderResponse" | "evidenceRecord"> &
+export type ResearchEvidenceDb = Pick<PrismaClient, "rawProviderResponse" | "evidenceRecord" | "articleKeywordResearchRun"> &
   Parameters<typeof storeEvidenceRecord>[0];
 
 export type StoredKeywordRun = {
@@ -63,6 +63,33 @@ export type ResearchEvidenceResult = {
   /** Runs whose stored result was already ingested under the same raw identity. */
   rawResponseId: string | null;
 };
+
+/**
+ * Release the duplicated payload once the evidence store owns it.
+ *
+ * The plan's rule is one home for raw provider data. After a run is bridged, its
+ * `result` column is a second copy of a payload that already lives in
+ * `RawProviderResponse`, so it is cleared. This is safe only because the raw row
+ * exists first and the screen reads evidence; a run that was not bridged keeps its
+ * result, so nothing is lost.
+ */
+export async function releaseBridgedRunResult(
+  db: Pick<PrismaClient, "rawProviderResponse" | "articleKeywordResearchRun">,
+  run: { id: string; providerTaskId: string | null }
+): Promise<boolean> {
+  const raw = await db.rawProviderResponse.findUnique({
+    where: {
+      provider_providerTaskId: {
+        provider: "dataforseo",
+        providerTaskId: run.providerTaskId ?? `stored-run:${run.id}`,
+      },
+    },
+    select: { id: true },
+  });
+  if (!raw) return false;
+  await db.articleKeywordResearchRun.update({ where: { id: run.id }, data: { result: Prisma.DbNull } });
+  return true;
+}
 
 /**
  * Ingest one stored keyword run. Idempotent: the raw response is keyed by the

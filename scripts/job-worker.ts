@@ -24,7 +24,7 @@ import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
-import { bridgeKeywordRunToEvidence } from "@/lib/dataforseo/research-evidence";
+import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
 import { bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 
 loadEnvConfig(process.cwd());
@@ -193,6 +193,9 @@ async function executeJob(
           if (bridged.skipped > 0) {
             console.warn(`[CrawlSEO worker] keyword evidence skipped ${bridged.skipped} row(s): run ${stored.id} has no recorded cost`);
           }
+          // One home for raw provider data: once the payload is in the evidence
+          // store, drop the duplicate copy from the run row.
+          if (bridged.stored > 0) await releaseBridgedRunResult(db as never, stored);
         }
       } catch (error) {
         console.error("[CrawlSEO worker] keyword evidence bridge failed", error);

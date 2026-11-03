@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { bridgeKeywordRunToEvidence, readKeywordRows, type StoredKeywordRun } from "@/lib/dataforseo/research-evidence";
+import { bridgeKeywordRunToEvidence, readKeywordRows, releaseBridgedRunResult, type StoredKeywordRun } from "@/lib/dataforseo/research-evidence";
 
 const AT = new Date("2026-11-02T00:00:00.000Z");
 
@@ -115,5 +115,39 @@ describe("stored DataForSEO research → funnel evidence", () => {
     const result = await bridgeKeywordRunToEvidence(db, run({ result: { ranked: [] } }));
     expect(result).toEqual({ rows: 0, stored: 0, skipped: 0, rawResponseId: null });
     expect(raws).toHaveLength(0);
+  });
+});
+
+describe("releasing the duplicated payload", () => {
+  const fake = (opts: { raw?: { id: string } | null } = {}) => {
+    const updates: Array<Record<string, unknown>> = [];
+    return {
+      db: {
+        rawProviderResponse: { findUnique: vi.fn(async () => opts.raw ?? null) },
+        articleKeywordResearchRun: {
+          update: vi.fn(async (args: { data: Record<string, unknown> }) => {
+            updates.push(args.data);
+            return {};
+          }),
+        },
+      } as never,
+      updates,
+    };
+  };
+
+  it("clears the run's result once the raw payload is stored", async () => {
+    const { db, updates } = fake({ raw: { id: "raw-1" } });
+    const released = await releaseBridgedRunResult(db, { id: "run-1", providerTaskId: "task-1" });
+    expect(released).toBe(true);
+    expect(updates).toHaveLength(1);
+    // Prisma.DbNull is the explicit "set the column to NULL" value.
+    expect(Object.keys(updates[0])).toEqual(["result"]);
+  });
+
+  it("keeps the result when no raw payload exists, so nothing is lost", async () => {
+    const { db, updates } = fake({ raw: null });
+    const released = await releaseBridgedRunResult(db, { id: "run-1", providerTaskId: null });
+    expect(released).toBe(false);
+    expect(updates).toHaveLength(0);
   });
 });

@@ -166,9 +166,16 @@ The screen no longer needs the run's duplicated `result` blob:
   serve them from evidence (10 rows). The other 16 stored SERP results, not
   keyword lists, and render as before.
 
-That is the read half of DS-02 for this family. The run row is now a job record
-only, so `result` can be dropped from it once the write side moves too — which is
-the remaining half, along with the same change for `seoResearchRun`/`Task`.
+That is the read half of DS-02 for this family. The write half started too: once a
+run is bridged, its `result` is released (`releaseBridgedRunResult`), so the
+payload has one home in `RawProviderResponse` instead of two. Measured on
+production: 8 of 24 completed runs released — exactly the ones holding keyword
+lists — while the 16 that stored SERP results keep theirs, because they were never
+bridged and nothing should be lost.
+
+The run row is now a job record plus a payload only when no bridge exists. Dropping
+the column entirely still needs the status/idempotency bookkeeping moved onto
+`ResearchRun`, which is the same remaining change for `seoResearchRun`/`Task`.
 
 ## Step 3c — two more factories retired
 
