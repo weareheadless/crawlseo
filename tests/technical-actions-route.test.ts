@@ -1,59 +1,49 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  db: { site: { findUnique: vi.fn() } },
-  reassess: vi.fn(),
-}));
-vi.mock("@/lib/db", () => ({ db: mocks.db }));
-vi.mock("@/lib/crawler/technical-actions", () => ({
-  TechnicalActionError: class TechnicalActionError extends Error { constructor(message: string, readonly status = 409) { super(message); } },
-  reassessTechnicalActionGroup: mocks.reassess,
-}));
+import { afterEach, describe, expect, it } from "vitest";
 
 import { POST } from "@/app/api/internal/sites/[siteId]/technical-actions/reassess/route";
 
 const priorToken = process.env.HELLOADA_PROVISIONING_TOKEN;
+
 afterEach(() => {
   if (priorToken === undefined) delete process.env.HELLOADA_PROVISIONING_TOKEN;
   else process.env.HELLOADA_PROVISIONING_TOKEN = priorToken;
-  vi.clearAllMocks();
 });
 
-const requestBody = {
-  crawlId: "crawl-1", expectedBindingGeneration: 3, expectedContextRevision: "ctx-9",
-  issueIds: ["issue-1"], operatorRequestId: "operator-request-1",
-  reason: "Owner requested evidence reassessment",
-};
+const request = (token?: string) =>
+  new Request("http://localhost/api/internal/sites/s1/technical-actions/reassess", {
+    method: "POST",
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    body: JSON.stringify({}),
+  });
 
-describe("protected technical Action reassessment route", () => {
-  it("requires the provisioning credential before database access", async () => {
-    delete process.env.HELLOADA_PROVISIONING_TOKEN;
-    const response = await POST(new Request("https://internal.test", { method: "POST", body: JSON.stringify(requestBody) }),
-      { params: Promise.resolve({ siteId: "site-1" }) });
+describe("technical reassess endpoint is retired (wave 6)", () => {
+  it("still authenticates, so an unauthenticated request cannot probe it", async () => {
+    process.env.HELLOADA_PROVISIONING_TOKEN = "secret";
+    const response = await POST(request());
     expect(response.status).toBe(401);
-    expect(mocks.db.site.findUnique).not.toHaveBeenCalled();
   });
 
-  it("rejects ambiguous or duplicate issue references", async () => {
-    process.env.HELLOADA_PROVISIONING_TOKEN = "provisioning-secret";
-    const response = await POST(new Request("https://internal.test", { method: "POST",
-      headers: { authorization: "Bearer provisioning-secret" },
-      body: JSON.stringify({ ...requestBody, issueIds: ["issue-1", "issue-1"] }) }),
-    { params: Promise.resolve({ siteId: "site-1" }) });
-    expect(response.status).toBe(400);
-    expect(mocks.reassess).not.toHaveBeenCalled();
+  it("rejects a wrong token", async () => {
+    process.env.HELLOADA_PROVISIONING_TOKEN = "secret";
+    const response = await POST(request("wrong"));
+    expect(response.status).toBe(401);
   });
 
-  it("scopes reassessment to the route site and returns only action identity", async () => {
-    process.env.HELLOADA_PROVISIONING_TOKEN = "provisioning-secret";
-    mocks.db.site.findUnique.mockResolvedValue({ projectId: "project-1" });
-    mocks.reassess.mockResolvedValue({ action: { id: "action-1", revision: 2 }, reused: false });
-    const response = await POST(new Request("https://internal.test", { method: "POST",
-      headers: { authorization: "Bearer provisioning-secret" }, body: JSON.stringify(requestBody) }),
-    { params: Promise.resolve({ siteId: "site-1" }) });
+  it("answers 410 to an authorised caller and says what replaced it", async () => {
+    process.env.HELLOADA_PROVISIONING_TOKEN = "secret";
+    const response = await POST(request("secret"));
+    expect(response.status).toBe(410);
+    const body = (await response.json()) as { error: string; detail: string; replacedBy: string };
+    expect(body.error).toMatch(/retired/i);
+    expect(body.detail).toMatch(/O7\/O8 detectors/);
+    expect(body.replacedBy).toContain("crawl");
+  });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ actionId: "action-1", revision: 2, reused: false });
-    expect(mocks.reassess).toHaveBeenCalledWith({ ...requestBody, siteId: "site-1", projectId: "project-1" });
+  it("does not create or revise any legacy row", async () => {
+    process.env.HELLOADA_PROVISIONING_TOKEN = "secret";
+    const response = await POST(request("secret"));
+    // A retired endpoint returns before touching the database at all.
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(JSON.stringify(await response.json())).not.toContain("actionId");
   });
 });

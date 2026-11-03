@@ -41,15 +41,11 @@ const DELETED_ITEMS = [
   "lib/pipeline/lineage.ts",
   "lib/pipeline/lineage-types.ts",
   "scripts/sync-seo-actions.ts",
+  "lib/crawler/technical-actions.ts",
 ];
 
 /** Factories still gated, with the exact consumer that keeps them alive. */
-const GATED_FACTORIES = [
-  {
-    file: "lib/crawler/technical-actions.ts",
-    blockedBy: "POST /api/internal/sites/:id/technical-actions/reassess returns {actionId, revision} to an external caller under HELLOADA_PROVISIONING_TOKEN; changing that is a cross-repo contract change (DS-13)",
-  },
-];
+const GATED_FACTORIES: Array<{ file: string; blockedBy: string }> = [];
 
 /** Read the flag from the live pm2 processes, not from `.env`. */
 export function runningProcessFreezeState(pm2Pids = "/home/admin/.pm2/pids"): Array<{ app: string; pid: number | null; strict: boolean }> {

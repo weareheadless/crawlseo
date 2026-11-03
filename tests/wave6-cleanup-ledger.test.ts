@@ -15,6 +15,8 @@ const exists = (relative: string) => existsSync(path.join(root, relative));
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
 
 const DELETED = [
+  "lib/crawler/technical-actions.ts",
+  "tests/technical-actions.test.ts",
   "lib/pipeline/lineage.ts",
   "lib/pipeline/lineage-types.ts",
   "lib/research/crawl-actions.ts",
@@ -27,9 +29,7 @@ const DELETED = [
   "tests/crawl-gap-action-lifecycle.test.ts",
 ];
 
-const GATED = [
-  "lib/crawler/technical-actions.ts",
-];
+const GATED: string[] = [];
 
 describe("wave 6 cleanup ledger", () => {
   it("keeps every deleted item deleted", () => {

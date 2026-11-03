@@ -262,10 +262,13 @@ overwriting the other.
 
 | Item | Blocking consumer | Unblocks when |
 |---|---|---|
-| `lib/crawler/technical-actions.ts` | `/api/internal/sites/:id/technical-actions/reassess` returns `{actionId, revision}` to an external caller authenticated with `HELLOADA_PROVISIONING_TOKEN` | changing that response is a cross-repo contract change (DS-13), not a cleanup swap |
+| ~~`lib/crawler/technical-actions.ts`~~ | **deleted** — the endpoint answers `410 Gone`; a crawl plus the O7/O8 detectors replaces reassessment, and no caller existed anywhere | done |
 | ~~`lib/research/keyword-actions.ts`~~ | **deleted** — the endpoint now records the keyword as tracked demand and refreshes detection | done |
 | ~~`lib/dataforseo/prelaunch-actions.ts`~~ | **deleted** — the worker bridges prelaunch task results into evidence and the endpoint refreshes the funnel | done |
 | `ResearchAction.evidence` JSON lineage | legacy work/findings views | those views are archived |
+
+`tests/technical-actions.test.ts` was deleted with its factory; the endpoint's own
+test now asserts the 410 and that it still authenticates.
 | `ResearchRun.actionCount/findingCount/sourceCount` | legacy research run views | same |
 
 ## Order that remains

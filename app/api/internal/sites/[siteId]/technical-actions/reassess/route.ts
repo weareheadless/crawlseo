@@ -1,26 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { TechnicalActionError, reassessTechnicalActionGroup } from "@/lib/crawler/technical-actions";
 
 const NO_STORE = { "Cache-Control": "no-store" };
-const requestSchema = z.object({
-  crawlId: z.string().trim().min(1).max(120),
-  expectedBindingGeneration: z.number().int().positive(),
-  expectedContextRevision: z.string().trim().min(1).max(200),
-  issueIds: z.array(z.string().trim().min(1).max(120)).min(1).max(200),
-  operatorRequestId: z.string().trim().min(8).max(200),
-  reason: z.string().trim().min(8).max(1000),
-  existingActionId: z.string().trim().min(1).max(120).optional(),
-  expectedActionRevision: z.number().int().positive().optional(),
-}).strict().superRefine((value, context) => {
-  if (new Set(value.issueIds).size !== value.issueIds.length) {
-    context.addIssue({ code: "custom", path: ["issueIds"], message: "Issue IDs must be unique" });
-  }
-  if (Boolean(value.existingActionId) !== Boolean(value.expectedActionRevision)) {
-    context.addIssue({ code: "custom", path: ["expectedActionRevision"], message: "Existing Action ID and revision must be supplied together" });
-  }
-});
 
 function authorized(req: Request): boolean {
   const configured = process.env.HELLOADA_PROVISIONING_TOKEN;
@@ -29,25 +9,29 @@ function authorized(req: Request): boolean {
   return timingSafeEqual(createHash("sha256").update(configured).digest(), createHash("sha256").update(supplied).digest());
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ siteId: string }> }) {
-  if (!authorized(req)) return Response.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
-  let input: z.infer<typeof requestSchema>;
-  try { input = requestSchema.parse(await req.json()); }
-  catch (error) {
-    return Response.json({ error: error instanceof z.ZodError ? error.issues[0]?.message : "Invalid request" },
-      { status: 400, headers: NO_STORE });
+/**
+ * Wave 6: retired.
+ *
+ * This endpoint minted and revised legacy Actions from a crawl issue group. The
+ * funnel has one producer of work — opportunities detected from evidence — so
+ * there is nothing here to reassess: a recrawl refreshes the funnel and the O7/O8
+ * detectors raise or re-score the opportunity themselves.
+ *
+ * It answers 410 rather than 404 so a caller still wired to it learns why, and it
+ * keeps its authentication so an unauthenticated request cannot probe it.
+ * See docs/site-agent-connector-contract.md.
+ */
+export async function POST(req: Request) {
+  if (!authorized(req)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
   }
-  try {
-    const { siteId } = await params;
-    const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true } });
-    if (!site) return Response.json({ error: "Project site not found" }, { status: 404, headers: NO_STORE });
-    if (!site.projectId) return Response.json({ error: "Site is not bound to a project" }, { status: 409, headers: NO_STORE });
-    const result = await reassessTechnicalActionGroup({ ...input, siteId, projectId: site.projectId });
-    return Response.json({ actionId: result.action.id, revision: result.action.revision, reused: result.reused }, { headers: NO_STORE });
-  } catch (error) {
-    if (error instanceof TechnicalActionError) {
-      return Response.json({ error: error.message }, { status: error.status, headers: NO_STORE });
-    }
-    return Response.json({ error: "Technical Action reassessment failed" }, { status: 500, headers: NO_STORE });
-  }
+  return Response.json(
+    {
+      error: "This endpoint is retired",
+      detail:
+        "Technical reassessment now happens in the funnel: run a crawl and the O7/O8 detectors raise or re-score opportunities from the new evidence. No legacy Action is created or revised.",
+      replacedBy: "POST /api/sites/{siteId}/crawl (or the scheduled crawl), then GET /api/sites/{siteId}/opportunities",
+    },
+    { status: 410, headers: NO_STORE }
+  );
 }

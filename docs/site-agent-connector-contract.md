@@ -164,9 +164,14 @@ freshness. The connector resolves each reference against the selected site's
 database rows before returning it as complete. Legacy crawl Actions are never
 backfilled by matching titles, URLs, or dates.
 
-The protected provisioning endpoint
-`POST /api/internal/sites/{siteId}/technical-actions/reassess` accepts an exact
-crawl ID and unique issue IDs. Reassessment requires an active `helloada`
+**Retired in wave 6.** The protected provisioning endpoint
+`POST /api/internal/sites/{siteId}/technical-actions/reassess` answers `410 Gone`.
+Technical reassessment now happens in the funnel: a crawl refreshes the evidence
+store and the O7/O8 detectors raise or re-score the opportunity themselves, so no
+legacy Action is created or revised. The paragraph below is kept as the record of
+what the endpoint did while it existed.
+
+It accepted an exact crawl ID and unique issue IDs. Reassessment requires an active `helloada`
 binding, current context, an explicit operator request ID and reason, and an
 exact group of persisted issue IDs. Reusing an operator request ID with changed
 inputs conflicts. Updating a legacy Action requires its explicit ID and current

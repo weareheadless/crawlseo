@@ -73,11 +73,11 @@ describe("wave 6 status checklist", () => {
     expect(drop?.status).toBe("complete");
   });
 
-  it("names the one factory still gated and why", async () => {
+  it("reports the gated items as deleted once the last factory is retired", async () => {
     const status = await wave6Status(fakeDb());
     const deleted = status.checks.find((check) => check.name === "gated items deleted");
-    expect(deleted?.status).toBe("partial");
-    expect(deleted?.detail).toContain("technical-actions");
+    expect(deleted?.status).toBe("complete");
+    expect(deleted?.detail).toMatch(/items deleted/);
   });
 
   it("summarises counts that add up to the number of checks", async () => {
