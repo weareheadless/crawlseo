@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { fetchRedditRssSearch } from "@/lib/research/providers/reddit-rss";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
+import { fetchDataForSeoCompetitorSources } from "@/lib/research/providers/dataforseo-competitor";
+import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
 import {
   createResearchAction,
   createResearchFinding,
@@ -290,7 +292,8 @@ export async function runResearchRun(runId: string) {
     const providers = stringList(run.providerSet);
     const useReddit = providers.length === 0 || providers.includes("reddit");
     const useNews = providers.includes("news");
-    const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news");
+    const useCompetitor = providers.includes("competitor");
+    const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news" && provider !== "competitor");
     const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
     const addCollected = (source: Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]) => {
       const previous = collected.get(source.contentHash);
@@ -318,7 +321,11 @@ export async function runResearchRun(runId: string) {
     if (!queryPlan.length) throw new Error("Research policy exclusions removed all bounded query candidates");
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
-    const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
+    const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0) + (useCompetitor ? 1 : 0));
+    // Competitor evidence is location-specific, so the locale is resolved once.
+    const competitorLocale = useCompetitor && run.projectId
+      ? await resolveDataForSeoLocale(run.projectId, language, country).catch(() => null)
+      : null;
     const recencyDays = Math.max(1, Math.min(run.recencyDays, site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
     const cached = run.projectId ? await Promise.all([
       ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
@@ -370,6 +377,28 @@ export async function runResearchRun(runId: string) {
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
           sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
+        }
+        requestIndex += 1;
+        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      if (useCompetitor) {
+        if (!competitorLocale) {
+          sourceErrors.push("competitor: DataForSEO locale could not be resolved; no competitor evidence was collected");
+        } else {
+          try {
+            const sources = await fetchDataForSeoCompetitorSources({
+              projectId: run.projectId!,
+              query: topic,
+              domain: site.domain,
+              languageCode: competitorLocale.languageCode,
+              locationCode: competitorLocale.locationCode,
+            });
+            for (const source of sources) {
+              addCollected({ ...source, metadata: { ...source.metadata, query_basis: plan.basis } });
+            }
+          } catch (error) {
+            sourceErrors.push(`competitor: ${error instanceof Error ? error.message : "DataForSEO competitor lookup failed"}`);
+          }
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));

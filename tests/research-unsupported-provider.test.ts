@@ -77,9 +77,11 @@ describe("research provider capability reporting", () => {
         report: expect.objectContaining({
           providers: [],
           requested_providers: ["web", "competitor"],
-          unsupported_providers: ["web", "competitor"],
+          // competitor is implemented now; only web remains unsupported.
+          unsupported_providers: ["web"],
           source_errors: expect.arrayContaining([
             expect.stringContaining("web: general web search is not implemented"),
+            expect.stringContaining("competitor: DataForSEO locale could not be resolved"),
             expect.stringContaining("quality: no sources passed"),
           ]),
         }),

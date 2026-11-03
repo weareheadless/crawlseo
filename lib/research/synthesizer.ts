@@ -1,3 +1,4 @@
+import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import type { ResearchFindingType } from "@prisma/client";
 
@@ -112,19 +113,23 @@ export async function synthesizeResearch(input: {
     throw new ResearchSynthesisError("No research sources were collected");
   }
 
-  const sourcePayload = input.sources.slice(0, 30).map((source, index) => ({
+  // The upstream rate-limits large prompts; 12 sources at 600 chars keeps the
+  // evidence without pushing the request into the limit.
+  const sourcePayload = input.sources.slice(0, 12).map((source, index) => ({
     index,
     provider: source.provider,
     title: source.title,
     community: source.community,
     published_at: source.publishedAt?.toISOString() ?? null,
     url: source.url,
-    excerpt: (source.excerpt ?? "").slice(0, 1_200),
+    excerpt: (source.excerpt ?? "").slice(0, 600),
   }));
 
   const prompt = [
     "You are the market research synthesizer for CrawlSEO.",
     "Use only the SOURCES below. Reddit and social posts are evidence of what people say, not proof of factual claims.",
+    "Sources with provider dataforseo_serp or dataforseo_labs are observed search results: they show who ranks and how much of the query set they cover. They are evidence of presence, not of quality or intent.",
+    "Use POSITIONING_GAP when the SERP/competitor sources show an offer or angle competitors articulate and the site does not. Use COMPETITOR_GAP when they show a query set competitors cover and the site does not. Cite the source indexes.",
     "Do not invent facts, statistics, prices, legal rules, medical advice, or business details.",
     "A finding must reference at least one source index. A single anecdote is not a market trend.",
     "Keep contradictory evidence visible instead of averaging it away.",
@@ -149,7 +154,7 @@ export async function synthesizeResearch(input: {
     "OUTPUT CONTRACT:",
     JSON.stringify({
       findings: [{
-        type: "THEME|QUESTION|CONCERN|OBJECTION|TREND|MISCONCEPTION|CONTENT_GAP",
+        type: "THEME|QUESTION|CONCERN|OBJECTION|TREND|MISCONCEPTION|CONTENT_GAP|POSITIONING_GAP|COMPETITOR_GAP",
         theme: "short label",
         summary: "evidence-grounded synthesis",
         confidence: 0,
@@ -173,56 +178,28 @@ export async function synthesizeResearch(input: {
     }, null, 2),
   ].join("\n");
 
-  let response: Response;
+  let decoded: unknown;
   try {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.2,
-        max_tokens: 6_000,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: "You synthesize bounded public research into evidence-linked findings and content actions.",
-          },
-          { role: "user", content: prompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(90_000),
+    decoded = await chatJson({
+      config,
+      system: "You synthesize bounded public research into evidence-linked findings and content actions.",
+      user: prompt,
+      maxTokens: 6_000,
+      attempts: 4,
     });
   } catch (error) {
     throw new ResearchSynthesisError(
-      error instanceof Error && /timeout|aborted/i.test(error.message)
-        ? "The research model timed out"
-        : "The research model could not be reached",
+      error instanceof Error ? error.message : "The research model could not be reached"
     );
   }
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new ResearchSynthesisError("The research model is rate-limited (HTTP 429)");
-    }
-    throw new ResearchSynthesisError(`The research model returned HTTP ${response.status}`);
-  }
-
-  const body = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
-  const content = body.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    throw new ResearchSynthesisError("The research model returned an empty response");
-  }
-  const decoded = extractJson(content) as { findings?: unknown; actions?: unknown };
-  if (!Array.isArray(decoded.findings) || !Array.isArray(decoded.actions)) {
+  const report = decoded as { findings?: unknown; actions?: unknown };
+  if (!Array.isArray(report.findings) || !Array.isArray(report.actions)) {
     throw new ResearchSynthesisError("The research model returned an invalid report");
   }
 
   const findings: SynthesizedFinding[] = [];
   const findingIndexMap = new Map<number, number>();
-  for (const [originalIndex, raw] of decoded.findings.slice(0, 12).entries()) {
+  for (const [originalIndex, raw] of report.findings.slice(0, 12).entries()) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     const type = text(row.type, 40).toUpperCase() as ResearchFindingType;
@@ -252,7 +229,7 @@ export async function synthesizeResearch(input: {
 
   const candidatePages = new Set(input.candidatePages);
   const actions: SynthesizedAction[] = [];
-  for (const raw of decoded.actions.slice(0, 12)) {
+  for (const raw of report.actions.slice(0, 12)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     const findingIndex = typeof row.finding_index === "number" ? Math.floor(row.finding_index) : -1;

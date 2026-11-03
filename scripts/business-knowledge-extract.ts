@@ -18,6 +18,7 @@ import { PrismaClient } from "@prisma/client";
 
 import { writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
+import { chatJson } from "@/lib/ai/chat";
 
 const MAX_PAGES = 10;
 const MAX_CHARS_PER_PAGE = 6_000;
@@ -146,44 +147,19 @@ async function main() {
     .map((page, index) => `--- PAGE ${index + 1}: ${page.url}\nTITLE: ${page.title}\n${page.text}`)
     .join("\n\n");
 
-  const res = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0.2,
-      max_tokens: 3_000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: userPrompt },
-      ],
-      signal: AbortSignal.timeout(90_000),
-    }),
-  });
-  if (!res.ok) throw new Error(`content model failed: ${res.status} ${await res.text().then((t) => t.slice(0, 200))}`);
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const raw = (json.choices?.[0]?.message?.content ?? "{}")
-    .replace(/^\s*```(?:json)?/i, "")
-    .replace(/```\s*$/, "")
-    .trim();
-  let extracted: Extracted;
+  let parsed: Extracted;
   try {
-    extracted = JSON.parse(raw) as Extracted;
-  } catch {
-    // A truncated answer is the common failure; take the largest balanced object.
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        extracted = JSON.parse(raw.slice(start, end + 1)) as Extracted;
-      } catch {
-        throw new Error(`content model returned non-JSON: ${raw.slice(0, 300)}`);
-      }
-    } else {
-      throw new Error(`content model returned non-JSON: ${raw.slice(0, 300)}`);
-    }
+    parsed = (await chatJson({
+      config,
+      system: SYSTEM,
+      user: userPrompt,
+      maxTokens: 3_000,
+      attempts: 4,
+    })) as Extracted;
+  } catch (error) {
+    throw new Error(`content model failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+  const extracted = parsed;
 
   const sourceUrl = pages[0].url;
   const now = new Date().toISOString();

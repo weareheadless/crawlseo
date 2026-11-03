@@ -518,6 +518,68 @@ export async function executeDataForSeoKeywordOverview(input: {
 }
 
 /** Capture one bounded SERP after Ada has selected or reframed a candidate. */
+export type SerpCompetitor = {
+  domain: string;
+  keywordsCount: number | null;
+  avgPosition: number | null;
+  etv: number | null;
+};
+
+export type DataForSeoLabsCompetitorsResult = {
+  result: SerpCompetitor[];
+  providerTaskId: string | null;
+  costMicros: number | null;
+};
+
+/**
+ * Labs `serp_competitors`: which domains rank for these queries and how many of
+ * them they cover. This is the competitor side of the "research asks DataForSEO"
+ * link — positioning gaps need to know who is actually present.
+ */
+export async function executeDataForSeoLabsSerpCompetitors(input: {
+  projectId: string;
+  keywords: string[];
+  languageCode: string;
+  locationCode: number;
+  limit?: number;
+}): Promise<DataForSeoLabsCompetitorsResult> {
+  const credentials = await credentialsForProject(input.projectId);
+  const response = await dataforseoPostWithMeta(
+    credentials.login,
+    credentials.password,
+    "/dataforseo_labs/google/serp_competitors/live",
+    [{
+      keywords: input.keywords.slice(0, 20),
+      language_code: input.languageCode,
+      location_code: input.locationCode,
+      item_types: ["organic"],
+      limit: Math.max(1, Math.min(input.limit ?? 20, 100)),
+    }]
+  );
+  if (!response.data) throw new Error("DataForSEO operation failed");
+  const root = asObject(response.data);
+  const tasks = root && Array.isArray(root.tasks) ? root.tasks : [];
+  const task = asObject(tasks[0]);
+  const results = task && Array.isArray(task.result) ? task.result : [];
+  const first = asObject(results[0]);
+  const items = first && Array.isArray(first.items) ? first.items : [];
+  const result: SerpCompetitor[] = items.slice(0, 100).flatMap((rawItem) => {
+    const item = asObject(rawItem);
+    if (!item || typeof item.domain !== "string") return [];
+    return [{
+      domain: item.domain,
+      keywordsCount: asNumber(item.keywords_count),
+      avgPosition: asNumber(item.avg_position),
+      etv: asNumber(item.etv),
+    }];
+  });
+  return {
+    result,
+    providerTaskId: typeof task?.id === "string" ? task.id : null,
+    costMicros: costMicros(task?.cost ?? root?.cost),
+  };
+}
+
 export async function executeDataForSeoOrganicSerp(input: {
   projectId: string;
   keyword: string;

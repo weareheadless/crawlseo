@@ -52,7 +52,7 @@ const microsOf = (value: number | null | undefined) => (value == null ? 0 : valu
  * ledger counts a target once per budget period even if it is collected twice.
  * A prior settled reservation is not settled again.
  */
-async function withBudget<T>(
+export async function withResearchBudget<T>(
   projectId: string,
   input: { operation: string; detail: Record<string, unknown>; run: () => Promise<T>; costOf: (result: T) => number }
 ): Promise<{ result: T; spentMicros: number; skippedSettle: boolean }> {
@@ -89,7 +89,7 @@ async function withBudget<T>(
 }
 
 export async function collectKeywordMetrics(db: CollectionDb, input: CollectionInput): Promise<CollectionOutput> {
-  const { result: overview, spentMicros: spent } = await withBudget(input.projectId, {
+  const { result: overview, spentMicros: spent } = await withResearchBudget(input.projectId, {
     operation: "dataforseo:keyword_metrics",
     detail: { queries: input.queries.slice(0, 20), locale: `${input.languageCode}:${input.locationCode}` },
     run: () =>
@@ -147,7 +147,7 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
   const domain = (input.domain ?? "").replace(/^www\./, "");
 
   for (const query of input.queries) {
-    const { result: serp, spentMicros: callSpent } = await withBudget(input.projectId, {
+    const { result: serp, spentMicros: callSpent } = await withResearchBudget(input.projectId, {
       operation: "dataforseo:serp_snapshot",
       detail: { query, locale: `${input.languageCode}:${input.locationCode}` },
       run: () =>
@@ -208,7 +208,7 @@ export async function collectBacklinkProfile(
   db: CollectionDb,
   input: { projectId: string; siteId: string | null; domain: string }
 ): Promise<CollectionOutput> {
-  const { result: backlinks, spentMicros: spent } = await withBudget(input.projectId, {
+  const { result: backlinks, spentMicros: spent } = await withResearchBudget(input.projectId, {
     operation: "dataforseo:backlink_profile",
     detail: { domain: input.domain.replace(/^www\./, "") },
     run: () =>
@@ -272,7 +272,7 @@ export async function collectAiVisibility(
 
   const calls: Array<{ question: string; answer: string; citations: string[]; model: string | null; costUsd: number; taskId: string; payload: unknown }> = [];
   for (const question of input.queries) {
-    const { result: call } = await withBudget(input.projectId, {
+    const { result: call } = await withResearchBudget(input.projectId, {
       operation: "dataforseo:ai_visibility",
       detail: { question, locale: `${input.languageCode}:${input.locationCode}` },
       run: () => askChatGpt(auth, question),
