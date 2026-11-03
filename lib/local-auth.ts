@@ -45,11 +45,11 @@ export async function signInWithPassword(formData: FormData) {
   const user = email ? await db.user.findUnique({ where: { email } }) : null;
 
   if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
-    redirect("/crawlseo/login?error=invalid");
+    redirect("/login?error=invalid");
   }
 
   await createLocalSession(user.id);
-  redirect("/crawlseo/dashboard");
+  redirect("/dashboard");
 }
 
 export async function signOutLocal() {
@@ -57,5 +57,5 @@ export async function signOutLocal() {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (token) await db.session.deleteMany({ where: { sessionToken: token } });
   cookieStore.delete(SESSION_COOKIE);
-  redirect("/crawlseo/login");
+  redirect("/login");
 }
