@@ -103,8 +103,13 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     * Math.max(inputs.freshness, 0)
     * Math.max(inputs.stability, 0);
 
+  // The raw ratio is unbounded (worth is linear in volume), so a site with real
+  // demand pinned every opportunity at the 0-100 ceiling and the ranking stopped
+  // meaning anything. A saturating curve keeps the order and the scale; the raw
+  // components stay stored, so the score is still recomputable.
+  const scaled = score > 0 ? score / (score + 1) : 0;
   return {
-    scoreValue: Math.max(0, Math.min(100, Math.round(score * 100))),
+    scoreValue: Math.max(0, Math.min(100, Math.round(scaled * 100))),
     inputs,
   };
 }

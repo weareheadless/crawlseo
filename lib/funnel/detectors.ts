@@ -50,6 +50,12 @@ export const DETECTOR_THRESHOLDS = {
   /** pages sharing one issue that make it systemic enough to act on */
   systemicIssuePages: 3,
   /**
+   * Grouped volume is capped for scoring: worth is linear in volume, so summing
+   * 120 pages of impressions pins any site-wide fix at the 0-100 ceiling and
+   * erases the ranking it was meant to express. The raw demand stays in evidence.
+   */
+  maxGroupVolume: 300,
+  /**
    * Declared worth of a page-level defect with no recorded traffic. Impressions
    * are the honest basis; this proxy keeps a no-traffic page from inheriting the
    * 120 searches/month query fallback (plan §2.3, §10).
@@ -162,7 +168,9 @@ export function collapsePageIssues(
         sum + (issue.candidate.scoreInputs.worth.volumeSource === "first_party" ? issue.candidate.scoreInputs.worth.volume ?? 0 : 0),
       0
     );
-    const volume = realDemand > 0 ? realDemand : DETECTOR_THRESHOLDS.technicalImpactVolume;
+    const volume = realDemand > 0
+      ? Math.min(realDemand, DETECTOR_THRESHOLDS.maxGroupVolume)
+      : DETECTOR_THRESHOLDS.technicalImpactVolume;
     out.push({
       ...first,
       title: opts.siteTitle(issueKey, group.length),
@@ -253,6 +261,20 @@ function byKind(evidence: Evidence[], kind: string): Evidence[] {
   return evidence.filter((row) => row.kind === kind);
 }
 
+/**
+ * One crawl row per (url, issue, schema): repeated crawls otherwise stack and
+ * a 60-page site reports "missing schema on 120 pages".
+ */
+function latestCrawlRows(evidence: Evidence[]): Evidence[] {
+  const latest = new Map<string, Evidence>();
+  for (const row of byKind(evidence, "onpage_crawl")) {
+    const key = `${dim(row, "url") ?? ""}|${dim(row, "issueType") ?? ""}|${dim(row, "schemaType") ?? ""}`;
+    const previous = latest.get(key);
+    if (!previous || row.observedAt > previous.observedAt) latest.set(key, row);
+  }
+  return [...latest.values()];
+}
+
 function group<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const row of rows) {
@@ -268,16 +290,24 @@ const byQuestion = (row: Evidence) => `${dim(row, "question") ?? ""}`;
 const DETECTORS: Detector[] = [
   {
     type: "O1_winnable_rank",
-    detect: (evidence) =>
-      byKind(evidence, "keyword_rank")
+    detect: (evidence) => {
+      // Volume arrives as its own evidence kind from the provider (Wave 0.5), not
+      // on the rank row. A rank without a volume is a position, not an opportunity.
+      const volumeByQuery = new Map<string, number>();
+      for (const row of byKind(evidence, "keyword_metrics")) {
+        const query = dim(row, "query");
+        const volume = num(row, "provider:volume");
+        if (query && volume != null) volumeByQuery.set(query, volume);
+      }
+      return byKind(evidence, "keyword_rank")
         .filter((row) => {
           const position = num(row, "provider:position") ?? num(row, "first_party:position");
-          const volume = num(row, "provider:volume") ?? 0;
+          const volume = num(row, "provider:volume") ?? volumeByQuery.get(byQuery(row)) ?? 0;
           return position != null && position >= 4 && position <= 10 && volume >= DETECTOR_THRESHOLDS.minVolume;
         })
         .map((row) => {
           const position = num(row, "provider:position") ?? num(row, "first_party:position")!;
-          const volume = num(row, "provider:volume") ?? 0;
+          const volume = num(row, "provider:volume") ?? volumeByQuery.get(byQuery(row)) ?? 0;
           return {
             type: "O1_winnable_rank" as const,
             title: `Winnable rank: "${dim(row, "query")}" at position ${Math.round(position)}`,
@@ -293,7 +323,8 @@ const DETECTORS: Detector[] = [
               freshness: freshnessFactor(row.observedAt, new Date()),
             }),
           };
-        }),
+        });
+    },
   },
   {
     type: "O2_striking_distance",
@@ -444,7 +475,7 @@ const DETECTORS: Detector[] = [
     type: "O7_technical_defect",
     detect: (evidence) => {
       const demand = pageDemandByUrl(evidence);
-      const crawlable = byKind(evidence, "onpage_crawl").filter(
+      const crawlable = latestCrawlRows(evidence).filter(
         (row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability"
       );
       // Plan §3: a defect with no traffic is only worth acting on when the same
@@ -496,7 +527,7 @@ const DETECTORS: Detector[] = [
     detect: (evidence) => {
       const knowledge = byKind(evidence, "knowledge_fact");
       const demand = pageDemandByUrl(evidence);
-      const issues: PageIssue[] = byKind(evidence, "onpage_crawl")
+      const issues: PageIssue[] = latestCrawlRows(evidence)
         .filter((row) => dim(row, "schemaMissing") === "true" && dim(row, "impact") === "structured_data")
         .map((row) => {
           const url = dim(row, "url") ?? "page";

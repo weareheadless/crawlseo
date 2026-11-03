@@ -73,6 +73,8 @@ This rule was added after v1 shipped detectors before their collection and read 
 
 ```
 score = worth × win_probability / effort          (0–100, displayed with components)
+raw   = score × completeness × freshness × stability
+shown = 100 × raw / (raw + 1)                     (saturating, so nothing pins at 100)
 worth           = volume × CTR-at-position × business_value (conversion relevance from knowledge)
 win_probability = f(rank distance, authority gap [referring-domain delta], page strength,
                     SERP composition [strong competitors above us], play type)

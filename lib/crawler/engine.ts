@@ -439,11 +439,11 @@ async function fetchPage(url: string): Promise<{
 
 async function fetchPageWithRetry(url: string): Promise<Awaited<ReturnType<typeof fetchPage>>> {
   let last: Awaited<ReturnType<typeof fetchPage>> | null = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     last = await fetchPage(url);
     if (last.statusCode !== 429) return last;
-    if (attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 3_000 * (attempt + 1)));
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000 * 2 ** attempt));
     }
   }
   return last!;
@@ -647,8 +647,12 @@ export async function runSiteCrawl(
         },
       });
 
+  // Crawl the pages that earn the traffic first. Sitemap order is not demand
+  // order: on atelier-harmonie the sitemap lists /en/ variants that carry almost
+  // no impressions while /lampes, /shop and the product pages carry most of them.
+  const priorityUrls = await topTrafficUrls(siteId, effectiveMax);
   try {
-    return await executeCrawl(crawl.id, siteId, seedUrl, origin, effectiveMax);
+    return await executeCrawl(crawl.id, siteId, seedUrl, origin, effectiveMax, priorityUrls);
   } catch (err) {
     // Mark crawl as failed on any unhandled error
     await db.crawl
@@ -664,12 +668,30 @@ export async function runSiteCrawl(
   }
 }
 
+/** Top Search Console pages by impressions over the last 28 days. */
+async function topTrafficUrls(siteId: string, limit: number): Promise<string[]> {
+  try {
+    const since = new Date(Date.now() - 28 * 864e5);
+    const rows = await db.page.groupBy({
+      by: ["url"],
+      where: { siteId, date: { gte: since }, impressions: { gt: 0 } },
+      _sum: { impressions: true },
+      orderBy: { _sum: { impressions: "desc" } },
+      take: Math.max(limit, 20),
+    });
+    return rows.map((row) => row.url).filter((url): url is string => Boolean(url));
+  } catch {
+    return [];
+  }
+}
+
 async function executeCrawl(
   crawlId: string,
   siteId: string,
   seedUrl: string,
   origin: string,
-  maxPages: number
+  maxPages: number,
+  priorityUrls: string[] = []
 ): Promise<CrawlResult> {
   const issues: IssueInput[] = [];
   const pages: PageSnapshot[] = [];
@@ -743,11 +765,29 @@ async function executeCrawl(
         : {},
     });
   } else {
-    // Seed queue from sitemap
+    // Sitemap order is not demand order: sort the URLs we know earn impressions
+    // to the front, then the rest of the sitemap.
+    const priorityRank = new Map<string, number>();
+    for (const [index, url] of priorityUrls.entries()) {
+      const normalized = normalizeUrl(url, url);
+      if (normalized) priorityRank.set(normalized, index);
+    }
+    sitemapUrls.sort((a, b) => {
+      const ra = priorityRank.get(normalizeUrl(a, origin) ?? a) ?? Number.POSITIVE_INFINITY;
+      const rb = priorityRank.get(normalizeUrl(b, origin) ?? b) ?? Number.POSITIVE_INFINITY;
+      return ra - rb;
+    });
     for (const u of sitemapUrls.slice(0, 100)) {
       if (!queue.includes(u)) queue.push(u);
     }
   }
+
+  // Traffic pages the sitemap omits (or lists too late) still get crawled, in
+  // demand order.
+  const priorityQueue = priorityUrls
+    .map((url) => normalizeUrl(url, origin))
+    .filter((url): url is string => Boolean(url) && !queue.includes(url!));
+  if (priorityQueue.length > 0) queue.unshift(...priorityQueue);
 
   /* ---- Crawl loop with batch concurrency ---- */
   let rateLimitedResponses = 0;
@@ -863,19 +903,21 @@ async function executeCrawl(
       }
     }
 
-    if (rateLimitedResponses > 0 && pages.length <= 1) {
+    // A site that throttles a minority of pages is still worth auditing: throwing
+    // away 50 good pages because 6 were 429 is how atelier-harmonie ended up with
+    // a one-page crawl. Abort only when nothing usable came back; otherwise slow
+    // down, and stop adding pages if throttling dominates.
+    if (pages.length === 0 && rateLimitedResponses > 0) {
       throw new Error("Site rate-limited the crawler (HTTP 429) before any usable page was audited. The crawl was aborted; retry later.");
     }
-    if (pages.length < 10 && rateLimitedResponses >= Math.ceil(pages.length / 2)) {
-      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
-    }
-    if (pages.length >= 10 && rateLimitedResponses / pages.length > 0.1) {
-      throw new Error(`Site rate-limited the crawler (HTTP 429 on ${rateLimitedResponses} of ${pages.length} pages). The crawl was aborted; retry later.`);
-    }
+    const throttledShare = rateLimitedResponses / (pages.length + rateLimitedResponses);
+    if (pages.length > 0 && throttledShare > 0.5) break;
 
-    // Small delay between batches to avoid hammering the target
+    // Small delay between batches to avoid hammering the target; longer when the
+    // site is already throttling.
     if (queue.length > 0 && pages.length < maxPages) {
-      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      const delay = throttledShare > 0.1 ? Math.max(BATCH_DELAY_MS, 5_000) : BATCH_DELAY_MS;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
