@@ -111,9 +111,9 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
     }
   }
 
-  // 2. Which domains cover the query set. Labs returns nothing for a single
-  //    keyword, so the whole plan goes in one call.
-  if (queries.length < 2) return sources;
+  // 2. Which domains cover the query set. Labs returns ten domains for three
+  //    keywords and none for one or two, so it needs a real query set.
+  if (queries.length < 3) return sources;
   const competitors = await withResearchBudget(input.projectId, {
     operation: "dataforseo:research_competitors",
     detail: { queries, locale: `${input.languageCode}:${input.locationCode}` },

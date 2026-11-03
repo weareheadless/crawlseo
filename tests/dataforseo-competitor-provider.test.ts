@@ -33,7 +33,7 @@ import { fetchDataForSeoCompetitorSources } from "@/lib/research/providers/dataf
 
 const input = {
   projectId: "p1",
-  queries: ["abat-jour sur mesure", "tapisserie de siège"],
+  queries: ["abat-jour sur mesure", "tapisserie de siège", "restauration de meubles anciens"],
   domain: "atelier-harmonie.com",
   languageCode: "fr",
   locationCode: 2250,
