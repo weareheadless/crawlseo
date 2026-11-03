@@ -88,3 +88,55 @@ export async function keywordRowsForScreen(
     source: "stored_result",
   };
 }
+
+/**
+ * DS-02 step 3: map a unified `ResearchRun` (kind ARTICLE_KEYWORD) onto the shape
+ * the keyword-research screen renders.
+ *
+ * Keyword counts and rows come from evidence, not from the run, so a run whose
+ * payload was released still reads correctly.
+ */
+export type ShadowRun = {
+  id: string;
+  status: string;
+  seed: string | null;
+  brief: unknown;
+  createdAt: Date;
+  completedAt: Date | null;
+  costMicros: number;
+  errorCode: string | null;
+  providerTaskId: string | null;
+};
+
+export type ScreenRunRow = {
+  id: string;
+  seed: string;
+  kind: string;
+  status: string;
+  requestedAt: string;
+  completedAt: string | null;
+  costMicros: number | null;
+  errorCode: string | null;
+  keywordCount: number | null;
+  resultLabel: string;
+  keywords: KeywordEvidenceRow[];
+};
+
+export function shadowRunToScreenRow(run: ShadowRun, keywords: KeywordEvidenceRow[] = []): ScreenRunRow {
+  const brief = (run.brief ?? {}) as { articleKind?: string };
+  const articleKind = brief.articleKind ?? "KEYWORD_OVERVIEW";
+  return {
+    id: run.id,
+    seed: run.seed ?? "",
+    kind: articleKind.toLowerCase(),
+    status: run.status.toLowerCase(),
+    requestedAt: run.createdAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+    costMicros: run.costMicros || null,
+    errorCode: run.errorCode,
+    // Counted from evidence so a released payload does not blank the column.
+    keywordCount: keywords.length > 0 ? keywords.length : null,
+    resultLabel: articleKind === "ORGANIC_SERP" ? "ranked search results" : "keyword list",
+    keywords,
+  };
+}

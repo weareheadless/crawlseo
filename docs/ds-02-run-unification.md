@@ -23,10 +23,17 @@ down here instead of half-done.
 |---|---|
 | 1. Schema only | **done** — `ResearchRun` gained `idempotencyKey`, `parentRunId`, `seed`, `providerTaskId`, `providerLanguageCode`, `providerLocationCode`, `attemptedAt`, the two unique constraints, and `ARTICLE_KEYWORD`/`PRELAUNCH` kinds. Migration `20261103150000_ds02_run_unification_schema` with a `down.sql`. |
 | 2. Dual-write | **done for the article family** — `syncArticleRunToResearchRun` writes the final state at job completion; the 26 existing runs were backfilled, so the shadow has full parity. |
-| 3. Read switch | next — needs creation-time shadows as well, or in-flight runs disappear from the screen. |
+| 3. Read switch | **done for the screen** — the keyword-research page lists `ResearchRun` (kind `ARTICLE_KEYWORD`) and pulls rows from evidence; creation-time shadows were added first so in-flight runs still appear. The runner and the API `runId` branch still read the legacy row. |
 | 4. Write switch | after 3 |
 | 5. Freeze | after 4 |
 | 6. Drop | after 5 |
+
+### Remaining readers of the legacy table
+
+`lib/dataforseo/article-research.ts` (idempotency, monthly cap, parent lookup,
+status transitions) and the `runId` branch of
+`app/api/sites/[siteId]/keyword-research/route.ts` (no caller found). Step 4 has to
+move those onto `ResearchRun` before the legacy row stops being written.
 
 ## What already moved (so the cutover is smaller)
 

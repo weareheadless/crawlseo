@@ -21,6 +21,7 @@ import {
   executeDataForSeoRelatedKeywords,
   resolveDataForSeoLocale,
 } from "@/lib/dataforseo/client";
+import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 
 export const ARTICLE_TASK_LIMIT_MAX = 5;
 export const ARTICLE_MIN_INTERVAL_DAYS = 0;
@@ -203,6 +204,29 @@ function runView(run: {
   };
 }
 
+
+/**
+ * DS-02 step 3 prerequisite: write the shadow row at creation as well as at
+ * completion, so an in-flight run still appears once the screen reads the unified
+ * table. Best effort — a shadow failure must not fail a paid request.
+ */
+async function shadowNewArticleRun(
+  client: Parameters<typeof syncArticleRunToResearchRun>[0],
+  run: {
+    id: string; projectId: string; siteId: string; idempotencyKey: string; ideaSummary: string;
+    seed: string; kind: string; language: string; country: string;
+    providerLanguageCode: string | null; providerLocationCode: number | null; status: string;
+    providerTaskId: string | null; costMicros: number | null; errorCode: string | null;
+    requestedAt: Date; attemptedAt: Date | null; completedAt: Date | null; parentRunId: string | null;
+  }
+): Promise<void> {
+  try {
+    await syncArticleRunToResearchRun(client as never, run);
+  } catch (error) {
+    console.error("[article-research] shadow run write failed", error);
+  }
+}
+
 async function ensureArticleResearchJob(projectId: string, siteId: string, runId: string) {
   return enqueueJob({
     projectId,
@@ -350,7 +374,7 @@ export async function requestArticleKeywordResearch(input: {
       if (attemptedThisMonth >= limit) {
         throw new ArticleResearchValidationError("Monthly article keyword research allowance is exhausted");
       }
-      return tx.articleKeywordResearchRun.create({
+      const created = await tx.articleKeywordResearchRun.create({
         data: {
           projectId: input.projectId,
           siteId: site.id,
@@ -368,6 +392,8 @@ export async function requestArticleKeywordResearch(input: {
           status: ArticleKeywordResearchStatus.REQUESTED,
         },
       });
+      await shadowNewArticleRun(tx as never, created);
+      return created;
     });
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
@@ -432,7 +458,7 @@ export async function requestArticleSerpResearch(input: {
   try {
     run = await db.$transaction(async (tx) => {
       await lockArticleDispatchPolicy(tx, input.projectId, parent.siteId);
-      return tx.articleKeywordResearchRun.create({
+      const created = await tx.articleKeywordResearchRun.create({
         data: {
         projectId: input.projectId,
         siteId: parent.siteId,
@@ -450,6 +476,8 @@ export async function requestArticleSerpResearch(input: {
         status: ArticleKeywordResearchStatus.REQUESTED,
         },
       });
+      await shadowNewArticleRun(tx as never, created);
+      return created;
     });
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
