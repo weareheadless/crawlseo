@@ -136,6 +136,28 @@ fails loudly with its own stack in the log — the freeze is the diagnostic.
 `prelaunchResearchRequest` is excluded from create-blocking because its paid
 request endpoint is still a live feature.
 
+## Step 2 evidence — the standing check
+
+`npx tsx scripts/legacy-write-watch.ts [--hours N]` reports what actually
+happened, as opposed to what could happen:
+
+- legacy rows created in the window, with their owners;
+- crawls that finished with no CRAWL job touched within two minutes, i.e. run
+  outside the queue.
+
+It exits non-zero when either signal fires, so it can be scheduled.
+
+**Measured after the create-block went live:** a three-hour window is
+`clean: true` — zero legacy rows created, zero crawls. The earlier 242-row burst
+sits outside it, and its five crawls were all normal backlogged jobs (created
+2026-11-02 08:30, claimed 02:42–02:55), not out-of-band runs. My first
+out-of-band metric was wrong: it compared finishes against jobs *created* in the
+window, which flags every backlogged crawl. It now matches completion against
+job activity.
+
+So the position is: the block is live, nothing has been created since, and any
+writer that reappears fails loudly with its stack in the worker log.
+
 The tables that still grow from scheduled jobs are the research run families:
 `researchRun` + `researchFinding` (kept by the spine as its run/finding models),
 and `seoResearchRun` + `articleKeywordResearchRun` (the families DS-02 unifies).
