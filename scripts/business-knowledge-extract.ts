@@ -84,7 +84,7 @@ Reponds uniquement en JSON avec les cles: businessName (texte), services (liste)
 serviceArea (liste), differentiators (liste), audienceMotivations (liste), concerns (liste),
 conversionGoals (liste), voice (texte).
 Regles: n'invente rien. Si une information n'apparait pas explicitement sur les pages, omets la cle.
-Les valeurs doivent etre courtes, factuelles, en francais, et citees telles quelles quand c'est un nom.`;
+Les valeurs doivent etre courtes, factuelles, dans la langue du contenu du site, et citees telles quelles quand c'est un nom.`;
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));

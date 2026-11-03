@@ -28,6 +28,14 @@ import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataf
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
+import {
+  collectAiVisibility,
+  collectDerivedKeywordMetrics,
+  collectKeywordMetrics,
+  collectSerpSnapshots,
+} from "@/lib/dataforseo/collection";
+import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
+import { researchCountry } from "@/lib/research/locale";
 
 loadEnvConfig(process.cwd());
 
@@ -179,14 +187,56 @@ async function executeJob(
       // free so a test does not spend.
       const scheduled = await db.researchRun.findUnique({
         where: { id: researchRunId },
-        select: { trigger: true, projectId: true, siteId: true },
+        select: { trigger: true, projectId: true, siteId: true, brief: true },
       });
-      if (scheduled?.trigger === "SCHEDULED" && scheduled.projectId) {
+      if (scheduled?.trigger === "SCHEDULED" && scheduled.projectId && scheduled.siteId) {
         try {
+          // Locale comes from the run's own brief, so the monthly pass works for
+          // any market rather than assuming one.
+          const brief = (scheduled.brief ?? {}) as { language?: string; market?: string };
+          const site = await db.site.findUnique({ where: { id: scheduled.siteId }, select: { domain: true } });
+          const language = brief.language ?? "en";
+          const country = researchCountry(brief.market, language);
+          const locale = await resolveDataForSeoLocale(scheduled.projectId, language, country).catch(() => null);
           const joins = await runJoinFollowUps(db as never, {
             projectId: scheduled.projectId,
             siteId: scheduled.siteId,
             maxSpendMicros: 300_000,
+            collectors: locale && site
+              ? {
+                  keywordMetrics: async (input) => {
+                    const seed = input.queries[0];
+                    if (!seed) return { evidence: [], spentMicros: 0 };
+                    const derived = await collectDerivedKeywordMetrics(db as never, {
+                      projectId: input.projectId,
+                      siteId: input.siteId,
+                      seed,
+                      languageCode: locale.languageCode,
+                      locationCode: locale.locationCode,
+                    });
+                    if (derived.evidence.length > 0) return derived;
+                    return collectKeywordMetrics(db as never, {
+                      ...input,
+                      languageCode: locale.languageCode,
+                      locationCode: locale.locationCode,
+                    });
+                  },
+                  serpSnapshots: (input) =>
+                    collectSerpSnapshots(db as never, {
+                      ...input,
+                      languageCode: locale.languageCode,
+                      locationCode: locale.locationCode,
+                      domain: site.domain,
+                    }),
+                  aiVisibility: (input) =>
+                    collectAiVisibility(db as never, {
+                      ...input,
+                      languageCode: locale.languageCode,
+                      locationCode: locale.locationCode,
+                      domain: site.domain,
+                    }),
+                }
+              : undefined,
           });
           if (joins.joined.length > 0 || joins.skipped.length > 0) {
             console.log(

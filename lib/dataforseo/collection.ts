@@ -346,7 +346,9 @@ async function askChatGpt(auth: string, question: string): Promise<AiCall | null
   const res = await fetch("https://api.dataforseo.com/v3/ai_optimization/chat_gpt/llm_responses/live", {
     method: "POST",
     headers: { Authorization: auth, "Content-Type": "application/json" },
-    body: JSON.stringify([{ user_prompt: `${question}. Cite les sources.`, model_name: "gpt-4o-mini", max_output_tokens: 400, web_search: true }]),
+    body: JSON.stringify([{ // The question carries its own language; the instruction stays neutral so it
+      // does not force a French answer on a non-French site.
+      user_prompt: `${question}\n\nCite your sources.`, model_name: "gpt-4o-mini", max_output_tokens: 400, web_search: true }]),
   });
   const json = (await res.json()) as {
     status_code?: number;

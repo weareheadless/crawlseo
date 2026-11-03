@@ -115,16 +115,16 @@ export async function synthesizeResearch(input: {
     throw new ResearchSynthesisError("No research sources were collected");
   }
 
-  // The upstream rate-limits large prompts; 12 sources at 600 chars keeps the
-  // evidence without pushing the request into the limit.
-  const sourcePayload = input.sources.slice(0, 12).map((source, index) => ({
+  // 20 sources at 800 chars keeps local/market context (salons, events, seasonal
+  // moments) visible without pushing the request into the upstream limit.
+  const sourcePayload = input.sources.slice(0, 20).map((source, index) => ({
     index,
     provider: source.provider,
     title: source.title,
     community: source.community,
     published_at: source.publishedAt?.toISOString() ?? null,
     url: source.url,
-    excerpt: (source.excerpt ?? "").slice(0, 600),
+    excerpt: (source.excerpt ?? "").slice(0, 800),
   }));
 
   const prompt = [
@@ -132,6 +132,7 @@ export async function synthesizeResearch(input: {
     "Use only the SOURCES below. Reddit and social posts are evidence of what people say, not proof of factual claims.",
     "Sources with provider dataforseo_serp or dataforseo_labs are observed search results: they show who ranks and how much of the query set they cover. They are evidence of presence, not of quality or intent.",
     "Use POSITIONING_GAP when the SERP/competitor sources show an offer or angle competitors articulate and the site does not. Use COMPETITOR_GAP when they show a query set competitors cover and the site does not. Cite the source indexes.",
+    "A CONTENT_GAP is any need the sources show and the site does not answer. Do not narrow it to the site's product pages: the gap may concern an audience, an occasion, a question, a place or a format, as long as the sources support it.",
     "Do not invent facts, statistics, prices, legal rules, medical advice, or business details.",
     "A finding must reference at least one source index. A single anecdote is not a market trend.",
     "Keep contradictory evidence visible instead of averaging it away.",
