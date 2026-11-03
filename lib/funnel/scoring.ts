@@ -72,8 +72,12 @@ function geometricMean(values: Array<number | null>): number | null {
 }
 
 export function computeScore(inputs: ScoreInputs): ScoreResult {
-  const volume = inputs.worth.volume ?? 0;
-  const ctr = inputs.worth.ctrAtPosition ?? 0;
+  // Declared defaults for unknown inputs (plan §2.3): missing demand data is
+  // "unknown", never zero — otherwise one-legged business opportunities
+  // (worth not yet measured) would always score 0 and hysteresis would park
+  // exactly the opportunities the join scheduler is supposed to lift.
+  const volume = inputs.worth.volume ?? 120;
+  const ctr = inputs.worth.ctrAtPosition ?? 0.03;
   const rawWorth = volume * ctr * inputs.worth.businessValue;
 
   const winProb = geometricMean([

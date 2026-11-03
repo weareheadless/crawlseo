@@ -172,6 +172,35 @@ export async function confirmHumanStep(
   });
 }
 
+/**
+ * Agent-prepared artifacts land the task in `awaiting_human` (plan decision 3):
+ * detection, research and drafting can be agent-driven, but execution and
+ * publication stay human-confirmed. The agent identity is recorded on the
+ * artifact, distinct from the human confirmation fields.
+ */
+export async function recordAgentPreparation(
+  db: TaskDb,
+  taskId: string,
+  input: { agentId: string; plan: unknown }
+): Promise<void> {
+  if (!input.agentId || input.agentId.trim() === "") {
+    throw new Error("agent-prepared artifacts require an agent identity");
+  }
+  const task = await db.task.findUnique({ where: { id: taskId }, select: { status: true } });
+  if (!task) throw new Error("task not found");
+  if (task.status === "delivered" || task.status === "verified_outcome") {
+    throw new Error(`cannot attach agent preparation to a ${task.status} task`);
+  }
+  await db.task.update({
+    where: { id: taskId },
+    data: {
+      status: "awaiting_human",
+      agentPreparedById: input.agentId,
+      plan: input.plan as never,
+    },
+  });
+}
+
 export async function recordDeliveryOutcome(
   db: Pick<PrismaClient, "outcomeObservation" | "task">,
   input: {

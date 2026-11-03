@@ -36,7 +36,7 @@ export const DETECTOR_THRESHOLDS = {
   minClusterQueries: 3,
   maxClusterCoverage: 0.34,
   /** below this score a `detected` opportunity parks (hysteresis) */
-  hysteresis: 4,
+  hysteresis: 3,
 } as const;
 
 function num(evidence: Evidence, key: string): number | null {

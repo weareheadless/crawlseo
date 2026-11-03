@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { acceptOpportunityIntoTask, applyJoin, computeFollowUps, confirmHumanStep, recordDeliveryOutcome } from "@/lib/funnel/join";
+import { acceptOpportunityIntoTask, applyJoin, computeFollowUps, confirmHumanStep, recordAgentPreparation, recordDeliveryOutcome } from "@/lib/funnel/join";
 import { upsertOpportunity } from "@/lib/funnel/opportunity";
 
 const scoreInputs = {
@@ -78,17 +78,44 @@ describe("task gate (wave 2)", () => {
   it("human confirmations are recorded distinctly from agent preparation", async () => {
     const { db } = opportunityDb();
     const updated: unknown[] = [];
-    (db as unknown as { task: { update: ReturnType<typeof vi.fn> } }).task = {
-      update: vi.fn(async (args: { data: unknown }) => {
+    (db as unknown as { task: { update: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> } }).task = {
+      update: vi.fn(async (args: { data: unknown; where: { id: string } }) => {
         updated.push(args.data);
-        return { id: "t" };
+        return { id: args.where.id };
       }),
+      findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }),
     };
     await confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: "dana" });
     expect(updated[0]).toMatchObject({ status: "delivered", humanConfirmedBy: "dana" });
     await expect(
       confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: " " })
     ).rejects.toThrow(/human confirmation requires a name/);
+  });
+
+  it("agent-prepared artifacts land in awaiting_human with the agent identity, never auto-delivered", async () => {
+    const { db } = opportunityDb();
+    const updated: unknown[] = [];
+    (db as unknown as { task: { update: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> } }).task = {
+      update: vi.fn(async (args: { data: Record<string, unknown> }) => {
+        updated.push(args.data);
+        return { id: "t1" };
+      }),
+      findUnique: vi.fn().mockResolvedValue({ status: "todo" }),
+    };
+    await recordAgentPreparation(db as never, "t1", { agentId: "agent-7", plan: { steps: ["rewrite title"] } });
+    expect(updated[0]).toMatchObject({
+      status: "awaiting_human",
+      agentPreparedById: "agent-7",
+    });
+    expect((updated[0] as Record<string, unknown>).humanConfirmedBy).toBeUndefined();
+    expect((updated[0] as Record<string, unknown>).humanConfirmedAt).toBeUndefined();
+    await expect(
+      recordAgentPreparation(db as never, "t1", { agentId: " ", plan: {} })
+    ).rejects.toThrow(/agent identity/);
+    (db as unknown as { task: { findUnique: ReturnType<typeof vi.fn> } }).task.findUnique.mockResolvedValue({ status: "delivered" });
+    await expect(
+      recordAgentPreparation(db as never, "t1", { agentId: "agent-7", plan: {} })
+    ).rejects.toThrow(/delivered task/);
   });
 });
 
