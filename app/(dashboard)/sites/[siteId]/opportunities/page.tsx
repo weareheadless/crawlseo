@@ -59,6 +59,19 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
 
   const query = await searchParams;
   const tab = STATUS_TABS.find((entry) => entry.key === (query.status ?? "open")) ?? STATUS_TABS[0];
+  // Type chips count the current status/leg view, not the whole project: after
+  // the §3 rules most rows are parked, and a chip reading 170 when 5 are open is
+  // a lie about the board.
+  const typeCounts = await db.opportunity.groupBy({
+    by: ["type"],
+    where: {
+      projectId: site.projectId,
+      status: tab.statuses?.length ? { in: tab.statuses } : undefined,
+      evidenceCompleteness: query.leg && query.leg !== "all" ? { in: [query.leg as never] } : undefined,
+    },
+    _count: { _all: true },
+  });
+  const typeTotal = typeCounts.reduce((sum, entry) => sum + entry._count._all, 0);
   const kindsPresent = await db.evidenceRecord.groupBy({
     by: ["kind"],
     where: { projectId: site.projectId, supersededById: null },
@@ -179,9 +192,12 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             !query.type || query.type === "all" ? "border-primary/50 bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          All types · {counts.total}
+          All types · {typeTotal}
         </Link>
-        {counts.byType.map((entry) => (
+        {typeCounts
+          .slice()
+          .sort((a, b) => b._count._all - a._count._all)
+          .map((entry) => (
           <Link
             key={entry.type}
             href={`/sites/${siteId}/opportunities?status=${tab.key}&type=${entry.type}${query.leg ? `&leg=${query.leg}` : ""}`}
@@ -192,7 +208,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             )}
             title={OPPORTUNITY_LABELS[entry.type]?.label}
           >
-            {OPPORTUNITY_LABELS[entry.type]?.code ?? entry.type} · {entry.count}
+            {OPPORTUNITY_LABELS[entry.type]?.code ?? entry.type} · {entry._count._all}
           </Link>
         ))}
       </div>

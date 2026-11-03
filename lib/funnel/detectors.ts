@@ -141,7 +141,14 @@ export function collapsePageIssues(
     }
     const first = group[0].candidate;
     const pages = group.map((issue) => issue.pageUrl);
-    const volume = group.reduce((sum, issue) => sum + (issue.candidate.scoreInputs.worth.volume ?? 0), 0);
+    // Sum real demand across the pages; an impact proxy is a per-defect stand-in,
+    // so multiplying it by 60 pages would turn "no traffic" into a top score.
+    const realDemand = group.reduce(
+      (sum, issue) =>
+        sum + (issue.candidate.scoreInputs.worth.volumeSource === "first_party" ? issue.candidate.scoreInputs.worth.volume ?? 0 : 0),
+      0
+    );
+    const volume = realDemand > 0 ? realDemand : DETECTOR_THRESHOLDS.technicalImpactVolume;
     out.push({
       ...first,
       title: opts.siteTitle(issueKey, group.length),
@@ -150,7 +157,11 @@ export function collapsePageIssues(
       howEvidenceIds: [...new Set(group.flatMap((issue) => issue.candidate.howEvidenceIds))].slice(0, 50),
       scoreInputs: {
         ...first.scoreInputs,
-        worth: { ...first.scoreInputs.worth, volume: volume > 0 ? volume : null },
+        worth: {
+          ...first.scoreInputs.worth,
+          volume,
+          volumeSource: realDemand > 0 ? "first_party" : "impact_proxy",
+        },
       },
     });
   }
