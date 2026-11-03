@@ -314,20 +314,33 @@ model DemandMapCluster {
   id                String        @id @default(cuid())
   projectId         String
   slug              String
+  /// Stable identity derived from the members (shared phrase, hub query or
+  /// question hash) — never from the display name. See
+  /// docs/demand-map-cluster-discovery.md §3.
+  identityKey       String
   name              String
   topicSummary      String
   intent            ClusterIntent @default(mixed)
   /// Declared business relevance: does the offer serve this need?
   businessRelevance Json
+  /// Which signal proposed this cluster (gsc_query, serp_overlap, ...).
+  proposedBy        String        @default("manual")
+  /// 0–1. Raised when another signal corroborates the same members.
+  confidence        Float         @default(0)
   tracked           Boolean       @default(false)
+  supersededById    String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]
+  supersededBy DemandMapCluster?  @relation("ClusterSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded   DemandMapCluster[] @relation("ClusterSupersede")
 
   @@unique([projectId, slug])
+  @@unique([projectId, identityKey])
   @@index([projectId])
+  @@index([supersededById])
 }
 
 model Task {

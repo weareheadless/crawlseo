@@ -35,6 +35,8 @@ export async function upsertCluster(db: DemandMapDb, input: UpsertClusterInput) 
     create: {
       projectId: input.projectId,
       slug: input.slug,
+      // A curated cluster is its own identity: the slug is chosen by a person.
+      identityKey: `curated:${input.slug}`,
       name: input.name,
       topicSummary: input.topicSummary,
       intent: input.intent,

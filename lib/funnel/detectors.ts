@@ -503,23 +503,39 @@ export async function clusterPlayDetector(db: DetectorDb, projectId: string, now
   for (const cluster of clusters) {
     const membership = await db.evidenceRecord.findMany({
       where: { projectId, kind: "keyword_universe_membership", supersededById: null, dimensions: { path: ["cluster"], equals: cluster.slug } },
+      select: { id: true, dimensions: true },
     });
     if (membership.length < DETECTOR_THRESHOLDS.minClusterQueries) continue;
-    const ranks = await db.evidenceRecord.findMany({
-      where: { projectId, kind: "keyword_rank", supersededById: null, dimensions: { path: ["cluster"], equals: cluster.slug } },
+    // Coverage = members we actually rank for. Rank evidence is not tagged with
+    // a cluster (the same query can move between clusters), so coverage is the
+    // intersection of member queries with queries that have a recorded rank.
+    const memberQueries = new Set(
+      membership
+        .map((row) => (row.dimensions as { query?: string } | null)?.query)
+        .filter((query): query is string => Boolean(query))
+    );
+    const ranked = await db.evidenceRecord.findMany({
+      where: { projectId, kind: "keyword_rank", supersededById: null },
+      select: { dimensions: true },
     });
-    const coverage = ranks.length / membership.length;
+    const rankedQueries = new Set(
+      ranked
+        .map((row) => (row.dimensions as { query?: string } | null)?.query)
+        .filter((query): query is string => Boolean(query))
+    );
+    const covered = [...memberQueries].filter((query) => rankedQueries.has(query)).length;
+    const coverage = memberQueries.size === 0 ? 1 : covered / memberQueries.size;
     if (coverage <= DETECTOR_THRESHOLDS.maxClusterCoverage) {
       candidates.push({
         type: "O3_content_gap",
         title: `Cluster play: build topical authority for "${cluster.name}"`,
-        summary: `${cluster.slug} has ${membership.length} tracked queries but only ${ranks.length} ranking pages — a topic hub can close the cluster.`,
+        summary: `${memberQueries.size} tracked queries, ${covered} with a ranking page — a topic hub can close the cluster.`,
         dedupKey: `O3:cluster:${cluster.slug}`,
         clusterSlug: cluster.slug,
         whyEvidenceIds: [],
         howEvidenceIds: membership.slice(0, 1).map((m) => m.id),
         scoreInputs: scoreDefaults({
-          worth: { volume: membership.length * 20, ctrAtPosition: ctrAtPosition(5), businessValue: 0.8 },
+          worth: { volume: memberQueries.size * 20, ctrAtPosition: ctrAtPosition(5), businessValue: 0.8 },
           winProbability: { rankDistance: 0.5, serpCompetition: 0.4 },
           effort: { playTypeBase: 16, sizeFactor: 2 },
         }),

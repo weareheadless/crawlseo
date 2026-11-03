@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type EvidenceDb, type MetricValue } from "@/lib/funnel/evidence";
 import { runDetectors } from "@/lib/funnel/detectors";
+import { discoverClusters } from "@/lib/funnel/cluster-discovery";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 
 /**
@@ -166,7 +167,7 @@ export async function backfillSiteEvidence(
   return result;
 }
 
-export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandMapCluster">;
+export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandMapCluster" | "keyword">;
 
 /**
  * Refresh the funnel for one site: backfill evidence from first-party stores,
@@ -191,6 +192,9 @@ export async function refreshFunnelForSite(
     };
   }
   const backfill = await backfillSiteEvidence(db, siteId, { projectId: site.projectId });
+  // Clusters first: a discovered cluster lets the board group work by need and
+  // lets the cluster play fire in the same run.
+  await discoverClusters(db, site.projectId, { siteId });
   const detection = await runDetectors(db, site.projectId, { detectedBy: opts.detectedBy ?? "funnel-refresh" });
   return { ...backfill, created: detection.created, updated: detection.updated, parked: detection.parked.length };
 }

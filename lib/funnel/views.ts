@@ -432,14 +432,30 @@ export type DemandClusterRow = {
   topicSummary: string;
   tracked: boolean;
   businessRelevance: unknown;
+  proposedBy: string;
+  confidence: number;
+  /** Queries recorded as members of this cluster. */
+  members: number;
+  /** Members with a recorded rank, i.e. we have a page competing. */
+  covered: number;
   openOpportunities: number;
 };
 
 export async function listDemandClusters(db: FunnelDb, projectId: string): Promise<DemandClusterRow[]> {
   const clusters = await db.demandMapCluster.findMany({
-    where: { projectId },
+    where: { projectId, supersededById: null },
     orderBy: { slug: "asc" },
-    select: { id: true, slug: true, name: true, intent: true, topicSummary: true, tracked: true, businessRelevance: true },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      intent: true,
+      topicSummary: true,
+      tracked: true,
+      businessRelevance: true,
+      proposedBy: true,
+      confidence: true,
+    },
   });
   const counts = await db.opportunity.groupBy({
     by: ["clusterId"],
@@ -447,10 +463,39 @@ export async function listDemandClusters(db: FunnelDb, projectId: string): Promi
     _count: { _all: true },
   });
   const countByCluster = new Map(counts.map((row) => [row.clusterId, row._count._all]));
-  return clusters.map((cluster) => ({
-    ...cluster,
-    openOpportunities: countByCluster.get(cluster.id) ?? 0,
-  }));
+
+  const memberships = await db.evidenceRecord.findMany({
+    where: { projectId, kind: "keyword_universe_membership", supersededById: null },
+    select: { dimensions: true },
+  });
+  const membersBySlug = new Map<string, Set<string>>();
+  for (const row of memberships) {
+    const dims = (row.dimensions ?? {}) as { cluster?: string; query?: string };
+    if (!dims.cluster || !dims.query) continue;
+    membersBySlug.set(dims.cluster, (membersBySlug.get(dims.cluster) ?? new Set()).add(dims.query));
+  }
+  const ranks = await db.evidenceRecord.findMany({
+    where: { projectId, kind: "keyword_rank", supersededById: null },
+    select: { dimensions: true, metrics: true },
+  });
+  const ranked = new Set<string>();
+  for (const row of ranks) {
+    const dims = (row.dimensions ?? {}) as { query?: string };
+    const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
+    if (dims.query && (metrics["provider:position"]?.value ?? metrics["first_party:position"]?.value) != null) {
+      ranked.add(dims.query);
+    }
+  }
+
+  return clusters.map((cluster) => {
+    const members = membersBySlug.get(cluster.slug) ?? new Set<string>();
+    return {
+      ...cluster,
+      members: members.size,
+      covered: [...members].filter((query) => ranked.has(query)).length,
+      openOpportunities: countByCluster.get(cluster.id) ?? 0,
+    };
+  });
 }
 
 export type TaskRow = {

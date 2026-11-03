@@ -87,27 +87,34 @@ export default async function DemandMapPage({ params }: Props) {
       {clusters.length === 0 ? (
         <EmptyState
           title="No clusters yet"
-          description="A cluster is a curated group of queries around one customer need: it carries the intent and the business relevance that make an opportunity worth playing. Clusters arrive with the demand-map build (DS-05) or can be curated per project. Until then, the board works from raw evidence alone."
+          description="A cluster groups queries around one customer need, with the intent and business relevance that make an opportunity worth playing. Discovery proposes clusters from stored evidence; none are endorsed until a person marks them core or adjacent to the offer."
         />
       ) : (
         <ul className="space-y-2">
-          {clusters.map((cluster) => (
-            <li key={cluster.id} className="panel px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-heading text-base font-semibold text-foreground">{cluster.name}</h3>
-                <Chip>{INTENT_LABELS[cluster.intent] ?? cluster.intent}</Chip>
-                {cluster.tracked && <Chip tone="success">tracked</Chip>}
-                <span className="text-[11px] text-muted-foreground">cluster · {cluster.slug}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{cluster.topicSummary}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                <span>{cluster.openOpportunities} open opportunities</span>
-                <Link href={`/sites/${siteId}/opportunities?status=open`} className="text-primary hover:underline">
-                  Open the board
+          {clusters.map((cluster) => {
+            const relevance = (cluster.businessRelevance ?? {}) as { relevance?: string };
+            const endorsed = relevance.relevance && relevance.relevance !== "none";
+            const coverage = cluster.members === 0 ? 0 : cluster.covered / cluster.members;
+            return (
+              <li key={cluster.id}>
+                <Link href={`/sites/${siteId}/demand/${cluster.id}`} className="panel block px-4 py-3 transition hover:border-primary/40">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-heading text-base font-semibold text-foreground">{cluster.name}</h3>
+                    <Chip>{INTENT_LABELS[cluster.intent] ?? cluster.intent}</Chip>
+                    <Chip tone={endorsed ? "success" : "warning"}>{endorsed ? relevance.relevance : "not endorsed"}</Chip>
+                    {cluster.tracked && <Chip tone="success">tracked</Chip>}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{cluster.topicSummary}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                    <span>{cluster.members} queries</span>
+                    <span>coverage {(coverage * 100).toFixed(0)}%</span>
+                    <span>{cluster.openOpportunities} open opportunities</span>
+                    <span>via {cluster.proposedBy}</span>
+                  </div>
                 </Link>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
