@@ -12,6 +12,12 @@ import path from "node:path";
  *
  * A table with a remaining writer cannot be frozen: freezing it would break the
  * producer. The audit names the producer so the reason is visible.
+ *
+ * Reachability is computed from static imports, so it is an **upper bound**: a
+ * file can be imported for a type without its write path ever running from a
+ * job. The create/update split narrows it — a table with updates only is no
+ * longer growing — and the ledger records which creates are actually reachable
+ * from a job handler rather than merely imported.
  */
 
 export type LegacyTable =
@@ -27,6 +33,13 @@ export type WriterFinding = {
   table: LegacyTable;
   file: string;
   line: number;
+  /**
+   * `create` adds rows (the table grows), `update` only mutates rows that
+   * already exist (lifecycle transitions that drain). Freezing a table with
+   * updates still breaks those transitions, but only a table with creates is
+   * still growing.
+   */
+  operation: "create" | "update" | "delete";
 };
 
 const WRITE_METHODS = "(create|createMany|update|updateMany|upsert|delete|deleteMany)";
@@ -70,7 +83,13 @@ export async function auditLegacyWriters(root = process.cwd()): Promise<WriterFi
     for (const match of content.matchAll(PATTERN)) {
       const index = match.index ?? 0;
       const line = content.slice(0, index).split("\n").length;
-      findings.push({ table: match[1] as LegacyTable, file: path.relative(root, file), line });
+      const method = match[2] ?? "";
+      const operation: WriterFinding["operation"] = method.startsWith("create")
+        ? "create"
+        : method.startsWith("delete")
+          ? "delete"
+          : "update";
+      findings.push({ table: match[1] as LegacyTable, file: path.relative(root, file), line, operation });
     }
   }
   return findings;
@@ -156,7 +175,15 @@ if (process.argv[1]?.endsWith("legacy-writer-audit.ts")) {
       process.stdout.write("\nscheduled-job reachability (step 2 gate):\n");
       for (const table of [...FROZEN_TABLES, ...STILL_WRITTEN]) {
         const writers = scheduledByTable[table] ?? [];
-        process.stdout.write(`  ${writers.length === 0 ? "no scheduled writer" : `${writers.length} scheduled writer(s)`}  ${table}\n`);
+        const creates = writers.filter((writer) => writer.operation === "create").length;
+        const updates = writers.filter((writer) => writer.operation === "update").length;
+        const label =
+          writers.length === 0
+            ? "no scheduled writer"
+            : creates > 0
+              ? `${creates} create + ${updates} update (table still grows)`
+              : `${updates} update only (nothing new is created)`;
+        process.stdout.write(`  ${label}  ${table}\n`);
       }
 
       const frozenWithWriter = FROZEN_TABLES.filter((table) => (byTable[table] ?? []).length > 0);

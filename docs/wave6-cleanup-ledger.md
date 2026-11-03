@@ -96,6 +96,43 @@ restores it), which is the first half of retiring `researchAction`.
 | `tests/pipeline-lineage.test.ts` | requirement **ported**: `tests/action-provenance-render.test.ts` now asserts the funnel page shows both legs, names producers, and states a missing hop |
 | rank-history precedence overlay | replaced by `buildRankHistory`, which keeps both series tagged (DS-05) |
 
+## Step 2a — what the audit can now prove, precisely
+
+The audit distinguishes **creates** (the table grows) from **updates** (lifecycle
+transitions on rows that already exist), and it states that import reachability is
+an upper bound rather than execution:
+
+```
+1 create + 14 update (table still grows)  researchAction
+2 create + 11 update (table still grows)  researchRun
+2 create +  0 update (table still grows)  researchFinding
+1 create +  7 update (table still grows)  seoResearchRun
+6 update only (nothing new is created)    seoResearchTask
+2 create +  8 update (table still grows)  articleKeywordResearchRun
+no scheduled writer                       prelaunchResearchRequest
+```
+
+**Measured fact, and it contradicts the earlier assumption:** `researchAction` is
+still growing in production. In one six-hour window it gained 242 rows with
+`owner: "crawl-actions"` and `source: "crawl_issue"`, all stamped within the same
+second — one crawl's worth.
+
+That owner string belonged to `lib/research/crawl-actions.ts`, which was deleted
+in wave 6 and is absent from the current web and worker releases. It is also
+absent from the source checkout. So the writer is a process running older code
+that has not been identified yet, and the claim "no scheduled job creates legacy
+actions" is **not proven** — it is currently false in effect.
+
+Open item: find and stop that writer before freezing `researchAction`. Candidates
+are a process started from an older release directory (`afc4713`, `d059be7`) or a
+scheduler outside pm2. Until it is found, `researchAction` stays out of the
+freeze, and this line stays in the ledger rather than being quietly removed.
+
+The tables that still grow from scheduled jobs are the research run families:
+`researchRun` + `researchFinding` (kept by the spine as its run/finding models),
+and `seoResearchRun` + `articleKeywordResearchRun` (the families DS-02 unifies).
+Those creates are what blocks the freeze, not the updates.
+
 ## Step 3b — the frozen table was dropped, in its own reversible migration
 
 `RankSnapshot` was the only table proven write-free, and it held **0 rows** in
