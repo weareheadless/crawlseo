@@ -1,0 +1,175 @@
+import { type EdgeRelation, type EvidenceLeg, type OpportunityDimension, type OpportunityStatus, type OpportunityType, type Prisma, type PrismaClient } from "@prisma/client";
+
+import { addEdge, type EdgeDb } from "@/lib/funnel/edges";
+import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
+
+/**
+ * Opportunity store (docs/seo-funnel-spine-plan.md §2/§4).
+ *
+ * Invariants enforced here:
+ *  - an opportunity requires at least one supporting evidence edge;
+ *  - dedup by (projectId, dedupKey): the same keyword+URL across detectors is
+ *    one opportunity — edges merge, no duplicates;
+ *  - score components are stored, declared, recomputable;
+ *  - acceptance/parking/rejection is a human decision, recorded;
+ *  - hysteresis: below-threshold detected opportunities park, they do not
+ *    flicker or disappear.
+ */
+
+export type OpportunityDb = EdgeDb & Pick<PrismaClient, "opportunity">;
+
+export type UpsertOpportunityInput = {
+  projectId: string;
+  type: OpportunityType;
+  dimension: OpportunityDimension;
+  title: string;
+  summary: string;
+  dedupKey: string;
+  detectedBy: string;
+  clusterId?: string | null;
+  scoreInputs: Omit<ScoreInputs, "evidenceCompleteness">;
+  /** evidence record ids on the why leg (business/knowledge) */
+  whyEvidenceIds: string[];
+  /** evidence record ids on the how leg (search/technical) */
+  howEvidenceIds: string[];
+};
+
+const TYPE_DIMENSION: Record<OpportunityType, OpportunityDimension> = {
+  O1_winnable_rank: "seo",
+  O2_striking_distance: "seo",
+  O3_content_gap: "content",
+  O4_aeo_citation_gap: "aeo",
+  O5_aeo_presence_gap: "aeo",
+  O6_business_fact_mismatch: "technical",
+  O7_technical_defect: "technical",
+  O8_structured_data_gap: "technical",
+  O9_backlink_gap: "seo",
+  O10_cannibalization: "seo",
+  O11_freshness_decay: "seo",
+  O12_page_experience: "technical",
+  O13_user_pain_point: "content",
+  O14_offer_positioning_gap: "content",
+};
+
+export function completenessLeg(whyCount: number, howCount: number): EvidenceLeg {
+  if (whyCount > 0 && howCount > 0) return "both";
+  if (whyCount > 0) return "why";
+  if (howCount > 0) return "how";
+  return "none";
+}
+
+export async function upsertOpportunity(
+  db: OpportunityDb,
+  input: UpsertOpportunityInput
+): Promise<{ id: string; status: OpportunityStatus; created: boolean }> {
+  if (!input.whyEvidenceIds.length && !input.howEvidenceIds.length) {
+    throw new Error(`opportunity ${input.dedupKey} has no supporting evidence (invariant: no orphan opportunities)`);
+  }
+  if (input.dimension !== TYPE_DIMENSION[input.type]) {
+    throw new Error(`opportunity type ${input.type} has fixed dimension ${TYPE_DIMENSION[input.type]}`);
+  }
+
+  const leg = completenessLeg(input.whyEvidenceIds.length, input.howEvidenceIds.length);
+  const { scoreValue, inputs } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
+
+  const existing = await db.opportunity.findUnique({
+    where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: input.dedupKey } },
+    select: { id: true, status: true },
+  });
+
+  const record = existing
+    ? await db.opportunity.update({
+        where: { id: existing.id },
+        data: {
+          title: input.title,
+          summary: input.summary,
+          clusterId: input.clusterId ?? undefined,
+          scoreValue,
+          scoreInputs: inputs as unknown as Prisma.InputJsonValue,
+          evidenceCompleteness: leg,
+          lastScoredAt: new Date(),
+        },
+        select: { id: true, status: true },
+      })
+    : await db.opportunity.create({
+        data: {
+          projectId: input.projectId,
+          type: input.type,
+          dimension: TYPE_DIMENSION[input.type],
+          title: input.title,
+          summary: input.summary,
+          dedupKey: input.dedupKey,
+          clusterId: input.clusterId ?? null,
+          scoreValue,
+          scoreInputs: inputs as unknown as Prisma.InputJsonValue,
+          evidenceCompleteness: leg,
+          detectedBy: input.detectedBy,
+          lastScoredAt: new Date(),
+        },
+        select: { id: true, status: true },
+      });
+
+  for (const evidenceId of input.whyEvidenceIds) {
+    await addEdge(db, {
+      fromType: "evidence_record",
+      fromId: evidenceId,
+      toType: "opportunity",
+      toId: record.id,
+      relation: "supporting",
+      createdBy: input.detectedBy,
+    });
+  }
+  for (const evidenceId of input.howEvidenceIds) {
+    await addEdge(db, {
+      fromType: "evidence_record",
+      fromId: evidenceId,
+      toType: "opportunity",
+      toId: record.id,
+      relation: "supporting",
+      createdBy: input.detectedBy,
+    });
+  }
+
+  return { id: record.id, status: record.status, created: !existing };
+}
+
+/** Hysteresis: park detected opportunities that fall below their threshold. */
+export async function applyHysteresis(
+  db: OpportunityDb,
+  opts: { threshold: number; detectedBy: string }
+): Promise<string[]> {
+  const drifting = await db.opportunity.findMany({
+    where: { status: "detected", scoreValue: { lt: opts.threshold } },
+    select: { id: true },
+  });
+  for (const row of drifting) {
+    await db.opportunity.update({
+      where: { id: row.id },
+      data: { status: "parked", parkReason: "score_below_threshold", decidedBy: opts.detectedBy, decidedAt: new Date() },
+    });
+  }
+  return drifting.map((row) => row.id);
+}
+
+export type HumanDecision = "accepted" | "parked" | "rejected" | "closed";
+
+/** Accept/park/reject/close is a human call, always recorded. */
+export async function decideOpportunity(
+  db: OpportunityDb,
+  id: string,
+  decision: HumanDecision,
+  decidedBy: string,
+  reason?: string
+): Promise<void> {
+  const status: OpportunityStatus =
+    decision === "accepted" ? "accepted" : decision === "parked" ? "parked" : decision === "rejected" ? "rejected" : "closed";
+  await db.opportunity.update({
+    where: { id },
+    data: { status, decidedBy, decidedAt: new Date(), parkReason: reason ?? null },
+  });
+}
+
+export async function edgesSupportingOpportunity(db: EdgeDb, opportunityId: string, relation: EdgeRelation = "supporting") {
+  const { incoming } = await (await import("@/lib/funnel/edges")).edgesFor(db, { type: "opportunity", id: opportunityId });
+  return incoming.filter((edge) => edge.relation === relation);
+}

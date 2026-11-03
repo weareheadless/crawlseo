@@ -15,6 +15,9 @@ vi.mock("@/lib/db", () => ({ db: mockDb }));
 
 import { connectorCapabilities, ConnectorError, getConnectorAction, listConnectorActions } from "@/lib/connectors/service";
 
+const RECENT_CRAWL_AT = new Date(Date.now() - 86_400_000); // 1 day ago, inside every recency window
+const RECENT_CRAWL_ISO = RECENT_CRAWL_AT.toISOString();
+
 const principal = { credentialId: "cred", servicePrincipalId: "principal", workspaceId: "workspace", projectId: "project-1", scopes: ["connector:read"] };
 const action = { id: "action-1", projectId: "project-1", siteId: "site-1", revision: 2, title: "Fix page",
   recommendation: "Update the page using the cited research.", priority: 50, priorityRationale: "High opportunity",
@@ -36,7 +39,7 @@ describe("connector Action envelope and pagination scope", () => {
     mockDb.project.findUnique.mockResolvedValue({ externalProjectId: "external-1" });
     mockDb.connectorExecutionState.findUnique.mockResolvedValue(null);
     mockDb.crawl.findFirst.mockResolvedValue({ id: "crawl-1", siteId: "site-1", status: "COMPLETED",
-      finishedAt: new Date("2026-10-25T11:00:00.000Z") });
+      finishedAt: RECENT_CRAWL_AT });
     mockDb.crawlIssue.findMany.mockResolvedValue([{ id: "issue-1", crawlId: "crawl-1", url: "https://example.com/",
       type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }]);
     mockDb.auditPage.findMany.mockResolvedValue([{ id: "page-1", crawlId: "crawl-1", url: "https://example.com/",
@@ -71,7 +74,7 @@ describe("connector Action envelope and pagination scope", () => {
     })).digest("hex");
     mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
       schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-3",
-      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: RECENT_CRAWL_ISO,
       recencyLimitDays: 7, sourceFingerprint,
       issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }],
       pageRefs: [{ id: "page-1", url: "https://example.com/", statusCode: 200, title: null, description: "Description",
@@ -95,7 +98,7 @@ describe("connector Action envelope and pagination scope", () => {
     })).digest("hex");
     mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
       schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-3",
-      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: RECENT_CRAWL_ISO,
       recencyLimitDays: 7, sourceFingerprint,
       issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "INFO", message: "Missing title" }],
       pageRefs: [],
@@ -114,7 +117,7 @@ describe("connector Action envelope and pagination scope", () => {
     })).digest("hex");
     mockDb.researchAction.findFirst.mockResolvedValue({ ...action, finding: null, evidence: { technicalEvidence: {
       schemaVersion: "1.0", sourceKind: "crawl", siteId: "site-1", canonicalContextRevision: "ctx-old",
-      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: "2026-10-25T11:00:00.000Z",
+      canonicalOrigin: "https://example.com/", crawlId: "crawl-1", completedAt: RECENT_CRAWL_ISO,
       recencyLimitDays: 7, sourceFingerprint,
       issueRefs: [{ id: "issue-1", url: "https://example.com/", type: "MISSING_TITLE", severity: "WARNING", message: "Missing title" }],
       pageRefs: [{ id: "page-1", url: "https://example.com/", statusCode: 200, title: null, description: "Description",

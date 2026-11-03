@@ -90,6 +90,9 @@ model Project {
   questionCoverages        QuestionCoverage[]
   aiVisibilityObservations AIVisibilityObservation[]
   aeoEvaluationRuns        AeoEvaluationRun[]
+  evidenceRecords          EvidenceRecord[]
+  opportunities            Opportunity[]
+  demandMapClusters        DemandMapCluster[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -100,6 +103,304 @@ enum AIVisibilitySourceKind {
   provider_api
   operator_manual
 }
+
+// ============ FUNNEL SPINE (seo-funnel-spine-plan.md, wave 0) ============
+
+enum EvidenceRecordKind {
+  keyword_rank
+  keyword_metrics
+  serp_snapshot
+  serp_features
+  intent_label
+  competitor_rank
+  backlink_profile
+  share_of_voice
+  keyword_universe_membership
+  onpage_crawl
+  internal_link_graph
+  ai_visibility_observation
+  gsc_query
+  gsc_page
+  vitals
+  analytics
+  knowledge_fact
+  question_coverage
+  research_finding
+}
+
+/// Immutable raw provider payload store. The only place raw provider
+/// responses live; normalized tables never store raw blobs (plan §4).
+model RawProviderResponse {
+  id             String   @id @default(cuid())
+  provider       String
+  product        String
+  endpoint       String
+  providerTaskId String?
+  locale         String?
+  requestedAt    DateTime
+  deliveredAt    DateTime
+  costMicros     BigInt?
+  status         String
+  payload        Json
+  createdAt      DateTime @default(now())
+
+  evidenceRecords EvidenceRecord[]
+
+  @@unique([provider, providerTaskId])
+  @@index([provider, product, requestedAt])
+}
+
+/// Typed, normalized observation with provenance. One envelope for both
+/// evidence legs (business and search). Superseded, never deleted.
+model EvidenceRecord {
+  id              String            @id @default(cuid())
+  projectId       String
+  siteId          String?
+  kind            EvidenceRecordKind
+  observedAt      DateTime
+  validFrom       DateTime?
+  validTo         DateTime?
+  producer        String
+  rawResponseId   String?
+  dimensions      Json
+  metrics         Json
+  observationHash String
+  supersededById  String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site         Site?                @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  rawResponse  RawProviderResponse? @relation(fields: [rawResponseId], references: [id], onDelete: SetNull)
+  supersededBy EvidenceRecord?      @relation("EvidenceSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded   EvidenceRecord[]     @relation("EvidenceSupersede")
+
+  @@unique([projectId, kind, observationHash])
+  @@index([projectId, kind, observedAt])
+  @@index([projectId, siteId])
+  @@index([supersededById])
+}
+
+/// Legacy funnel tables are frozen read-only at cutover (plan §6). Writes are
+/// rejected at the application layer by lib/funnel/legacy-freeze.ts.
+
+// ============ FUNNEL SPINE (wave 1): demand map, opportunity, edges ============
+
+enum OpportunityType {
+  O1_winnable_rank
+  O2_striking_distance
+  O3_content_gap
+  O4_aeo_citation_gap
+  O5_aeo_presence_gap
+  O6_business_fact_mismatch
+  O7_technical_defect
+  O8_structured_data_gap
+  O9_backlink_gap
+  O10_cannibalization
+  O11_freshness_decay
+  O12_page_experience
+  O13_user_pain_point
+  O14_offer_positioning_gap
+}
+
+enum OpportunityStatus {
+  detected
+  accepted
+  in_progress
+  parked
+  rejected
+  closed
+}
+
+enum OpportunityDimension {
+  seo
+  aeo
+  geo
+  content
+  technical
+}
+
+enum EvidenceLeg {
+  why
+  how
+  both
+  none
+}
+
+/// Decision-shaped object detected automatically from evidence. Scored with
+/// declared, recomputable inputs (plan §2.3); acceptance is a human call.
+model Opportunity {
+  id                 String              @id @default(cuid())
+  projectId          String
+  type               OpportunityType
+  status             OpportunityStatus   @default(detected)
+  dimension          OpportunityDimension
+  title              String
+  summary            String
+  /// Stable dedup identity within a project: same keyword+URL across
+  /// detectors is one opportunity (plan §2 detector hygiene).
+  dedupKey           String
+  clusterId          String?
+  scoreValue         Int?
+  /// Declared, recomputable scoring inputs (worth, win probability, effort,
+  /// completeness, freshness, stability) — never a black box.
+  scoreInputs        Json
+  evidenceCompleteness EvidenceLeg      @default(none)
+  firstDetectedAt    DateTime            @default(now())
+  detectedBy         String
+  decidedBy          String?
+  decidedAt          DateTime?
+  lastScoredAt       DateTime?
+  parkReason         String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cluster    DemandMapCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  tasks      Task[]
+
+  @@unique([projectId, dedupKey])
+  @@index([projectId, status])
+  @@index([projectId, type])
+  @@index([clusterId])
+}
+
+/// The typed lineage table (plan §4). Generic endpoints; relation carries the
+/// meaning. This *is* the funnel lineage — no IDs inside JSON.
+enum EdgeEndpointType {
+  raw_provider_response
+  evidence_record
+  opportunity
+  task
+  delivery
+  outcome_observation
+}
+
+enum EdgeRelation {
+  supporting
+  contradicting
+  baseline
+  produced_by
+  superseded_by
+  serves
+}
+
+model EvidenceEdge {
+  id        String            @id @default(cuid())
+  fromType  EdgeEndpointType
+  fromId    String
+  toType    EdgeEndpointType
+  toId      String
+  relation  EdgeRelation
+  createdBy String
+  createdAt DateTime          @default(now())
+
+  @@unique([fromType, fromId, toType, toId, relation])
+  @@index([toType, toId])
+  @@index([fromType, fromId])
+}
+
+/// Demand-map projection (plan §2.1): curated cluster identity with
+/// recomputable metrics stored as evidence views, never new truth.
+enum ClusterIntent {
+  informational
+  commercial
+  transactional
+  local
+  mixed
+}
+
+model DemandMapCluster {
+  id                String        @id @default(cuid())
+  projectId         String
+  slug              String
+  name              String
+  topicSummary      String
+  intent            ClusterIntent @default(mixed)
+  /// Declared business relevance: does the offer serve this need?
+  businessRelevance Json
+  tracked           Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([projectId, slug])
+  @@index([projectId])
+}
+
+model Task {
+  id            String           @id @default(cuid())
+  opportunityId String
+  title         String
+  /// Human executor (plan decision 3). Agent assistance is recorded
+  /// separately and never publishes autonomously in this phase.
+  assignedTo    String
+  status        TaskStatus       @default(todo)
+  plan          Json?
+  agentPreparedById String?
+  humanConfirmedBy  String?
+  humanConfirmedAt  DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  baselines   Baseline[]
+  outcomeObservations OutcomeObservation[]
+
+  @@index([opportunityId])
+  @@index([status])
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  awaiting_human
+  delivered
+  verified_outcome
+}
+
+/// Pre-delivery measurement for the task's success metric (plan §3).
+model Baseline {
+  id        String   @id @default(cuid())
+  taskId    String
+  metrics   Json
+  observedAt DateTime
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+/// Post-delivery typed delta against the baseline. AEO impact finally has a
+/// schema-backed join: observation → task → opportunity (plan §3).
+enum OutcomeVerdict {
+  verified_win
+  no_effect
+  regression
+  unmeasured
+  pending
+}
+
+model OutcomeObservation {
+  id                String         @id @default(cuid())
+  taskId            String
+  baselineMetrics   Json
+  baselineObservedAt DateTime
+  afterMetrics      Json
+  afterObservedAt   DateTime
+  verdict           OutcomeVerdict
+  measuredBy        String
+  createdAt         DateTime       @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+
 
 model AIVisibilityObservation {
   id                  String                 @id @default(cuid())
@@ -1206,6 +1507,7 @@ model Site {
   alerts                     Alert[]
   savedKeywords              SavedKeyword[]
   rankSnapshots              RankSnapshot[]
+  evidenceRecords            EvidenceRecord[]
   integrationGrants          IntegrationGrant[]
   analyticsSnapshots         AnalyticsSnapshot[]
   jobs                       Job[]
