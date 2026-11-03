@@ -1,114 +1,139 @@
-import { getUserIdFromCookies } from "@/lib/session-helper";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { db } from "@/lib/db";
+import { getUserIdFromCookies } from "@/lib/session-helper";
+import { listTasks, listOpportunities } from "@/lib/funnel/views";
+import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
 import { PageHeader } from "@/components/ui/page-header";
-import { DataLagBadge } from "@/components/ui/data-lag-badge";
-import { getWorkData } from "@/lib/work/service";
-import { Workbench } from "@/components/work/workbench";
-import { keywordEvidenceForAction, sourceIdsForAction } from "@/lib/research/evidence";
-import { opportunityPriorityForAction } from "@/lib/ai-seo/opportunity-priority";
-import { actionDimensions, actionDimension, type ActionDimension } from "@/lib/work/categories";
-import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Chip, ScoreBadge, StatusChip, VerdictChip, relativeTime } from "@/components/funnel/badges";
+import { RefreshFunnelButton } from "@/components/funnel/refresh-button";
+import type { TaskStatus } from "@prisma/client";
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ tab?: string; dimension?: string; state?: string; actionId?: string }>;
 }
 
+const STATE_ORDER: TaskStatus[] = ["todo", "in_progress", "awaiting_human", "delivered", "verified_outcome"];
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
+const STATE_LABELS: Record<TaskStatus, string> = {
+  todo: "To do",
+  in_progress: "In progress",
+  awaiting_human: "Awaiting you",
+  delivered: "Delivered",
+  verified_outcome: "Verified",
+};
 
-export default async function WorkPage({ params, searchParams }: Props) {
+/**
+ * Work (plan §5, surface 4): the human execution queue. Tasks exist only
+ * because an opportunity was accepted, so every row shows its reason.
+ */
+export default async function WorkPage({ params }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
   if (!userId) redirect("/login");
 
-  const [data, query] = await Promise.all([getWorkData(siteId), searchParams]);
-  const dimension = actionDimensions.includes(query.dimension as ActionDimension) ? query.dimension as ActionDimension : "all";
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, domain: true, projectId: true } });
+  if (!site) redirect("/sites");
+
+  if (!site.projectId) {
+    return (
+      <div>
+        <PageHeader eyebrow={site.domain} title="Work" description="Tasks created by accepting an opportunity." />
+        <EmptyState
+          title="This site is not attached to a project"
+          description="Tasks belong to a project. Attach the site to a project to queue work."
+          actionLabel="Open sites"
+          actionHref="/sites"
+        />
+      </div>
+    );
+  }
+
+  const [tasks, accepted] = await Promise.all([
+    listTasks(db, site.projectId),
+    listOpportunities(db, { projectId: site.projectId, statuses: ["accepted", "in_progress"] }),
+  ]);
+
+  const grouped = STATE_ORDER.map((state) => ({ state, rows: tasks.filter((task) => task.status === state) })).filter(
+    (group) => group.rows.length > 0
+  );
 
   return (
     <div>
       <PageHeader
-        eyebrow={data.site.domain}
+        eyebrow={site.domain}
         title="Work"
-        description="One queue for research findings, content drafts, implementation tasks, and delivery."
-        actions={
-          <div className="flex items-center gap-2">
-            <DataLagBadge />
-            <Link
-              href={`/sites/${siteId}/research`}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-            >
-              Research
-            </Link>
-          </div>
-        }
+        description="One queue. Every task came from an opportunity, so its reason is always one click away."
+        actions={<RefreshFunnelButton siteId={siteId} />}
       />
-      <div className="mb-5 space-y-3">
-        <PipelineNavigation siteId={siteId} currentStage="work" />
-        <PipelineStageContext siteId={siteId} currentStage="work" />
-      </div>
-      {query.actionId && (
-        <section className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4" aria-label="Selected action">
-          <p className="text-sm">Selected action preserved from the previous workspace.</p>
-          <Link className="text-sm font-medium text-primary underline" href={`/sites/${siteId}/actions/${encodeURIComponent(query.actionId)}`}>
-            Open selected action
-          </Link>
-        </section>
+
+      {tasks.length === 0 && accepted.length === 0 ? (
+        <EmptyState
+          title="No tasks yet"
+          description="Tasks are created by accepting an opportunity. Open the board, read the reason, and accept the ones worth playing."
+          actionLabel="Open opportunities"
+          actionHref={`/sites/${siteId}/opportunities`}
+        />
+      ) : (
+        <div className="space-y-6">
+          {accepted.length > 0 && (
+            <section>
+              <h2 className="mb-2 flex items-center gap-2 font-heading text-atom-subheader font-semibold">
+                Accepted, no task yet <Chip tone="primary">{accepted.length}</Chip>
+              </h2>
+              <ul className="space-y-2">
+                {accepted.map((row) => (
+                  <li key={row.id}>
+                    <Link href={`/sites/${siteId}/opportunities/${row.id}`} className="panel flex items-center gap-3 px-4 py-2.5 transition hover:border-primary/40">
+                      <span className="font-mono text-[11px] font-semibold text-primary">{OPPORTUNITY_LABELS[row.type].code}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.title}</span>
+                      <ScoreBadge score={row.score} />
+                      <span className="text-[11px] text-muted-foreground">create the task</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {grouped.map((group) => (
+            <section key={group.state}>
+              <h2 className="mb-2 flex items-center gap-2 font-heading text-atom-subheader font-semibold">
+                {STATE_LABELS[group.state]} <Chip tone={group.state === "awaiting_human" ? "warning" : "neutral"}>{group.rows.length}</Chip>
+              </h2>
+              <ul className="space-y-2">
+                {group.rows.map((task) => (
+                  <li key={task.id}>
+                    <Link
+                      href={`/sites/${siteId}/opportunities/${task.opportunityId}`}
+                      className="panel block px-4 py-3 transition hover:border-primary/40"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[11px] font-semibold text-primary">
+                          {OPPORTUNITY_LABELS[task.opportunityType].code}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{task.title}</span>
+                        <StatusChip status={task.status} />
+                        {task.verdict && <VerdictChip verdict={task.verdict} />}
+                        <ScoreBadge score={task.opportunityScore} />
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                        <span>for {task.opportunityTitle}</span>
+                        <span>· executor {task.assignedTo}</span>
+                        {task.agentPreparedById && <span>· prepared by agent</span>}
+                        {task.humanConfirmedBy && <span>· confirmed by {task.humanConfirmedBy}</span>}
+                        <span>· {relativeTime(task.createdAt)}</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
-      <Workbench
-        siteId={siteId}
-        initialDimension={dimension}
-        initialState={query.state ?? "all"}
-        actions={data.actions.map((action) => ({
-          id: action.id,
-          title: action.title,
-          source: action.source,
-          kind: action.kind,
-          dimension: actionDimension(action),
-          format: action.format,
-          status: action.status,
-          priority: action.priority,
-          targetUrl: action.targetUrl,
-          primaryQuery: action.primaryQuery,
-          recommendation: action.recommendation,
-          createdAt: action.createdAt.toISOString(),
-          evidenceSources: sourceIdsForAction(action).length,
-          keyword: keywordEvidenceForAction(action.evidence),
-          opportunity: opportunityPriorityForAction(action),
-          editorialDecision: typeof (action.evidence as Record<string, unknown> | null)?.editorial === "object"
-            ? String(((action.evidence as Record<string, unknown>).editorial as Record<string, unknown>).decision ?? "")
-            : null,
-          examples: Array.isArray(record(action.evidence).examples)
-            ? (record(action.evidence).examples as unknown[])
-              .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value))
-              .map((value) => ({
-                url: typeof value.url === "string" ? value.url : "",
-                title: typeof value.title === "string" ? value.title : null,
-                statusCode: typeof value.statusCode === "number" ? value.statusCode : null,
-              }))
-              .filter((value) => value.url)
-              .slice(0, 3)
-            : [],
-          drafts: action._count.drafts,
-          agentTasks: action._count.agentTasks,
-          deliveries: action._count.deliveries,
-        }))}
-        agentTasks={data.agentTasks.map((task) => ({
-          id: task.id,
-          actionId: task.actionId,
-          actionTitle: task.action?.title ?? null,
-          title: task.title,
-          status: task.status,
-          route: task.route,
-          createdAt: task.createdAt.toISOString(),
-        }))}
-      />
-      {data.prelaunchRuns.length > 0 && <section className="panel mt-5 p-4"><h2 className="font-heading text-lg font-semibold">Prelaunch SEO research</h2><p className="mt-1 text-sm text-muted-foreground">Stored keyword results and their derived Actions.</p>{data.prelaunchRuns.map((run) => <p key={run.id} className="mt-2 text-sm"><Link className="text-primary underline" href={`/projects/${data.site.projectId}/prelaunch/${run.id}`}>{run.periodStart.toISOString().slice(0, 7)} · {run.status.toLowerCase()} · SEO research</Link></p>)}</section>}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { getAllOpportunities } from "@/lib/seo-opportunities";
 import { TimeframeSelect } from "@/components/sites/timeframe-select";
 import { parseSeoTimeframe } from "@/lib/seo-timeframes";
 import { readPipelineOverview } from "@/lib/pipeline/overview";
+import { getFunnelCounts } from "@/lib/funnel/views";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 
 interface SitePageProps {
@@ -37,6 +38,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
       userId: true,
       domain: true,
       gscProperty: true,
+      projectId: true,
       _count: { select: { keywords: true } },
     },
   });
@@ -62,6 +64,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
     site._count.keywords > 0
       ? await getAllOpportunities(siteId)
       : null;
+  const funnel = site.projectId ? await getFunnelCounts(db, site.projectId) : null;
 
   return (
     <div>
@@ -80,28 +83,28 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      {/* The funnel, in order. Each stage links to its surface. */}
+      <ol className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-5">
         {[
-          ["Work", "work"],
-          ["Research", "research"],
-          ["Intelligence", "intelligence"],
-          ["Keywords", "keywords"],
-          ["Saved Keywords", "saved-keywords"],
-          ["Pages", "pages"],
-          ["Crawl", "crawl"],
-          ["Vitals", "vitals"],
-          ["Alerts", "alerts"],
-          ["Settings", "settings"],
-        ].map(([label, path]) => (
-          <Link
-            key={path}
-            href={`/sites/${siteId}/${path}`}
-            className="rounded-lg border border-border bg-card px-3 py-1.5 text-atom-caption font-medium text-muted-foreground shadow-[var(--shadow-1)] transition hover:border-primary hover:text-primary"
-          >
-            {label}
-          </Link>
+          { label: "Demand map", value: funnel ? `${funnel.total} opportunities` : "no project", href: `/sites/${siteId}/demand` },
+          { label: "Opportunities", value: funnel ? `${funnel.detected} detected` : "—", href: `/sites/${siteId}/opportunities` },
+          { label: "Work", value: funnel ? `${funnel.accepted + funnel.inProgress} accepted` : "—", href: `/sites/${siteId}/work` },
+          { label: "Delivery", value: funnel ? `${funnel.closed} closed` : "—", href: `/sites/${siteId}/work` },
+          { label: "Evidence", value: funnel ? `${funnel.evidenceTotal} records` : "—", href: `/sites/${siteId}/evidence` },
+        ].map((stage, index) => (
+          <li key={stage.label}>
+            <Link
+              href={stage.href}
+              className="panel block px-3 py-2 transition hover:border-primary/40"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {index + 1} · {stage.label}
+              </p>
+              <p className="mt-0.5 text-xs text-foreground">{stage.value}</p>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ol>
 
       <div className="mb-6 space-y-4">
         <PipelineNavigation siteId={siteId} />

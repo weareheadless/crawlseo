@@ -41,7 +41,7 @@ export type EvidenceRecordPayload = {
   metrics: Record<string, MetricValue>;
 };
 
-/** Kinds collected through a paid provider require a raw response reference. */
+/** Kinds whose metrics may come from a paid provider (see the rule below). */
 export const PROVIDER_COLLECTED_KINDS: ReadonlySet<string> = new Set([
   "keyword_rank",
   "keyword_metrics",
@@ -53,6 +53,17 @@ export const PROVIDER_COLLECTED_KINDS: ReadonlySet<string> = new Set([
   "keyword_universe_membership",
   "ai_visibility_observation",
 ]);
+
+/**
+ * Provenance rule: evidence is "paid" when any stored metric declares
+ * `source: "provider"`. Paid evidence must point at the raw response and its
+ * recorded cost. The same kind can be collected first-party (GSC ranks, our
+ * crawler) and then needs no raw provider payload — so the rule is driven by
+ * the declared metric source, not by the kind alone.
+ */
+export function requiresPaidProvenance(metrics: Record<string, MetricValue>): boolean {
+  return Object.values(metrics).some((metric) => metric.source === "provider");
+}
 
 export const EVIDENCE_KINDS: readonly EvidenceRecordKind[] = [
   "keyword_rank",
@@ -132,18 +143,23 @@ export async function storeEvidenceRecord(
     throw new Error("evidence requires a valid observedAt (provenance)");
   }
   if (PROVIDER_COLLECTED_KINDS.has(input.kind)) {
-    if (!input.rawResponseId) {
-      throw new Error(`provider-collected evidence kind "${input.kind}" requires a raw response reference (provenance)`);
-    }
-    const raw = await db.rawProviderResponse.findUnique({
-      where: { id: input.rawResponseId },
-      select: { costMicros: true, status: true },
-    });
-    if (!raw) {
-      throw new Error("raw provider response not found");
-    }
-    if (raw.costMicros == null) {
-      throw new Error("provider-collected evidence requires the raw response to record its cost (provenance)");
+    const providerMetrics = Object.entries(input.metrics).filter(([, metric]) => metric.source === "provider");
+    if (providerMetrics.length > 0) {
+      if (!input.rawResponseId) {
+        throw new Error(
+          `provider-sourced metrics require a raw response reference (provenance); kind "${input.kind}"`
+        );
+      }
+      const raw = await db.rawProviderResponse.findUnique({
+        where: { id: input.rawResponseId },
+        select: { costMicros: true, status: true },
+      });
+      if (!raw) {
+        throw new Error("raw provider response not found");
+      }
+      if (raw.costMicros == null) {
+        throw new Error("provider-sourced evidence requires the raw response to record its cost (provenance)");
+      }
     }
   }
   for (const [label, metric] of Object.entries(input.metrics)) {
