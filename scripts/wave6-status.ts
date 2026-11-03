@@ -137,10 +137,14 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
   checks.push({
     step: 2,
     name: "nothing legacy written in the observation window",
-    status: watch.clean ? "complete" : "open",
-    detail: watch.clean
-      ? `clean over ${watch.windowHours}h (0 legacy rows, 0 out-of-band crawls)`
-      : `${watch.legacyCreates.map((row) => `${row.table}:${row.created}`).join(", ") || "none"}; out-of-band crawls ${watch.outOfBandCrawls}`,
+    // An out-of-band crawl matters for funnel freshness, not for this step: it
+    // does not write a legacy table. Keep it visible without failing the check on
+    // something the freeze cannot control.
+    status: watch.legacyCreates.length === 0 ? "complete" : "open",
+    detail:
+      watch.legacyCreates.length === 0
+        ? `0 legacy rows over ${watch.windowHours}h${watch.outOfBandCrawls > 0 ? `; ${watch.outOfBandCrawls} out-of-band crawl(s) noted (job queue bypassed)` : ""}`
+        : `${watch.legacyCreates.map((row) => `${row.table}:${row.created}`).join(", ")}; out-of-band crawls ${watch.outOfBandCrawls}`,
   });
 
   // Step 3 — deletions and the reversible table drop.

@@ -8,7 +8,7 @@ import { wave6Status } from "../scripts/wave6-status";
  * failing check rather than a stale document.
  */
 
-function fakeDb(opts: { actions?: Array<{ createdAt: Date; owner?: string }> } = {}) {
+function fakeDb(opts: { actions?: Array<{ createdAt: Date; owner?: string }>; outOfBand?: boolean } = {}) {
   const now = Date.now();
   return {
     researchAction: {
@@ -21,7 +21,12 @@ function fakeDb(opts: { actions?: Array<{ createdAt: Date; owner?: string }> } =
     seoResearchTask: { findMany: vi.fn(async () => []) },
     articleKeywordResearchRun: { findMany: vi.fn(async () => []) },
     prelaunchResearchRequest: { findMany: vi.fn(async () => []) },
-    crawl: { findMany: vi.fn(async () => [{ id: "c1", finishedAt: new Date(now - 60_000) }]) },
+    crawl: {
+      findMany: vi.fn(async () => [
+        // An out-of-band crawl finishes far from any job update.
+        { id: "c1", finishedAt: new Date(now - (opts.outOfBand ? 3_600_000 : 60_000)) },
+      ]),
+    },
     job: { findMany: vi.fn(async () => [{ id: "j1", updatedAt: new Date(now - 60_000) }]) },
   } as never;
 }
@@ -65,6 +70,15 @@ describe("wave 6 status checklist", () => {
     const clean = status.checks.find((check) => check.name.includes("observation window"));
     expect(clean?.status).toBe("open");
     expect(clean?.detail).toContain("ResearchAction");
+  });
+
+  it("does not fail the observation window on a crawl that wrote no legacy row", async () => {
+    // A manual crawl bypasses the job queue but writes no legacy table; that is a
+    // freshness question, not evidence the freeze leaked.
+    const status = await wave6Status(fakeDb({ outOfBand: true }));
+    const clean = status.checks.find((check) => check.name.includes("observation window"));
+    expect(clean?.status).toBe("complete");
+    expect(clean?.detail).toContain("out-of-band crawl(s) noted");
   });
 
   it("reports the reversible drop as complete", async () => {
