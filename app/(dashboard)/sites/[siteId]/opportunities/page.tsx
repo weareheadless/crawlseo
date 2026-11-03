@@ -65,10 +65,27 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     _count: { _all: true },
   });
   const present = new Set(kindsPresent.map((row) => row.kind));
-  const disabledDetectors = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
+  const disabledDetectors: Array<{ type: string; missing: string[] }> = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
     const missing = needs.filter((kind) => !present.has(kind));
-    return missing.length > 0 ? [{ type, missing }] : [];
+    return missing.length > 0 ? [{ type, missing: missing as string[] }] : [];
   });
+  // O13/O14 need a finding that states a gap, not just any finding. Research that
+  // returned themes only leaves them enabled-but-empty, which reads as "nothing
+  // found" when the truth is "no gap was stated".
+  const gapFindings = await db.evidenceRecord.count({
+    where: {
+      projectId: site.projectId,
+      kind: "research_finding",
+      OR: [
+        { dimensions: { path: ["painPoint"], equals: "true" } },
+        { dimensions: { path: ["positioningGap"], equals: "true" } },
+      ],
+    },
+  });
+  if (gapFindings === 0) {
+    disabledDetectors.push({ type: "O13_user_pain_point", missing: ["gap-typed research_finding"] });
+    disabledDetectors.push({ type: "O14_offer_positioning_gap", missing: ["gap-typed research_finding"] });
+  }
 
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {
