@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
@@ -66,7 +67,7 @@ export default async function EvidencePage({ params, searchParams }: Props) {
 
       <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
         {KIND_FILTERS.map((entry) => (
-          <a
+          <Link
             key={entry.key}
             href={`/sites/${siteId}/evidence?kind=${entry.key}`}
             aria-current={entry.key === filter.key ? "page" : undefined}
@@ -76,7 +77,7 @@ export default async function EvidencePage({ params, searchParams }: Props) {
             )}
           >
             {entry.label}
-          </a>
+          </Link>
         ))}
         <span className="ml-2 self-center text-xs text-muted-foreground">{rows.length} records</span>
       </div>

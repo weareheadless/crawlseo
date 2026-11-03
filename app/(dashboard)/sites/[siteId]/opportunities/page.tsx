@@ -63,6 +63,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       projectId: site.projectId,
       statuses: tab.statuses,
       completeness: query.leg && query.leg !== "all" ? [query.leg] : undefined,
+      types: query.type && query.type !== "all" ? [query.type as never] : undefined,
       search: query.q,
     }),
     getFunnelCounts(db, site.projectId),
@@ -137,6 +138,42 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           {rows.length} {rows.length === 1 ? "opportunity" : "opportunities"}
         </span>
       </div>
+
+      {/* Every detector that fired, with its count. Without this the highest-scoring
+          type fills the page and the rest are unreachable. */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <Link
+          href={`/sites/${siteId}/opportunities?status=${tab.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+          aria-current={!query.type || query.type === "all" ? "page" : undefined}
+          className={cn(
+            "rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium transition",
+            !query.type || query.type === "all" ? "border-primary/50 bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          All types · {counts.total}
+        </Link>
+        {counts.byType.map((entry) => (
+          <Link
+            key={entry.type}
+            href={`/sites/${siteId}/opportunities?status=${tab.key}&type=${entry.type}${query.leg ? `&leg=${query.leg}` : ""}`}
+            aria-current={query.type === entry.type ? "page" : undefined}
+            className={cn(
+              "rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium transition",
+              query.type === entry.type ? "border-primary/50 bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+            title={OPPORTUNITY_LABELS[entry.type]?.label}
+          >
+            {OPPORTUNITY_LABELS[entry.type]?.code ?? entry.type} · {entry.count}
+          </Link>
+        ))}
+      </div>
+
+      {counts.bothLegs === 0 && counts.total > 0 && (
+        <p className="mb-4 rounded-lg border border-[var(--a-warning-300)] bg-[var(--a-warning-50)] px-3 py-2 text-xs text-[var(--a-warning-800)]">
+          No opportunity has the <strong>why</strong> leg yet. Business knowledge and research findings are empty for
+          this project, so only technical work can be proposed. Demand-led ideas need that evidence first.
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState

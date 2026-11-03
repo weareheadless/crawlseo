@@ -28,6 +28,12 @@ type Evidence = Pick<EvidenceRecord, "id" | "kind" | "observedAt" | "dimensions"
 /** Stated thresholds (config, not vibes). All counts are per project. */
 export const DETECTOR_THRESHOLDS = {
   minVolume: 10,
+  /**
+   * A striking-distance opportunity needs enough impressions that a click is
+   * worth winning. With only `impressions > 0` this fired on queries that got a
+   * single impression and scored 0, adding rows nobody can act on.
+   */
+  minImpressions: 10,
   lowCtr: 0.02,
   minCompetitorSubtopics: 2,
   minReferringDomainGap: 3,
@@ -160,7 +166,7 @@ const DETECTORS: Detector[] = [
           const position = num(row, "provider:position") ?? num(row, "first_party:position");
           const ctr = num(row, "first_party:ctr");
           const impressions = num(row, "first_party:impressions") ?? 0;
-          return position != null && position > 10 && position <= 20 && ctr != null && ctr <= DETECTOR_THRESHOLDS.lowCtr && impressions > 0;
+          return position != null && position > 10 && position <= 20 && ctr != null && ctr <= DETECTOR_THRESHOLDS.lowCtr && impressions >= DETECTOR_THRESHOLDS.minImpressions;
         })
         .map((row) => {
           const position = num(row, "provider:position") ?? num(row, "first_party:position")!;
