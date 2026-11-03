@@ -222,15 +222,18 @@ export async function runResearchRun(runId: string) {
     },
   });
   if (!run) throw new Error("Research run not found");
+  // Project-scoped runs (prelaunch) have no site and use their own runner.
+  if (!run.site) throw new Error("RESEARCH_RUN_SITE_REQUIRED");
+  const site = run.site;
   if (run.status === "COMPLETED" || run.status === "PARTIAL") return run;
 
   const { start: monthStart, end: monthEnd } = researchMonthBounds(
-    new Date(), run.site.project?.researchBudgetTimeZone ?? "UTC",
+    new Date(), site.project?.researchBudgetTimeZone ?? "UTC",
   );
   const currentMonthRuns = await db.researchRun.count({
-    where: { siteId: run.siteId, createdAt: { gte: monthStart, lt: monthEnd } },
+    where: { siteId: site.id, createdAt: { gte: monthStart, lt: monthEnd } },
   });
-  if (currentMonthRuns > Math.max(0, run.site.researchPolicy?.monthlyBudget ?? 9)) {
+  if (currentMonthRuns > Math.max(0, site.researchPolicy?.monthlyBudget ?? 9)) {
     await db.researchRun.update({
       where: { id: run.id },
       data: { status: "FAILED", errorCode: "MONTHLY_RESEARCH_BUDGET_EXCEEDED", completedAt: new Date() },
@@ -238,7 +241,7 @@ export async function runResearchRun(runId: string) {
     throw new Error("Monthly research task budget is exhausted; this queued run was not dispatched");
   }
 
-  const currentPolicy = run.site.researchPolicy;
+  const currentPolicy = site.researchPolicy;
   const allowedProviders = currentPolicy && Array.isArray(currentPolicy.providers)
     ? stringList(currentPolicy.providers) : ["reddit", "news", "web"];
   const effectiveAllowedProviders = [...allowedProviders];
@@ -259,10 +262,10 @@ export async function runResearchRun(runId: string) {
   }
 
   const dispatchAllowed = await db.$transaction(async (tx) => {
-    if (run.site.projectId) await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${run.site.projectId} FOR UPDATE`;
-    await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${run.siteId} FOR UPDATE`;
-    await tx.$queryRaw`SELECT "id" FROM "ResearchPolicy" WHERE "siteId" = ${run.siteId} FOR UPDATE`;
-    const latestPolicy = await tx.researchPolicy.findUnique({ where: { siteId: run.siteId }, select: { enabled: true } });
+    if (site.projectId) await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${site.projectId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id" = ${site.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "ResearchPolicy" WHERE "siteId" = ${site.id} FOR UPDATE`;
+    const latestPolicy = await tx.researchPolicy.findUnique({ where: { siteId: site.id }, select: { enabled: true } });
     if (latestPolicy?.enabled === false) {
       await tx.researchRun.updateMany({
         where: { id: run.id, status: { in: ["QUEUED", "RUNNING"] } },
@@ -307,8 +310,8 @@ export async function runResearchRun(runId: string) {
     const language = typeof brief.language === "string" ? brief.language : "en";
     const market = typeof brief.market === "string" ? brief.market : "";
     const country = researchCountry(market, language);
-    const constraints = run.site.siteProfile?.constraints && typeof run.site.siteProfile.constraints === "object" && !Array.isArray(run.site.siteProfile.constraints)
-      ? run.site.siteProfile.constraints as Record<string, unknown> : {};
+    const constraints = site.siteProfile?.constraints && typeof site.siteProfile.constraints === "object" && !Array.isArray(site.siteProfile.constraints)
+      ? site.siteProfile.constraints as Record<string, unknown> : {};
     const exclusions = stringList(constraints.exclusions ?? constraints.excludedTopics).slice(0, 100);
     const excludedDomains = stringList(constraints.excludedDomains).slice(0, 100);
     const queryPlan = boundedQueryPlan({ topics: effectiveTopics, questions: stringList(brief.questions), exclusions, limit: 5 });
@@ -316,7 +319,7 @@ export async function runResearchRun(runId: string) {
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
     const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0));
-    const recencyDays = Math.max(1, Math.min(run.recencyDays, run.site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
+    const recencyDays = Math.max(1, Math.min(run.recencyDays, site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
     const cached = run.projectId ? await Promise.all([
       ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
       ...(useNews ? [reusableResearchSources({ projectId: run.projectId, provider: "google_news_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
@@ -389,10 +392,10 @@ export async function runResearchRun(runId: string) {
       }
     }
 
-    const maxSources = Math.max(1, Math.min(run.site.researchPolicy?.maxSources ?? 30, 100));
+    const maxSources = Math.max(1, Math.min(site.researchPolicy?.maxSources ?? 30, 100));
     const collectedSources = [...collected.values()];
     const qualityFiltered = collectedSources.filter((source) => !excludedUrl(source.url, excludedDomains));
-    const policyRecency = run.site.researchPolicy?.recencyDays ?? run.recencyDays;
+    const policyRecency = site.researchPolicy?.recencyDays ?? run.recencyDays;
     const effectiveRecencyDays = Math.max(1, Math.min(run.recencyDays, policyRecency, 730));
     const recencyIssues = qualityFiltered.map((source) => sourceRecencyIssue(source.publishedAt, effectiveRecencyDays));
     const recencyRejections = { missing_date: 0, invalid_date: 0, future_date: 0, stale: 0 };
@@ -423,12 +426,12 @@ export async function runResearchRun(runId: string) {
 
     // A site that handed owner work to an external executor through a sibling
     // site for the same domain must not emit a second set of Actions.
-    const supersededByExternalAuthority = await isSupersededByExternalAuthority(run.siteId);
+    const supersededByExternalAuthority = await isSupersededByExternalAuthority(site.id);
     let synthesis: Awaited<ReturnType<typeof synthesizeResearch>> | null = null;
     const actionIds: string[] = [];
     if (existingFindings.length === 0 && savedSources.length > 0) {
       const latestCrawl = await db.crawl.findFirst({
-        where: { siteId: run.siteId, status: "COMPLETED" },
+        where: { siteId: site.id, status: "COMPLETED" },
         orderBy: { finishedAt: "desc" },
         select: { id: true },
       });
@@ -442,10 +445,10 @@ export async function runResearchRun(runId: string) {
         : [];
 
       synthesis = await synthesizeResearch({
-        siteDomain: run.site.domain,
+        siteDomain: site.domain,
         title: run.title,
         topics: effectiveTopics,
-        goals: stringList(run.site.researchPolicy?.goals),
+        goals: stringList(site.researchPolicy?.goals),
         audience: typeof brief.audience === "string" ? brief.audience : null,
         market: typeof brief.market === "string" ? brief.market : null,
         questions: stringList(brief.questions),
@@ -469,7 +472,7 @@ export async function runResearchRun(runId: string) {
       // are untouched, so this is safe while the old pipeline still produces.
       if (run.projectId) {
         try {
-          await bridgeFindingsToEvidence(db, { projectId: run.projectId, siteId: run.siteId, runId: run.id });
+          await bridgeFindingsToEvidence(db, { projectId: run.projectId, siteId: site.id, runId: run.id });
         } catch (error) {
           console.error("[research] finding evidence bridge failed", error);
         }
@@ -483,7 +486,7 @@ export async function runResearchRun(runId: string) {
       for (const action of legacyActionWrites && !supersededByExternalAuthority ? synthesis.actions : []) {
         const findingId = findingIdByIndex.get(action.findingIndex);
         const result = await createResearchAction(
-          run.siteId,
+          site.id,
           {
             runId: run.id,
             findingId,
@@ -509,17 +512,17 @@ export async function runResearchRun(runId: string) {
       }
     }
 
-    const reclassified = await reclassifyUnstableActionTargets(run.siteId, { runId: run.id });
+    const reclassified = await reclassifyUnstableActionTargets(site.id, { runId: run.id });
 
-    const policy = run.site.researchPolicy;
+    const policy = site.researchPolicy;
     const automation = policy && (policy.autoDraft || policy.autoAgent)
       ? await automateRunActions({
           runId: run.id,
-          siteDomain: run.site.domain,
+          siteDomain: site.domain,
           autoDraft: policy.autoDraft,
           autoAgent: policy.autoAgent,
-          connectorExecutor: run.site.connectorBinding
-            ? run.site.connectorBinding.status === "ACTIVE" ? run.site.connectorBinding.executor : "inactive-connector"
+          connectorExecutor: site.connectorBinding
+            ? site.connectorBinding.status === "ACTIVE" ? site.connectorBinding.executor : "inactive-connector"
             : null,
         })
       : null;

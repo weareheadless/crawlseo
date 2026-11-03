@@ -101,3 +101,69 @@ describe("DS-02 dual-write: article runs into ResearchRun", () => {
     expect(rows[0].costMicros).toBe(0);
   });
 });
+
+describe("DS-02 prelaunch shadow", () => {
+  it("maps the prelaunch statuses without inventing new ones", async () => {
+    const { prelaunchShadowStatus } = await import("@/lib/dataforseo/run-shadow");
+    expect(prelaunchShadowStatus("COMPLETED")).toBe("COMPLETED");
+    expect(prelaunchShadowStatus("PARTIAL")).toBe("COMPLETED");
+    expect(prelaunchShadowStatus("FAILED")).toBe("FAILED");
+    expect(prelaunchShadowStatus("RUNNING_PAID_RESEARCH")).toBe("RUNNING");
+    expect(prelaunchShadowStatus("WAITING_FOR_SOURCES")).toBe("RUNNING");
+    expect(prelaunchShadowStatus("REQUESTED")).toBe("QUEUED");
+  });
+
+  it("writes a project-scoped run with no site and keeps the legacy id traceable", async () => {
+    const { syncPrelaunchRunToResearchRun } = await import("@/lib/dataforseo/run-shadow");
+    const { db, rows } = fakeDb();
+    await syncPrelaunchRunToResearchRun(db, {
+      id: "legacy-prelaunch-1",
+      projectId: "p1",
+      status: "COMPLETED",
+      brief: { business_goal: "Find launch markets" },
+      taskLimit: 9,
+      taskCount: 5,
+      actualCostMicros: 12000,
+      report: { sections: [] },
+      errorCode: null,
+      periodStart: AT,
+      idempotencyKey: "prelaunch-key-1",
+      requestedAt: AT,
+      startedAt: AT,
+      completedAt: AT,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      siteId: null,
+      kind: "PRELAUNCH",
+      status: "COMPLETED",
+      title: "Find launch markets",
+      costMicros: 12000,
+      findingCount: 5,
+    });
+    expect((rows[0].brief as { legacyRunId?: string }).legacyRunId).toBe("legacy-prelaunch-1");
+  });
+
+  it("falls back to a dated title when the brief has no goal", async () => {
+    const { syncPrelaunchRunToResearchRun } = await import("@/lib/dataforseo/run-shadow");
+    const { db, rows } = fakeDb();
+    await syncPrelaunchRunToResearchRun(db, {
+      id: "legacy-prelaunch-2",
+      projectId: "p1",
+      status: "REQUESTED",
+      brief: {},
+      taskLimit: 9,
+      taskCount: 0,
+      actualCostMicros: 0,
+      report: null,
+      errorCode: null,
+      periodStart: AT,
+      idempotencyKey: "prelaunch-key-2",
+      requestedAt: AT,
+      startedAt: null,
+      completedAt: null,
+    });
+    expect(rows[0].title).toBe("Prelaunch research 2026-11-03");
+    expect(rows[0].status).toBe("QUEUED");
+  });
+});

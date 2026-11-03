@@ -997,7 +997,8 @@ model SiteProfile {
 
 model ResearchRun {
   id            String            @id @default(cuid())
-  siteId        String
+  /// Null for project-scoped runs (prelaunch research has no site).
+  siteId        String?
   projectId     String?
   scheduleKey   String?
   kind          ResearchRunKind   @default(MARKET)
@@ -1031,7 +1032,7 @@ model ResearchRun {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  site     Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site     Site?             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   project  Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
   sources  ResearchSource[]
   findings ResearchFinding[]

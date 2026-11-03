@@ -70,8 +70,14 @@ page, and its data already bridged. Nothing else is "free".
 
 The cutover for this family:
 
-1. **Shadow the one run.** Write it into `ResearchRun` as kind `PRELAUNCH` with the
-   same `syncArticleRunToResearchRun` shape (1 row, no backfill risk).
+1. **Shadow the one run — done 2026-11-03.** `syncPrelaunchRunToResearchRun` writes
+   the run as kind `PRELAUNCH`; the existing row was backfilled
+   (`scripts/ds02-prelaunch-shadow.ts`, idempotent). This needed a schema change the
+   plan did not anticipate: prelaunch runs are project-scoped and `ResearchRun.siteId`
+   was required, so `20261103170000_ds02_project_scoped_run` makes it nullable
+   (reversible, `down.sql` refuses to run while null rows exist) and the site
+   relation optional. `runResearchRun` now refuses a site-less run explicitly
+   (`RESEARCH_RUN_SITE_REQUIRED`) instead of reading a null site.
 2. **Switch the one reader.** The prelaunch page reads `ResearchRun` + evidence.
 3. **Switch the one reader.** `projects/[projectId]/prelaunch/[runId]` reads
    `ResearchRun` + evidence instead of `SeoResearchRun` + tasks.

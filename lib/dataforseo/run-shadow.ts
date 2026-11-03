@@ -103,3 +103,89 @@ export async function syncArticleRunToResearchRun(
   });
   return row;
 }
+
+/**
+ * DS-02 step 1 of the prelaunch cutover: write the project-scoped prelaunch run
+ * into `ResearchRun` as kind `PRELAUNCH`.
+ *
+ * Prelaunch research has no site, which is why the unified table's `siteId` had to
+ * become nullable first (migration 20261103170000). The legacy run id stays in the
+ * brief so the shadow can always be traced back while the legacy row still exists.
+ */
+export type PrelaunchRunForShadow = {
+  id: string;
+  projectId: string;
+  status: string;
+  brief: unknown;
+  taskLimit: number;
+  taskCount: number;
+  actualCostMicros: number;
+  report: unknown;
+  errorCode: string | null;
+  periodStart: Date;
+  idempotencyKey: string;
+  requestedAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+};
+
+/** PRELAUNCH has two in-flight states; the spine only needs "running". */
+export function prelaunchShadowStatus(status: string): ResearchRunStatus {
+  switch (status) {
+    case "COMPLETED":
+      return "COMPLETED";
+    case "PARTIAL":
+      return "COMPLETED";
+    case "FAILED":
+      return "FAILED";
+    case "RUNNING_PAID_RESEARCH":
+    case "WAITING_FOR_SOURCES":
+      return "RUNNING";
+    default:
+      return "QUEUED";
+  }
+}
+
+export async function syncPrelaunchRunToResearchRun(
+  db: RunShadowDb,
+  run: PrelaunchRunForShadow
+): Promise<{ id: string }> {
+  const brief = (run.brief ?? {}) as { business_goal?: string };
+  const title = brief.business_goal?.trim() || `Prelaunch research ${run.periodStart.toISOString().slice(0, 10)}`;
+  const data = {
+    siteId: null,
+    projectId: run.projectId,
+    kind: "PRELAUNCH" as const,
+    status: prelaunchShadowStatus(run.status),
+    title,
+    brief: {
+      family: "prelaunch_research",
+      legacyRunId: run.id,
+      period: run.periodStart.toISOString(),
+      taskLimit: run.taskLimit,
+      taskCount: run.taskCount,
+      legacyBrief: run.brief,
+    } as never,
+    report: (run.report ?? undefined) as never,
+    findingCount: run.taskCount,
+    costMicros: run.actualCostMicros,
+    errorCode: run.errorCode,
+    idempotencyKey: run.idempotencyKey,
+    requestedBy: null,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+    createdAt: run.requestedAt,
+  };
+  return db.researchRun.upsert({
+    where: {
+      projectId_kind_idempotencyKey: {
+        projectId: run.projectId,
+        kind: "PRELAUNCH",
+        idempotencyKey: run.idempotencyKey,
+      },
+    },
+    create: data,
+    update: data,
+    select: { id: true },
+  });
+}
