@@ -115,7 +115,7 @@ function usableQuery(value: unknown): boolean {
 }
 
 async function queryForOpportunity(
-  db: Pick<PrismaClient, "evidenceEdge" | "evidenceRecord">,
+  db: Pick<PrismaClient, "evidenceEdge" | "evidenceRecord" | "researchFinding">,
   opportunityId: string,
   title: string
 ): Promise<string | null> {
@@ -129,11 +129,20 @@ async function queryForOpportunity(
       select: { dimensions: true },
     });
     for (const row of evidence) {
-      const dimensions = (row.dimensions ?? {}) as { query?: unknown; theme?: unknown; question?: unknown; painPointSummary?: unknown };
+      const dimensions = (row.dimensions ?? {}) as { query?: unknown; theme?: unknown; question?: unknown; painPointSummary?: unknown; findingId?: unknown };
       // `query` is the finding's primary_query: the phrase research wants
       // validated. It comes before the theme, which is a sentence.
       for (const candidate of [dimensions.query, dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
         if (usableQuery(candidate)) return (candidate as string).trim();
+      }
+      // Findings stored before primary_query existed have no phrase in evidence;
+      // read it from the finding itself before falling back to the title.
+      if (typeof dimensions.findingId === "string") {
+        const finding = await db.researchFinding.findUnique({
+          where: { id: dimensions.findingId },
+          select: { primaryQuery: true },
+        });
+        if (usableQuery(finding?.primaryQuery)) return (finding!.primaryQuery as string).trim();
       }
     }
   }
@@ -159,7 +168,7 @@ type OpportunityRow = {
 };
 
 export async function runJoinFollowUps(
-  db: JoinDb & Pick<PrismaClient, "evidenceRecord" | "demandMapCluster" | "evidenceEdge">,
+  db: JoinDb & Pick<PrismaClient, "evidenceRecord" | "demandMapCluster" | "evidenceEdge" | "researchFinding">,
   opts: {
     projectId: string;
     siteId?: string | null;
@@ -251,7 +260,18 @@ export async function runJoinFollowUps(
       continue;
     }
 
-    const collected = await collector({ projectId: opts.projectId, siteId: opts.siteId ?? null, queries: [query] });
+    let collected;
+    try {
+      collected = await collector({ projectId: opts.projectId, siteId: opts.siteId ?? null, queries: [query] });
+    } catch (error) {
+      // A budget refusal or provider failure is a reason, not "no evidence".
+      result.skipped.push({
+        opportunityId: opportunity.id,
+        leg: "how",
+        reason: error instanceof Error ? error.message.slice(0, 160) : "collection failed",
+      });
+      continue;
+    }
     result.spentMicros += collected.spentMicros;
     const first = collected.evidence[0];
     if (!first) {

@@ -59,7 +59,18 @@ const microsOf = (value: number | null | undefined) => (value == null ? 0 : valu
  */
 export async function withResearchBudget<T>(
   projectId: string,
-  input: { operation: string; detail: Record<string, unknown>; run: () => Promise<T>; costOf: (result: T) => number }
+  input: {
+    operation: string;
+    detail: Record<string, unknown>;
+    run: () => Promise<T>;
+    costOf: (result: T) => number;
+    /**
+     * Expected cost to reserve. Reserving the full per-operation ceiling blocks a
+     * $0.012 call whenever less than $0.10 remains, which is what made every
+     * collection fail silently near the end of the monthly allowance.
+     */
+    expectedMicros?: number;
+  }
 ): Promise<{ result: T; spentMicros: number; skippedSettle: boolean }> {
   const principal = { projectId } as ServicePrincipalContext;
   const budget = await projectConnectorBudget(principal);
@@ -72,7 +83,7 @@ export async function withResearchBudget<T>(
     period,
     policyRevision: budget.policyRevision,
     idempotencyKey: key,
-    amountMicros: budget.maxOperationMicros ?? "0",
+    amountMicros: String(Math.min(input.expectedMicros ?? Number(budget.maxOperationMicros ?? 0), Number(budget.maxOperationMicros ?? 0))),
     currency: "USD",
     operation: input.operation,
     detail: input.detail,
@@ -97,6 +108,7 @@ export async function collectKeywordMetrics(db: CollectionDb, input: CollectionI
   const { result: overview, spentMicros: spent } = await withResearchBudget(input.projectId, {
     operation: "dataforseo:keyword_metrics",
     detail: { queries: input.queries.slice(0, 20), locale: `${input.languageCode}:${input.locationCode}` },
+    expectedMicros: 20_000,
     run: () =>
       executeDataForSeoKeywordOverview({
         projectId: input.projectId,
@@ -155,6 +167,7 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
     const { result: serp, spentMicros: callSpent } = await withResearchBudget(input.projectId, {
       operation: "dataforseo:serp_snapshot",
       detail: { query, locale: `${input.languageCode}:${input.locationCode}` },
+      expectedMicros: 5_000,
       run: () =>
         executeDataForSeoOrganicSerp({
           projectId: input.projectId,
@@ -216,6 +229,7 @@ export async function collectBacklinkProfile(
   const { result: backlinks, spentMicros: spent } = await withResearchBudget(input.projectId, {
     operation: "dataforseo:backlink_profile",
     detail: { domain: input.domain.replace(/^www\./, "") },
+    expectedMicros: 40_000,
     run: () =>
       performDataForSeoOperation(input.projectId, {
         kind: "BACKLINKS_OVERVIEW",
@@ -280,6 +294,7 @@ export async function collectAiVisibility(
     const { result: call } = await withResearchBudget(input.projectId, {
       operation: "dataforseo:ai_visibility",
       detail: { question, locale: `${input.languageCode}:${input.locationCode}` },
+      expectedMicros: 40_000,
       run: () => askChatGpt(auth, question),
       costOf: (result) => Math.round((result?.costUsd ?? 0) * 1_000_000),
     });
@@ -376,13 +391,18 @@ export function pickDerivedKeyword(
   const normalise = (value: string) =>
     value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
   const seedTokens = new Set(normalise(seed));
+  const seedIsPhrase = seedTokens.size >= 2;
   const scored = candidates
     .filter((candidate) => typeof candidate.volume === "number" && (candidate.volume ?? 0) >= 10 && candidate.keyword.trim().length > 0)
     .map((candidate) => ({
       keyword: candidate.keyword.trim(),
       volume: candidate.volume as number,
       shared: normalise(candidate.keyword).filter((token) => seedTokens.has(token)).length,
+      tokens: normalise(candidate.keyword).length,
     }))
+    // A single generic word ("tenue", "siège") is not the phrase's keyword: when
+    // the seed is a phrase, keep candidates that are phrases too and share a token.
+    .filter((candidate) => (seedIsPhrase ? candidate.shared >= 1 && candidate.tokens >= 2 : true))
     .sort((a, b) => b.shared - a.shared || b.volume - a.volume);
   return scored[0] ?? null;
 }
@@ -413,6 +433,7 @@ export async function collectDerivedKeywordMetrics(
       call = await withResearchBudget(input.projectId, {
       operation: "dataforseo:keyword_suggestions",
       detail: { seed: candidateSeed, locale: `${input.languageCode}:${input.locationCode}` },
+      expectedMicros: 20_000,
       run: () =>
         executeDataForSeoKeywordSuggestions({
           projectId: input.projectId,
@@ -422,7 +443,10 @@ export async function collectDerivedKeywordMetrics(
         }),
         costOf: (result) => result.costMicros ?? 0,
       });
-    } catch {
+    } catch (error) {
+      // A budget refusal is not "no data": surface it instead of pretending the
+      // phrase had no suggestions.
+      if (error instanceof ConnectorError) throw error;
       continue;
     }
     spentMicros += call.spentMicros;
