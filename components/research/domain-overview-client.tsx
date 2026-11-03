@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
 } from "lucide-react";
+import { METRICS, type MetricSemantic } from "@/lib/funnel/metric-semantics";
 import Link from "next/link";
 
 type DomainData = {
@@ -192,27 +193,32 @@ function DomainCard({ data, label }: { data: DomainData; label: string }) {
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
             label="Organic Keywords"
+            semantic="organic_keywords"
             value={data.overview.organicKeywords.toLocaleString()}
           />
           <MetricCard
             label="Organic Traffic"
+            semantic="organic_traffic"
             value={data.overview.organicTraffic.toLocaleString()}
           />
           {data.overview.organicCost != null && (
             <MetricCard
               label="Traffic Cost"
+            semantic="traffic_cost"
               value={`$${data.overview.organicCost.toLocaleString()}`}
             />
           )}
           {data.overview.backlinks != null && (
             <MetricCard
               label="Backlinks"
+            semantic="backlinks_count"
               value={data.overview.backlinks.toLocaleString()}
             />
           )}
           {data.overview.referringDomains != null && (
             <MetricCard
               label="Referring Domains"
+            semantic="referring_domains"
               value={data.overview.referringDomains.toLocaleString()}
             />
           )}
@@ -238,6 +244,7 @@ function DomainCard({ data, label }: { data: DomainData; label: string }) {
             />
             <MetricCard
               label="Referring Domains"
+            semantic="referring_domains"
               value={data.backlinks.referringDomains.toLocaleString()}
             />
             <MetricCard
@@ -255,14 +262,16 @@ function DomainCard({ data, label }: { data: DomainData; label: string }) {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({ label, value, semantic }: { label: string; value: string; semantic?: MetricSemantic }) {
+  const metric = semantic ? METRICS[semantic] : null;
   return (
-    <div className="rounded-lg border border-border/50 bg-panel/80 px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 font-data text-lg font-semibold text-foreground">
-        {value}
+    <div className="rounded-lg border border-border/50 bg-panel/80 px-3 py-2.5" title={metric?.caveat}>
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1 font-data text-lg font-semibold text-foreground">{value}</p>
+      {/* DS-05: provider estimates are labelled as estimates. */}
+      <p className="mt-0.5 flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+        <span className="rounded bg-muted/60 px-1 py-px">DataForSEO</span>
+        <span className="text-[var(--a-warning-700)]">estimated</span>
       </p>
     </div>
   );

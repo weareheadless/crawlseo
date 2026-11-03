@@ -35,6 +35,8 @@ export type OnPageTaskResponse = {
       checks?: Record<string, boolean | undefined>;
       content?: { plain_text_word_count?: number };
       onpage_score?: number;
+      /** Present when the task was requested with links. */
+      links?: Array<{ link_from?: string; link_to?: string; link_type?: string; is_internal?: boolean }>;
     }>;
   }>;
 };
@@ -85,6 +87,7 @@ export type OnPageAdapterResult = {
   rawResponseId: string;
   pages: number;
   issues: number;
+  links: number;
   evidenceIds: string[];
   /** Checks the provider returned that we do not map yet: parity work, not silence. */
   unmappedChecks: string[];
@@ -118,6 +121,7 @@ export async function ingestOnPageResponse(
   const unmapped = new Set<string>();
   let pages = 0;
   let issues = 0;
+  let links = 0;
 
   for (const result of response.result ?? []) {
     for (const item of result.items ?? []) {
@@ -157,6 +161,29 @@ export async function ingestOnPageResponse(
         metrics: pageMetrics,
       });
 
+      // Internal link graph: the shape the audit read paths use for link
+      // evidence, so a dual-run can compare it before anything is switched.
+      const internal = (item.links ?? []).filter((link) => link.is_internal !== false && link.link_to);
+      if (internal.length > 0) {
+        links += internal.length;
+        await storeEvidenceRecord(db, {
+          projectId: options.projectId,
+          siteId: options.siteId ?? null,
+          kind: "internal_link_graph",
+          observedAt: observed,
+          producer: "dataforseo",
+          rawResponseId: raw.id,
+          dimensions: {
+            url: item.url,
+            outboundInternal: internal.length,
+            anchors: internal.slice(0, 20).map((link) => link.link_to).filter((url): url is string => Boolean(url)),
+          },
+          metrics: {
+            "provider:internalLinks": { value: internal.length, unit: "count", source: "provider" },
+          },
+        });
+      }
+
       for (const [check, value] of Object.entries(item.checks ?? {})) {
         if (typeof value !== "boolean") continue;
         const mapped = ONPAGE_CHECK_MAP[check];
@@ -193,7 +220,14 @@ export async function ingestOnPageResponse(
     }
   }
 
-  return { rawResponseId: raw.id, pages, issues, evidenceIds, unmappedChecks: [...unmapped].sort() };
+  return {
+    rawResponseId: raw.id,
+    pages,
+    issues,
+    links,
+    evidenceIds,
+    unmappedChecks: [...unmapped].sort(),
+  };
 }
 
 /**

@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
+import { MetricHeader } from "@/components/funnel/metric-header";
+import { METRICS, type MetricSemantic } from "@/lib/funnel/metric-semantics";
 import Link from "next/link";
 
 type BacklinkItem = {
@@ -106,10 +108,12 @@ export function BacklinksClient({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
             label="Total Backlinks"
+            semantic="backlinks_count"
             value={overview.totalBacklinks.toLocaleString()}
           />
           <StatCard
             label="Referring Domains"
+            semantic="referring_domains"
             value={overview.referringDomains.toLocaleString()}
           />
           <StatCard
@@ -130,9 +134,7 @@ export function BacklinksClient({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
-                  <th className="px-4 py-3 font-medium text-muted-foreground">
-                    Referring Domain
-                  </th>
+                  <MetricHeader semantic="referring_domains" label="Referring Domain" className="py-3" />
                   <th className="px-4 py-3 font-medium text-muted-foreground">
                     Target URL
                   </th>
@@ -207,14 +209,16 @@ export function BacklinksClient({
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, semantic }: { label: string; value: string; semantic?: MetricSemantic }) {
+  const metric = semantic ? METRICS[semantic] : null;
   return (
     <div className="panel px-4 py-3">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 font-data text-xl font-semibold text-foreground">
-        {value}
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1 font-data text-xl font-semibold text-foreground">{value}</p>
+      {/* DS-05: every provider number carries its source and state. */}
+      <p className="mt-0.5 flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground" title={metric?.caveat}>
+        <span className="rounded bg-muted/60 px-1 py-px">DataForSEO</span>
+        <span className="text-[var(--a-warning-700)]">estimated</span>
       </p>
     </div>
   );

@@ -35,7 +35,21 @@ export type MetricSemantic =
   /** Core Web Vital measured in the field. */
   | "field_vital"
   /** Whether an AI answer cited us, at a point in time. */
-  | "ai_citation_presence";
+  | "ai_citation_presence"
+  /** Provider difficulty score for ranking on a keyword. */
+  | "keyword_difficulty"
+  /** Provider cost-per-click estimate. */
+  | "cpc"
+  /** Domains linking to a target, as counted by a provider. */
+  | "referring_domains"
+  /** Total backlinks, as counted by a provider. */
+  | "backlinks_count"
+  /** Provider estimate of organic traffic for a domain. */
+  | "organic_traffic"
+  /** Provider estimate of the cost of that traffic. */
+  | "traffic_cost"
+  /** Provider keyword count for a domain. */
+  | "organic_keywords";
 
 export type MetricDeclaration = {
   semantic: MetricSemantic;
@@ -110,6 +124,55 @@ export const METRICS: Record<MetricSemantic, MetricDeclaration> = {
     unit: "boolean",
     label: "AI citation",
     caveat: "Whether one answer cited us when asked; absence is a measurement, not proof of invisibility.",
+  },
+  keyword_difficulty: {
+    semantic: "keyword_difficulty",
+    source: "dataforseo",
+    unit: "score",
+    label: "Keyword difficulty",
+    caveat: "A provider estimate of how hard the top results are to displace, not a prediction.",
+  },
+  cpc: {
+    semantic: "cpc",
+    source: "dataforseo",
+    unit: "currency",
+    label: "Cost per click",
+    caveat: "An advertising bid estimate; it does not describe organic value.",
+  },
+  referring_domains: {
+    semantic: "referring_domains",
+    source: "dataforseo",
+    unit: "count",
+    label: "Referring domains",
+    caveat: "Domains the provider has indexed as linking to the target; it may differ from Search Console.",
+  },
+  backlinks_count: {
+    semantic: "backlinks_count",
+    source: "dataforseo",
+    unit: "count",
+    label: "Backlinks",
+    caveat: "Links the provider has indexed, not every link that exists.",
+  },
+  organic_traffic: {
+    semantic: "organic_traffic",
+    source: "dataforseo",
+    unit: "visits/month",
+    label: "Organic traffic estimate",
+    caveat: "A modelled estimate from rankings and volume, not measured sessions.",
+  },
+  traffic_cost: {
+    semantic: "traffic_cost",
+    source: "dataforseo",
+    unit: "currency",
+    label: "Traffic cost estimate",
+    caveat: "What that modelled traffic would cost as ads; it is not revenue or spend.",
+  },
+  organic_keywords: {
+    semantic: "organic_keywords",
+    source: "dataforseo",
+    unit: "count",
+    label: "Organic keywords",
+    caveat: "Keywords the provider attributes to the domain, subject to its index.",
   },
 };
 

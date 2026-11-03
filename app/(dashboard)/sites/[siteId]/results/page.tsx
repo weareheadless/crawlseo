@@ -5,10 +5,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 import { ResultsPanel } from "@/components/results/results-panel";
 import { readPipelineResults } from "@/lib/pipeline/results";
+import { archivedDestination } from "@/lib/funnel/legacy-routes";
 
 export default async function ResultsPage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  const archived = archivedDestination("results", siteId);
+  if (archived) redirect(archived);
   if (!userId) redirect("/login");
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, domain: true, projectId: true } });
   if (!site) redirect("/sites");

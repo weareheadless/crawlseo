@@ -9,6 +9,7 @@ import { keywordEvidenceForAction, sourceIdsForAction } from "@/lib/research/evi
 import { opportunityPriorityForAction } from "@/lib/ai-seo/opportunity-priority";
 import { actionDimensions, actionDimension, type ActionDimension } from "@/lib/work/categories";
 import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
+import { archivedDestination } from "@/lib/funnel/legacy-routes";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -25,6 +26,8 @@ function record(value: unknown): Record<string, unknown> {
 export default async function LegacyWorkPage({ params, searchParams }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  const archived = archivedDestination("legacy-work", siteId);
+  if (archived) redirect(archived);
   if (!userId) redirect("/login");
 
   const [data, query] = await Promise.all([getWorkData(siteId), searchParams]);

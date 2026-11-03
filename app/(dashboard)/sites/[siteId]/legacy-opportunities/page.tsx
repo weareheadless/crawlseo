@@ -10,6 +10,7 @@ import { PositionBadge, NumCell, CtrCell } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { PipelineNavigation, PipelineStageContext } from "@/components/pipeline/pipeline-navigation";
+import { archivedDestination } from "@/lib/funnel/legacy-routes";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -18,6 +19,8 @@ interface Props {
 export default async function LegacyOpportunitiesPage({ params }: Props) {
   const userId = await getUserIdFromCookies();
   const { siteId } = await params;
+  const archived = archivedDestination("legacy-opportunities", siteId);
+  if (archived) redirect(archived);
   if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({

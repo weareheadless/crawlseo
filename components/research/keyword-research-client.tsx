@@ -8,11 +8,19 @@ import {
   AlertTriangle,
   ListPlus,
 } from "lucide-react";
+import { METRICS, type MetricSemantic } from "@/lib/funnel/metric-semantics";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const SORTABLE = ["keyword", "volume", "difficulty", "cpc"] as const;
+
+/** DS-05: which declared metric each provider column actually shows. */
+const METRIC_FOR_COLUMN: Partial<Record<(typeof SORTABLE)[number], MetricSemantic>> = {
+  volume: "provider_volume",
+  difficulty: "keyword_difficulty",
+  cpc: "cpc",
+};
 
 function storedRowLabel(run: { keywordCount: number | null; resultLabel: string }): string {
   const count = run.keywordCount;
@@ -234,19 +242,31 @@ export function KeywordResearchClient({
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-y border-border/60 text-left text-xs text-muted-foreground">
-                        {SORTABLE.map((key) => (
-                          <th key={key} className="px-4 py-2 font-medium">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSort({ key, desc: sort.key === key ? !sort.desc : key !== "keyword" })
-                              }
-                              className="uppercase tracking-wide transition hover:text-foreground"
-                            >
-                              {key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}
-                            </button>
-                          </th>
-                        ))}
+                        {SORTABLE.map((key) => {
+                          // DS-05: a provider estimate says so, right in the header.
+                          const semantic = METRIC_FOR_COLUMN[key];
+                          const metric = semantic ? METRICS[semantic] : null;
+                          return (
+                            <th key={key} className="px-4 py-2 font-medium">
+                              <button
+                                type="button"
+                                title={metric ? `${metric.caveat} (source: DataForSEO, unit: ${metric.unit})` : undefined}
+                                onClick={() =>
+                                  setSort({ key, desc: sort.key === key ? !sort.desc : key !== "keyword" })
+                                }
+                                className="uppercase tracking-wide transition hover:text-foreground"
+                              >
+                                {key} {sort.key === key ? (sort.desc ? "↓" : "↑") : ""}
+                              </button>
+                              {metric && (
+                                <span className="mt-0.5 flex items-center gap-1 text-[9px] font-normal uppercase tracking-wide">
+                                  <span className="rounded bg-muted/60 px-1 py-px">DataForSEO</span>
+                                  <span className="text-[var(--a-warning-700)]">estimated</span>
+                                </span>
+                              )}
+                            </th>
+                          );
+                        })}
                         <th className="px-4 py-2 font-medium">INTENT</th>
                         <th className="px-4 py-2 font-medium">COMPETITION</th>
                         <th className="px-4 py-2 font-medium">TREND</th>

@@ -7,6 +7,7 @@ import {
   visibilityCohorts,
   type AiVisibilityObservation,
 } from "@/lib/dataforseo/ai-visibility-adapter";
+import { getVisibilityProjection } from "@/lib/funnel/visibility-view";
 
 const AT = new Date("2026-11-02T00:00:00.000Z");
 
@@ -157,5 +158,63 @@ describe("DS-06 cohort discipline", () => {
     ]);
     expect(cohorts).toHaveLength(2);
     expect(() => assertSingleCohort(cohorts)).toThrow();
+  });
+});
+
+describe("DS-06 read projection", () => {
+  const row = (question: string, cited: number, surface = "perplexity_api", locale = "en-US", model: string | null = "sonar") => ({
+    dimensions: { question, surface, model, locale },
+    metrics: {
+      "provider:citedCount": { value: cited },
+      "provider:competitorCitedCount": { value: cited > 0 ? 0 : 2 },
+      "provider:samples": { value: 3 },
+    },
+    observedAt: new Date("2026-11-01T00:00:00.000Z"),
+  });
+
+  const db = (observations: unknown[], coverage: unknown[] = []) =>
+    ({
+      evidenceRecord: {
+        findMany: vi.fn(async (args: { where: { kind: string } }) => (args.where.kind === "question_coverage" ? coverage : observations)),
+      },
+    }) as never;
+
+  it("keeps cited, uncited and unobserved as three distinct states", async () => {
+    const projection = await getVisibilityProjection(
+      db(
+        [row("q1", 1), row("q2", 0)],
+        [{ dimensions: { question: "q3" } }]
+      ),
+      { projectId: "p1" }
+    );
+    expect(projection.questions.map((q) => [q.question, q.state])).toEqual([
+      ["q1", "cited"],
+      ["q2", "uncited"],
+    ]);
+    expect(projection.unobservedQuestions).toBe(1);
+    expect(projection.observedQuestions).toBe(2);
+  });
+
+  it("never sums across cohorts and says so", async () => {
+    const projection = await getVisibilityProjection(
+      db([row("q1", 1, "perplexity_api"), row("q1", 0, "google_ai_overview", "en-US", null)]),
+      { projectId: "p1" }
+    );
+    expect(projection.cohorts).toHaveLength(2);
+    expect(projection.mixedCohorts).toBe(true);
+    expect(projection.note).toMatch(/must not be added together/);
+  });
+
+  it("reports freshness per cohort", async () => {
+    const projection = await getVisibilityProjection(db([row("q1", 1)]), { projectId: "p1" });
+    expect(projection.cohorts[0].latestObservedAt).toEqual(new Date("2026-11-01T00:00:00.000Z"));
+  });
+
+  it("returns an empty projection when nothing was observed", async () => {
+    const projection = await getVisibilityProjection(db([]), { projectId: "p1" });
+    expect(projection.questions).toEqual([]);
+    expect(projection.cohorts).toEqual([]);
+    expect(projection.mixedCohorts).toBe(false);
+    expect(projection.note).toMatch(/Unobserved questions are unknown, not zero/);
   });
 });

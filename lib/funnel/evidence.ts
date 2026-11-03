@@ -26,7 +26,13 @@ export type MetricValue = {
   source: MetricSource;
 };
 
-export type EvidenceDimensions = Record<string, string | number | boolean | null>;
+/**
+ * Dimensions are JSON scalars or arrays of scalars. Arrays are allowed because
+ * some observations are inherently multi-valued (a SERP's top URLs, a page's
+ * internal link targets) and flattening them into JSON strings would lose type.
+ */
+export type EvidenceDimensionValue = string | number | boolean | null | string[] | number[];
+export type EvidenceDimensions = Record<string, EvidenceDimensionValue>;
 
 export type EvidenceRecordPayload = {
   projectId: string;

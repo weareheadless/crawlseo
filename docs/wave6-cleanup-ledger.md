@@ -2,55 +2,85 @@
 
 Executable companion: `tests/wave6-cleanup-ledger.test.ts` fails if a deleted item
 returns or a still-gated item is deleted without its cutover.
+Writer audit: `npx tsx scripts/legacy-writer-audit.ts` reports which legacy tables
+still have producers, and exits non-zero if a frozen table gains a writer.
 
 Rule (from `docs/seo-funnel-spine-plan.md` §8): every deletion needs either a
-migrated consumer or a frozen read-only cutover. This file records which is which.
+migrated consumer or a frozen read-only cutover.
 
-## Cutover performed
+## Step 1 — legacy routes archived: done
 
-The crawl now feeds the funnel directly, so the legacy action producers are
-retired rather than merely idle:
+The pre-funnel screens redirect to the funnel surface that replaced them. They
+stay on disk, so the history is still reachable, and `CRAWLSEO_LEGACY_ROUTES=live`
+serves them again without a code change.
 
-| Producer | Was called from | Now |
+| Archived route | Sends the reader to | Mechanism |
 |---|---|---|
-| `syncCrawlIssuesToActions` | `scripts/job-worker.ts` after every crawl | `refreshFunnelForSite` — crawl evidence → O7/O8 opportunities |
-| `syncSeoOpportunitiesToActions` | `POST /api/sites/:id/actions/sync-seo` | same funnel refresh (the endpoint keeps its route) |
+| `/sites/:id/legacy-work` | `/sites/:id/work` | flag-gated redirect |
+| `/sites/:id/legacy-opportunities` | `/sites/:id/opportunities` | flag-gated redirect |
+| `/sites/:id/findings` | `/sites/:id/opportunities` | flag-gated redirect |
+| `/sites/:id/results` | `/sites/:id/work` | flag-gated redirect |
+| `/sites/:id/actions/:id` | `/sites/:id/work` | removed (no flag) |
 
-The legacy tables (`ResearchAction`, `ResearchRun`, `SeoResearchRun`,
-`ArticleKeywordResearchRun`, …) are **not** deleted and **not** migrated. They
-stay readable for audits and spend reconciliation, which is why the legacy read
-routes still work.
+The sidebar no longer carries a Legacy group: archived screens are URL-only.
 
-## Deleted
+## Step 2 — strict freeze: **not possible yet, and the audit says why**
+
+`npx tsx scripts/legacy-writer-audit.ts` shows every legacy table still has a
+producer. The research pipeline is the live business-research producer:
+
+| Table | Writers |
+|---|---|
+| `researchAction` | `lib/agent-tasks/service.ts`, `lib/editorial/action-policy.ts`, `lib/research/content.ts`, `lib/research/keyword-actions.ts`, `lib/research/runner.ts` |
+| `researchRun` | `lib/research/runner.ts`, `lib/research/service.ts` |
+| `researchFinding` | `lib/research/runner.ts` (nested) |
+| `seoResearchRun`, `seoResearchTask` | `lib/dataforseo/research.ts`, `lib/dataforseo/prelaunch-runner.ts` |
+| `articleKeywordResearchRun` | `lib/dataforseo/research.ts` |
+| `rankSnapshot` | the rank-tracking sync |
+
+Flipping `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` now would break business research
+and keyword tracking. That migration is **DS-16** ("complete remote
+business-research lifecycle"), not cleanup, so the freeze stays off and
+`FROZEN_TABLES` in the audit is empty on purpose. The audit is the gate: when the
+research runner writes evidence instead, the table becomes write-free, and the
+freeze can cover it.
+
+## Step 3 — deletions: done for everything that became unreferenced
 
 | Item | Why it was safe |
 |---|---|
-| `lib/research/crawl-actions.ts` | its only production callers were the crawl job and the sync endpoint, both cut over; its type moved to `crawl-live-check.ts` with its consumer |
-| `lib/research/seo-actions.ts` | derived actions from other actions — the pattern the funnel replaces; last caller was the sync endpoint |
+| `lib/research/crawl-actions.ts` | crawl job and sync endpoint cut over to the funnel; its type moved to `crawl-live-check.ts` with its consumer |
+| `lib/research/seo-actions.ts` | derived actions from actions — the pattern the funnel replaces |
 | `scripts/sync-seo-actions.ts` | manual script for the retired producer |
-| `tests/crawl-actions.test.ts` | tested the deleted module |
-| `tests/seo-actions-authority.test.ts` | tested the deleted module |
-| `tests/crawl-gap-action-lifecycle.test.ts` | requirement **ported**, not dropped: `tests/funnel-crawl-gap-lifecycle.test.ts` asserts crawl gap → opportunity → task → delivery → outcome |
-| rank-history precedence overlay | replaced by `buildRankHistory`, which keeps both series tagged instead of overwriting one with the other (DS-05) |
+| `lib/pipeline/lineage.ts`, `lineage-types.ts` | their only consumer was the legacy action detail, which step 1 removed |
+| `tests/crawl-actions.test.ts`, `tests/seo-actions-authority.test.ts` | tested deleted modules |
+| `tests/crawl-gap-action-lifecycle.test.ts` | requirement **ported**: `tests/funnel-crawl-gap-lifecycle.test.ts` asserts crawl gap → opportunity → task → delivery → outcome |
+| `tests/pipeline-lineage.test.ts` | requirement **ported**: `tests/action-provenance-render.test.ts` now asserts the funnel page shows both legs, names producers, and states a missing hop |
+| rank-history precedence overlay | replaced by `buildRankHistory`, which keeps both series tagged (DS-05) |
 
-## Still gated on legacy route retirement
+## Correction to the original ledger
 
-These have live read consumers, so deleting them would break a screen the owner
-still uses. They stay until the legacy routes are archived.
+`RankSnapshot` was listed for deletion as duplication. DS-05 proved the opposite:
+a sampled SERP rank is a *different semantic* from a Search Console average
+position, and `RankSnapshot` is the only store of the sampled series. It is
+therefore retained, and the two series are now returned tagged instead of one
+overwriting the other.
 
-| Item | Blocking consumer |
-|---|---|
-| `lib/pipeline/lineage.ts`, `lineage-types.ts` | `/actions/[actionId]` provenance panel |
-| `RankSnapshot` table and its writers | `/api/sites/:id/rank-history` sampled series, `rank-history` page |
-| `ResearchAction.evidence` JSON lineage | legacy work queue and findings views |
-| `lib/crawler/technical-actions.ts`, `lib/research/keyword-actions.ts`, `lib/dataforseo/prelaunch-actions.ts` | legacy research/prelaunch read paths and their fixtures |
-| `ResearchRun.actionCount/findingCount/sourceCount` | legacy research run views |
+## Still gated, with the exact blocker
 
-## What must happen before the gated items go
+| Item | Blocking consumer | Unblocks when |
+|---|---|---|
+| `lib/crawler/technical-actions.ts` | `/api/internal/sites/:id/technical-actions/reassess` | the technical reassess endpoint moves to the funnel detectors |
+| `lib/research/keyword-actions.ts` | `POST /api/sites/:id/keyword-research/actions` (a UI button) | the keyword-research button refreshes the funnel instead |
+| `lib/dataforseo/prelaunch-actions.ts` | `POST /api/projects/:projectId/prelaunch-research/:runId/actions` | DS-16 gives domainless projects a funnel evidence path |
+| `ResearchAction.evidence` JSON lineage | legacy work/findings views | those views are archived |
+| `ResearchRun.actionCount/findingCount/sourceCount` | legacy research run views | same |
 
-1. Archive the legacy routes (`/legacy-work`, `/legacy-opportunities`, `/actions/[id]`,
-   `/findings`, `/results`) behind a read-only flag or remove them.
-2. Confirm no scheduled job writes the legacy tables, then flip
-   `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` so any accidental write fails loudly.
-3. Delete the gated items, then drop the frozen tables in a separate, reversible
-   migration — never in the same change as the code.
+## Order that remains
+
+1. Migrate the research runner to write `research_finding` evidence (DS-16), so
+   `researchRun`/`researchFinding`/`researchAction` stop growing.
+2. Point the three remaining endpoints at the funnel, then delete the factories.
+3. Re-run `scripts/legacy-writer-audit.ts`; when it reports write-free, add the
+   table to `FROZEN_TABLES` and flip `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict`.
+4. Drop the frozen tables in a separate, reversible migration — never with code.

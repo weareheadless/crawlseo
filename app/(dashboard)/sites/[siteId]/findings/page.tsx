@@ -8,11 +8,14 @@ import { actionDimensions, type ActionDimension } from "@/lib/work/categories";
 import { readFindings } from "@/lib/pipeline/findings";
 import { actionDimension } from "@/lib/work/categories";
 import { identityIssues, splitObservations, summarizeDimensions } from "@/lib/research/aeo-geo-view";
+import { archivedDestination } from "@/lib/funnel/legacy-routes";
 
 export default async function FindingsPage({ params, searchParams }: { params: Promise<{ siteId: string }>; searchParams: Promise<{ dimension?: string }> }) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
   const { siteId } = await params;
+  const archived = archivedDestination("findings", siteId);
+  if (archived) redirect(archived);
   const { dimension: requested } = await searchParams;
   const dimension = requested === "all" || actionDimensions.includes(requested as ActionDimension) ? requested : "all";
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, domain: true, projectId: true } });

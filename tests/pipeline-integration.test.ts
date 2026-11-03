@@ -27,7 +27,9 @@ describe("pipeline UI integration", () => {
   it("exposes exactly five funnel stages in order, plus settings", () => {
     const groups = buildSidebarGroups("site-1");
     const labels = groups.map((group) => group.label);
-    expect(labels).toEqual(["Workspace", "Funnel", "Context", "Evidence sources", "Settings", "Legacy"]);
+    // Wave 6 archived the legacy screens: they are URL-only now, so the nav
+    // carries no Legacy group.
+    expect(labels).toEqual(["Workspace", "Funnel", "Context", "Evidence sources", "Settings"]);
     // The funnel group is the five stages of docs/seo-funnel-spine-plan.md §5, in order.
     const funnel = groups.find((group) => group.label === "Funnel")!;
     expect(funnel.items.map((item) => item.label)).toEqual([

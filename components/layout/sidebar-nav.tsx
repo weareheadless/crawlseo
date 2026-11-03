@@ -17,7 +17,6 @@ import {
   Gauge,
   Sparkles,
   Bot,
-  Archive,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,13 +73,6 @@ export function buildSidebarGroups(siteId?: string): PipelineNavGroup[] {
       items: [
         { href: `/sites/${siteId}/settings`, label: "Settings", icon: Settings },
         { href: `/sites/${siteId}/mcp`, label: "AI & MCP", icon: Bot },
-      ],
-    },
-    {
-      label: "Legacy",
-      items: [
-        { href: `/sites/${siteId}/legacy-work`, label: "Old work queue", icon: Archive },
-        { href: `/sites/${siteId}/legacy-opportunities`, label: "Old GSC analysis", icon: Archive },
       ],
     },
   ];

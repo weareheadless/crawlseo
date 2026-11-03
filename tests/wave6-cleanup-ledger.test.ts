@@ -15,6 +15,8 @@ const exists = (relative: string) => existsSync(path.join(root, relative));
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
 
 const DELETED = [
+  "lib/pipeline/lineage.ts",
+  "lib/pipeline/lineage-types.ts",
   "lib/research/crawl-actions.ts",
   "lib/research/seo-actions.ts",
   "scripts/sync-seo-actions.ts",
@@ -24,8 +26,6 @@ const DELETED = [
 ];
 
 const GATED = [
-  "lib/pipeline/lineage.ts",
-  "lib/pipeline/lineage-types.ts",
   "lib/crawler/technical-actions.ts",
   "lib/research/keyword-actions.ts",
   "lib/dataforseo/prelaunch-actions.ts",
@@ -73,5 +73,28 @@ describe("wave 6 cleanup ledger", () => {
   it("keeps the legacy freeze switch documented as the cutover step", () => {
     const doc = read("docs/wave6-cleanup-ledger.md");
     expect(doc).toContain("CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict");
+  });
+
+  it("archives the legacy routes rather than leaving them reachable", () => {
+    const routes = read("lib/funnel/legacy-routes.ts");
+    for (const route of ["legacy-work", "legacy-opportunities", "actions", "findings", "results"]) {
+      expect(routes).toContain(route);
+    }
+    const nav = read("components/layout/sidebar-nav.tsx");
+    expect(nav).not.toContain("legacy-work");
+  });
+
+  it("does not claim the freeze is flipped while a writer remains", async () => {
+    const { FROZEN_TABLES, auditLegacyWriters, writersByTable } = await import("../scripts/legacy-writer-audit");
+    const findings = await auditLegacyWriters();
+    const byTable = writersByTable(findings);
+    // The ledger may only freeze tables that are provably write-free.
+    for (const table of FROZEN_TABLES) {
+      expect(byTable[table] ?? [], `${table} is frozen but still written`).toHaveLength(0);
+    }
+    const doc = read("docs/wave6-cleanup-ledger.md");
+    if (FROZEN_TABLES.length === 0) {
+      expect(doc).toContain("not possible yet");
+    }
   });
 });
