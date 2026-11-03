@@ -101,7 +101,8 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       const timedOut = failure.name === "TimeoutError" || /aborted|timeout/i.test(failure.message);
       const retryable = timedOut || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
       if (!retryable) throw failure;
-      if (attempt < attempts - 1) await sleep(backoffMs(attempt, failure.retryAfterMs));
+      const retryAfterMs = failure instanceof ChatError ? failure.retryAfterMs : undefined;
+      if (attempt < attempts - 1) await sleep(backoffMs(attempt, retryAfterMs));
     }
   }
   throw lastError;
