@@ -18,6 +18,8 @@ async function main() {
   const marker = `smoke-${Date.now()}`;
   const workspace = await db.workspace.create({ data: { externalOrganizationId: marker, name: marker } });
   const project = await db.project.create({ data: { workspaceId: workspace.id, externalProjectId: marker, name: marker } });
+  const site = await db.site.create({ data: { projectId: project.id, domain: `${marker}.example` }, select: { id: true } });
+  const siteId = site.id;
 
   // Wave 0: raw response + evidence with provenance
   const raw = await db.rawProviderResponse.create({
@@ -45,14 +47,18 @@ async function main() {
   console.log("wave0: idempotent upsert verified");
 
   // legacy freeze: a write to researchRun must fail, reads must pass through
+  // Wave 6 step 2: the strict freeze covers only tables proven to have no
+  // scheduled writer, so the smoke checks one of those.
+  process.env.CRAWLSEO_LEGACY_FUNNEL_FREEZE = "strict";
+  const frozenDb = withFrozenLegacyFunnel(new PrismaClient());
   let froze = false;
   try {
-    await db.researchRun.create({ data: { projectId: project.id, kind: "research", status: "completed" } as never });
+    await frozenDb.rankSnapshot.create({ data: { siteId, query: "smoke", date: new Date(), position: 1 } as never });
   } catch (error) {
     froze = (error as Error).name === "LegacyFunnelWriteError";
   }
-  if (!froze) throw new Error("legacy freeze did not block researchRun write");
-  const legacyRead = await db.researchRun.findMany({ where: { projectId: project.id } });
+  if (!froze) throw new Error("legacy freeze did not block rankSnapshot write");
+  const legacyRead = await frozenDb.rankSnapshot.findMany({ where: { siteId } });
   if (!Array.isArray(legacyRead)) throw new Error("legacy read pass-through failed");
   console.log("wave0: legacy freeze verified (write blocked, read open)");
 

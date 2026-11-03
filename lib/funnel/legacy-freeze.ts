@@ -19,9 +19,24 @@ export const FROZEN_FUNNEL_MODELS = [
   "seoResearchTask",
   "prelaunchResearchRequest",
   "articleKeywordResearchRun",
+  "rankSnapshot",
 ] as const;
 
 export type FrozenFunnelModel = (typeof FROZEN_FUNNEL_MODELS)[number];
+
+/**
+ * Tables proven to have **no writer at all** (scripts/legacy-writer-audit.ts), so
+ * the strict freeze may cover them today. `prelaunchResearchRequest` has no
+ * scheduled writer but is still written by the paid prelaunch request endpoint,
+ * so freezing it would break incubation and it stays out. Freezing is per-table
+ * on purpose: freezing a table whose producer still runs breaks that producer.
+ */
+export const FROZEN_NOW: readonly FrozenFunnelModel[] = ["rankSnapshot"] as const;
+
+/** Tables the strict freeze covers: proven-retired only. */
+export function frozenModelsFor(strict: boolean): readonly string[] {
+  return strict ? FROZEN_NOW : [];
+}
 
 export class LegacyFunnelWriteError extends Error {
   readonly model: string;
@@ -32,8 +47,8 @@ export class LegacyFunnelWriteError extends Error {
   }
 }
 
-export function assertLegacyFunnelModelNotFrozen(model: string): void {
-  if ((FROZEN_FUNNEL_MODELS as readonly string[]).includes(model)) {
+export function assertLegacyFunnelModelNotFrozen(model: string, strict = true): void {
+  if (strict && (FROZEN_NOW as readonly string[]).includes(model)) {
     throw new LegacyFunnelWriteError(model);
   }
 }
@@ -43,11 +58,11 @@ export function assertLegacyFunnelModelNotFrozen(model: string): void {
  * read-only: any write delegate call on a frozen model throws. Reads pass
  * through untouched, so audits and spend reconciliation keep working.
  */
-export function withFrozenLegacyFunnel<T extends PrismaClient>(db: T): T {
+export function withFrozenLegacyFunnel<T extends PrismaClient>(db: T, strict = true): T {
   return new Proxy(db, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
-      if (typeof prop !== "string" || !(FROZEN_FUNNEL_MODELS as readonly string[]).includes(prop)) {
+      if (typeof prop !== "string" || !(frozenModelsFor(strict) as readonly string[]).includes(prop)) {
         return typeof value === "function" ? value.bind(target) : value;
       }
       return withWriteGuard(prop, value);
@@ -76,7 +91,7 @@ function withWriteGuard(model: string, delegate: unknown): unknown {
       }
       if (WRITE_METHODS.has(prop)) {
         return (...args: unknown[]) => {
-          assertLegacyFunnelModelNotFrozen(model);
+          assertLegacyFunnelModelNotFrozen(model, true);
           return (value as (...a: unknown[]) => unknown).apply(target, args);
         };
       }

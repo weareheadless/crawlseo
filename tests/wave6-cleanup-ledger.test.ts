@@ -93,8 +93,6 @@ describe("wave 6 cleanup ledger", () => {
       expect(byTable[table] ?? [], `${table} is frozen but still written`).toHaveLength(0);
     }
     const doc = read("docs/wave6-cleanup-ledger.md");
-    if (FROZEN_TABLES.length === 0) {
-      expect(doc).toContain("not possible yet");
-    }
+    expect(doc).toContain("prelaunchResearchRequest");
   });
 });

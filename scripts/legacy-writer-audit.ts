@@ -31,7 +31,7 @@ export type WriterFinding = {
 };
 
 const WRITE_METHODS = "(create|createMany|update|updateMany|upsert|delete|deleteMany)";
-const PATTERN = new RegExp(`db\\.(${[
+const PATTERN = new RegExp(`(?:db|tx|client|prisma)\\.(${[
   "researchAction",
   "researchRun",
   "researchFinding",
@@ -78,6 +78,41 @@ export async function auditLegacyWriters(root = process.cwd()): Promise<WriterFi
   return findings;
 }
 
+/**
+ * Files the scheduled worker can reach: the job handlers plus everything they
+ * import transitively. Step 2 asks specifically about *scheduled* writers, so
+ * the audit distinguishes them from request-path writers (a UI button that will
+ * be pointed at the funnel next).
+ */
+export const SCHEDULED_ENTRY = "scripts/job-worker.ts";
+
+export async function scheduledWriters(
+  findings: WriterFinding[],
+  root = process.cwd()
+): Promise<WriterFinding[]> {
+  const seen = new Set<string>();
+  const queue = [SCHEDULED_ENTRY];
+  while (queue.length > 0) {
+    const file = queue.shift()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let content: string;
+    try {
+      content = await readFile(path.join(root, file), "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of content.matchAll(/from "(@\/[^"]+|\.{1,2}\/[^"]+)"/g)) {
+      const spec = match[1];
+      const base = spec.startsWith("@/") ? spec.slice(2) : path.join(path.dirname(file), spec);
+      for (const candidate of [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`]) {
+        if (!seen.has(candidate)) queue.push(candidate);
+      }
+    }
+  }
+  return findings.filter((finding) => seen.has(finding.file));
+}
+
 export function writersByTable(findings: WriterFinding[]): Record<string, WriterFinding[]> {
   const byTable: Record<string, WriterFinding[]> = {};
   for (const finding of findings) byTable[finding.table] = [...(byTable[finding.table] ?? []), finding];
@@ -88,7 +123,7 @@ export function writersByTable(findings: WriterFinding[]): Record<string, Writer
  * Tables that are provably write-free and can therefore be frozen strictly.
  * Kept explicit so a new writer cannot silently widen the freeze.
  */
-export const FROZEN_TABLES: LegacyTable[] = [];
+export const FROZEN_TABLES: LegacyTable[] = ["rankSnapshot"];
 
 /**
  * Every legacy table still has a producer, so none can be frozen yet. The
@@ -103,13 +138,12 @@ export const STILL_WRITTEN: LegacyTable[] = [
   "seoResearchTask",
   "articleKeywordResearchRun",
   "prelaunchResearchRequest",
-  "rankSnapshot",
 ];
 
 if (process.argv[1]?.endsWith("legacy-writer-audit.ts")) {
   const strict = process.argv.includes("--strict");
   auditLegacyWriters()
-    .then((findings) => {
+    .then(async (findings) => {
       const byTable = writersByTable(findings);
       for (const table of [...FROZEN_TABLES, ...STILL_WRITTEN]) {
         const writers = byTable[table] ?? [];
@@ -119,6 +153,14 @@ if (process.argv[1]?.endsWith("legacy-writer-audit.ts")) {
           }\n`
         );
       }
+      const scheduled = await scheduledWriters(findings);
+      const scheduledByTable = writersByTable(scheduled);
+      process.stdout.write("\nscheduled-job reachability (step 2 gate):\n");
+      for (const table of [...FROZEN_TABLES, ...STILL_WRITTEN]) {
+        const writers = scheduledByTable[table] ?? [];
+        process.stdout.write(`  ${writers.length === 0 ? "no scheduled writer" : `${writers.length} scheduled writer(s)`}  ${table}\n`);
+      }
+
       const frozenWithWriter = FROZEN_TABLES.filter((table) => (byTable[table] ?? []).length > 0);
       if (frozenWithWriter.length > 0) {
         process.stderr.write(`\nFrozen tables still have writers: ${frozenWithWriter.join(", ")}\n`);

@@ -20,6 +20,7 @@ import { synthesizeResearch } from "@/lib/research/synthesizer";
 import { researchCountry } from "@/lib/research/locale";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
+import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -463,7 +464,23 @@ export async function runResearchRun(runId: string) {
         sourceIdsByFindingIndex.set(index, sourceIds);
       }
 
-      for (const action of supersededByExternalAuthority ? [] : synthesis.actions) {
+      // Bridge the findings into funnel evidence so business research reaches
+      // the opportunity board (the "why" leg). Additive: the legacy rows above
+      // are untouched, so this is safe while the old pipeline still produces.
+      if (run.projectId) {
+        try {
+          await bridgeFindingsToEvidence(db, { projectId: run.projectId, siteId: run.siteId, runId: run.id });
+        } catch (error) {
+          console.error("[research] finding evidence bridge failed", error);
+        }
+      }
+
+      // Wave 6: the funnel is the single producer of work. Findings are bridged
+      // into evidence above and the O13/O14 detectors turn winnable gaps into
+      // opportunities, so the runner no longer writes legacy actions by default.
+      // Set CRAWLSEO_LEGACY_ACTION_WRITES=on to restore the old behaviour.
+      const legacyActionWrites = process.env.CRAWLSEO_LEGACY_ACTION_WRITES === "on";
+      for (const action of legacyActionWrites && !supersededByExternalAuthority ? synthesis.actions : []) {
         const findingId = findingIdByIndex.get(action.findingIndex);
         const result = await createResearchAction(
           run.siteId,

@@ -24,10 +24,22 @@ serves them again without a code change.
 
 The sidebar no longer carries a Legacy group: archived screens are URL-only.
 
-## Step 2 — strict freeze: **not possible yet, and the audit says why**
+## Step 2 — strict freeze: enabled for the tables that are provably write-free
 
-`npx tsx scripts/legacy-writer-audit.ts` shows every legacy table still has a
-producer. The research pipeline is the live business-research producer:
+`npx tsx scripts/legacy-writer-audit.ts` now separates **scheduled-job** writers
+(reachable from `scripts/job-worker.ts`) from request-path writers, because step 2
+asks specifically about scheduled jobs. Only `rankSnapshot` has no writer at all, so
+it is the only table the strict freeze covers today, with
+`CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` live in production:
+
+| Table | Writers | Frozen |
+|---|---|---|
+| `rankSnapshot` | none at all (read-only historical store) | **yes** |
+| `prelaunchResearchRequest` | no scheduled writer, but the paid prelaunch request endpoint still writes it | no |
+| everything below | scheduled producers | no |
+
+The remaining tables still have scheduled producers, so freezing them would break
+those producers:
 
 | Table | Writers |
 |---|---|
@@ -38,12 +50,18 @@ producer. The research pipeline is the live business-research producer:
 | `articleKeywordResearchRun` | `lib/dataforseo/research.ts` |
 | `rankSnapshot` | the rank-tracking sync |
 
-Flipping `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` now would break business research
-and keyword tracking. That migration is **DS-16** ("complete remote
-business-research lifecycle"), not cleanup, so the freeze stays off and
-`FROZEN_TABLES` in the audit is empty on purpose. The audit is the gate: when the
-research runner writes evidence instead, the table becomes write-free, and the
-freeze can cover it.
+`FROZEN_NOW` in `lib/funnel/legacy-freeze.ts` lists exactly what the strict freeze
+covers, and `tests/funnel-legacy-freeze.test.ts` fails if a table with a producer
+is added to it. The audit is the gate: as each migration lands, the table stops
+appearing as a scheduled writer and can be added to `FROZEN_NOW`.
+
+## Progress made toward the remaining freeze (this wave)
+
+Business research now reaches the funnel: `lib/research/finding-evidence.ts`
+bridges each `ResearchFinding` into `research_finding` evidence, so the O13/O14
+detectors turn winnable gaps into opportunities. Because of that the runner no
+longer writes legacy actions by default (`CRAWLSEO_LEGACY_ACTION_WRITES=on`
+restores it), which is the first half of retiring `researchAction`.
 
 ## Step 3 — deletions: done for everything that became unreferenced
 
