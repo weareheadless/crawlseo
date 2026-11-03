@@ -73,9 +73,12 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
   // The same page can rank for several queries; one source per URL keeps the
   // synthesis prompt from repeating itself.
   const seenUrls = new Set<string>();
+  const failures: string[] = [];
 
-  // 1. Who ranks for each query right now.
+  // 1. Who ranks for each query right now. One query failing (a 5xx or a rejected
+  //    phrase) must not abort the whole collection.
   for (const query of queries.slice(0, 5)) {
+    try {
     const serpCall = await withResearchBudget(input.projectId, {
       operation: "dataforseo:research_serp",
       detail: { query, locale: `${input.languageCode}:${input.locationCode}`, device: input.device ?? "desktop" },
@@ -130,11 +133,17 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
         },
       });
     }
+    } catch (error) {
+      failures.push(`${query}: ${error instanceof Error ? error.message : "SERP lookup failed"}`);
+    }
   }
 
   // 2. Which domains cover the query set. Labs returns ten domains for three
   //    keywords and none for one or two, so it needs a real query set.
-  if (queries.length < 3) return sources;
+  if (queries.length < 3) {
+    if (sources.length === 0 && failures.length > 0) throw new Error(failures[0]);
+    return sources;
+  }
   const competitors = await withResearchBudget(input.projectId, {
     operation: "dataforseo:research_competitors",
     detail: { queries, locale: `${input.languageCode}:${input.locationCode}` },
@@ -175,5 +184,6 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
     });
   }
 
+  if (sources.length === 0 && failures.length > 0) throw new Error(failures[0]);
   return sources;
 }

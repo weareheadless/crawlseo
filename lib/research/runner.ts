@@ -34,12 +34,16 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
-export function boundedQueryPlan(input: { topics: string[]; questions: string[]; exclusions: string[]; limit: number }) {
+export function boundedQueryPlan(input: { topics: string[]; questions: string[]; exclusions: string[]; limit: number; language?: string }) {
   const clean = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
   const candidates = [
+    // The intent expansion is English ("… problems"); applying it to a French
+    // topic produces phrases nobody searches for, so it only runs in English.
     ...input.topics.flatMap((value) => [
       { query: value, basis: "configured_topic" },
-      { query: `${value} problems`, basis: "topic_intent" },
+      ...((input.language ?? "en").toLowerCase().startsWith("en")
+        ? [{ query: `${value} problems`, basis: "topic_intent" }]
+        : []),
     ]),
     ...input.questions.flatMap((value) => [
       { query: value, basis: "audience_question" },
@@ -317,7 +321,7 @@ export async function runResearchRun(runId: string) {
       ? site.siteProfile.constraints as Record<string, unknown> : {};
     const exclusions = stringList(constraints.exclusions ?? constraints.excludedTopics).slice(0, 100);
     const excludedDomains = stringList(constraints.excludedDomains).slice(0, 100);
-    const queryPlan = boundedQueryPlan({ topics: effectiveTopics, questions: stringList(brief.questions), exclusions, limit: 5 });
+    const queryPlan = boundedQueryPlan({ topics: effectiveTopics, questions: stringList(brief.questions), exclusions, limit: 5, language });
     if (!queryPlan.length) throw new Error("Research policy exclusions removed all bounded query candidates");
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
@@ -408,7 +412,11 @@ export async function runResearchRun(runId: string) {
         try {
           const sources = await fetchDataForSeoCompetitorSources({
             projectId: run.projectId!,
-            queries: queryPlan.map((plan) => plan.query),
+            // Only real topics/questions: the intent expansion is for source search,
+            // not a keyword set to validate.
+            queries: queryPlan
+              .filter((plan) => plan.basis === "configured_topic" || plan.basis === "audience_question")
+              .map((plan) => plan.query),
             domain: site.domain,
             languageCode: competitorLocale.languageCode,
             locationCode: competitorLocale.locationCode,
