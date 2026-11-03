@@ -381,28 +381,6 @@ export async function runResearchRun(runId: string) {
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (useCompetitor) {
-        if (!competitorLocale) {
-          sourceErrors.push("competitor: DataForSEO locale could not be resolved; no competitor evidence was collected");
-        } else {
-          try {
-            const sources = await fetchDataForSeoCompetitorSources({
-              projectId: run.projectId!,
-              query: topic,
-              domain: site.domain,
-              languageCode: competitorLocale.languageCode,
-              locationCode: competitorLocale.locationCode,
-            });
-            for (const source of sources) {
-              addCollected({ ...source, metadata: { ...source.metadata, query_basis: plan.basis } });
-            }
-          } catch (error) {
-            sourceErrors.push(`competitor: ${error instanceof Error ? error.message : "DataForSEO competitor lookup failed"}`);
-          }
-        }
-        requestIndex += 1;
-        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
-      }
       if (providers.includes("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
@@ -418,6 +396,27 @@ export async function runResearchRun(runId: string) {
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+
+    // Competitor evidence is collected once for the whole query plan: Labs needs
+    // several keywords to return anyone, and one call covers the run.
+    if (useCompetitor) {
+      if (!competitorLocale) {
+        sourceErrors.push("competitor: DataForSEO locale could not be resolved; no competitor evidence was collected");
+      } else {
+        try {
+          const sources = await fetchDataForSeoCompetitorSources({
+            projectId: run.projectId!,
+            queries: queryPlan.map((plan) => plan.query),
+            domain: site.domain,
+            languageCode: competitorLocale.languageCode,
+            locationCode: competitorLocale.locationCode,
+          });
+          for (const source of sources) addCollected(source);
+        } catch (error) {
+          sourceErrors.push(`competitor: ${error instanceof Error ? error.message : "DataForSEO competitor lookup failed"}`);
+        }
       }
     }
 

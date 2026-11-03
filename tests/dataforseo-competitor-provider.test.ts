@@ -33,7 +33,7 @@ import { fetchDataForSeoCompetitorSources } from "@/lib/research/providers/dataf
 
 const input = {
   projectId: "p1",
-  query: "abat-jour sur mesure",
+  queries: ["abat-jour sur mesure", "tapisserie de siège"],
   domain: "atelier-harmonie.com",
   languageCode: "fr",
   locationCode: 2250,
@@ -46,7 +46,7 @@ describe("DataForSEO competitor research provider", () => {
     const sources = await fetchDataForSeoCompetitorSources(input);
     const serp = sources.filter((source) => source.provider === "dataforseo_serp");
     expect(serp.map((source) => source.url)).toEqual(["https://rival.fr/abat-jour", "https://autre.fr/"]);
-    expect(serp[0].metadata).toMatchObject({ query: input.query, rank: 1, domain: "rival.fr" });
+    expect(serp[0].metadata).toMatchObject({ query: input.queries[0], rank: 1, domain: "rival.fr" });
   });
 
   it("returns Labs coverage for competitor domains, not for us", async () => {
