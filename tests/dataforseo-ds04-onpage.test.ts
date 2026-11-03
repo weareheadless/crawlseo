@@ -21,7 +21,7 @@ const response = {
           page_timing: { duration_time: 1.4 },
           content: { plain_text_word_count: 400 },
           onpage_score: 82,
-          checks: { no_title: false, no_description: true, no_canonical: false, no_schema: true, unknown_future_check: false },
+          checks: { no_title: false, no_description: true, canonical: false, no_h1_tag: true, has_micromarkup: false, unknown_future_check: false },
         },
         {
           url: "https://example.com/a",
@@ -75,27 +75,30 @@ describe("DS-04 OnPage adapter (producer only)", () => {
     const { db, evidence } = fakeDb();
     const result = await ingestOnPageResponse(db, response, { projectId: "p1", siteId: "s1", requestedAt: AT, costMicros: BigInt(1200) });
     expect(result.pages).toBe(2);
-    // no_description + no_schema on page 1, high_loading_time on page 2
-    expect(result.issues).toBe(3);
+    // no_description + no_h1_tag + canonical absent on page 1, high_loading_time on page 2
+    expect(result.issues).toBe(4);
     const issueRows = evidence.filter((row) => (row.dimensions as { issueType?: string }).issueType);
     expect(issueRows.map((row) => (row.dimensions as { issueType: string }).issueType).sort()).toEqual([
+      "MISSING_CANONICAL",
       "MISSING_DESCRIPTION",
-      "MISSING_SCHEMA",
+      "MISSING_H1",
       "SLOW_PAGE",
     ]);
   });
 
-  it("marks structured-data issues so our detectors key off them", async () => {
+  it("does not turn a microdata-only check into a total schema claim", async () => {
     const { db, evidence } = fakeDb();
     await ingestOnPageResponse(db, response, { projectId: "p1", siteId: "s1", requestedAt: AT, costMicros: BigInt(1200) });
-    const schema = evidence.find((row) => (row.dimensions as { issueType?: string }).issueType === "MISSING_SCHEMA");
-    expect(schema?.dimensions).toMatchObject({ impact: "structured_data", schemaMissing: "true" });
+    // A JSON-LD page reports has_micromarkup: false. Treating that as MISSING_SCHEMA
+    // would contradict our own crawler's JSON-LD detection, so it stays unmapped.
+    expect(evidence.some((row) => (row.dimensions as { issueType?: string }).issueType === "MISSING_SCHEMA")).toBe(false);
+    expect(ONPAGE_CHECK_MAP.has_micromarkup).toBeUndefined();
   });
 
   it("records provider checks we do not map instead of silently dropping them", async () => {
     const { db } = fakeDb();
     const result = await ingestOnPageResponse(db, response, { projectId: "p1", siteId: "s1", requestedAt: AT, costMicros: BigInt(1200) });
-    expect(result.unmappedChecks).toEqual(["unknown_future_check"]);
+    expect(result.unmappedChecks).toEqual(["has_micromarkup", "unknown_future_check"]);
   });
 
   it("uses the provider observation time, not the ingest time", async () => {

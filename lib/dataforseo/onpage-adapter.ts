@@ -70,8 +70,10 @@ export const ONPAGE_CHECK_MAP: Record<string, OnPageCheck> = {
   no_title: { issueType: "MISSING_TITLE", impact: "crawlability", problemWhen: "present" },
   title_too_long: { issueType: "TITLE_TOO_LONG", impact: "crawlability", problemWhen: "present" },
   no_description: { issueType: "MISSING_DESCRIPTION", impact: "crawlability", problemWhen: "present" },
-  no_h1: { issueType: "MISSING_H1", impact: "crawlability", problemWhen: "present" },
-  no_canonical: { issueType: "MISSING_CANONICAL", impact: "crawlability", problemWhen: "present" },
+  no_h1_tag: { issueType: "MISSING_H1", impact: "crawlability", problemWhen: "present" },
+  // The provider reports canonical *presence*, not absence: `canonical: true` means
+  // the tag exists. Verified against a live payload on 2026-11-03.
+  canonical: { issueType: "MISSING_CANONICAL", impact: "crawlability", problemWhen: "absent" },
   no_image_alt: { issueType: "MISSING_ALT", impact: "crawlability", problemWhen: "present" },
   no_doctype: { issueType: "MISSING_DOCTYPE", impact: "crawlability", problemWhen: "present" },
   no_content_encoding: { issueType: "MISSING_ENCODING", impact: "crawlability", problemWhen: "present" },
@@ -79,7 +81,11 @@ export const ONPAGE_CHECK_MAP: Record<string, OnPageCheck> = {
   is_4xx_code: { issueType: "CLIENT_ERROR", impact: "crawlability", problemWhen: "present" },
   is_5xx_code: { issueType: "SERVER_ERROR", impact: "crawlability", problemWhen: "present" },
   is_redirect: { issueType: "REDIRECT", impact: "crawlability", problemWhen: "present" },
-  no_schema: { issueType: "MISSING_SCHEMA", impact: "structured_data", problemWhen: "present" },
+  // Deliberately unmapped: the provider has no "no schema at all" check. Its
+  // `has_micromarkup` covers microdata only, so a JSON-LD site reports false and
+  // mapping it to MISSING_SCHEMA would manufacture structured-data issues that
+  // contradict our own crawler's JSON-LD detection. Verified on a live payload
+  // (Wix/JSON-LD page, has_micromarkup: false) on 2026-11-03.
   low_content_rate: { issueType: "THIN_CONTENT", impact: "content", problemWhen: "present" },
 };
 
