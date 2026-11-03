@@ -36,21 +36,30 @@ function withUtm(value: string): string {
   }
 }
 
-export async function findUnsplashCover(query: string): Promise<UnsplashCover> {
-  const key = accessKey();
-  if (!key) throw new Error("UNSPLASH_ACCESS_KEY is not configured");
-  const exact = query.trim().slice(0, 180) || "Riviera Maya Mexico";
-  const lower = exact.toLowerCase();
-  const location = ["Cancun", "Tulum", "Playa del Carmen", "Riviera Maya", "Normandie", "Normandy", "France", "Mexico"]
-    .find((place) => lower.includes(place.toLowerCase()));
+/**
+ * Search terms to try, most specific first.
+ *
+ * No place names are hardcoded: the caller supplies the business's own location
+ * (business knowledge, or the site's market), so a bakery in Lisbon and a SaaS in
+ * Berlin get their own fallback instead of someone else's coastline.
+ */
+export function coverCandidates(query: string, location?: string | null): string[] {
+  const exact = query.trim().slice(0, 180);
   const short = exact.replace(/[^a-z0-9\s]/gi, " ").split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
-  const candidates = [...new Set([
+  const place = location?.trim().slice(0, 80) || "";
+  return [...new Set([
     exact,
     short,
-    location === "Cancun" ? "Cancun Mexico" : location ? `${location} landscape` : "",
-    "Mexico Caribbean coast",
-    "coastal landscape",
+    place ? `${place} landscape` : "",
+    "landscape",
   ].filter(Boolean))];
+}
+
+export async function findUnsplashCover(query: string, options: { location?: string | null } = {}): Promise<UnsplashCover> {
+  const key = accessKey();
+  if (!key) throw new Error("UNSPLASH_ACCESS_KEY is not configured");
+  const exact = query.trim().slice(0, 180);
+  const candidates = coverCandidates(query, options.location);
 
   let photo: UnsplashPhoto | undefined;
   let search = exact;

@@ -331,11 +331,44 @@ function coverQuery(draft: { title: string; primaryQuery: string }): string {
   return (draft.title || draft.primaryQuery).trim();
 }
 
+/**
+ * The business's own place, for the image fallback: business knowledge first
+ * (owner-written location or service area), then the site's market. Never a
+ * hardcoded list of places.
+ */
+async function locationForSite(siteId: string): Promise<string | null> {
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true } });
+  if (site?.projectId) {
+    const document = await db.businessKnowledgeDocument.findUnique({
+      where: { projectId: site.projectId },
+      select: {
+        revision: true,
+        acceptedRevision: true,
+        revisions: { orderBy: { revision: "desc" }, take: 1, select: { revision: true, fields: true } },
+      },
+    });
+    const wanted = document?.acceptedRevision ?? document?.revision;
+    const revision = document?.revisions.find((row) => row.revision === wanted) ?? document?.revisions[0];
+    const fields = (revision?.fields ?? {}) as Record<string, { value?: unknown }>;
+    if (typeof fields.location?.value === "string" && fields.location.value.trim()) return fields.location.value.trim();
+    const area = fields.serviceArea?.value;
+    if (Array.isArray(area)) {
+      const first = area.find((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+      if (first) return first.trim();
+    }
+  }
+  const profile = await db.siteProfile.findFirst({ where: { siteId }, select: { constraints: true } });
+  const constraints = profile?.constraints && typeof profile.constraints === "object" && !Array.isArray(profile.constraints)
+    ? profile.constraints as Record<string, unknown>
+    : {};
+  return typeof constraints.market === "string" && constraints.market.trim() ? constraints.market.trim() : null;
+}
+
 async function importCover(
   cfg: WixConfig,
-  draft: { title: string; primaryQuery: string; slug: string },
+  draft: { title: string; primaryQuery: string; slug: string; siteId: string },
 ) {
-  const cover = await findUnsplashCover(coverQuery(draft));
+  const cover = await findUnsplashCover(coverQuery(draft), { location: await locationForSite(draft.siteId) });
   return importUnsplashCover(
     (method, path, body) => wixRequest(cfg, method, path, body),
     cover,
