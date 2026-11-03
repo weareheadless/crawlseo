@@ -100,12 +100,26 @@ export function businessValueFromKnowledge(evidence: Evidence[]): { value: numbe
     : { value: 0.5, source: "unknown" };
 }
 
-/** First-party impressions recorded per URL: the demand a page-level defect risks. */
+/**
+ * First-party impressions recorded per URL: the demand a page-level defect risks.
+ *
+ * `gsc_page` is the complete page total; `keyword_rank` is query-level and Google
+ * samples it (662 query rows carried 835 impressions where the same site's pages
+ * carried 2,556). Page rows win; query rows are only a fallback for URLs the page
+ * report does not cover.
+ */
 export function pageDemandByUrl(evidence: Evidence[]): Map<string, number> {
   const demand = new Map<string, number>();
-  for (const row of byKind(evidence, "keyword_rank")) {
+  for (const row of byKind(evidence, "gsc_page")) {
     const url = dim(row, "url");
     if (!url) continue;
+    const impressions = num(row, "first_party:impressions") ?? 0;
+    if (impressions <= 0) continue;
+    demand.set(url, Math.max(demand.get(url) ?? 0, impressions));
+  }
+  for (const row of byKind(evidence, "keyword_rank")) {
+    const url = dim(row, "url");
+    if (!url || demand.has(url)) continue;
     const impressions = num(row, "first_party:impressions") ?? 0;
     if (impressions <= 0) continue;
     demand.set(url, (demand.get(url) ?? 0) + impressions);
@@ -796,7 +810,7 @@ export async function runDetectors(
     else updated += 1;
   }
 
-  const parked = await applyHysteresis(db, { threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
+  const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
   return { created, updated, parked: [...parked, ...superseded, ...capped], disabled };

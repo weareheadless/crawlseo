@@ -133,13 +133,25 @@ export async function upsertOpportunity(
   return { id: record.id, status: record.status, created: !existing };
 }
 
-/** Hysteresis: park detected opportunities that fall below their threshold. */
+/** Parks the system applied. A human park uses its own reason and is left alone. */
+export const SYSTEM_PARK_REASONS = ["score_below_threshold", "cap"] as const;
+/** `superseded` is not restorable: the detector no longer emits the key. */
+const RESTORABLE_PARK_REASONS = [...SYSTEM_PARK_REASONS];
+
+/**
+ * Hysteresis: park detected opportunities that fall below their threshold, and
+ * restore ones whose score recovered.
+ *
+ * Without the restore half, a row parked at score 1 stays parked after the
+ * evidence improves — which is how 5 opportunities with scores 27–43 sat on the
+ * board as "below threshold".
+ */
 export async function applyHysteresis(
   db: OpportunityDb,
-  opts: { threshold: number; detectedBy: string }
+  opts: { projectId: string; threshold: number; detectedBy: string }
 ): Promise<string[]> {
   const drifting = await db.opportunity.findMany({
-    where: { status: "detected", scoreValue: { lt: opts.threshold } },
+    where: { projectId: opts.projectId, status: "detected", scoreValue: { lt: opts.threshold } },
     select: { id: true },
   });
   for (const row of drifting) {
@@ -148,7 +160,22 @@ export async function applyHysteresis(
       data: { status: "parked", parkReason: "score_below_threshold", decidedBy: opts.detectedBy, decidedAt: new Date() },
     });
   }
-  return drifting.map((row) => row.id);
+  const recovered = await db.opportunity.findMany({
+    where: {
+      projectId: opts.projectId,
+      status: "parked",
+      parkReason: { in: RESTORABLE_PARK_REASONS },
+      scoreValue: { gte: opts.threshold },
+    },
+    select: { id: true },
+  });
+  if (recovered.length > 0) {
+    await db.opportunity.updateMany({
+      where: { id: { in: recovered.map((row) => row.id) } },
+      data: { status: "detected", parkReason: null, decidedBy: null, decidedAt: null },
+    });
+  }
+  return [...drifting.map((row) => row.id), ...recovered.map((row) => row.id)];
 }
 
 export type HumanDecision = "accepted" | "parked" | "rejected" | "closed";

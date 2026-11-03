@@ -18,12 +18,14 @@ import type { OpportunityDb } from "@/lib/funnel/opportunity";
  */
 
 export type BackfillDb = EvidenceDb &
-  Pick<PrismaClient, "site" | "crawl" | "crawlIssue" | "auditPage" | "keyword" | "evidenceRecord">;
+  Pick<PrismaClient, "site" | "crawl" | "crawlIssue" | "auditPage" | "keyword" | "page" | "evidenceRecord">;
 
 export type BackfillResult = {
   projectId: string | null;
   crawlEvidence: number;
   rankEvidence: number;
+  /** Page-level Search Console observations (the honest page demand signal). */
+  pageEvidence: number;
   skipped: string[];
 };
 
@@ -51,7 +53,7 @@ export async function backfillSiteEvidence(
   siteId: string,
   opts: { projectId: string; maxKeywords?: number } = { projectId: "" }
 ): Promise<BackfillResult> {
-  const result: BackfillResult = { projectId: opts.projectId || null, crawlEvidence: 0, rankEvidence: 0, skipped: [] };
+  const result: BackfillResult = { projectId: opts.projectId || null, crawlEvidence: 0, rankEvidence: 0, pageEvidence: 0, skipped: [] };
 
   const crawl = await db.crawl.findFirst({
     where: { siteId, status: "COMPLETED" },
@@ -132,6 +134,54 @@ export async function backfillSiteEvidence(
     }
   }
 
+  // Search Console page totals: the complete demand signal.
+  //
+  // Query-level rows are sampled by Google (662 rows / 835 impressions for a site
+  // whose page-level total is 2,556), so a page-level defect scored on query rows
+  // undercounts its traffic by an order of magnitude. Pages are stored as their own
+  // evidence kind with declared units.
+  const pageSince = new Date(Date.now() - 28 * 864e5);
+  const pageRows = await db.page.findMany({
+    where: { siteId, date: { gte: pageSince } },
+    orderBy: { date: "desc" },
+    take: 20000,
+    select: { url: true, clicks: true, impressions: true, ctr: true, position: true, date: true },
+  });
+  // One observation per URL over the 28-day window. Taking the latest day instead
+  // reports a single day's traffic as the page's demand (8 impressions where the
+  // window holds 2,556).
+  const pageTotals = new Map<string, { clicks: number; impressions: number; weightedPosition: number; lastDate: Date }>();
+  for (const row of pageRows) {
+    if (!row.url) continue;
+    const current = pageTotals.get(row.url) ?? { clicks: 0, impressions: 0, weightedPosition: 0, lastDate: row.date };
+    current.clicks += row.clicks;
+    current.impressions += row.impressions;
+    current.weightedPosition += row.position * Math.max(row.impressions, 1);
+    if (row.date > current.lastDate) current.lastDate = row.date;
+    pageTotals.set(row.url, current);
+  }
+  for (const [url, total] of pageTotals) {
+    await storeEvidenceRecord(db, {
+      projectId: opts.projectId,
+      siteId,
+      kind: "gsc_page",
+      observedAt: total.lastDate,
+      producer: "search_console",
+      dimensions: { url, windowDays: 28 },
+      metrics: {
+        "first_party:clicks": { value: total.clicks, unit: "count", source: "first_party" },
+        "first_party:impressions": { value: total.impressions, unit: "count", source: "first_party" },
+        "first_party:ctr": { value: total.impressions > 0 ? total.clicks / total.impressions : 0, unit: "ratio", source: "first_party" },
+        "first_party:position": {
+          value: total.weightedPosition / Math.max(total.impressions, 1),
+          unit: "rank",
+          source: "first_party",
+        },
+      },
+    });
+    result.pageEvidence += 1;
+  }
+
   // Search Console ranks: latest observation per (query, page).
   const keywords = await db.keyword.findMany({
     where: { siteId },
@@ -185,6 +235,7 @@ export async function refreshFunnelForSite(
       projectId: null,
       crawlEvidence: 0,
       rankEvidence: 0,
+      pageEvidence: 0,
       skipped: ["site is not attached to a project"],
       created: 0,
       updated: 0,

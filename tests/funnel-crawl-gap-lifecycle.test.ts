@@ -49,6 +49,14 @@ function mockDb(seed: Array<Record<string, unknown>>) {
         opportunities.set(row.id as string, row);
         return row;
       }),
+      updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
+        let count = 0;
+        for (const id of args.where.id.in) {
+          const row = opportunities.get(id);
+          if (row) { Object.assign(row, args.data); count += 1; }
+        }
+        return { count };
+      }),
       update: vi.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
         const row = opportunities.get(args.where.id)!;
         Object.assign(row, args.data);
@@ -62,6 +70,14 @@ function mockDb(seed: Array<Record<string, unknown>>) {
         const row = { id: `task-${tasks.length + 1}`, status: "todo", ...args.data };
         tasks.push(row);
         return { id: row.id };
+      }),
+      updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
+        let count = 0;
+        for (const id of args.where.id.in) {
+          const row = opportunities.get(id);
+          if (row) { Object.assign(row, args.data); count += 1; }
+        }
+        return { count };
       }),
       update: vi.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
         const row = tasks.find((entry) => entry.id === args.where.id)!;
