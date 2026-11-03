@@ -13,7 +13,17 @@ export async function verifyWorkerRelease({ releaseDir, expectedSha, generatedCl
   }
   const schema = await readFile(path.join(root, "prisma/schema.prisma"));
   const generatedSchema = await readFile(path.join(generatedClientDir ?? path.join(root, "node_modules/.prisma/client"), "schema.prisma"));
-  const digest = (value) => createHash("sha256").update(value).digest("hex");
+  // Prisma reformats, re-aligns and reorders attributes when it copies the schema
+  // into the generated client, so compare content order- and whitespace-insensitively:
+  // strip comments and blank lines, collapse runs of spaces, then sort. Only a real
+  // schema difference fails the guard.
+  const normalize = (value) => String(value)
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter((line) => line && !line.startsWith("//"))
+    .sort()
+    .join("\n");
+  const digest = (value) => createHash("sha256").update(normalize(value)).digest("hex");
   if (digest(schema) !== digest(generatedSchema)) throw new Error("Worker Prisma client schema does not match migrated release schema; run npx prisma generate");
   return root;
 }
