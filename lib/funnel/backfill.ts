@@ -73,39 +73,61 @@ export async function backfillSiteEvidence(
       select: { url: true, hasSchema: true, statusCode: true, responseTimeMs: true, h1Count: true },
     });
 
+    // One evidence record per (page, issue): an opportunity must be able to
+    // cite the exact observation that produced it, so a title can never say
+    // "structured data" while its reason cites a duplicate title.
     for (const page of pages) {
       const pageIssues = issuesByUrl.get(page.url) ?? [];
-      const schemaIssue = pageIssues.find((issue) => SCHEMA_ISSUES.has(issue.type));
-      const crawlability = pageIssues.filter((issue) => CRAWLABILITY_ISSUES.has(issue.type));
-      if (pageIssues.length === 0 && page.hasSchema) continue;
+      const reported = pageIssues.filter((issue) => CRAWLABILITY_ISSUES.has(issue.type) || SCHEMA_ISSUES.has(issue.type));
 
-      const metrics: Record<string, MetricValue> = {
-        "first_party:issueCount": { value: pageIssues.length, unit: "count", source: "first_party" },
-        "first_party:responseTimeMs": { value: page.responseTimeMs, unit: "ms", source: "first_party" },
-      };
-      if (!page.hasSchema) {
-        metrics["first_party:schemaMissing"] = { value: 1, unit: "boolean", source: "first_party" };
+      for (const issue of reported) {
+        const isSchema = SCHEMA_ISSUES.has(issue.type);
+        await storeEvidenceRecord(db, {
+          projectId: opts.projectId,
+          siteId,
+          kind: "onpage_crawl",
+          observedAt: crawl.finishedAt,
+          producer: "crawler",
+          dimensions: {
+            url: page.url,
+            statusCode: page.statusCode,
+            issueType: issue.type,
+            severity: issue.severity,
+            impact: isSchema ? "structured_data" : "crawlability",
+            schemaMissing: isSchema ? "true" : null,
+            schemaType: isSchema ? "LocalBusiness" : null,
+          },
+          metrics: {
+            "first_party:issueCount": { value: 1, unit: "count", source: "first_party" },
+            "first_party:responseTimeMs": { value: page.responseTimeMs, unit: "ms", source: "first_party" },
+          },
+        });
+        result.crawlEvidence += 1;
       }
 
-      await storeEvidenceRecord(db, {
-        projectId: opts.projectId,
-        siteId,
-        kind: "onpage_crawl",
-        observedAt: crawl.finishedAt,
-        producer: "crawler",
-        dimensions: {
-          url: page.url,
-          statusCode: page.statusCode,
-          h1Count: page.h1Count,
-          hasSchema: page.hasSchema,
-          schemaMissing: page.hasSchema ? "false" : "true",
-          schemaType: page.hasSchema ? null : "LocalBusiness",
-          issueType: crawlability[0]?.type ?? (schemaIssue ? schemaIssue.type : null),
-          impact: crawlability.length > 0 ? "crawlability" : schemaIssue ? "structured_data" : null,
-        },
-        metrics,
-      });
-      result.crawlEvidence += 1;
+      // A page with no schema and no reported schema issue is still a gap the
+      // funnel should see: record it explicitly rather than inferring later.
+      if (!page.hasSchema && !reported.some((issue) => SCHEMA_ISSUES.has(issue.type))) {
+        await storeEvidenceRecord(db, {
+          projectId: opts.projectId,
+          siteId,
+          kind: "onpage_crawl",
+          observedAt: crawl.finishedAt,
+          producer: "crawler",
+          dimensions: {
+            url: page.url,
+            statusCode: page.statusCode,
+            issueType: "MISSING_SCHEMA",
+            impact: "structured_data",
+            schemaMissing: "true",
+            schemaType: "LocalBusiness",
+          },
+          metrics: {
+            "first_party:issueCount": { value: 1, unit: "count", source: "first_party" },
+          },
+        });
+        result.crawlEvidence += 1;
+      }
     }
   }
 

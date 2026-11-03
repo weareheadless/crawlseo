@@ -44,7 +44,7 @@ function seedAllTypes(): SeedRow[] {
     // O7 technical defect
     row("e-o7", "onpage_crawl", { url: "https://x.com/broken", issueType: "broken_link", impact: "crawlability" }, { "provider:issueCount": metric(4, "count") }),
     // O8 structured data gap
-    row("e-o8", "onpage_crawl", { url: "https://x.com/services", schemaType: "LocalBusiness", schemaMissing: "true" }, {}),
+    row("e-o8", "onpage_crawl", { url: "https://x.com/services", schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
     row("e-o8-why", "knowledge_fact", { question: "who are you" }, {}),
     // O9 backlink gap
     row("e-o9", "backlink_profile", { competitor: "rival.com", cluster: "local" }, { "provider:referringDomainGap": metric(9, "count") }),

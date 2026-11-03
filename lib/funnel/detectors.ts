@@ -39,9 +39,21 @@ export const DETECTOR_THRESHOLDS = {
   hysteresis: 3,
 } as const;
 
+/**
+ * Read a metric regardless of who produced it. The same semantic metric can be
+ * recorded as provider-sourced (DataForSEO) or first-party (our crawler, GSC);
+ * a detector must not silently miss evidence because of the namespace.
+ */
 function num(evidence: Evidence, key: string): number | null {
-  const value = (evidence.metrics as { [k: string]: { value: number | null } })?.[key]?.value;
-  return typeof value === "number" ? value : null;
+  const metrics = (evidence.metrics ?? {}) as { [k: string]: { value: number | null } };
+  const bare = key.includes(":") ? key.split(":").slice(1).join(":") : key;
+  const direct = metrics[key]?.value;
+  if (typeof direct === "number") return direct;
+  for (const [label, metric] of Object.entries(metrics)) {
+    const labelBare = label.includes(":") ? label.split(":").slice(1).join(":") : label;
+    if (labelBare === bare && typeof metric?.value === "number") return metric.value;
+  }
+  return null;
 }
 
 function dim(evidence: Evidence, key: string): string | undefined {
@@ -278,7 +290,7 @@ const DETECTORS: Detector[] = [
     type: "O7_technical_defect",
     detect: (evidence) =>
       byKind(evidence, "onpage_crawl")
-        .filter((row) => (num(row, "provider:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability")
+        .filter((row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability")
         .map((row) => ({
           type: "O7_technical_defect" as const,
           title: `Technical defect: ${dim(row, "issueType") ?? "issue"} on ${dim(row, "url") ?? "site"}`,
@@ -300,7 +312,7 @@ const DETECTORS: Detector[] = [
     detect: (evidence) => {
       const knowledge = byKind(evidence, "knowledge_fact");
       return byKind(evidence, "onpage_crawl")
-        .filter((row) => dim(row, "schemaMissing") === "true")
+        .filter((row) => dim(row, "schemaMissing") === "true" && dim(row, "impact") === "structured_data")
         .map((row) => ({
           type: "O8_structured_data_gap" as const,
           title: `Structured data gap on ${dim(row, "url") ?? "page"}`,
