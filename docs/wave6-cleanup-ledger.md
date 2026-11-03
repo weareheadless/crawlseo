@@ -7,8 +7,18 @@ Executable companions:
   (static, creates vs updates).
 - `npx tsx scripts/legacy-write-watch.ts [--hours N]` — what *did* write, plus
   crawls run outside the job queue.
+- `tests/funnel-freeze-wiring.test.ts` asserts the *wiring*: the shared `db`
+  client is wrapped when the flag is set, and is not when it is absent or has any
+  other value. That is the half that failed in production.
 - `tests/wave6-cleanup-ledger.test.ts` fails if a deleted item returns or a
   still-gated item is deleted without its cutover.
+
+Note on end-to-end proof of the block: it cannot be exercised from outside,
+because no live path attempts a legacy create any more — which is the desired
+state. The evidence is therefore threefold: the flag is present in both running
+processes (`/proc/<pid>/environ`), the wiring test proves the client wraps when it
+is present, and the guard tests prove a wrapped client refuses creates while
+allowing updates.
 Writer audit: `npx tsx scripts/legacy-writer-audit.ts` reports which legacy tables
 still have producers, and exits non-zero if a frozen table gains a writer.
 
