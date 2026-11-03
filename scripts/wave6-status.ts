@@ -30,6 +30,8 @@ export type Check = {
 
 export type Wave6Status = {
   checks: Check[];
+  /** Work the checklist surfaces but does not contain, with its own owner. */
+  blockedBy: Array<{ item: string; reason: string }>;
   summary: { complete: number; partial: number; open: number };
 };
 
@@ -171,7 +173,21 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
     partial: checks.filter((check) => check.status === "partial").length,
     open: checks.filter((check) => check.status === "open").length,
   };
-  return { checks, summary };
+
+  // What the checklist surfaces but does not own. Kept separate so "the three
+  // steps are done" and "these tables still receive rows" are both visible and
+  // neither is used to imply the other.
+  const blockedBy: Wave6Status["blockedBy"] = stillGrowing.map((table) => ({
+    item: `${table} still receives creates from a scheduled job`,
+    reason: "DS-02 run-family unification — docs/ds-02-run-unification.md",
+  }));
+  if (exists("lib/dataforseo/article-research.ts")) {
+    blockedBy.push({
+      item: "article research runner still writes its legacy row",
+      reason: "step 4 of DS-02: move idempotency, cap and parent lookups onto ResearchRun, then stop the write",
+    });
+  }
+  return { checks, blockedBy, summary };
 }
 
 if (process.argv[1]?.endsWith("wave6-status.ts")) {
@@ -185,6 +201,12 @@ if (process.argv[1]?.endsWith("wave6-status.ts")) {
       process.stdout.write(
         `\n${status.summary.complete} complete · ${status.summary.partial} partial · ${status.summary.open} open\n`
       );
+      if (status.blockedBy.length > 0) {
+        process.stdout.write("\nNot part of these steps, still open:\n");
+        for (const entry of status.blockedBy) {
+          process.stdout.write(`  - ${entry.item}\n    ${entry.reason}\n`);
+        }
+      }
       if (strict && (status.summary.partial > 0 || status.summary.open > 0)) process.exitCode = 2;
     })
     .catch((error) => {

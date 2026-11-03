@@ -80,6 +80,14 @@ describe("wave 6 status checklist", () => {
     expect(deleted?.detail).toMatch(/items deleted/);
   });
 
+  it("lists what the checklist surfaces but does not own, separately from its steps", async () => {
+    const status = await wave6Status(fakeDb());
+    // The three steps and the DS-02 consequence must not be conflated.
+    expect(status.blockedBy.length).toBeGreaterThan(0);
+    expect(status.blockedBy.every((entry) => entry.reason.includes("DS-02") || entry.reason.includes("step 4"))).toBe(true);
+    expect(status.checks.every((check) => !check.name.includes("DS-02"))).toBe(true);
+  });
+
   it("summarises counts that add up to the number of checks", async () => {
     const status = await wave6Status(fakeDb());
     const { complete, partial, open } = status.summary;
