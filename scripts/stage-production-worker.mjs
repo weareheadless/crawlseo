@@ -23,8 +23,24 @@ export async function stageWorker({ source, releaseDir, sha, envFile = undefined
     // how CRAWLSEO_LEGACY_FUNNEL_FREEZE silently failed to reach the process that
     // writes the legacy tables.
     if (envFile) {
-      await copyFile(envFile, path.join(tmp, ".env"));
-      await chmod(path.join(tmp, ".env"), 0o600);
+      const envPath = path.join(tmp, ".env");
+      await copyFile(envFile, envPath);
+      // The runtime needs keys that only exist in .env.local (LLM credentials,
+      // internal tokens). Add what is missing; never override the release env,
+      // and never import NODE_ENV, which would flip the worker to development.
+      const localEnv = path.join(path.dirname(envFile), ".env.local");
+      if (localEnv !== envFile && (await lstat(localEnv).catch(() => null))) {
+        const base = await readFile(envPath, "utf8");
+        const extra = (await readFile(localEnv, "utf8")).split("\n").filter((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) return false;
+          const key = trimmed.split("=")[0].trim();
+          if (!/^[A-Z0-9_]+$/.test(key) || key === "NODE_ENV") return false;
+          return !new RegExp(`^${key}=`, "m").test(base);
+        });
+        if (extra.length > 0) await writeFile(envPath, `${base.replace(/\n*$/, "\n")}${extra.join("\n")}\n`);
+      }
+      await chmod(envPath, 0o600);
     }
     // `cp` with dereference copies `node_modules/.bin/tsx` as a standalone file, but
     // it is a symlink into `../tsx/dist` and imports its siblings relatively, so the

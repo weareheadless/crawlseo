@@ -15,6 +15,7 @@ import {
   rename,
   rm,
   stat,
+  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,6 +141,21 @@ export async function stage({ source, buildDir, releaseDir, envFile }) {
     try {
       await envHandle.close();
       await copyFile(envFile, envPath);
+      // Keys that only exist in .env.local (LLM credentials, internal tokens) are
+      // added when missing; the release env always wins and NODE_ENV is never
+      // imported, so the build's environment is preserved.
+      const localEnv = path.join(path.dirname(envFile), ".env.local");
+      if (localEnv !== envFile && (await lstat(localEnv).catch(() => null))) {
+        const base = await readFile(envPath, "utf8");
+        const extra = (await readFile(localEnv, "utf8")).split("\n").filter((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) return false;
+          const key = trimmed.split("=")[0].trim();
+          if (!/^[A-Z0-9_]+$/.test(key) || key === "NODE_ENV") return false;
+          return !new RegExp(`^${key}=`, "m").test(base);
+        });
+        if (extra.length > 0) await writeFile(envPath, `${base.replace(/\n*$/, "\n")}${extra.join("\n")}\n`);
+      }
       await chmod(envPath, 0o600);
     } catch (error) {
       await envHandle.close().catch(() => undefined);
