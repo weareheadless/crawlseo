@@ -56,6 +56,17 @@ function num(evidence: Evidence, key: string): number | null {
   return null;
 }
 
+/** MISSING_CANONICAL -> "Missing canonical". Titles read as sentences. */
+function humanizeIssue(type: string | undefined): string {
+  if (!type) return "issue";
+  const words = type.replaceAll("_", " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 function dim(evidence: Evidence, key: string): string | undefined {
   const value = (evidence.dimensions as Record<string, unknown>)?.[key];
   return typeof value === "string" ? value : undefined;
@@ -293,8 +304,8 @@ const DETECTORS: Detector[] = [
         .filter((row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability")
         .map((row) => ({
           type: "O7_technical_defect" as const,
-          title: `Technical defect: ${dim(row, "issueType") ?? "issue"} on ${dim(row, "url") ?? "site"}`,
-          summary: `Crawl found ${num(row, "provider:issueCount")} issues with crawlability/user impact.`,
+          title: `${humanizeIssue(dim(row, "issueType"))} on ${dim(row, "url") ?? "site"}`,
+          summary: `Crawl found ${plural(num(row, "first_party:issueCount") ?? 0, "issue", "issues")} with crawlability or user impact on this page.`,
           dedupKey: `O7:${dim(row, "url")}:${dim(row, "issueType") ?? ""}`,
           clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: [],
@@ -315,8 +326,8 @@ const DETECTORS: Detector[] = [
         .filter((row) => dim(row, "schemaMissing") === "true" && dim(row, "impact") === "structured_data")
         .map((row) => ({
           type: "O8_structured_data_gap" as const,
-          title: `Structured data gap on ${dim(row, "url") ?? "page"}`,
-          summary: `Missing/mismatched ${dim(row, "schemaType") ?? "identity"} schema on a revenue page.`,
+          title: `Missing structured data on ${dim(row, "url") ?? "page"}`,
+          summary: `No ${dim(row, "schemaType") ?? "identity"} schema on this page, so answer engines and rich results cannot read who the business is.`,
           dedupKey: `O8:${dim(row, "url")}:${dim(row, "schemaType") ?? ""}`,
           clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: knowledge.slice(0, 1).map((k) => k.id),

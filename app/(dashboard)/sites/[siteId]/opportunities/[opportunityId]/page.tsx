@@ -233,11 +233,6 @@ export default async function OpportunityDetailPage({ params }: Props) {
         )}
       </Stage>
 
-      {detail.status === "detected" && detail.task === null && (
-        <div className="panel mt-6 px-4 py-3">
-          <OpportunityDecisionBar siteId={siteId} opportunityId={detail.id} status={detail.status} />
-        </div>
-      )}
     </div>
   );
 }
