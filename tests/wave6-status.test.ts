@@ -63,6 +63,15 @@ describe("wave 6 status checklist", () => {
     expect(coverage?.detail).toContain("still growing");
   });
 
+  it("reports the prelaunch ledger as intentional, not as coverage debt", async () => {
+    const status = await wave6Status(fakeDb());
+    const coverage = status.checks.find((check) => check.name.includes("freeze covers"));
+    // The request endpoint writes this table on purpose; asking for its cutover
+    // would contradict lib/funnel/legacy-freeze.ts.
+    expect(coverage?.detail).toContain("intentional ledger: [prelaunchResearchRequest]");
+    expect(coverage?.detail).not.toContain("still growing: [prelaunchResearchRequest");
+  });
+
   it("flags legacy writes observed in the window", async () => {
     const status = await wave6Status(
       fakeDb({ actions: [{ createdAt: new Date(Date.now() - 60_000), owner: "crawl-actions" }] })

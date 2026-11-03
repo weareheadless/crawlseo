@@ -62,7 +62,7 @@ export default async function ResearchRunPage({ params }: Props) {
   return (
     <div>
       <PageHeader
-        eyebrow={run.site.domain}
+        eyebrow={run.site?.domain ?? "project"}
         title={run.title}
         description={`Research run · ${run.createdAt.toLocaleString()}`}
         actions={

@@ -892,12 +892,15 @@ model SeoResearchRun {
 model PrelaunchResearchRequest {
   id             String @id @default(cuid())
   projectId      String
-  researchRunId  String
+  /// Legacy target, kept for rows created before the DS-02 cutover.
+  researchRunId  String?
+  /// Unified run (kind PRELAUNCH) that new requests point at.
+  researchRunRef String?
   idempotencyKey String
   requestHash    String
   createdAt      DateTime @default(now())
   project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  researchRun    SeoResearchRun @relation(fields: [researchRunId], references: [id], onDelete: Cascade)
+  researchRun    SeoResearchRun? @relation(fields: [researchRunId], references: [id], onDelete: Cascade)
   @@unique([projectId, idempotencyKey])
   @@index([researchRunId])
 }

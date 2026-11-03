@@ -587,28 +587,18 @@ function normalizeBacklinksOverview(data: unknown): BacklinksOverviewResult | nu
 }
 
 /** Execute exactly one task that the research worker has already claimed. */
-export async function executeDataForSeoOperation(
-  input: {
-    projectId: string;
-    researchRunId: string;
-    taskId: string;
-    operation: DataForSeoOperation;
-  }
+/**
+ * Run one provider operation for a project.
+ *
+ * Split out from `executeDataForSeoOperation` so a run that keeps its own task
+ * bookkeeping (the prelaunch family, which no longer has task rows) can use the
+ * same request path. The task-row guard stays with the caller that has task rows.
+ */
+export async function performDataForSeoOperation(
+  projectId: string,
+  operation: DataForSeoOperation
 ): Promise<DataForSeoOperationResult> {
-  const task = await db.seoResearchTask.findFirst({
-    where: {
-      id: input.taskId,
-      researchRunId: input.researchRunId,
-      status: "ATTEMPTING",
-      researchRun: { projectId: input.projectId },
-    },
-    select: { id: true },
-  });
-  if (!task) throw new Error("DATAFORSEO_TASK_NOT_RESERVED");
-
-  const credentials = await credentialsForProject(input.projectId);
-
-  const operation = input.operation;
+  const credentials = await credentialsForProject(projectId);
   let endpoint: string;
   let body: Record<string, unknown>;
   let normalize: (data: unknown) => DomainOverviewResult | BacklinksOverviewResult | KeywordResult[] | null;
@@ -653,4 +643,25 @@ export async function executeDataForSeoOperation(
     providerTaskId: response.providerTaskId,
     costMicros: response.costMicros,
   };
+}
+
+export async function executeDataForSeoOperation(
+  input: {
+    projectId: string;
+    researchRunId: string;
+    taskId: string;
+    operation: DataForSeoOperation;
+  }
+): Promise<DataForSeoOperationResult> {
+  const task = await db.seoResearchTask.findFirst({
+    where: {
+      id: input.taskId,
+      researchRunId: input.researchRunId,
+      status: "ATTEMPTING",
+      researchRun: { projectId: input.projectId },
+    },
+    select: { id: true },
+  });
+  if (!task) throw new Error("DATAFORSEO_TASK_NOT_RESERVED");
+  return performDataForSeoOperation(input.projectId, input.operation);
 }

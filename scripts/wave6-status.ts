@@ -105,10 +105,18 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
   // models (spine plan §4), so they are not legacy tables and must not be counted
   // as "legacy coverage" debt. The families DS-02 replaces are.
   const SPINE_MODELS = new Set(["researchRun", "researchFinding"]);
+  // The prelaunch idempotency ledger is written by the live request endpoint on
+  // purpose (lib/funnel/legacy-freeze.ts), so it is not a run family awaiting a
+  // cutover. Counting it as coverage debt would ask for work the plan forbids.
+  const LEDGER_MODELS = new Set(["prelaunchResearchRequest"]);
   const stillGrowing = createsAttempted.filter(
-    (table) => !(FROZEN_CREATES as readonly string[]).includes(table) && !SPINE_MODELS.has(table)
+    (table) =>
+      !(FROZEN_CREATES as readonly string[]).includes(table) &&
+      !SPINE_MODELS.has(table) &&
+      !LEDGER_MODELS.has(table)
   );
   const spineStillGrowing = createsAttempted.filter((table) => SPINE_MODELS.has(table));
+  const ledgerStillGrowing = createsAttempted.filter((table) => LEDGER_MODELS.has(table));
   const watch = await watchLegacyWrites(db, { hours: opts.hours ?? 3 });
 
   checks.push({
@@ -132,7 +140,7 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
     detail:
       stillGrowing.length === 0
         ? `no legacy table grows from a scheduled job; fully frozen: [${FROZEN_NOW.join(", ")}], creates blocked: [${FROZEN_CREATES.join(", ")}]`
-        : `creates blocked on [${createBlocked.join(", ") || "none"}]; legacy families still growing: [${stillGrowing.join(", ")}] (DS-02, docs/ds-02-run-unification.md)${spineStillGrowing.length ? `; spine models, not legacy: [${spineStillGrowing.join(", ")}]` : ""}`,
+        : `creates blocked on [${createBlocked.join(", ") || "none"}]; legacy families still growing: [${stillGrowing.join(", ")}] (DS-02, docs/ds-02-run-unification.md)${spineStillGrowing.length ? `; spine models, not legacy: [${spineStillGrowing.join(", ")}]` : ""}${ledgerStillGrowing.length ? `; intentional ledger: [${ledgerStillGrowing.join(", ")}]` : ""}`,
   });
   checks.push({
     step: 2,

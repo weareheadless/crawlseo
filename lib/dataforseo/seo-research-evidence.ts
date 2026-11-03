@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
+import { reportEntries } from "@/lib/dataforseo/prelaunch-runner";
 
 /**
  * Bridge: stored SEO research runs → funnel evidence.
@@ -110,7 +111,42 @@ export async function bridgeSeoResearchRunToEvidence(
     where: { researchRunId: opts.researchRunId, status: "COMPLETED" },
     select: { id: true, kind: true, providerTaskId: true, costMicros: true, result: true, completedAt: true, input: true },
   })) as StoredTask[];
+  return bridgeTasks(db, opts, tasks);
+}
 
+/**
+ * DS-02 prelaunch cutover: prelaunch runs no longer have task rows, so their
+ * results are read from the run report. Same mapping, same refusals.
+ */
+export async function bridgePrelaunchRunToEvidence(
+  db: SeoResearchEvidenceDb & Pick<PrismaClient, "researchRun">,
+  opts: { projectId: string; researchRunId: string }
+): Promise<SeoResearchEvidenceResult> {
+  const run = await db.researchRun.findFirst({
+    where: { id: opts.researchRunId, projectId: opts.projectId, kind: "PRELAUNCH" },
+    select: { report: true },
+  });
+  if (!run) return { tasks: 0, stored: 0, skipped: [], kinds: {} };
+  const entries = reportEntries(run.report);
+  const tasks: StoredTask[] = entries
+    .filter((entry) => entry.status === "completed")
+    .map((entry) => ({
+      id: entry.operation_key,
+      kind: entry.kind.toUpperCase(),
+      providerTaskId: null,
+      costMicros: entry.cost_micros,
+      result: entry.result,
+      completedAt: null,
+      input: { seed: entry.seed },
+    }));
+  return bridgeTasks(db, { projectId: opts.projectId, siteId: null }, tasks);
+}
+
+export async function bridgeTasks(
+  db: SeoResearchEvidenceDb,
+  opts: { projectId: string; siteId?: string | null },
+  tasks: StoredTask[]
+): Promise<SeoResearchEvidenceResult> {
   const result: SeoResearchEvidenceResult = { tasks: tasks.length, stored: 0, skipped: [], kinds: {} };
 
   for (const task of tasks) {

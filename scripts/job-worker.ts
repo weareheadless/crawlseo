@@ -26,7 +26,7 @@ import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
-import { bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
+import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 
 loadEnvConfig(process.cwd());
 
@@ -123,10 +123,10 @@ async function executeJob(
       if (!researchRunId) throw new JobExecutionError("SEO_RESEARCH_RUN_REQUIRED");
       if (!job.siteId) {
         await runPrelaunchResearch(projectId, researchRunId);
-        // Project-scoped prelaunch runs have no site: their task results still
-        // belong in the evidence store so the funnel can use them.
+        // Project-scoped prelaunch runs have no site. Their results now live in
+        // the run report (no task rows), so the bridge reads the report.
         try {
-          await bridgeSeoResearchRunToEvidence(db as never, { projectId, siteId: null, researchRunId });
+          await bridgePrelaunchRunToEvidence(db as never, { projectId, researchRunId });
         } catch (error) {
           console.error("[CrawlSEO worker] prelaunch evidence bridge failed", error);
         }
