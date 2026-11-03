@@ -57,7 +57,18 @@ appearing as a scheduled writer and can be added to `FROZEN_NOW`.
 
 ## Progress made toward the remaining freeze (this wave)
 
-DataForSEO research now reaches the spine too: `lib/dataforseo/research-evidence.ts`
+Both DataForSEO families now project their stored results into evidence, so the
+run tables are no longer the only home of that data:
+
+- `lib/dataforseo/seo-research-evidence.ts` maps each completed `SeoResearchTask`
+  to the evidence kind that matches what it measured — `analytics` for a domain
+  overview, `backlink_profile` for a backlinks overview, `keyword_metrics` for a
+  keyword seed (every row, not just a summary) — with the raw payload stored
+  first and a task lacking a recorded cost skipped and reported. The
+  `SEO_RESEARCH` job bridges each completed run; production backfill landed 3
+  more keyword observations (33 total).
+
+`lib/dataforseo/research-evidence.ts`
 projects stored keyword runs into `keyword_metrics` evidence (raw payload first,
 then evidence pointing at it, with the run's locale as a dimension and every
 metric carrying a declared unit). The `ARTICLE_KEYWORD_RESEARCH` job bridges each

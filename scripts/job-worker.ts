@@ -25,6 +25,7 @@ import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence } from "@/lib/dataforseo/research-evidence";
+import { bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 
 loadEnvConfig(process.cwd());
 
@@ -130,6 +131,16 @@ async function executeJob(
           throw new JobExecutionError("SEO_RESEARCH_NOT_FOUND");
         }
         throw error;
+      }
+      // Wave 6: project completed task results into funnel evidence so the run
+      // tables stop being the only home of this data.
+      try {
+        const bridged = await bridgeSeoResearchRunToEvidence(db as never, { projectId, siteId: job.siteId, researchRunId });
+        if (bridged.skipped.length > 0) {
+          console.warn(`[CrawlSEO worker] seo research evidence skipped ${bridged.skipped.length} task(s) for run ${researchRunId}`);
+        }
+      } catch (error) {
+        console.error("[CrawlSEO worker] seo research evidence bridge failed", error);
       }
       return;
     }
