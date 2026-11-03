@@ -99,7 +99,10 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       lastError = failure;
       // A timeout is transient like a 5xx: the upstream was slow, not wrong.
       const timedOut = failure.name === "TimeoutError" || /aborted|timeout/i.test(failure.message);
-      const retryable = timedOut || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
+      // Malformed JSON is often a truncated or fenced answer; one more attempt is
+      // cheaper than failing the whole research run.
+      const malformed = /non-JSON/i.test(failure.message);
+      const retryable = timedOut || malformed || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
       if (!retryable) throw failure;
       const retryAfterMs = failure instanceof ChatError ? failure.retryAfterMs : undefined;
       if (attempt < attempts - 1) await sleep(backoffMs(attempt, retryAfterMs));

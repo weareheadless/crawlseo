@@ -142,6 +142,7 @@ export async function synthesizeResearch(input: {
     "Only propose action kinds listed in the output contract; omit unsupported work.",
     "Target URLs may only come from CANDIDATE PAGES. If no candidate page matches, target_url must be null.",
     "Return exactly one JSON object and no prose outside it.",
+    "Return at most 6 findings and at most 6 actions, so the object stays within the output limit.",
     "",
     `SITE: ${input.siteDomain}`,
     `RESEARCH TITLE: ${input.title}`,
@@ -189,7 +190,7 @@ export async function synthesizeResearch(input: {
       config,
       system: "You synthesize bounded public research into evidence-linked findings and content actions.",
       user: prompt,
-      maxTokens: 6_000,
+      maxTokens: 8_000,
       attempts: 4,
     });
   } catch (error) {
