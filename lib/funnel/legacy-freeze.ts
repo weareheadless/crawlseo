@@ -37,9 +37,25 @@ export type FrozenFunnelModel = (typeof FROZEN_FUNNEL_MODELS)[number];
  */
 export const FROZEN_NOW: readonly FrozenFunnelModel[] = [] as const;
 
-/** Tables the strict freeze covers: proven-retired only. */
+/**
+ * Tables whose **creates** are blocked while updates are still allowed.
+ *
+ * This is the honest middle state for a table that is no longer produced by the
+ * funnel but may still have work in flight: nothing new may be added, and any
+ * accidental (or forgotten) writer fails loudly with its stack, while lifecycle
+ * transitions on existing rows can still complete. `prelaunchResearchRequest` is
+ * excluded because its paid request endpoint is still a live feature.
+ */
+export const FROZEN_CREATES: readonly string[] = ["researchAction"] as const;
+
+/** Tables the strict freeze covers in full: proven-retired only. */
 export function frozenModelsFor(strict: boolean): readonly string[] {
   return strict ? FROZEN_NOW : [];
+}
+
+/** Tables whose creates are blocked (updates allowed). */
+export function createBlockedModelsFor(strict: boolean): readonly string[] {
+  return strict ? FROZEN_CREATES : [];
 }
 
 export class LegacyFunnelWriteError extends Error {
@@ -57,6 +73,13 @@ export function assertLegacyFunnelModelNotFrozen(model: string, strict = true): 
   }
 }
 
+/** Creates are blocked on a frozen-creates table; updates still pass. */
+export function assertLegacyCreateAllowed(model: string, strict = true): void {
+  if (strict && (FROZEN_CREATES as readonly string[]).includes(model)) {
+    throw new LegacyFunnelWriteError(model);
+  }
+}
+
 /**
  * Prisma client proxy that makes the frozen legacy funnel tables strictly
  * read-only: any write delegate call on a frozen model throws. Reads pass
@@ -66,10 +89,12 @@ export function withFrozenLegacyFunnel<T extends PrismaClient>(db: T, strict = t
   return new Proxy(db, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
-      if (typeof prop !== "string" || !(frozenModelsFor(strict) as readonly string[]).includes(prop)) {
+      const frozen = (frozenModelsFor(strict) as readonly string[]).includes(prop as string);
+      const createBlocked = (createBlockedModelsFor(strict) as readonly string[]).includes(prop as string);
+      if (typeof prop !== "string" || (!frozen && !createBlocked)) {
         return typeof value === "function" ? value.bind(target) : value;
       }
-      return withWriteGuard(prop, value);
+      return withWriteGuard(prop, value, frozen);
     },
   }) as T;
 }
@@ -86,7 +111,7 @@ const WRITE_METHODS = new Set([
   "deleteMany",
 ]);
 
-function withWriteGuard(model: string, delegate: unknown): unknown {
+function withWriteGuard(model: string, delegate: unknown, fullyFrozen: boolean): unknown {
   return new Proxy(delegate as object, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
@@ -95,7 +120,8 @@ function withWriteGuard(model: string, delegate: unknown): unknown {
       }
       if (WRITE_METHODS.has(prop)) {
         return (...args: unknown[]) => {
-          assertLegacyFunnelModelNotFrozen(model, true);
+          if (fullyFrozen) assertLegacyFunnelModelNotFrozen(model, true);
+          else if (prop.startsWith("create")) assertLegacyCreateAllowed(model, true);
           return (value as (...a: unknown[]) => unknown).apply(target, args);
         };
       }

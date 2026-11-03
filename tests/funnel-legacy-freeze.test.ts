@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  FROZEN_CREATES,
   FROZEN_FUNNEL_MODELS,
   FROZEN_NOW,
   LegacyFunnelWriteError,
@@ -68,6 +69,33 @@ describe("legacy funnel freeze (plan §6, wave 6 step 2)", () => {
     } finally {
       frozenNow.length = 0;
     }
+  });
+
+  it("blocks creates on a frozen-creates table but lets updates finish in-flight work", async () => {
+    expect(FROZEN_CREATES).toEqual(["researchAction"]);
+    const inner = {
+      researchAction: {
+        create: vi.fn().mockResolvedValue({ id: "new" }),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        update: vi.fn().mockResolvedValue({ id: "existing" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+    const db = withFrozenLegacyFunnel(inner as never, true) as unknown as typeof inner;
+    expect(() => db.researchAction.create({ data: {} })).toThrow(LegacyFunnelWriteError);
+    expect(() => db.researchAction.createMany({ data: [] })).toThrow(LegacyFunnelWriteError);
+    // In-flight lifecycle transitions still complete.
+    await expect(db.researchAction.update({ where: { id: "x" }, data: {} })).resolves.toEqual({ id: "existing" });
+    await expect(db.researchAction.updateMany({ data: {} })).resolves.toEqual({ count: 1 });
+    await expect(db.researchAction.findMany()).resolves.toEqual([]);
+    expect(inner.researchAction.create).not.toHaveBeenCalled();
+  });
+
+  it("does not block creates on tables that are still produced", () => {
+    const inner = { researchRun: { create: vi.fn().mockResolvedValue({ id: "r" }) } };
+    const db = withFrozenLegacyFunnel(inner as never, true) as unknown as typeof inner;
+    expect(() => db.researchRun.create({ data: {} })).not.toThrow();
   });
 
   it("does nothing when the freeze is not enabled", () => {

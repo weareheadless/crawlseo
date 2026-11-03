@@ -123,10 +123,18 @@ absent from the source checkout. So the writer is a process running older code
 that has not been identified yet, and the claim "no scheduled job creates legacy
 actions" is **not proven** — it is currently false in effect.
 
-Open item: find and stop that writer before freezing `researchAction`. Candidates
-are a process started from an older release directory (`afc4713`, `d059be7`) or a
-scheduler outside pm2. Until it is found, `researchAction` stays out of the
-freeze, and this line stays in the ledger rather than being quietly removed.
+Investigation: the crawls behind that burst ran with **no `CRAWL` job rows**
+(five crawls finished, zero jobs), so they came from something outside the job
+queue, and no pm2 app or node process is running from an old release directory.
+The writer has not been identified.
+
+Rather than chase it further, the freeze now catches it. `FROZEN_CREATES` blocks
+**creates** on `researchAction` while still allowing lifecycle **updates**, so
+in-flight work can close and nothing new can be added. Any forgotten writer now
+fails loudly with its own stack in the log — the freeze is the diagnostic.
+
+`prelaunchResearchRequest` is excluded from create-blocking because its paid
+request endpoint is still a live feature.
 
 The tables that still grow from scheduled jobs are the research run families:
 `researchRun` + `researchFinding` (kept by the spine as its run/finding models),
