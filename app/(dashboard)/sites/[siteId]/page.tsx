@@ -202,12 +202,12 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
             </div>
             <div className="panel p-4">
               <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                Opportunities
+                Open opportunities
               </p>
               <p className="mt-1 font-heading text-2xl font-semibold text-signal">
-                {opportunities?.feed.length ?? 0}
+                {funnel ? funnel.counts.detected + funnel.counts.accepted + funnel.counts.inProgress : "—"}
               </p>
-              <p className="text-xs text-muted-foreground">action items this period</p>
+              <p className="text-xs text-muted-foreground">detected and not yet closed</p>
             </div>
             <div className="panel p-4">
               <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
