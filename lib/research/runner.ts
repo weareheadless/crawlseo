@@ -440,6 +440,13 @@ export async function runResearchRun(runId: string) {
     for (const issue of recencyIssues) if (issue) recencyRejections[issue] += 1;
     const freshFiltered = qualityFiltered.filter((_, index) => recencyIssues[index] === null);
     const boundedSources = freshFiltered.slice(0, maxSources);
+    if (process.env.RESEARCH_SOURCE_DEBUG === "1") {
+      const count = (rows: typeof boundedSources) => rows.reduce((acc: Record<string, number>, row) => {
+        acc[row.provider] = (acc[row.provider] ?? 0) + 1;
+        return acc;
+      }, {});
+      console.log(`[research] sources collected=${collectedSources.length} fresh=${freshFiltered.length} bounded=${boundedSources.length}`, JSON.stringify(count(boundedSources)), JSON.stringify(recencyRejections));
+    }
     const savedSources = await saveResearchSources(
       run.id,
       boundedSources.map((source) => ({
