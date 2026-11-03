@@ -107,6 +107,12 @@ function mockDb(seed: SeedRow[], clusters: Array<{ id: string; slug: string; nam
         return { ...entry, ...args.data };
       }),
       groupBy: vi.fn().mockResolvedValue([]),
+      updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
+        for (const entry of byDedup.values()) {
+          if (args.where.id.in.includes(entry.id)) Object.assign(entry, args.data);
+        }
+        return { count: args.where.id.in.length };
+      }),
     },
     evidenceEdge: {
       upsert: vi.fn(async (args: { create: Record<string, unknown> }) => {

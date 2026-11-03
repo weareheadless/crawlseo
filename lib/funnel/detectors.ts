@@ -1,4 +1,4 @@
-import { type DemandMapCluster, type EvidenceRecord, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
+import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
 
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
@@ -43,7 +43,52 @@ export const DETECTOR_THRESHOLDS = {
   maxClusterCoverage: 0.34,
   /** below this score a `detected` opportunity parks (hysteresis) */
   hysteresis: 3,
+  /** open opportunities per project before overflow parks (plan §3) */
+  openCap: 100,
 } as const;
+
+/**
+ * Which evidence kinds a detector needs before it can say anything (plan §2.2).
+ *
+ * A detector whose kind is absent is **disabled**, not empty: an empty O3 board
+ * must mean "no content gap", never "no SERP data". v1 shipped detectors before
+ * their collection and read the emptiness as a detector failure.
+ */
+export const DETECTOR_REQUIRES: Record<OpportunityType, EvidenceRecordKind[]> = {
+  O1_winnable_rank: ["keyword_rank"],
+  O2_striking_distance: ["keyword_rank"],
+  O3_content_gap: ["serp_snapshot"],
+  O4_aeo_citation_gap: ["ai_visibility_observation"],
+  O5_aeo_presence_gap: ["question_coverage"],
+  O6_business_fact_mismatch: ["onpage_crawl", "knowledge_fact"],
+  O7_technical_defect: ["onpage_crawl"],
+  O8_structured_data_gap: ["onpage_crawl"],
+  O9_backlink_gap: ["backlink_profile"],
+  O10_cannibalization: ["keyword_rank"],
+  O11_freshness_decay: ["keyword_rank"],
+  O12_page_experience: ["vitals"],
+  O13_user_pain_point: ["research_finding"],
+  O14_offer_positioning_gap: ["research_finding"],
+};
+
+export type DisabledDetector = {
+  type: OpportunityType;
+  /** The kinds it needs and does not have. */
+  missing: EvidenceRecordKind[];
+};
+
+/**
+ * Business value from knowledge (plan §2.3), not a constant.
+ *
+ * 0.9 when knowledge names the offer/audience, 0.5 declared unknown when the
+ * project has none. A detector that hardcodes 0.6 claims relevance it never
+ * checked.
+ */
+export function businessValueFromKnowledge(evidence: Evidence[]): { value: number; source: "knowledge" | "unknown" } {
+  return byKind(evidence, "knowledge_fact").length > 0
+    ? { value: 0.9, source: "knowledge" }
+    : { value: 0.5, source: "unknown" };
+}
 
 /**
  * Read a metric regardless of who produced it. The same semantic metric can be
@@ -339,7 +384,7 @@ const DETECTORS: Detector[] = [
           whyEvidenceIds: knowledge.slice(0, 1).map((k) => k.id),
           howEvidenceIds: [row.id],
           scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.6 },
+            worth: { volume: null, ctrAtPosition: null, businessValue: businessValueFromKnowledge(evidence).value },
             winProbability: { playTypeFactor: 1.0 },
             effort: { playTypeBase: 2, sizeFactor: 1 },
             freshness: freshnessFactor(row.observedAt, new Date()),
@@ -555,6 +600,8 @@ export type DetectorRunResult = {
   created: number;
   updated: number;
   parked: string[];
+  /** Detectors that could not run because their evidence kind is absent. */
+  disabled: DisabledDetector[];
 };
 
 /** Run every detector for a project, upsert opportunities, then hysteresis. */
@@ -569,9 +616,17 @@ export async function runDetectors(
     where: { projectId, supersededById: null },
   })) as Evidence[];
 
+  const available = new Set(evidence.map((row) => row.kind));
+  const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
+    const missing = (DETECTOR_REQUIRES[detector.type] ?? []).filter((kind) => !available.has(kind));
+    return missing.length > 0 ? [{ type: detector.type, missing }] : [];
+  });
+  const disabledTypes = new Set(disabled.map((entry) => entry.type));
+
   let created = 0;
   let updated = 0;
   for (const detector of DETECTORS) {
+    if (disabledTypes.has(detector.type)) continue;
     for (const candidate of detector.detect(evidence, { now })) {
       const result = await upsertOpportunity(db, {
         projectId,
@@ -609,7 +664,30 @@ export async function runDetectors(
   }
 
   const parked = await applyHysteresis(db, { threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
-  return { created, updated, parked };
+  const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
+  return { created, updated, parked: [...parked, ...capped], disabled };
+}
+
+/**
+ * Plan §3: at most `cap` open opportunities per project, score-sorted overflow
+ * parks. Nothing is deleted, so a later re-score can lift an opportunity back.
+ */
+export async function applyOpenCap(
+  db: DetectorDb,
+  opts: { projectId: string; cap: number; detectedBy: string }
+): Promise<string[]> {
+  const open = await db.opportunity.findMany({
+    where: { projectId: opts.projectId, status: { in: ["detected", "accepted", "in_progress"] } },
+    select: { id: true, scoreValue: true },
+    orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "asc" }],
+  });
+  const overflow = open.slice(opts.cap);
+  if (overflow.length === 0) return [];
+  await db.opportunity.updateMany({
+    where: { id: { in: overflow.map((row) => row.id) } },
+    data: { status: "parked", parkReason: "cap", decidedBy: opts.detectedBy, decidedAt: new Date() },
+  });
+  return overflow.map((row) => row.id);
 }
 
 export function dimensionFor(type: OpportunityType): OpportunityDimension {

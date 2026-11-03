@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { listOpportunities, getFunnelCounts, type OpportunityRow } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
+import { DETECTOR_REQUIRES } from "@/lib/funnel/detectors";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -58,6 +59,17 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
 
   const query = await searchParams;
   const tab = STATUS_TABS.find((entry) => entry.key === (query.status ?? "open")) ?? STATUS_TABS[0];
+  const kindsPresent = await db.evidenceRecord.groupBy({
+    by: ["kind"],
+    where: { projectId: site.projectId, supersededById: null },
+    _count: { _all: true },
+  });
+  const present = new Set(kindsPresent.map((row) => row.kind));
+  const disabledDetectors = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
+    const missing = needs.filter((kind) => !present.has(kind));
+    return missing.length > 0 ? [{ type, missing }] : [];
+  });
+
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {
       projectId: site.projectId,
@@ -167,6 +179,16 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           </Link>
         ))}
       </div>
+
+      {disabledDetectors.length > 0 && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          {disabledDetectors.length} detectors are disabled because their evidence is missing:{" "}
+          {disabledDetectors
+            .map((entry) => `${OPPORTUNITY_LABELS[entry.type as keyof typeof OPPORTUNITY_LABELS]?.code ?? entry.type} needs ${entry.missing.join(" + ")}`)
+            .join(" · ")}
+          . An empty type above means “not collected yet”, not “nothing found”.
+        </p>
+      )}
 
       {counts.bothLegs === 0 && counts.total > 0 && (
         <p className="mb-4 rounded-lg border border-[var(--a-warning-300)] bg-[var(--a-warning-50)] px-3 py-2 text-xs text-[var(--a-warning-800)]">
