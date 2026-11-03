@@ -57,6 +57,15 @@ appearing as a scheduled writer and can be added to `FROZEN_NOW`.
 
 ## Progress made toward the remaining freeze (this wave)
 
+DataForSEO research now reaches the spine too: `lib/dataforseo/research-evidence.ts`
+projects stored keyword runs into `keyword_metrics` evidence (raw payload first,
+then evidence pointing at it, with the run's locale as a dimension and every
+metric carrying a declared unit). The `ARTICLE_KEYWORD_RESEARCH` job bridges each
+completed run, and the 24 runs already stored in production were backfilled:
+10 keyword rows now sit in the evidence store as provider data. A run with no
+recorded cost is skipped and reported rather than given a provenance it lacks.
+
+
 Business research now reaches the funnel: `lib/research/finding-evidence.ts`
 bridges each `ResearchFinding` into `research_finding` evidence, so the O13/O14
 detectors turn winnable gaps into opportunities. Because of that the runner no

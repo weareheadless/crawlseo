@@ -24,6 +24,7 @@ import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { loadEnvConfig } from "@next/env";
+import { bridgeKeywordRunToEvidence } from "@/lib/dataforseo/research-evidence";
 
 loadEnvConfig(process.cwd());
 
@@ -158,6 +159,22 @@ async function executeJob(
           throw new JobExecutionError("ARTICLE_RESEARCH_NOT_FOUND");
         }
         throw error;
+      }
+      // Wave 6: project the stored keyword data into funnel evidence so the
+      // demand map and detectors can use it. Additive; the legacy run row stays.
+      try {
+        const stored = await db.articleKeywordResearchRun.findUnique({
+          where: { id: researchRunId },
+          select: { id: true, siteId: true, projectId: true, providerTaskId: true, costMicros: true, result: true, language: true, country: true, completedAt: true, requestedAt: true },
+        });
+        if (stored) {
+          const bridged = await bridgeKeywordRunToEvidence(db as never, stored);
+          if (bridged.skipped > 0) {
+            console.warn(`[CrawlSEO worker] keyword evidence skipped ${bridged.skipped} row(s): run ${stored.id} has no recorded cost`);
+          }
+        }
+      } catch (error) {
+        console.error("[CrawlSEO worker] keyword evidence bridge failed", error);
       }
       return;
     }
