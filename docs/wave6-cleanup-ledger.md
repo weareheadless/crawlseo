@@ -136,6 +136,21 @@ fails loudly with its own stack in the log — the freeze is the diagnostic.
 `prelaunchResearchRequest` is excluded from create-blocking because its paid
 request endpoint is still a live feature.
 
+## Step 3c — two more factories retired
+
+Both remaining action factories behind a live UI caller were cut over, so the
+capability survives without the legacy write:
+
+| Factory | Old behaviour | Now |
+|---|---|---|
+| `lib/research/keyword-actions.ts` | minted an Action from a keyword the owner picked | records the keyword as tracked demand (`keyword_universe_membership` evidence) and refreshes detection; the button reads "Track" |
+| `lib/dataforseo/prelaunch-actions.ts` | minted Actions from a prelaunch run | the worker bridges prelaunch task results into evidence (project-scoped, no site) and the endpoint refreshes the funnel; the button reads "Detect opportunities" |
+
+Neither endpoint lost its meaning: "this keyword matters" still enters the system,
+it just enters as demand rather than as a hand-made task. One factory remains
+gated: `lib/crawler/technical-actions.ts`, whose reassess endpoint carries
+revision/approval semantics that need their own cutover.
+
 ## Step 2 evidence — the standing check
 
 `npx tsx scripts/legacy-write-watch.ts [--hours N]` reports what actually
@@ -192,8 +207,8 @@ overwriting the other.
 | Item | Blocking consumer | Unblocks when |
 |---|---|---|
 | `lib/crawler/technical-actions.ts` | `/api/internal/sites/:id/technical-actions/reassess` | the technical reassess endpoint moves to the funnel detectors |
-| `lib/research/keyword-actions.ts` | `POST /api/sites/:id/keyword-research/actions` (a UI button) | the keyword-research button refreshes the funnel instead |
-| `lib/dataforseo/prelaunch-actions.ts` | `POST /api/projects/:projectId/prelaunch-research/:runId/actions` | DS-16 gives domainless projects a funnel evidence path |
+| ~~`lib/research/keyword-actions.ts`~~ | **deleted** — the endpoint now records the keyword as tracked demand and refreshes detection | done |
+| ~~`lib/dataforseo/prelaunch-actions.ts`~~ | **deleted** — the worker bridges prelaunch task results into evidence and the endpoint refreshes the funnel | done |
 | `ResearchAction.evidence` JSON lineage | legacy work/findings views | those views are archived |
 | `ResearchRun.actionCount/findingCount/sourceCount` | legacy research run views | same |
 

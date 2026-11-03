@@ -80,7 +80,6 @@ export function KeywordResearchClient({
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [savingSet, setSavingSet] = useState<Set<string>>(new Set());
   const [queuedSet, setQueuedSet] = useState<Set<string>>(new Set());
-  const [queuedActionIds, setQueuedActionIds] = useState<Record<string, string>>({});
   const [queuingSet, setQueuingSet] = useState<Set<string>>(new Set());
   const [queueError, setQueueError] = useState<string | null>(null);
 
@@ -122,14 +121,10 @@ export function KeywordResearchClient({
         }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error ?? "Failed to queue keyword action");
-      const actionId = payload.action?.id;
+      if (!response.ok) throw new Error(payload.error ?? "Failed to track keyword");
       setQueuedSet((prev) => new Set(prev).add(result.keyword));
-      if (typeof actionId === "string") {
-        setQueuedActionIds((prev) => ({ ...prev, [result.keyword]: actionId }));
-      }
     } catch (caught) {
-      setQueueError(caught instanceof Error ? caught.message : "Failed to queue keyword action");
+      setQueueError(caught instanceof Error ? caught.message : "Failed to track keyword");
     } finally {
       setQueuingSet((prev) => {
         const next = new Set(prev);
@@ -437,25 +432,18 @@ export function KeywordResearchClient({
                             {queuedSet.has(result.keyword) ? (
                               <>
                                 <Check className="size-3 text-signal" />
-                                Queued
+                                Tracked
                               </>
                             ) : queuingSet.has(result.keyword) ? (
                               <Loader2 className="size-3 animate-spin" />
                             ) : (
                               <>
                                 <ListPlus className="size-3" />
-                                Queue
+                                Track
                               </>
                             )}
                           </button>
-                          {queuedActionIds[result.keyword] && (
-                            <Link
-                              href={`/sites/${siteId}/actions/${queuedActionIds[result.keyword]}`}
-                              className="inline-flex items-center rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/10"
-                            >
-                              Open in Work
-                            </Link>
-                          )}
+
                         </div>
                       </td>
                     </tr>

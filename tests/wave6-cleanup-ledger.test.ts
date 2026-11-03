@@ -19,6 +19,8 @@ const DELETED = [
   "lib/pipeline/lineage-types.ts",
   "lib/research/crawl-actions.ts",
   "lib/research/seo-actions.ts",
+  "lib/research/keyword-actions.ts",
+  "lib/dataforseo/prelaunch-actions.ts",
   "scripts/sync-seo-actions.ts",
   "tests/crawl-actions.test.ts",
   "tests/seo-actions-authority.test.ts",
@@ -27,8 +29,6 @@ const DELETED = [
 
 const GATED = [
   "lib/crawler/technical-actions.ts",
-  "lib/research/keyword-actions.ts",
-  "lib/dataforseo/prelaunch-actions.ts",
 ];
 
 describe("wave 6 cleanup ledger", () => {

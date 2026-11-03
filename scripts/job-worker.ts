@@ -120,7 +120,17 @@ async function executeJob(
       if (!projectId) throw new JobExecutionError("SEO_RESEARCH_PROJECT_REQUIRED");
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("SEO_RESEARCH_RUN_REQUIRED");
-      if (!job.siteId) { await runPrelaunchResearch(projectId, researchRunId); return; }
+      if (!job.siteId) {
+        await runPrelaunchResearch(projectId, researchRunId);
+        // Project-scoped prelaunch runs have no site: their task results still
+        // belong in the evidence store so the funnel can use them.
+        try {
+          await bridgeSeoResearchRunToEvidence(db as never, { projectId, siteId: null, researchRunId });
+        } catch (error) {
+          console.error("[CrawlSEO worker] prelaunch evidence bridge failed", error);
+        }
+        return;
+      }
       try {
         const result = await runSeoResearch(projectId, job.siteId, researchRunId);
         if (result.status === "WAITING_FOR_SOURCES") {
