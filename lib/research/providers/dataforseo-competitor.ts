@@ -144,7 +144,7 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
     if (sources.length === 0 && failures.length > 0) throw new Error(failures[0]);
     return sources;
   }
-  const competitors = await withResearchBudget(input.projectId, {
+  const competitorCall = await withResearchBudget(input.projectId, {
     operation: "dataforseo:research_competitors",
     detail: { queries, locale: `${input.languageCode}:${input.locationCode}` },
     run: () =>
@@ -156,7 +156,27 @@ export async function fetchDataForSeoCompetitorSources(input: CompetitorProvider
         limit: input.limit ?? 10,
       }),
     costOf: (result) => result.costMicros ?? 0,
-  }).then((outcome) => outcome.result);
+  });
+  const competitors = competitorCall.result;
+  if (input.db) {
+    await input.db.rawProviderResponse.create({
+      data: {
+        provider: "dataforseo",
+        product: "dataforseo_labs",
+        endpoint: "serp_competitors/live",
+        providerTaskId: competitors.providerTaskId,
+        locale: `${input.languageCode}:${input.locationCode}`,
+        requestedAt: new Date(),
+        deliveredAt: new Date(),
+        costMicros: BigInt(competitorCall.spentMicros),
+        status: "succeeded",
+        payload: { queries, items: competitors.result } as never,
+      },
+    }).catch(() => undefined);
+  }
+  if (competitors.result.length === 0) {
+    console.warn(`[competitor] Labs returned no domains for ${queries.length} queries`);
+  }
 
   for (const competitor of competitors.result) {
     if (!competitor.domain || competitor.domain.replace(/^www\./, "").toLowerCase() === own) continue;
