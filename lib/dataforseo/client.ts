@@ -166,17 +166,28 @@ async function dataforseoPostWithMeta(
   endpoint: string,
   body: unknown[]
 ): Promise<{ data: unknown; providerTaskId: string | null; costMicros: number | null }> {
-  const res = await fetch(`https://api.dataforseo.com/v3${endpoint}`, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader(login, password),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    res = await fetch(`https://api.dataforseo.com/v3${endpoint}`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(login, password),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    // DataForSEO rate-limits per minute; a burst across queries is normal.
+    if (res.status === 429 || res.status >= 500) {
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000 * 2 ** attempt));
+        continue;
+      }
+    }
+    break;
+  }
 
-  if (!res.ok) {
-    console.error(`DataForSEO ${endpoint} error: ${res.status} ${res.statusText}`);
+  if (!res || !res.ok) {
+    console.error(`DataForSEO ${endpoint} error: ${res?.status ?? "no response"} ${res?.statusText ?? ""}`);
     return { data: null, providerTaskId: null, costMicros: null };
   }
 
@@ -230,13 +241,16 @@ function normalizeKeywordResults(data: unknown): KeywordResult[] {
     const item = asObject(rawItem);
     if (!item) return [];
     const keywordData = asObject(item.keyword_data);
-    const keywordInfo = asObject(keywordData?.keyword_info);
+    // related_keywords nests under keyword_data; keyword_suggestions returns the
+    // info at the item level. Both shapes reach this normalizer.
+    const keywordInfo = asObject(keywordData?.keyword_info) ?? asObject(item.keyword_info);
+    const properties = asObject(keywordData?.keyword_properties) ?? asObject(item.keyword_properties);
     const monthlySearches = Array.isArray(keywordInfo?.monthly_searches) ? keywordInfo.monthly_searches : null;
     const keyword = keywordData?.keyword ?? item.keyword;
     return [{
       keyword: String(keyword ?? "").slice(0, 200),
       volume: asNumber(keywordInfo?.search_volume),
-      difficulty: asNumber(keywordInfo?.keyword_difficulty),
+      difficulty: asNumber(keywordInfo?.keyword_difficulty) ?? asNumber(properties?.keyword_difficulty),
       cpc: asNumber(keywordInfo?.cpc),
       competition: asNumber(keywordInfo?.competition),
       trend: monthlySearches
@@ -488,6 +502,35 @@ export async function executeDataForSeoRelatedKeywords(input: {
 }
 
 /** Measure Ada's bounded candidate list without asking the provider to generate topics. */
+/**
+ * Labs `keyword_suggestions`: the keywords people actually type around a phrase.
+ * Used to derive a measurable keyword when a research phrase has no volume data.
+ */
+export async function executeDataForSeoKeywordSuggestions(input: {
+  projectId: string;
+  keyword: string;
+  languageCode: string;
+  locationCode: number;
+  limit?: number;
+}): Promise<DataForSeoKeywordResearchResult> {
+  const credentials = await credentialsForProject(input.projectId);
+  const response = await dataforseoPostWithMeta(
+    credentials.login,
+    credentials.password,
+    "/dataforseo_labs/google/keyword_suggestions/live",
+    [{
+      keyword: input.keyword,
+      language_code: input.languageCode,
+      location_code: input.locationCode,
+      limit: Math.max(1, Math.min(input.limit ?? 20, 100)),
+    }]
+  );
+  if (!response.data) throw new Error("DataForSEO operation failed");
+  const result = normalizeKeywordResults(response.data);
+  await markDataForSeoGrantValidated(credentials.grantId);
+  return { result, providerTaskId: response.providerTaskId, costMicros: response.costMicros };
+}
+
 export async function executeDataForSeoKeywordOverview(input: {
   projectId: string;
   keywords: string[];

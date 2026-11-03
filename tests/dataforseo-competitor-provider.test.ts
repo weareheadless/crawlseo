@@ -69,3 +69,4 @@ describe("DataForSEO competitor research provider", () => {
     expect(first.map((s) => s.contentHash).sort()).toEqual(second.map((s) => s.contentHash).sort());
   });
 });
+

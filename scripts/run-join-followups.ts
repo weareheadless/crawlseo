@@ -17,6 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
 import {
   collectAiVisibility,
+  collectDerivedKeywordMetrics,
   collectKeywordMetrics,
   collectSerpSnapshots,
 } from "@/lib/dataforseo/collection";
@@ -67,8 +68,27 @@ async function main() {
     siteId: site.id,
     maxSpendMicros: args.maxSpendMicros,
     collectors: {
-      keywordMetrics: (input) =>
-        collectKeywordMetrics(db as never, { ...input, languageCode: locale.languageCode, locationCode: locale.locationCode }),
+      // A gap finding names a phrase Labs may not know ("retapisser un siège
+      // soi-même"). Ask for the keywords people actually search around it, and
+      // only fall back to the exact phrase when derivation finds nothing.
+      keywordMetrics: async (input) => {
+        const seed = input.queries[0];
+        if (!seed) return { evidence: [], spentMicros: 0 };
+        const derived = await collectDerivedKeywordMetrics(db as never, {
+          projectId: input.projectId,
+          siteId: input.siteId,
+          seed,
+          languageCode: locale.languageCode,
+          locationCode: locale.locationCode,
+        });
+        if (derived.evidence.length > 0) return derived;
+        const exact = await collectKeywordMetrics(db as never, {
+          ...input,
+          languageCode: locale.languageCode,
+          locationCode: locale.locationCode,
+        });
+        return { evidence: exact.evidence, spentMicros: derived.spentMicros + exact.spentMicros };
+      },
       serpSnapshots: (input) =>
         collectSerpSnapshots(db as never, {
           ...input,

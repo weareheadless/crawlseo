@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { executeDataForSeoKeywordOverview, executeDataForSeoOrganicSerp, performDataForSeoOperation } from "@/lib/dataforseo/client";
+import {
+  executeDataForSeoKeywordOverview,
+  executeDataForSeoKeywordSuggestions,
+  executeDataForSeoOrganicSerp,
+  performDataForSeoOperation,
+} from "@/lib/dataforseo/client";
 import { ingestAiVisibility, type AiVisibilityObservation } from "@/lib/dataforseo/ai-visibility-adapter";
 import { storeEvidenceRecord } from "@/lib/funnel/evidence";
 import { decryptCredential } from "@/lib/encryption";
@@ -353,5 +358,118 @@ async function askChatGpt(auth: string, question: string): Promise<AiCall | null
     costUsd: Number(task.cost ?? 0),
     taskId: task.id ?? "",
     payload: result,
+  };
+}
+
+/**
+ * Derive a keyword Labs actually knows from a phrase it does not.
+ *
+ * A gap finding names a phrase like "retapisser un siège soi-même"; Labs has no
+ * volume for it, so the how-leg join collected nothing. This asks related_keywords
+ * for what people do search around the phrase, prefers a candidate that shares a
+ * token with it, and stores the winner with `derivedFrom` for provenance.
+ */
+export function pickDerivedKeyword(
+  seed: string,
+  candidates: Array<{ keyword: string; volume: number | null }>
+): { keyword: string; volume: number; shared: number } | null {
+  const normalise = (value: string) =>
+    value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
+  const seedTokens = new Set(normalise(seed));
+  const scored = candidates
+    .filter((candidate) => typeof candidate.volume === "number" && (candidate.volume ?? 0) >= 10 && candidate.keyword.trim().length > 0)
+    .map((candidate) => ({
+      keyword: candidate.keyword.trim(),
+      volume: candidate.volume as number,
+      shared: normalise(candidate.keyword).filter((token) => seedTokens.has(token)).length,
+    }))
+    .sort((a, b) => b.shared - a.shared || b.volume - a.volume);
+  return scored[0] ?? null;
+}
+
+/** Phrases to try, longest first: the phrase, its unaccented form, its head terms. */
+export function derivationSeeds(seed: string): string[] {
+  const clean = seed.trim().replace(/\s+/g, " ");
+  const unaccented = clean.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const tokens = unaccented.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
+  const head = tokens.slice(0, 2).join(" ");
+  const first = tokens[0] ?? "";
+  return [...new Set([clean, unaccented, head, first])].filter((value) => value.length >= 3);
+}
+
+export async function collectDerivedKeywordMetrics(
+  db: CollectionDb,
+  input: { projectId: string; siteId: string | null; seed: string; languageCode: string; locationCode: number }
+): Promise<CollectionOutput> {
+  // Labs has no data for many long phrases ("tapisserie de siège" returns nothing,
+  // "tapisserie siege" returns 50/month). Back off from the phrase to its head
+  // terms until a suggestion set comes back.
+  let related: Awaited<ReturnType<typeof executeDataForSeoKeywordSuggestions>> | null = null;
+  let spentMicros = 0;
+  let chosen: ReturnType<typeof pickDerivedKeyword> = null;
+  for (const candidateSeed of derivationSeeds(input.seed)) {
+    let call;
+    try {
+      call = await withResearchBudget(input.projectId, {
+      operation: "dataforseo:keyword_suggestions",
+      detail: { seed: candidateSeed, locale: `${input.languageCode}:${input.locationCode}` },
+      run: () =>
+        executeDataForSeoKeywordSuggestions({
+          projectId: input.projectId,
+          keyword: candidateSeed,
+          languageCode: input.languageCode,
+          locationCode: input.locationCode,
+        }),
+        costOf: (result) => result.costMicros ?? 0,
+      });
+    } catch {
+      continue;
+    }
+    spentMicros += call.spentMicros;
+    if (call.result.result.length === 0) continue;
+    related = call.result;
+    chosen = pickDerivedKeyword(input.seed, call.result.result);
+    if (chosen) break;
+  }
+  if (!related || !chosen) return { evidence: [], spentMicros };
+
+  const raw = await db.rawProviderResponse.create({
+    data: {
+      provider: "dataforseo",
+      product: "dataforseo_labs",
+      endpoint: "keyword_suggestions/live",
+      providerTaskId: related.providerTaskId,
+      locale: `${input.languageCode}:${input.locationCode}`,
+      requestedAt: new Date(),
+      deliveredAt: new Date(),
+      costMicros: BigInt(spentMicros),
+      status: "succeeded",
+      payload: { seed: input.seed, chosen, candidates: related.result } as never,
+    },
+    select: { id: true },
+  });
+
+  const match = related.result.find((row) => row.keyword.trim() === chosen!.keyword);
+  const metrics: Record<string, { value: number | null; unit: string; source: "provider" }> = {
+    "provider:volume": { value: chosen.volume, unit: "searches/month", source: "provider" },
+  };
+  if (typeof match?.difficulty === "number") metrics["provider:difficulty"] = { value: match.difficulty, unit: "score", source: "provider" };
+  if (typeof match?.cpc === "number") metrics["provider:cpc"] = { value: match.cpc, unit: "currency", source: "provider" };
+  if (typeof match?.competition === "number") metrics["provider:competition"] = { value: match.competition, unit: "score", source: "provider" };
+
+  const dimensions = { query: chosen.keyword, derivedFrom: input.seed, sharedTokens: chosen.shared };
+  const stored = await storeEvidenceRecord(db, {
+    projectId: input.projectId,
+    siteId: input.siteId,
+    kind: "keyword_metrics",
+    observedAt: new Date(),
+    producer: "dataforseo",
+    rawResponseId: raw.id,
+    dimensions,
+    metrics,
+  });
+  return {
+    evidence: [{ id: stored.id, kind: "keyword_metrics", observedAt: new Date(), dimensions, metrics }],
+    spentMicros,
   };
 }
