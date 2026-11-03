@@ -45,6 +45,40 @@ move those onto `ResearchRun` before the legacy row stops being written.
 
 What remains is the bookkeeping: status, idempotency, caps and linkage.
 
+## Recommended next cutover: the prelaunch family, not the article family
+
+Inspected on 2026-11-03. The two remaining families are not equally risky:
+
+| | `articleKeywordResearchRun` | `seoResearchRun` + `seoResearchTask` |
+|---|---|---|
+| Rows | 26 | **1** |
+| Last use | 2026-11-02 (yesterday) | 2026-10-27 (dormant) |
+| Scope | site-scoped, live feature | project-scoped prelaunch only |
+| Readers | screen (already switched), runner, one callerless API branch | one page: `projects/[projectId]/prelaunch/[runId]` |
+| Data in evidence | yes (bridged) | yes (bridged, 3 keyword observations) |
+
+**The site-scoped SEO research path is dead code.** `requestResearchReport` — the
+only entry point that would enqueue a site-scoped `SEO_RESEARCH` job — has no
+callers anywhere in `app/`, `lib/` or `scripts/`. So `runSeoResearch`'s site branch
+is unreachable, and every `seoResearchRun` row comes from
+`requestPrelaunchResearch`.
+
+That makes the prelaunch family the safe cutover:
+
+1. **Delete the dead site branch.** Remove `requestResearchReport`,
+   `ensureResearchJob`'s site path and `runSeoResearch`'s site handling, plus the
+   job handler branch that calls it. Nothing enqueues it, so nothing can notice.
+2. **Shadow the one run.** Write it into `ResearchRun` as kind `PRELAUNCH` with the
+   same `syncArticleRunToResearchRun` shape (1 row, no backfill risk).
+3. **Switch the one reader.** `projects/[projectId]/prelaunch/[runId]` reads
+   `ResearchRun` + evidence instead of `SeoResearchRun` + tasks.
+4. **Write switch.** `requestPrelaunchResearch` and `runPrelaunchResearch` write and
+   update `ResearchRun`; `SeoResearchRun`/`SeoResearchTask` stop being written.
+5. **Freeze and drop**, per the steps below.
+
+This exercises the whole cutover on a single dormant row, so the article family —
+which is live — repeats a proven sequence instead of being the first attempt.
+
 ## Target model
 
 Add to `ResearchRun`:
