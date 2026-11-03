@@ -90,6 +90,7 @@ model Project {
   questionCoverages        QuestionCoverage[]
   aiVisibilityObservations AIVisibilityObservation[]
   aeoEvaluationRuns        AeoEvaluationRun[]
+  evidenceRecords          EvidenceRecord[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -100,6 +101,87 @@ enum AIVisibilitySourceKind {
   provider_api
   operator_manual
 }
+
+// ============ FUNNEL SPINE (seo-funnel-spine-plan.md, wave 0) ============
+
+enum EvidenceRecordKind {
+  keyword_rank
+  keyword_metrics
+  serp_snapshot
+  serp_features
+  intent_label
+  competitor_rank
+  backlink_profile
+  share_of_voice
+  keyword_universe_membership
+  onpage_crawl
+  internal_link_graph
+  ai_visibility_observation
+  gsc_query
+  gsc_page
+  vitals
+  analytics
+  knowledge_fact
+  question_coverage
+  research_finding
+}
+
+/// Immutable raw provider payload store. The only place raw provider
+/// responses live; normalized tables never store raw blobs (plan §4).
+model RawProviderResponse {
+  id             String   @id @default(cuid())
+  provider       String
+  product        String
+  endpoint       String
+  providerTaskId String?
+  locale         String?
+  requestedAt    DateTime
+  deliveredAt    DateTime
+  costMicros     BigInt?
+  status         String
+  payload        Json
+  createdAt      DateTime @default(now())
+
+  evidenceRecords EvidenceRecord[]
+
+  @@unique([provider, providerTaskId])
+  @@index([provider, product, requestedAt])
+}
+
+/// Typed, normalized observation with provenance. One envelope for both
+/// evidence legs (business and search). Superseded, never deleted.
+model EvidenceRecord {
+  id              String            @id @default(cuid())
+  projectId       String
+  siteId          String?
+  kind            EvidenceRecordKind
+  observedAt      DateTime
+  validFrom       DateTime?
+  validTo         DateTime?
+  producer        String
+  rawResponseId   String?
+  dimensions      Json
+  metrics         Json
+  observationHash String
+  supersededById  String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site         Site?                @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  rawResponse  RawProviderResponse? @relation(fields: [rawResponseId], references: [id], onDelete: SetNull)
+  supersededBy EvidenceRecord?      @relation("EvidenceSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded   EvidenceRecord[]     @relation("EvidenceSupersede")
+
+  @@unique([projectId, kind, observationHash])
+  @@index([projectId, kind, observedAt])
+  @@index([projectId, siteId])
+  @@index([supersededById])
+}
+
+/// Legacy funnel tables are frozen read-only at cutover (plan §6). Writes are
+/// rejected at the application layer by lib/funnel/legacy-freeze.ts.
+
 
 model AIVisibilityObservation {
   id                  String                 @id @default(cuid())
@@ -1206,6 +1288,7 @@ model Site {
   alerts                     Alert[]
   savedKeywords              SavedKeyword[]
   rankSnapshots              RankSnapshot[]
+  evidenceRecords            EvidenceRecord[]
   integrationGrants          IntegrationGrant[]
   analyticsSnapshots         AnalyticsSnapshot[]
   jobs                       Job[]
