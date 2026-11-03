@@ -71,7 +71,17 @@ export async function runDualRun(db: PrismaClient, args: Args) {
   });
   if (!crawl) throw new Error(`no completed crawl for ${site.domain}: nothing to compare against`);
 
-  const ourIssueRows = await db.crawlIssue.groupBy({ by: ["type"], where: { crawlId: crawl.id }, _count: { _all: true } });
+  // Compare the same URLs. Counting our issues across the whole crawl against the
+  // provider's sample compares sample sizes, not detectors: a 200-page crawl will
+  // always show issue types a 25-page sample never reached.
+  const providerUrls = new Set(
+    (response.result ?? []).flatMap((result) => (result.items ?? []).map((item) => item.url)).filter((url): url is string => Boolean(url))
+  );
+  const ourIssueRows = await db.crawlIssue.groupBy({
+    by: ["type"],
+    where: { crawlId: crawl.id, ...(providerUrls.size > 0 ? { url: { in: [...providerUrls] } } : {}) },
+    _count: { _all: true },
+  });
   const ourIssues: Record<string, number> = {};
   for (const row of ourIssueRows) ourIssues[row.type] = row._count._all;
 
@@ -96,7 +106,7 @@ export async function runDualRun(db: PrismaClient, args: Args) {
     providerIssues,
     ourIssues,
     providerPages: ingested.pages,
-    ourPages: crawl.pagesFound ?? 0,
+    ourPages: providerUrls.size,
   });
 
   return { site: site.domain, ingested, report };

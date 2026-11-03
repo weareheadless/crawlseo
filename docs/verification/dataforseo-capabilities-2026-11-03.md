@@ -123,19 +123,93 @@ free endpoints above still work.
 This was my error: I called a per-result-priced endpoint without capping its
 result count, and did not check the balance against the price before calling.
 
+## DS-04 dual-run: susimacdonald.com, 30 pages
+
+Balance restored to $51 on 2026-11-03. Two crawls of the same 30 pages, each
+compared against our own crawl of the same URLs (`crawlIssue` filtered to the
+provider's URL set — comparing a 30-page sample to a 200-page crawl measures
+sample size, not detectors).
+
+| | Run 1: no JS, no resources | Run 2: JS + resources |
+|---|---|---|
+| Cost | $0.0045 | $0.0540 |
+| Provider pages | 30 | 30 |
+| Our pages | 30 | 30 |
+| Both agree | MISSING_ALT, MISSING_DESCRIPTION, MISSING_H1 | MISSING_DESCRIPTION, MISSING_H1, SLOW_PAGE |
+| Provider only | THIN_CONTENT (30), TITLE_TOO_LONG (21) | THIN_CONTENT (30), TITLE_TOO_LONG (21) |
+| Ours only | DUPLICATE_DESCRIPTION, MISSING_SCHEMA (31), MIXED_CONTENT (3), SLOW_PAGE (18) | DUPLICATE_DESCRIPTION, MISSING_ALT (4), MISSING_SCHEMA (31), MIXED_CONTENT (3) |
+| `parityProven` | **false** | **false** |
+
+Three exact agreements in run 1 (MISSING_ALT 4 = 4, MISSING_DESCRIPTION 1 = 1,
+MISSING_H1 1 = 1) show the two detectors are looking at the same pages. The
+disagreements are semantic, not noise:
+
+1. **`low_content_rate` is not thin content.** It is a text-to-markup ratio. It
+   fired on **30 of 30** pages, including a 1,777-word article, because the site's
+   CMS ships heavy markup. Mapping it to `THIN_CONTENT` would have created 30 false
+   issues on one site. Now unmapped; `low_character_count` and `small_page_size`
+   were false on every page, so the provider has no usable thin-content check here.
+2. **`title_too_long` is our gap, not theirs.** 21 of 30 titles exceed the
+   provider's threshold (a 64-character title is flagged, 49 is not). Our crawler
+   reported none. That is coverage we are missing.
+3. **`SLOW_PAGE` depends on crawl conditions.** Without resources the provider saw
+   none; with resources it saw 12 against our 18. Timings from different crawl
+   configurations are not comparable, so this check can only be used with declared
+   conditions.
+4. **`MISSING_SCHEMA` and `MIXED_CONTENT` are ours only.** The provider's
+   microdata check cannot see JSON-LD, and it does not check mixed content. These
+   stay our detectors.
+5. **`no_image_alt` flipped between runs** (4 agree without JS, 0 with JS). Under
+   rendering the provider sees a different image set. Unresolved; do not switch
+   this check on provider data.
+
+Conclusion: **parity is not proven, and the read switch does not happen.** The
+useful outcome is that the provider's OnPage data is *additional* evidence with
+per-check semantics, not a replacement for our crawler. Our crawler stays the
+authority for `MISSING_SCHEMA`, `MIXED_CONTENT` and thin content; provider
+`title_too_long` covers a gap we have.
+
+## OnPage API shape (corrected)
+
+- There is **no `task_get`** for OnPage. Results are retrieved with
+  `POST /on_page/pages` (and `summary`, `links`, `duplicate_tags`, …) passing the
+  task id in the body. `GET /on_page/task_get/...` returns 404. The adapter's
+  `endpoint: "task_get"` label is wrong and should become `pages`.
+- `instant_pages` accepts **one URL per host per request** ("duplicate crawl host")
+  and at most 20 tasks per call, so per-page sampling is one request per page.
+  Site-wide comparison needs `task_post` (30 pages, $0.0045 without JS, $0.054
+  with JS and resources).
+- `/on_page/pages` costs nothing to read; the crawl is billed at task creation.
+
+## Spend and cadence
+
+| Run | Cost |
+|---|---|
+| `instant_pages` shape probe | $0.00015 |
+| `llm_mentions` probes (my error) | $0.201 |
+| `chat_gpt/llm_responses` probe | $0.000622 |
+| DS-04 crawl, no JS | $0.0045 |
+| DS-04 crawl, JS + resources | $0.054 |
+| Balance after top-up to $51 | **$49.93** |
+
+`llm_mentions` is capped at **once per calendar month** in code
+(`lib/dataforseo/ai-mentions-cadence.ts`, tested), because one call costs $0.101 —
+about 168 `llm_responses` calls. Recurring AI visibility uses `llm_responses`;
+mentions is a monthly market snapshot.
+
 ## What this verification does and does not prove
 
 Proven:
 
 - the credential works, and every locale/price endpoint we need responds;
-- OnPage `instant_pages` returns the 52-check payload the adapter expects, and the
-  adapter's map is now correct against it;
-- the AI-optimization path is per-engine, and `llm_responses` is $0.0006/call.
+- OnPage returns the 52–60-check payload the adapter consumes, and the adapter's
+  map is now correct against real payloads in four places;
+- the AI-optimization path is per-engine, and `llm_responses` is $0.0006/call;
+- OnPage and our crawler agree exactly on three issue types and disagree for
+  reasons that are now named.
 
 Not proven:
 
-- OnPage parity against our own crawler (needs the dual-run, which needs balance);
+- OnPage parity (explicitly failed on 30 pages; the switch is blocked by design);
 - the `llm_responses` answer and citation shape;
-- queued-task flows (`task_post` → `task_get`), which the adapters label but the
-  probes did not exercise;
 - backlinks payload shape (subscription exists, no call made).

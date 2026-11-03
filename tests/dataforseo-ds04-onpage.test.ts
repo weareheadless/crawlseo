@@ -93,6 +93,9 @@ describe("DS-04 OnPage adapter (producer only)", () => {
     // would contradict our own crawler's JSON-LD detection, so it stays unmapped.
     expect(evidence.some((row) => (row.dimensions as { issueType?: string }).issueType === "MISSING_SCHEMA")).toBe(false);
     expect(ONPAGE_CHECK_MAP.has_micromarkup).toBeUndefined();
+    // low_content_rate is a text-to-markup ratio: it fired on 30/30 pages of a real
+    // crawl, including a 1,777-word article, so it is not THIN_CONTENT.
+    expect(ONPAGE_CHECK_MAP.low_content_rate).toBeUndefined();
   });
 
   it("records provider checks we do not map instead of silently dropping them", async () => {

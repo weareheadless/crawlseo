@@ -86,7 +86,10 @@ export const ONPAGE_CHECK_MAP: Record<string, OnPageCheck> = {
   // mapping it to MISSING_SCHEMA would manufacture structured-data issues that
   // contradict our own crawler's JSON-LD detection. Verified on a live payload
   // (Wix/JSON-LD page, has_micromarkup: false) on 2026-11-03.
-  low_content_rate: { issueType: "THIN_CONTENT", impact: "content", problemWhen: "present" },
+  // Deliberately unmapped: `low_content_rate` is a text-to-markup ratio, not thin
+  // content. On a JS-heavy CMS every page trips it (30/30 on a real crawl,
+  // including a 1,777-word article), so mapping it to THIN_CONTENT would flag the
+  // whole site. Verified 2026-11-03.
 };
 
 export type OnPageAdapterResult = {
@@ -109,7 +112,8 @@ export async function ingestOnPageResponse(
     data: {
       provider: "dataforseo",
       product: "onpage",
-      endpoint: "task_get",
+      // OnPage has no task_get: results are read from /on_page/pages.
+      endpoint: "pages",
       providerTaskId: response.id,
       locale: options.locale ?? null,
       requestedAt: options.requestedAt,
