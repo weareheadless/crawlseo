@@ -1,7 +1,14 @@
 # Wave 6: cleanup ledger status
 
-Executable companion: `tests/wave6-cleanup-ledger.test.ts` fails if a deleted item
-returns or a still-gated item is deleted without its cutover.
+Executable companions:
+- `npx tsx scripts/wave6-status.ts [--strict]` — the three steps as checks with
+  evidence, so drift fails a check instead of leaving a stale document.
+- `npx tsx scripts/legacy-writer-audit.ts` — what *could* write a legacy table
+  (static, creates vs updates).
+- `npx tsx scripts/legacy-write-watch.ts [--hours N]` — what *did* write, plus
+  crawls run outside the job queue.
+- `tests/wave6-cleanup-ledger.test.ts` fails if a deleted item returns or a
+  still-gated item is deleted without its cutover.
 Writer audit: `npx tsx scripts/legacy-writer-audit.ts` reports which legacy tables
 still have producers, and exits non-zero if a frozen table gains a writer.
 
@@ -206,7 +213,7 @@ overwriting the other.
 
 | Item | Blocking consumer | Unblocks when |
 |---|---|---|
-| `lib/crawler/technical-actions.ts` | `/api/internal/sites/:id/technical-actions/reassess` | the technical reassess endpoint moves to the funnel detectors |
+| `lib/crawler/technical-actions.ts` | `/api/internal/sites/:id/technical-actions/reassess` returns `{actionId, revision}` to an external caller authenticated with `HELLOADA_PROVISIONING_TOKEN` | changing that response is a cross-repo contract change (DS-13), not a cleanup swap |
 | ~~`lib/research/keyword-actions.ts`~~ | **deleted** — the endpoint now records the keyword as tracked demand and refreshes detection | done |
 | ~~`lib/dataforseo/prelaunch-actions.ts`~~ | **deleted** — the worker bridges prelaunch task results into evidence and the endpoint refreshes the funnel | done |
 | `ResearchAction.evidence` JSON lineage | legacy work/findings views | those views are archived |
