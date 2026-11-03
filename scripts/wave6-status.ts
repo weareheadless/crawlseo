@@ -99,7 +99,14 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
     .filter(([, writers]) => writers.some((writer) => writer.operation === "create"))
     .map(([table]) => table);
   const createBlocked = createsAttempted.filter((table) => (FROZEN_CREATES as readonly string[]).includes(table));
-  const stillGrowing = createsAttempted.filter((table) => !(FROZEN_CREATES as readonly string[]).includes(table));
+  // The plan keeps ResearchRun/ResearchFinding as the spine's own run and finding
+  // models (spine plan §4), so they are not legacy tables and must not be counted
+  // as "legacy coverage" debt. The families DS-02 replaces are.
+  const SPINE_MODELS = new Set(["researchRun", "researchFinding"]);
+  const stillGrowing = createsAttempted.filter(
+    (table) => !(FROZEN_CREATES as readonly string[]).includes(table) && !SPINE_MODELS.has(table)
+  );
+  const spineStillGrowing = createsAttempted.filter((table) => SPINE_MODELS.has(table));
   const watch = await watchLegacyWrites(db, { hours: opts.hours ?? 3 });
 
   checks.push({
@@ -123,7 +130,7 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
     detail:
       stillGrowing.length === 0
         ? `no legacy table grows from a scheduled job; fully frozen: [${FROZEN_NOW.join(", ")}], creates blocked: [${FROZEN_CREATES.join(", ")}]`
-        : `creates blocked on [${createBlocked.join(", ") || "none"}]; still growing from scheduled jobs: [${stillGrowing.join(", ")}]`,
+        : `creates blocked on [${createBlocked.join(", ") || "none"}]; legacy families still growing: [${stillGrowing.join(", ")}] (DS-02, docs/ds-02-run-unification.md)${spineStillGrowing.length ? `; spine models, not legacy: [${spineStillGrowing.join(", ")}]` : ""}`,
   });
   checks.push({
     step: 2,

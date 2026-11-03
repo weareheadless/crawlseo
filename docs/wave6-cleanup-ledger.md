@@ -177,6 +177,24 @@ The run row is now a job record plus a payload only when no bridge exists. Dropp
 the column entirely still needs the status/idempotency bookkeeping moved onto
 `ResearchRun`, which is the same remaining change for `seoResearchRun`/`Task`.
 
+## The one open item: DS-02 run-family unification
+
+`articleKeywordResearchRun` and `seoResearchRun` still receive creates because the
+run row is the **job record**, not just a payload: status, idempotency, monthly
+caps, parent linkage and cost live there. The plan keeps `ResearchRun` as the
+spine's run model and gives DS-02 the job of replacing the families with it.
+
+That is specified rather than half-done in
+`docs/ds-02-run-unification.md`: target columns, the six ordered steps
+(schema → dual-write → read switch → write switch → freeze → drop), acceptance,
+and the fact that the feature is live (26 runs, most recent the day before).
+`tests/wave6-run-family-guard.test.ts` fails if the tables are dropped before
+those steps land.
+
+`ResearchRun` and `ResearchFinding` are **not** legacy tables — the plan keeps
+them as the spine's own models — so the status report now lists them separately
+instead of counting them as coverage debt.
+
 ## Step 3c — two more factories retired
 
 Both remaining action factories behind a live UI caller were cut over, so the
