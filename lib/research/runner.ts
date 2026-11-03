@@ -439,7 +439,14 @@ export async function runResearchRun(runId: string) {
     const recencyRejections = { missing_date: 0, invalid_date: 0, future_date: 0, stale: 0 };
     for (const issue of recencyIssues) if (issue) recencyRejections[issue] += 1;
     const freshFiltered = qualityFiltered.filter((_, index) => recencyIssues[index] === null);
-    const boundedSources = freshFiltered.slice(0, maxSources);
+    // Competitor evidence is why the run asked DataForSEO: it must not be crowded
+    // out of the source cap by social/news volume.
+    const PROVIDER_PRIORITY: Record<string, number> = { dataforseo_labs: 0, dataforseo_serp: 1, google_news_rss: 2, reddit_rss: 3 };
+    const prioritised = freshFiltered
+      .map((source, index) => ({ source, index }))
+      .sort((a, b) => (PROVIDER_PRIORITY[a.source.provider] ?? 9) - (PROVIDER_PRIORITY[b.source.provider] ?? 9) || a.index - b.index)
+      .map((entry) => entry.source);
+    const boundedSources = prioritised.slice(0, maxSources);
     if (process.env.RESEARCH_SOURCE_DEBUG === "1") {
       const count = (rows: typeof boundedSources) => rows.reduce((acc: Record<string, number>, row) => {
         acc[row.provider] = (acc[row.provider] ?? 0) + 1;
