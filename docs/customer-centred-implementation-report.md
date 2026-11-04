@@ -77,6 +77,9 @@ Not done: joins still do not rebuild assessment inputs from newly arrived eviden
 - Accepting a recommendation now creates the task with its brief: need, existing
   coverage, target page, the specific change and the success measure
   (`taskPlanFromOpportunity`). Before, the task carried only the title.
+- The board list shows readiness and "impact not quantified" on every row, so
+  actionable work, investigations and backlog are separable without opening each
+  opportunity.
 
 Not verified: no browser check on desktop/mobile was run in this pass.
 

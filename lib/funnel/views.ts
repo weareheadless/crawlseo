@@ -59,6 +59,9 @@ export type OpportunityRow = {
   /** One line of decisive evidence: the reason this row exists. */
   reason: string | null;
   evidenceCount: number;
+  /** Readiness from the decision contract, so the board can separate work from questions. */
+  readiness: string | null;
+  measurement: string | null;
 };
 
 export type OpportunityDetail = OpportunityRow & {
@@ -246,6 +249,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       firstDetectedAt: true,
       clusterId: true,
       dedupKey: true,
+      scoreInputs: true,
     },
   });
 
@@ -284,6 +288,8 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       clusterSlug: row.clusterId ? clusterSlug.get(row.clusterId) ?? null : null,
       reason: first ? headlineFor(first) : null,
       evidenceCount: rowEdges.length,
+      readiness: decisionFromScoreInputs(row.scoreInputs).readiness,
+      measurement: decisionFromScoreInputs(row.scoreInputs).measurement,
     };
   });
 }
@@ -359,6 +365,8 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     dimension: row.dimension,
     title: row.title,
     summary: row.summary,
+    readiness: decisionFromScoreInputs(row.scoreInputs).readiness,
+    measurement: decisionFromScoreInputs(row.scoreInputs).measurement,
     score: row.scoreValue,
     scoreInputs: row.scoreInputs,
     decision: decisionFromScoreInputs(row.scoreInputs),

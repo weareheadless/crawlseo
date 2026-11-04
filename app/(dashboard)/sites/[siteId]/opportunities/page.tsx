@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { listOpportunities, getFunnelCounts, type OpportunityRow } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
+import { READINESS_LABELS } from "@/lib/funnel/decision";
 import { DETECTOR_REQUIRES } from "@/lib/funnel/detectors";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -265,6 +266,23 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
             <span className="font-mono text-[11px] font-semibold text-primary">{label.code}</span>
             <h3 className="font-heading text-base font-semibold text-foreground group-hover:text-primary">{row.title}</h3>
             <StatusChip status={row.status} />
+            {row.readiness && (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]",
+                  row.readiness === "actionable" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                  row.readiness === "needs_investigation" && "border-amber-500/30 bg-amber-500/10 text-amber-300",
+                  row.readiness === "research_backlog" && "border-sky-500/30 bg-sky-500/10 text-sky-300",
+                  row.readiness === "rejected" && "border-red-500/30 bg-red-500/10 text-red-300"
+                )}
+                title={READINESS_LABELS[row.readiness as keyof typeof READINESS_LABELS]?.hint}
+              >
+                {READINESS_LABELS[row.readiness as keyof typeof READINESS_LABELS]?.label ?? row.readiness}
+              </span>
+            )}
+            {row.measurement === "unquantified" && (
+              <span className="text-[11px] text-muted-foreground">impact not quantified</span>
+            )}
           </div>
 
           {/* The reason. Always visible, never behind a click. */}
