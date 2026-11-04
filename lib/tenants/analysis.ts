@@ -41,6 +41,47 @@ export type TenantAnalysis = {
   steps: TenantStep[];
 };
 
+/**
+ * Topics for a tenant that has none, taken from what the site says it does.
+ *
+ * The other tenants had topics because a human wrote them; a new tenant should not
+ * need that to be analysed. Services are the site's own words, so they are a
+ * defensible starting query set, and the owner can replace them.
+ */
+async function deriveTopics(
+  db: PrismaClient,
+  projectId: string | null,
+  siteId: string,
+  context: { language: string; location: string | null; market: string | null }
+): Promise<string[]> {
+  if (!projectId) return [];
+  const document = await db.businessKnowledgeDocument.findUnique({
+    where: { projectId },
+    select: { revision: true, acceptedRevision: true, revisions: { orderBy: { revision: "desc" }, take: 1, select: { fields: true } } },
+  });
+  const fields = (document?.revisions[0]?.fields ?? {}) as Record<string, { value?: unknown }>;
+  const list = (key: string): string[] => {
+    const value = fields[key]?.value;
+    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0) : [];
+  };
+  const services = list("services").slice(0, 5);
+  const candidates = services.length > 0 ? services : list("differentiators").slice(0, 3);
+  const place = context.location ?? context.market;
+  const topics = candidates
+    .map((service) => service.trim().replace(/\s+/g, " ").slice(0, 120))
+    // A local business is found by "service + place"; a national one is not, so the
+    // place is only added when it is not already part of the phrase.
+    .map((service) => (place && !service.toLowerCase().includes(place.toLowerCase().split(",")[0]) ? `${service} ${place.split(",")[0]}` : service))
+    .slice(0, 5);
+  if (topics.length === 0) return [];
+  await db.siteProfile.upsert({
+    where: { siteId },
+    create: { siteId, projectId, language: context.language, topics },
+    update: { topics },
+  });
+  return topics;
+}
+
 export type TenantAnalysisOptions = {
   /** Perform the fixes that can be performed now. Without it, this is a read. */
   apply?: boolean;
@@ -218,18 +259,21 @@ export async function ensureTenantAnalysis(
     if (index >= 0) steps[index] = entry;
   };
 
-  const context = await resolveSiteContext(db, site.id).catch(() => null);
-  if (!context) return { ...before, steps };
+  let context = await resolveSiteContext(db, site.id).catch(() => null);
+  const knowledgeMissing = steps.find((entry) => entry.step === "business-knowledge")?.status === "missing";
+  const languageMissing = !context;
 
-  // Business knowledge: extract when there is none. This was a script run for one
-  // tenant; every tenant now gets it on the same condition.
-  if (steps.find((entry) => entry.step === "business-knowledge")?.status === "missing" && site.projectId) {
+  // Bootstrap: a site with no profile and no knowledge document is not a broken
+  // tenant, it is an unconfigured one. Its own pages are the only source for its
+  // language and topics, so extraction runs before anything needs them.
+  let extraction: Awaited<ReturnType<typeof extractBusinessKnowledgeFromSite>> | null = null;
+  if ((knowledgeMissing || languageMissing) && site.projectId) {
     try {
-      const result = await extractBusinessKnowledgeFromSite(db, { projectId: site.projectId });
+      extraction = await extractBusinessKnowledgeFromSite(db, { projectId: site.projectId });
       replace(step({
         step: "business-knowledge",
         status: "fixed",
-        detail: `extracted ${result.extracted.length} field(s) from ${result.pagesRead} page(s), revision ${result.revision}`,
+        detail: `extracted ${extraction.extracted.length} field(s) from ${extraction.pagesRead} page(s), revision ${extraction.revision}`,
       }));
     } catch (error) {
       replace(step({
@@ -237,6 +281,34 @@ export async function ensureTenantAnalysis(
         status: "failed",
         detail: `extraction failed: ${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`,
       }));
+    }
+  }
+
+  // The pages' own language, persisted so it is stable and visible to the owner.
+  if (languageMissing && extraction?.contentLanguage) {
+    await db.siteProfile.upsert({
+      where: { siteId: site.id },
+      create: { siteId: site.id, projectId: site.projectId, language: extraction.contentLanguage, topics: [] },
+      update: { language: extraction.contentLanguage },
+    });
+    context = await resolveSiteContext(db, site.id).catch(() => null);
+    replace(step({
+      step: "site-context",
+      status: "fixed",
+      detail: `language ${extraction.contentLanguage} detected from the site's own pages`,
+    }));
+  }
+  if (!context) return { ...before, steps };
+
+  // Topics: derived from the extracted services rather than typed in by hand, so an
+  // unconfigured tenant gets analysed on the same schedule as a configured one.
+  const existingTopics = Array.isArray(site.siteProfile?.topics)
+    ? site.siteProfile.topics.filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
+    : [];
+  if (existingTopics.length === 0) {
+    const derived = await deriveTopics(db, site.projectId, site.id, context);
+    if (derived.length > 0) {
+      replace(step({ step: "topics", status: "fixed", detail: `${derived.length} topic(s) derived from the site's own services` }));
     }
   }
 

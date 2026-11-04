@@ -54,6 +54,7 @@ async function fetchPage(url: string): Promise<{ url: string; text: string; titl
 }
 
 type Extracted = {
+  contentLanguage?: string;
   businessName?: string;
   services?: string[];
   location?: string;
@@ -68,7 +69,8 @@ type Extracted = {
 // Language-neutral on purpose: the prompt asks for the site's own language, so a
 // French atelier and a Mexican agency get the same instruction.
 const SYSTEM = `You extract business knowledge from a website for a company document.
-Answer with JSON only, keys: businessName (text), services (list), location (text),
+Answer with JSON only, keys: contentLanguage (ISO 639-1 code of the pages' language),
+businessName (text), services (list), location (text),
 serviceArea (list), differentiators (list), audienceMotivations (list), concerns (list),
 conversionGoals (list), voice (text).
 Rules: invent nothing. If a fact does not appear explicitly on the pages, omit the key.
@@ -76,6 +78,11 @@ Values must be short, factual, in the language of the site content, and quoted v
 Always return a JSON object. Return {} when the pages contain no extractable business fact.`;
 
 export type ExtractBusinessKnowledgeResult = {
+  /**
+   * The language the pages are written in, which is the only source of a language
+   * for a site whose profile and TLD say nothing.
+   */
+  contentLanguage: string | null;
   /** Fields the model returned, so a caller can see what was found before writing. */
   extracted: string[];
   documentId: string;
@@ -214,8 +221,12 @@ export async function extractBusinessKnowledgeFromSite(
     }).filter(([, value]) => value !== undefined)
   );
 
+  const contentLanguage = typeof parsed.contentLanguage === "string" && /^[a-z]{2}$/i.test(parsed.contentLanguage.trim())
+    ? parsed.contentLanguage.trim().toLowerCase()
+    : null;
+
   if (opts.dryRun) {
-    return { extracted: Object.keys(changes), documentId: "", revision: 0, state: "dry-run", pagesRead: pages.length };
+    return { contentLanguage, extracted: Object.keys(changes), documentId: "", revision: 0, state: "dry-run", pagesRead: pages.length };
   }
 
   const head = await db.businessKnowledgeDocument.findUnique({
@@ -243,6 +254,7 @@ export async function extractBusinessKnowledgeFromSite(
   );
 
   return {
+    contentLanguage,
     extracted: Object.keys(changes),
     documentId: result.documentId,
     revision: result.revision,
