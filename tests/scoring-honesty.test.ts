@@ -96,3 +96,43 @@ describe("priority index", () => {
     expect(result.impact.assumptions.targetPosition).toBe(3);
   });
 });
+
+describe("reach bound", () => {
+  /**
+   * Susi ranked around position 4 for a head term with a handful of impressions and
+   * a provider volume of 74,000. The board read that as 11,100 incremental clicks.
+   */
+  it("bounds the upside by the impressions the site actually received", () => {
+    const assessment = assessImpact({
+      volume: 74_000,
+      volumeSource: "provider",
+      observedImpressions: 12,
+      observedCtr: 0.08,
+      currentPosition: 4,
+      targetPosition: 3,
+      windowDays: 28,
+    });
+    expect(assessment.kind).toBe("measured");
+    expect(assessment.basis).toBe("first_party_impressions");
+    expect(assessment.incrementalClicksPerMonth).toBeLessThan(5);
+  });
+
+  it("treats a query the site is barely shown for as a hypothesis", () => {
+    const assessment = assessImpact({
+      volume: 3_600,
+      volumeSource: "provider",
+      observedImpressions: 2,
+      currentPosition: 7,
+      targetPosition: 3,
+      windowDays: 28,
+    });
+    expect(assessment.kind).toBe("hypothesis");
+    expect(assessment.incrementalClicksPerMonth).toBeNull();
+    expect(assessment.limitations.join(" ")).toContain("market size");
+  });
+
+  it("still estimates a query the site has never been shown for", () => {
+    const assessment = assessImpact({ volume: 500, volumeSource: "provider", observedImpressions: 0, currentPosition: null, targetPosition: 10 });
+    expect(assessment.kind).toBe("estimated");
+  });
+});

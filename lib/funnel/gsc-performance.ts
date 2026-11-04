@@ -108,7 +108,9 @@ export async function readPagePerformance(
       SUM("impressions")::float8 AS impressions,
       SUM("position" * "impressions")::float8 AS weighted_position,
       COUNT(*)::int AS observations,
-      COUNT(DISTINCT "device" || '|' || "country")::int AS segments,
+      -- Page rows carry no device/country split: the page report is already the
+      -- total, so there is exactly one segment.
+      1::int AS segments,
       MIN("date") AS first_date,
       MAX("date") AS last_date
     FROM "Page"

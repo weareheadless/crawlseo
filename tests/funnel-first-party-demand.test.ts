@@ -114,3 +114,38 @@ describe("current performance window", () => {
     expect(selectCurrentPerformanceWindow([legacy] as never)).toHaveLength(1);
   });
 });
+
+describe("brand and relevance", () => {
+  it("does not offer the site's own name as a winnable rank", async () => {
+    const brand = rankRow("r1", { impressions: 500, clicks: 50, position: 6, windowEnd: "2026-10-31T00:00:00.000Z" });
+    brand.dimensions = { ...brand.dimensions, query: "atelier harmonie" };
+    const { db, created } = mockDb([brand]);
+    const { brandTermsFromDomain, isBrandQuery } = await import("@/lib/funnel/detectors");
+    await runDetectors(db as never, "p1", { now: NOW, brandTerms: brandTermsFromDomain("www.atelier-harmonie.com") });
+    expect(created.find((o) => o.type === "O1_winnable_rank")).toBeUndefined();
+    expect(isBrandQuery("atelier harmony", ["atelier", "harmonie"])).toBe(true);
+    expect(isBrandQuery("restauration fauteuil", ["atelier", "harmonie"])).toBe(false);
+  });
+
+  it("keeps a query that shares a word with the offer", async () => {
+    const row = rankRow("r1", { impressions: 269, clicks: 10, position: 6, windowEnd: "2026-10-31T00:00:00.000Z" });
+    row.dimensions = { ...row.dimensions, query: "condos for sale in puerto morelos" };
+    const fact = { id: "k1", kind: "knowledge_fact", observedAt: NOW, dimensions: { field: "services", value: "condos for sale in puerto morelos" }, metrics: {} };
+    const { db, created } = mockDb([row, fact]);
+    await runDetectors(db as never, "p1", { now: NOW });
+    const o1 = created.find((o) => o.type === "O1_winnable_rank")!;
+    expect((o1.scoreInputs as { worth: { businessValueSource: string } }).worth.businessValueSource).toBe("knowledge");
+  });
+
+  it("marks an off-offer query as unknown relevance instead of claiming it", async () => {
+    const row = rankRow("r1", { impressions: 269, clicks: 10, position: 6, windowEnd: "2026-10-31T00:00:00.000Z" });
+    row.dimensions = { ...row.dimensions, query: "apartments for rent" };
+    const fact = { id: "k1", kind: "knowledge_fact", observedAt: NOW, dimensions: { field: "services", value: "beachfront property sales" }, metrics: {} };
+    const { db, created } = mockDb([row, fact]);
+    await runDetectors(db as never, "p1", { now: NOW });
+    const o1 = created.find((o) => o.type === "O1_winnable_rank")!;
+    const worth = (o1.scoreInputs as { worth: { businessValueSource: string; businessValue: number } }).worth;
+    expect(worth.businessValueSource).toBe("unknown");
+    expect(worth.businessValue).toBe(0.5);
+  });
+});

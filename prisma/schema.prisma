@@ -246,6 +246,10 @@ model Opportunity {
   /// completeness, freshness, stability) — never a black box.
   scoreInputs        Json
   evidenceCompleteness EvidenceLeg      @default(none)
+  /// Version of the impact-assessment model behind scoreValue. A row scored by an
+  /// older model is identifiable without deleting it, so a rollout can be compared
+  /// and rolled back.
+  assessmentVersion  Int                 @default(1)
   firstDetectedAt    DateTime            @default(now())
   detectedBy         String
   decidedBy          String?

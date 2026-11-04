@@ -49,6 +49,8 @@ export type ScoreInputs = {
     observedCtr?: number | null;
     /** A defect's severity, used to order technical work without inventing clicks. */
     severity?: number | null;
+    /** Impressions actually observed for the query, which bound the upside. */
+    observedImpressions?: number | null;
     /** Marks a page/site defect whose traffic impact is not quantifiable. */
     technical?: boolean;
   };
@@ -65,6 +67,14 @@ export type ScoreInputs = {
     playTypeBase: number; // hours-equivalent
     sizeFactor: number; // 0.25 (tiny) … 3 (large)
   };
+  /**
+   * The impact assessment the priority index was computed from. Stored with the
+   * inputs so a board can show measured/estimated/technical/hypothesis, and so an
+   * assessment can be re-derived and compared across versions.
+   */
+  assessment?: ImpactAssessment;
+  /** Version of the assessment model, so an old index is identifiable. */
+  assessmentVersion?: number;
   /** separate multipliers, never folded into one number silently */
   evidenceCompleteness: EvidenceLeg; // which legs hold
   freshness: number; // 0–1, decays with evidence age
@@ -78,6 +88,9 @@ export type ScoreResult = {
   /** What the play is expected to change, and what that estimate rests on. */
   impact: ImpactAssessment;
 };
+
+/** Bumped when the assessment or index changes meaning. */
+export const ASSESSMENT_VERSION = 2;
 
 /** Declared recovery for a technical or structured-data fix. */
 export const TECHNICAL_UPLIFT = 0.1;
@@ -123,6 +136,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     windowDays: inputs.worth.windowDays ?? null,
     severity: inputs.worth.severity ?? null,
     technical: inputs.worth.technical,
+    observedImpressions: inputs.worth.observedImpressions ?? null,
   });
 
   // Demand is never invented. A missing volume used to become 120 searches/month,
@@ -138,7 +152,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       (0.5 + inputs.worth.businessValue / 2);
     return {
       scoreValue: Math.max(0, Math.min(ceiling, Math.round(strength * ceiling))),
-      inputs,
+      inputs: withAssessment(inputs, assessment),
       impact: assessment,
     };
   }
@@ -147,10 +161,10 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   if (assessment.kind === "technical") {
     const severity = inputs.worth.severity ?? 0.5;
     const reach = Math.min(1, (inputs.worth.volume ?? 0) / 300);
-    const index = 10 + 20 * severity + 10 * reach;
+    const index = 4 + 6 * severity + 4 * reach;
     return {
-      scoreValue: Math.max(0, Math.min(40, Math.round(index))),
-      inputs,
+      scoreValue: Math.max(0, Math.min(14, Math.round(index))),
+      inputs: withAssessment(inputs, assessment),
       impact: assessment,
     };
   }
@@ -168,8 +182,14 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // Incremental clicks per month, weighted by the chance of winning and the work
   // involved. The scale constant keeps small sites readable: 10 clicks/month of
   // upside is half of 20, not a rounding error.
-  const PRIORITY_SCALE_CLICKS = 10;
-  const ratio = (clicks * winProb * inputs.worth.businessValue) / effort;
+  //
+  // Relevance is dampened when it is unknown rather than assumed. A site can rank
+  // for "hospital near me" by accident; that traffic is real, but it is not the
+  // business, and letting it top the board is how a real-estate agent is told to
+  // optimise a hospital guide.
+  const relevance = inputs.worth.businessValueSource === "knowledge" ? 1 : 0.25;
+  const PRIORITY_SCALE_CLICKS = 5;
+  const ratio = (clicks * winProb * inputs.worth.businessValue * relevance) / effort;
   const scaled = ratio / (ratio + PRIORITY_SCALE_CLICKS);
   const multiplier =
     LEG_COMPLETENESS_MULTIPLIER[inputs.evidenceCompleteness] *
@@ -179,9 +199,14 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
 
   return {
     scoreValue: Math.max(0, Math.min(100, Math.round(value * 100))),
-    inputs,
+    inputs: withAssessment(inputs, assessment),
     impact: assessment,
   };
+}
+
+/** Store the assessment alongside the inputs it was computed from. */
+function withAssessment(inputs: ScoreInputs, assessment: ImpactAssessment): ScoreInputs {
+  return { ...inputs, assessment, assessmentVersion: ASSESSMENT_VERSION };
 }
 
 /** Default CTR curve by average rank position (banded, declared). */

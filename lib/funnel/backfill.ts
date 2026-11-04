@@ -2,9 +2,10 @@ import type { PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type EvidenceDb } from "@/lib/funnel/evidence";
 import { currentPerformanceWindow, readPagePerformance, readQueryPagePerformance } from "@/lib/funnel/gsc-performance";
+import { previousWindow } from "@/lib/funnel/performance-window";
 import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
 import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
-import { runDetectors } from "@/lib/funnel/detectors";
+import { brandTermsFromDomain, runDetectors } from "@/lib/funnel/detectors";
 import { discoverClusters } from "@/lib/funnel/cluster-discovery";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 
@@ -240,6 +241,7 @@ export async function backfillSiteEvidence(
         url: row.url,
         windowDays: window.days,
         windowEnd: window.end.toISOString(),
+        windowRole: "current",
         scope: "all",
         observations: row.observations,
         segments: row.segments,
@@ -255,6 +257,38 @@ export async function backfillSiteEvidence(
   }
   if (queryPerformance.length === 0) result.skipped.push("no search console query rows in the window");
 
+  // The comparison window: decline and recovery cannot be stated from one window,
+  // and comparing daily rows treated a normal oscillation as a trend.
+  const previous = previousWindow(window);
+  const previousPerformance = await readQueryPagePerformance(db, siteId, previous);
+  for (const row of previousPerformance) {
+    if (row.impressions <= 0) continue;
+    await storeEvidenceRecord(db, {
+      projectId: opts.projectId,
+      siteId,
+      kind: "keyword_rank",
+      observedAt: previous.end,
+      producer: "search_console",
+      dimensions: {
+        query: row.query,
+        url: row.url,
+        windowDays: previous.days,
+        windowEnd: previous.end.toISOString(),
+        windowRole: "previous",
+        scope: "all",
+        observations: row.observations,
+        segments: row.segments,
+      },
+      metrics: {
+        "first_party:position": { value: row.position, unit: "rank", source: "first_party" },
+        "first_party:clicks": { value: row.clicks, unit: "count", source: "first_party" },
+        "first_party:impressions": { value: row.impressions, unit: "count", source: "first_party" },
+        "first_party:ctr": { value: row.ctr, unit: "ratio", source: "first_party" },
+      },
+    });
+  }
+  if (previousPerformance.length === 0) result.skipped.push("no comparison window: decline cannot be measured yet");
+
   return result;
 }
 
@@ -265,6 +299,33 @@ export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandM
  * then run every detector. Idempotent (evidence upserts by observation hash,
  * opportunities dedupe by key). Reads only; makes no paid calls.
  */
+/**
+ * Evidence only: backfill, business knowledge, question coverage, clusters.
+ *
+ * Split out so a shadow run can rebuild the inputs without running the detectors
+ * that write opportunities. Evidence writes are additive and idempotent.
+ */
+export async function refreshEvidenceForSite(
+  db: RefreshDb,
+  siteId: string,
+  opts: { projectId?: string } = {}
+): Promise<{ backfill: BackfillResult; knowledgeFacts: number; questionCoverage: number }> {
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true } });
+  const projectId = opts.projectId ?? site?.projectId;
+  if (!projectId) {
+    return {
+      backfill: { projectId: null, crawlEvidence: 0, rankEvidence: 0, pageEvidence: 0, window: null, skipped: ["site is not attached to a project"] },
+      knowledgeFacts: 0,
+      questionCoverage: 0,
+    };
+  }
+  const backfill = await backfillSiteEvidence(db, siteId, { projectId });
+  const knowledge = await bridgeBusinessKnowledgeToEvidence(db as never, { projectId, siteId });
+  const coverage = await bridgeQuestionCoverageToEvidence(db as never, { projectId, siteId });
+  await discoverClusters(db, projectId, { siteId });
+  return { backfill, knowledgeFacts: knowledge.stored, questionCoverage: coverage.stored };
+}
+
 export async function refreshFunnelForSite(
   db: RefreshDb,
   siteId: string,
@@ -286,20 +347,18 @@ export async function refreshFunnelForSite(
       questionCoverage: 0,
     };
   }
-  const backfill = await backfillSiteEvidence(db, siteId, { projectId: site.projectId });
-  // The why leg: owner-written business facts become evidence before detection,
-  // so O6/O8 can attach them in the same run.
-  const knowledge = await bridgeBusinessKnowledgeToEvidence(db as never, { projectId: site.projectId, siteId });
-  // O5 needs a question set and an unobserved marker; both come from knowledge.
-  const coverage = await bridgeQuestionCoverageToEvidence(db as never, { projectId: site.projectId, siteId });
-  // Clusters first: a discovered cluster lets the board group work by need and
-  // lets the cluster play fire in the same run.
-  await discoverClusters(db, site.projectId, { siteId });
-  const detection = await runDetectors(db, site.projectId, { detectedBy: opts.detectedBy ?? "funnel-refresh" });
+  // The why leg, question coverage and clusters all have to exist before
+  // detection; refreshEvidenceForSite owns that order.
+  const evidence = await refreshEvidenceForSite(db, siteId, { projectId: site.projectId });
+  const detection = await runDetectors(db, site.projectId, {
+    detectedBy: opts.detectedBy ?? "funnel-refresh",
+    // The site's own name is not an opportunity: a brand query already ranks.
+    brandTerms: brandTermsFromDomain(site.domain),
+  });
   return {
-    ...backfill,
-    knowledgeFacts: knowledge.stored,
-    questionCoverage: coverage.stored,
+    ...evidence.backfill,
+    knowledgeFacts: evidence.knowledgeFacts,
+    questionCoverage: evidence.questionCoverage,
     created: detection.created,
     updated: detection.updated,
     parked: detection.parked.length,

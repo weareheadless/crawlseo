@@ -56,6 +56,14 @@ export type ImpactInput = {
   targetPosition?: number | null;
   /** Days the impressions cover, for a first-party window. */
   windowDays?: number | null;
+  /**
+   * Impressions the site actually received for this query in the window.
+   *
+   * This is the reach bound. A provider can say the market searches a phrase 74,000
+   * times a month, but if Google showed this site ten times, the upside is bounded
+   * by those ten: the rest of the market is not reachable by editing a page.
+   */
+  observedImpressions?: number | null;
   /** A defect: severity in 0–1, used only to order technical work. */
   severity?: number | null;
   /** A page defect's traffic impact is not quantifiable from page counts. */
@@ -98,6 +106,64 @@ export function assessImpact(input: ImpactInput): ImpactAssessment {
 
   const source = input.volumeSource ?? "unknown";
   const volume = input.volume;
+  const observed = input.observedImpressions ?? null;
+
+  // Reach first. A query the site is barely shown for is not a large opportunity,
+  // however big the market is: 3,600 searches a month against two impressions is a
+  // phrase the site does not compete for yet, and the honest next step is to check
+  // intent and rank rather than book a 400-click win.
+  if (observed != null && observed > 0 && observed < MIN_REACH_IMPRESSIONS) {
+    return {
+      kind: "hypothesis",
+      basis: "none",
+      incrementalClicksPerMonth: null,
+      assumptions: emptyAssumptions(),
+      limitations: [
+        `only ${Math.round(observed)} impressions in the window: too little visibility to estimate a win`,
+        volume != null ? `a provider estimates ${Math.round(volume)} searches/month, but that is market size, not reachable demand` : "no provider volume either",
+      ],
+    };
+  }
+  if (observed != null && observed > 0) {
+    const windowDays = input.windowDays ?? null;
+    const monthlyFactor = windowDays && windowDays > 0 ? 30 / windowDays : null;
+    const targetPosition = input.targetPosition ?? null;
+    const targetCtr = ctrCurve(targetPosition);
+    const currentCtr = input.observedCtr ?? ctrCurve(input.currentPosition ?? null);
+    if (targetCtr == null || currentCtr == null || monthlyFactor == null) {
+      return {
+        kind: "hypothesis",
+        basis: "none",
+        incrementalClicksPerMonth: null,
+        assumptions: emptyAssumptions(),
+        limitations: ["the target position, CTR or window is missing, so the upside cannot be computed"],
+      };
+    }
+    const incrementalClicksPerMonth = observed * Math.max(0, targetCtr - currentCtr) * monthlyFactor;
+    limitations.push(
+      "reachable impressions are the impressions already observed for this query/page, not the whole market",
+      "a ranking change does not guarantee the CTR curve: snippets, AI answers and ads change it"
+    );
+    if (volume != null && volume > observed * 2) {
+      limitations.push(`the provider estimates ${Math.round(volume)} searches/month; the gap to observed reach is not claimed`);
+    }
+    return {
+      kind: "measured",
+      basis: "first_party_impressions",
+      incrementalClicksPerMonth,
+      assumptions: {
+        reachableImpressions: observed,
+        currentCtr,
+        targetCtr,
+        currentPosition: input.currentPosition ?? null,
+        targetPosition,
+        windowDays,
+        monthlyFactor,
+      },
+      limitations,
+    };
+  }
+
   if (volume == null || volume <= 0) {
     return {
       kind: "hypothesis",
@@ -209,6 +275,9 @@ function emptyAssumptions(): ImpactAssessment["assumptions"] {
  * The target position a play is expected to reach, by play type. Declared, so a
  * change to the assumption is visible rather than buried in a formula.
  */
+/** Below this many impressions the site is not competing for the query yet. */
+export const MIN_REACH_IMPRESSIONS = 10;
+
 export const TARGET_POSITION: Record<string, number> = {
   O1_winnable_rank: 3,
   O2_striking_distance: 8,

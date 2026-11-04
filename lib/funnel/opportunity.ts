@@ -2,6 +2,7 @@ import { type EdgeRelation, type EvidenceLeg, type OpportunityDimension, type Op
 
 import { addEdge, type EdgeDb } from "@/lib/funnel/edges";
 import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
+import { ASSESSMENT_VERSION } from "@/lib/funnel/scoring";
 
 /**
  * Opportunity store (docs/seo-funnel-spine-plan.md §2/§4).
@@ -99,6 +100,7 @@ export async function upsertOpportunity(
           scoreValue,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
+          assessmentVersion: ASSESSMENT_VERSION,
           lastScoredAt: new Date(),
         },
         select: { id: true, status: true },
@@ -115,6 +117,7 @@ export async function upsertOpportunity(
           scoreValue,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
+          assessmentVersion: ASSESSMENT_VERSION,
           detectedBy: input.detectedBy,
           lastScoredAt: new Date(),
         },

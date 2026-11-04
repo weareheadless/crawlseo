@@ -2,6 +2,9 @@ import type { PrismaClient } from "@prisma/client";
 
 import { buildJoinCollectors } from "@/lib/dataforseo/join-collectors";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
+import { runAcquisitionPlan, type HypothesisCandidate } from "@/lib/funnel/acquisition";
+import { currentPerformanceWindow } from "@/lib/funnel/gsc-performance";
+import { readQueryPagePerformance } from "@/lib/funnel/gsc-performance";
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { extractBusinessKnowledgeFromSite } from "@/lib/projects/business-knowledge-extract";
@@ -27,7 +30,7 @@ import { MissingSiteContextError, resolveSiteContext } from "@/lib/site/context"
 export type TenantStepStatus = "ok" | "missing" | "blocked" | "fixed" | "pending" | "failed";
 
 export type TenantStep = {
-  step: "site-records" | "site-context" | "topics" | "business-knowledge" | "crawl" | "research" | "joins" | "funnel";
+  step: "site-records" | "site-context" | "topics" | "business-knowledge" | "crawl" | "research" | "acquisition" | "joins" | "funnel";
   status: TenantStepStatus;
   detail: string;
 };
@@ -137,6 +140,8 @@ export type TenantAnalysisOptions = {
   apply?: boolean;
   /** Ceiling for the join's paid collectors. */
   maxJoinSpendMicros?: number;
+  /** Ceiling for the observed-performance acquisition pass. */
+  maxAcquisitionSpendMicros?: number;
   /** Who triggered the work, recorded on created runs. */
   requestedBy?: string | null;
   now?: Date;
@@ -456,6 +461,68 @@ export async function ensureTenantAnalysis(
     }
   }
 
+  // Performance first: the funnel's windowed projection has to exist before paid
+  // collection can be aimed at what the site is actually observed ranking for.
+  if (site.projectId) {
+    await refreshFunnelForSite(db, site.id, { detectedBy: "tenant-analysis" });
+  }
+
+  // Acquisition: enrich observed queries before hypothesised ones. This is the step
+  // that was missing — joins bought volume only for ideas a model had already
+  // proposed, so the measured phrases and the ranking phrases never met.
+  if (site.projectId) {
+    const window = await currentPerformanceWindow(db, site.id);
+    if (!window) {
+      replace(step({ step: "acquisition", status: "missing", detail: "no performance window: nothing observed to enrich" }));
+    } else {
+      const performance = await readQueryPagePerformance(db, site.id, window);
+      const hypotheses: HypothesisCandidate[] = (await db.opportunity.findMany({
+        where: { projectId: site.projectId, status: "detected", type: { in: ["O13_user_pain_point", "O14_offer_positioning_gap"] } },
+        select: { id: true, title: true, dedupKey: true },
+        take: 25,
+      })).map((row) => ({ query: row.title.replace(/^[^:]+:\s*/, "").replace(/^"|"$/g, "").trim(), opportunityId: row.id, title: row.title }))
+        .filter((row) => row.query.length > 2 && row.query.length <= 80);
+      const setup = await buildJoinCollectors(db, {
+        projectId: site.projectId,
+        siteId: site.id,
+        domain: site.domain,
+        language: context.language,
+        country: context.audienceCountry ?? context.country,
+      });
+      if (!setup) {
+        replace(step({ step: "acquisition", status: "missing", detail: "no provider locale: paid measurement is unavailable" }));
+      } else {
+        try {
+          const receipt = await runAcquisitionPlan(db, {
+            projectId: site.projectId,
+            siteId: site.id,
+            window,
+            performance,
+            hypotheses,
+            collect: setup.collectors.keywordMetrics!,
+            maxSpendMicros: opts.maxAcquisitionSpendMicros ?? 300_000,
+            now: opts.now,
+          });
+          replace(step({
+            step: "acquisition",
+            status: receipt.measured > 0 ? "fixed" : receipt.requested === 0 ? "ok" : "missing",
+            detail: `${receipt.measured}/${receipt.requested} measured (${receipt.cached} cached, ${receipt.failed} failed), $${(receipt.spentMicros / 1e6).toFixed(3)}`,
+          }));
+          // New measurements change the assessment inputs, so detection runs again.
+          if (receipt.measured > 0) {
+            await refreshFunnelForSite(db, site.id, { detectedBy: "tenant-acquisition" });
+          }
+        } catch (error) {
+          replace(step({
+            step: "acquisition",
+            status: "failed",
+            detail: `acquisition failed: ${error instanceof Error ? error.message.slice(0, 140) : "unknown"}`,
+          }));
+        }
+      }
+    }
+  }
+
   // Joins: attach the how leg to every why-only opportunity.
   if (steps.find((entry) => entry.step === "joins")?.status === "missing" && site.projectId) {
     const setup = await buildJoinCollectors(db, {
@@ -484,10 +551,6 @@ export async function ensureTenantAnalysis(
         detail: `join failed: ${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`,
       }));
     }
-  }
-
-  if (site.projectId) {
-    await refreshFunnelForSite(db, site.id, { detectedBy: "tenant-analysis" });
   }
 
   const detected = site.projectId

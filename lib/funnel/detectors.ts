@@ -107,6 +107,98 @@ export function businessValueFromKnowledge(evidence: Evidence[]): { value: numbe
     : { value: 0.5, source: "unknown" };
 }
 
+const RELEVANCE_STOPWORDS = new Set([
+  "the", "and", "for", "with", "from", "this", "that", "our", "your", "you", "are",
+  "les", "des", "une", "aux", "pour", "avec", "sans", "dans", "sur", "est", "sont",
+  "de", "la", "le", "du", "en", "et", "un", "a", "of", "in", "to", "on",
+]);
+
+function tokens(value: string): string[] {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !RELEVANCE_STOPWORDS.has(token));
+}
+
+/** Every knowledge fact's text, used to test whether a query touches the offer. */
+function knowledgeTokens(evidence: Evidence[]): Set<string> {
+  const all = new Set<string>();
+  for (const row of byKind(evidence, "knowledge_fact")) {
+    const dimensions = (row.dimensions ?? {}) as Record<string, unknown>;
+    for (const value of Object.values(dimensions)) {
+      if (typeof value !== "string") continue;
+      for (const token of tokens(value)) all.add(token);
+    }
+  }
+  return all;
+}
+
+/**
+ * Business relevance of a query, tested rather than assumed.
+ *
+ * `businessValueFromKnowledge` answered 0.9 for every query as soon as one
+ * knowledge fact existed, so a rental query on a sales site scored like the site's
+ * own service. A query that shares no word with the knowledge is `unknown`.
+ */
+export function businessValueForQuery(
+  evidence: Evidence[],
+  query: string
+): { value: number; source: "knowledge" | "unknown" } {
+  const facts = knowledgeTokens(evidence);
+  if (facts.size === 0) return { value: 0.5, source: "unknown" };
+  const shared = tokens(query).filter((token) => facts.has(token));
+  return shared.length > 0 ? { value: 0.9, source: "knowledge" } : { value: 0.5, source: "unknown" };
+}
+
+/**
+ * Near-identical tokens, enough to match a transliteration ("harmony" / "harmonie")
+ * without pulling in a fuzzy-matching dependency. Longer tokens allow two edits,
+ * short ones one, so "art" does not match "car".
+ */
+function nearToken(a: string, b: string): boolean {
+  const maxEdits = Math.min(a.length, b.length) >= 6 ? 2 : 1;
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > maxEdits) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i += 1; j += 1; continue; }
+    edits += 1;
+    if (edits > maxEdits) return false;
+    if (a.length - i > b.length - j) i += 1;
+    else if (b.length - j > a.length - i) j += 1;
+    else { i += 1; j += 1; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= maxEdits;
+}
+
+/**
+ * Whether a query is the site's own name.
+ *
+ * "atelier harmonie" at position 6 is not an opportunity: the site already ranks
+ * for its brand, and improving a brand query is not the work the board is for.
+ */
+export function isBrandQuery(query: string, brandTerms: string[] | undefined): boolean {
+  if (!brandTerms || brandTerms.length === 0) return false;
+  const queryTokens = tokens(query);
+  if (queryTokens.length === 0) return false;
+  const brand = brandTerms.map((term) => term.toLowerCase());
+  return queryTokens.every((token) => brand.some((term) => term === token || nearToken(token, term)));
+}
+
+/** Brand terms from a domain: "www.atelier-harmonie.com" -> atelier, harmonie. */
+export function brandTermsFromDomain(domain: string): string[] {
+  return domain
+    .replace(/^www\./i, "")
+    .split(".")[0]
+    .split(/[^a-z0-9]+/i)
+    .filter((token) => token.length >= 3)
+    .map((token) => token.toLowerCase());
+}
+
 /**
  * First-party impressions recorded per URL: the demand a page-level defect risks.
  *
@@ -261,6 +353,13 @@ type Detector = {
 
 type DetectContext = {
   now: Date;
+  /** The site's own name, so a brand query is not offered as a win. */
+  brandTerms?: string[];
+  /**
+   * The previous window's rank observations. Decline is only meaningful against a
+   * comparable window; comparing daily rows treated normal oscillation as a trend.
+   */
+  previousRank?: Evidence[];
 };
 
 function byKind(evidence: Evidence[], kind: string): Evidence[] {
@@ -302,6 +401,21 @@ export function selectCurrentEvidence(evidence: Evidence[]): Evidence[] {
   });
 }
 
+/**
+ * The comparison window's rank rows: the newest windowEnd that is older than the
+ * current one. Empty when only one window has been projected.
+ */
+export function previousWindowEvidence(evidence: Evidence[]): Evidence[] {
+  const windows = [...new Set(
+    byKind(evidence, "keyword_rank")
+      .map((row) => dim(row, "windowEnd"))
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+  )].sort();
+  if (windows.length < 2) return [];
+  const previous = windows[windows.length - 2];
+  return byKind(evidence, "keyword_rank").filter((row) => dim(row, "windowEnd") === previous);
+}
+
 /** @deprecated use selectCurrentEvidence; kept for callers that only rank evidence. */
 export const selectCurrentPerformanceWindow = selectCurrentEvidence;
 
@@ -334,7 +448,7 @@ const byQuestion = (row: Evidence) => `${dim(row, "question") ?? ""}`;
 const DETECTORS: Detector[] = [
   {
     type: "O1_winnable_rank",
-    detect: (evidence) => {
+    detect: (evidence, ctx) => {
       // Volume arrives as its own evidence kind from the provider (Wave 0.5), not
       // on the rank row. A rank without any demand evidence is a position, not an
       // opportunity — but demand can be first-party: a site whose Search Console
@@ -347,12 +461,12 @@ const DETECTORS: Detector[] = [
         const volume = num(row, "provider:volume");
         if (query && volume != null) volumeByQuery.set(query, volume);
       }
-      const knowledge = businessValueFromKnowledge(evidence);
       const candidates: DetectorCandidate[] = [];
       for (const row of byKind(evidence, "keyword_rank")) {
         const position = num(row, "provider:position") ?? num(row, "first_party:position");
         if (position == null || position < 4 || position > 10) continue;
         const query = byQuery(row);
+        if (isBrandQuery(query, ctx.brandTerms)) continue;
         const providerVolume = num(row, "provider:volume") ?? volumeByQuery.get(query) ?? null;
         const impressions = num(row, "first_party:impressions") ?? 0;
         const clicks = num(row, "first_party:clicks") ?? 0;
@@ -360,6 +474,7 @@ const DETECTORS: Detector[] = [
         const measuredImpressions = impressions >= DETECTOR_THRESHOLDS.minImpressions;
         if (!measuredVolume && !measuredImpressions) continue;
 
+        const knowledge = businessValueForQuery(evidence, query);
         const windowDays = dimNum(row, "windowDays");
         const volume = measuredVolume ? (providerVolume as number) : impressions;
         const observedCtr = num(row, "first_party:ctr");
@@ -380,11 +495,12 @@ const DETECTORS: Detector[] = [
               ctrAtPosition: ctr,
               businessValue: knowledge.value,
               volumeSource: measuredVolume ? "provider" : "first_party",
-              businessValueSource: knowledge.source === "knowledge" ? "knowledge" : "unknown",
+              businessValueSource: knowledge.source,
               currentPosition: position,
               targetPosition: 3,
               windowDays: windowDays ?? null,
               observedCtr: observedCtr ?? null,
+              observedImpressions: impressions,
             },
             winProbability: { rankDistance: rankDistanceFactor(position) },
             effort: { playTypeBase: 6, sizeFactor: 1 },
@@ -397,9 +513,10 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O2_striking_distance",
-    detect: (evidence) =>
+    detect: (evidence, ctx) =>
       byKind(evidence, "keyword_rank")
         .filter((row) => {
+          if (isBrandQuery(byQuery(row), ctx.brandTerms)) return false;
           const position = num(row, "provider:position") ?? num(row, "first_party:position");
           const ctr = num(row, "first_party:ctr");
           const impressions = num(row, "first_party:impressions") ?? 0;
@@ -673,64 +790,92 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O10_cannibalization",
+    // Two URLs appearing for one query is not proof of harm. Search engines
+    // routinely rank several pages of one site for related intent, and telling the
+    // owner to consolidate on that basis destroys pages that were never competing.
     detect: (evidence) => {
-      const urlsByQuery = group(
-        byKind(evidence, "keyword_rank"),
-        byQuery
-      );
+      const urlsByQuery = group(byKind(evidence, "keyword_rank"), byQuery);
       const candidates: DetectorCandidate[] = [];
       for (const [query, rows] of urlsByQuery) {
-        const urls = new Set(rows.map((row) => dim(row, "url") ?? "").filter(Boolean));
-        if (urls.size >= 2) {
-          const [first, ...rest] = rows;
-          candidates.push({
-            type: "O10_cannibalization",
-            title: `Cannibalization: ${urls.size} URLs split "${query}"`,
-            summary: `Multiple our-URLs compete for one query — consolidate.`,
-            dedupKey: `O10:${query}`,
-            clusterSlug: dim(first, "cluster"),
-            whyEvidenceIds: [],
-            howEvidenceIds: rows.map((r) => r.id),
-            scoreInputs: scoreDefaults({
-              worth: { volume: num(first, "provider:volume") ?? 0, ctrAtPosition: ctrAtPosition(8), businessValue: 0.6 },
-              winProbability: { rankDistance: 0.6, playTypeFactor: 0.8 },
-              effort: { playTypeBase: 4, sizeFactor: 1 },
-              freshness: freshnessFactor(first.observedAt, new Date()),
-            }),
-          });
-          void rest;
-        }
+        const competing = rows.filter((row) => {
+          const impressions = num(row, "first_party:impressions") ?? 0;
+          const position = num(row, "provider:position") ?? num(row, "first_party:position");
+          return impressions >= DETECTOR_THRESHOLDS.minImpressions && position != null && position <= 30;
+        });
+        const urls = new Set(competing.map((row) => dim(row, "url") ?? "").filter(Boolean));
+        if (urls.size < 2) continue;
+        const [first] = competing;
+        candidates.push({
+          type: "O10_cannibalization",
+          title: `Query overlap: ${urls.size} of our pages appear for "${query}"`,
+          summary: `${urls.size} pages each received impressions for this query in the window. Check the query's intent and the pages' content before changing anything: overlap is not proof that they compete, and consolidation is not the default fix.`,
+          dedupKey: `O10:${query}`,
+          clusterSlug: dim(first, "cluster"),
+          whyEvidenceIds: [],
+          howEvidenceIds: competing.map((row) => row.id),
+          scoreInputs: scoreDefaults({
+            // No demand of its own and no declared play: this is a question to
+            // answer, so it stays a hypothesis rather than claiming an upside.
+            worth: { volume: null, ctrAtPosition: null, businessValue: 0.6, volumeSource: "unknown" },
+            winProbability: { playTypeFactor: 0.5 },
+            effort: { playTypeBase: 4, sizeFactor: 1 },
+            freshness: freshnessFactor(first.observedAt, new Date()),
+          }),
+        });
       }
       return candidates;
     },
   },
   {
     type: "O11_freshness_decay",
-    detect: (evidence) => {
-      const series = group(byKind(evidence, "keyword_rank"), (row) => `${byQuery(row)}|${dim(row, "url") ?? ""}`);
+    // A position that fell is an observation, not a diagnosis: the cause could be a
+    // competitor, a SERP feature, seasonality or the content. The detector reports
+    // the movement and asks for the check; it does not prescribe a refresh.
+    detect: (evidence, ctx) => {
+      const previous = ctx.previousRank ?? [];
+      if (previous.length === 0) return [];
+      const previousByKey = new Map(previous.map((row) => [`${byQuery(row)}|${dim(row, "url") ?? ""}`, row]));
       const candidates: DetectorCandidate[] = [];
-      for (const rows of series.values()) {
-        if (rows.length < 2) continue;
-        const sorted = [...rows].sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
-        const first = num(sorted[0], "provider:position") ?? num(sorted[0], "first_party:position");
-        const last = num(sorted[sorted.length - 1], "provider:position") ?? num(sorted[sorted.length - 1], "first_party:position");
-        if (first != null && last != null && last - first >= DETECTOR_THRESHOLDS.freshnessDecayDelta) {
-          candidates.push({
-            type: "O11_freshness_decay",
-            title: `Freshness decay on "${byQuery(sorted[0])}"`,
-            summary: `Position moved from ${Math.round(first)} to ${Math.round(last)} over the observed window.`,
-            dedupKey: `O11:${byQuery(sorted[0])}:${dim(sorted[0], "url") ?? ""}`,
-            clusterSlug: dim(sorted[0], "cluster"),
-            whyEvidenceIds: [],
-            howEvidenceIds: [sorted[0].id, sorted[sorted.length - 1].id],
-            scoreInputs: scoreDefaults({
-              worth: { volume: num(sorted[0], "provider:volume") ?? 0, ctrAtPosition: ctrAtPosition(last), businessValue: 0.6 },
-              winProbability: { rankDistance: rankDistanceFactor(last) },
-              effort: { playTypeBase: 5, sizeFactor: 1 },
-              freshness: freshnessFactor(sorted[sorted.length - 1].observedAt, new Date()),
-            }),
-          });
-        }
+      for (const row of byKind(evidence, "keyword_rank")) {
+        const key = `${byQuery(row)}|${dim(row, "url") ?? ""}`;
+        const before = previousByKey.get(key);
+        if (!before) continue;
+        const currentPosition = num(row, "provider:position") ?? num(row, "first_party:position");
+        const previousPosition = num(before, "provider:position") ?? num(before, "first_party:position");
+        const currentImpressions = num(row, "first_party:impressions") ?? 0;
+        const previousImpressions = num(before, "first_party:impressions") ?? 0;
+        if (currentPosition == null || previousPosition == null) continue;
+        // Both windows need enough signal for the move to mean anything.
+        if (currentImpressions < DETECTOR_THRESHOLDS.minImpressions || previousImpressions < DETECTOR_THRESHOLDS.minImpressions) continue;
+        const delta = currentPosition - previousPosition;
+        if (delta < DETECTOR_THRESHOLDS.freshnessDecayDelta) continue;
+        const windowDays = dimNum(row, "windowDays") ?? 28;
+        candidates.push({
+          type: "O11_freshness_decay",
+          title: `Position decline: "${byQuery(row)}" ${Math.round(previousPosition)} → ${Math.round(currentPosition)}`,
+          summary: `Average position moved from ${Math.round(previousPosition)} to ${Math.round(currentPosition)} between the previous and current ${windowDays}-day windows (${Math.round(previousImpressions)} → ${Math.round(currentImpressions)} impressions). The cause is not established: check the SERP, competitors and the page before refreshing it.`,
+          dedupKey: `O11:${byQuery(row)}:${dim(row, "url") ?? ""}`,
+          clusterSlug: dim(row, "cluster"),
+          whyEvidenceIds: [],
+          howEvidenceIds: [before.id, row.id],
+          scoreInputs: scoreDefaults({
+            worth: {
+              volume: currentImpressions,
+              ctrAtPosition: num(row, "first_party:ctr") ?? ctrAtPosition(currentPosition),
+              businessValue: 0.6,
+              volumeSource: "first_party",
+              currentPosition,
+              // Recovering the previous position is the declared target.
+              targetPosition: previousPosition,
+              windowDays,
+              observedCtr: num(row, "first_party:ctr") ?? null,
+              observedImpressions: currentImpressions,
+            },
+            winProbability: { rankDistance: rankDistanceFactor(currentPosition) },
+            effort: { playTypeBase: 5, sizeFactor: 1 },
+            freshness: freshnessFactor(row.observedAt, new Date()),
+          }),
+        });
       }
       return candidates;
     },
@@ -885,19 +1030,23 @@ export type DetectorRunResult = {
   parked: string[];
   /** Detectors that could not run because their evidence kind is absent. */
   disabled: DisabledDetector[];
+  /** Every candidate produced, when the run was a dry run (shadow comparison). */
+  candidates?: DetectorCandidate[];
 };
 
 /** Run every detector for a project, upsert opportunities, then hysteresis. */
 export async function runDetectors(
   db: DetectorDb,
   projectId: string,
-  opts: { detectedBy?: string; now?: Date } = {}
+  opts: { detectedBy?: string; now?: Date; dryRun?: boolean; brandTerms?: string[] } = {}
 ): Promise<DetectorRunResult> {
   const detectedBy = opts.detectedBy ?? "funnel-detectors";
   const now = opts.now ?? new Date();
-  const evidence = selectCurrentEvidence((await db.evidenceRecord.findMany({
+  const allEvidence = (await db.evidenceRecord.findMany({
     where: { projectId, supersededById: null },
-  })) as Evidence[]);
+  })) as Evidence[];
+  const evidence = selectCurrentEvidence(allEvidence);
+  const previousRank = previousWindowEvidence(allEvidence);
 
   const available = new Set(evidence.map((row) => row.kind));
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
@@ -908,14 +1057,19 @@ export async function runDetectors(
 
   let created = 0;
   let updated = 0;
+  const candidates: DetectorCandidate[] = [];
   const produced = new Map<OpportunityType, Set<string>>();
   const remember = (candidate: DetectorCandidate) => {
     produced.set(candidate.type, (produced.get(candidate.type) ?? new Set()).add(candidate.dedupKey));
   };
   for (const detector of DETECTORS) {
     if (disabledTypes.has(detector.type)) continue;
-    for (const candidate of detector.detect(evidence, { now })) {
+    for (const candidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms })) {
       remember(candidate);
+      if (opts.dryRun) {
+        candidates.push(candidate);
+        continue;
+      }
       const result = await upsertOpportunity(db, {
         projectId,
         type: candidate.type,
@@ -935,6 +1089,10 @@ export async function runDetectors(
   }
   for (const candidate of await clusterPlayDetector(db, projectId, now)) {
     remember(candidate);
+    if (opts.dryRun) {
+      candidates.push(candidate);
+      continue;
+    }
     const result = await upsertOpportunity(db, {
       projectId,
       type: candidate.type,
@@ -955,7 +1113,13 @@ export async function runDetectors(
   const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
-  return { created, updated, parked: [...parked, ...superseded, ...capped], disabled };
+  return {
+    created,
+    updated,
+    parked: [...parked, ...superseded, ...capped],
+    disabled,
+    ...(opts.dryRun ? { candidates } : {}),
+  };
 }
 
 /**

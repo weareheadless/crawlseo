@@ -27,9 +27,9 @@ const metric = (value: number, unit: string, source = "provider") => ({ value, u
 function seedAllTypes(): SeedRow[] {
   return [
     // O1 winnable rank: position 6, volume 400
-    row("e-o1", "keyword_rank", { query: "local seo", url: "https://x.com/a", cluster: "local" }, { "provider:position": metric(6, "rank"), "provider:volume": metric(400, "searches/month") }),
+    row("e-o1", "keyword_rank", { query: "local seo", url: "https://x.com/a", cluster: "local", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "provider:position": metric(6, "rank"), "provider:volume": metric(400, "searches/month") }),
     // O2 striking distance: position 14, impressions 900, ctr 0.008
-    row("e-o2", "keyword_rank", { query: "near me seo", url: "https://x.com/b", cluster: "local" }, { "provider:position": metric(14, "rank"), "first_party:impressions": metric(900, "count", "first_party"), "first_party:ctr": metric(0.008, "ratio", "first_party") }),
+    row("e-o2", "keyword_rank", { query: "near me seo", url: "https://x.com/b", cluster: "local", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "provider:position": metric(14, "rank"), "first_party:impressions": metric(900, "count", "first_party"), "first_party:ctr": metric(0.008, "ratio", "first_party") }),
     // O3 content gap: competitors cover, we do not rank
     row("e-o3", "serp_snapshot", { query: "seo audit checklist", cluster: "content", competitorCovered: "true" }, { "provider:volume": metric(220, "searches/month") }),
     // O4 AEO citation gap: asked, competitor cited, we not; knowledge answers
@@ -44,18 +44,18 @@ function seedAllTypes(): SeedRow[] {
     // O7 technical defect: the page has recorded demand, which is what makes a
     // page-level defect worth acting on (spine plan §3).
     row("e-o7", "onpage_crawl", { url: "https://x.com/broken", issueType: "broken_link", impact: "crawlability" }, { "provider:issueCount": metric(4, "count") }),
-    row("e-o7-demand", "keyword_rank", { query: "broken page", url: "https://x.com/broken" }, { "first_party:impressions": metric(300, "count", "first_party") }),
+    row("e-o7-demand", "keyword_rank", { query: "broken page", url: "https://x.com/broken", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "first_party:impressions": metric(300, "count", "first_party") }),
     // O8 structured data gap
     row("e-o8", "onpage_crawl", { url: "https://x.com/services", schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
     row("e-o8-why", "knowledge_fact", { question: "who are you" }, {}),
     // O9 backlink gap
     row("e-o9", "backlink_profile", { competitor: "rival.com", cluster: "local" }, { "provider:referringDomainGap": metric(9, "count") }),
     // O10 cannibalization: two urls one query
-    row("e-o10a", "keyword_rank", { query: "pricing", url: "https://x.com/pricing", cluster: "money" }, { "provider:position": metric(9, "rank"), "provider:volume": metric(500, "searches/month") }),
-    row("e-o10b", "keyword_rank", { query: "pricing", url: "https://x.com/plans" }, { "provider:position": metric(12, "rank"), "provider:volume": metric(500, "searches/month") }),
+    row("e-o10a", "keyword_rank", { query: "pricing", url: "https://x.com/pricing", cluster: "money", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "provider:position": metric(9, "rank"), "provider:volume": metric(500, "searches/month"), "first_party:impressions": metric(120, "count", "first_party") }),
+    row("e-o10b", "keyword_rank", { query: "pricing", url: "https://x.com/plans", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "provider:position": metric(12, "rank"), "provider:volume": metric(500, "searches/month"), "first_party:impressions": metric(40, "count", "first_party") }),
     // O11 freshness decay: same query+url, position moved 5 -> 11
-    row("e-o11a", "keyword_rank", { query: "seo packages", url: "https://x.com/packages" }, { "provider:position": metric(5, "rank"), "provider:volume": metric(300, "searches/month") }, new Date("2026-10-01T00:00:00.000Z")),
-    row("e-o11b", "keyword_rank", { query: "seo packages", url: "https://x.com/packages" }, { "provider:position": metric(11, "rank"), "provider:volume": metric(300, "searches/month") }, new Date("2026-11-01T00:00:00.000Z")),
+    row("e-o11a", "keyword_rank", { query: "seo packages", url: "https://x.com/packages", windowEnd: "2026-09-30T00:00:00.000Z", windowRole: "previous" }, { "provider:position": metric(5, "rank"), "provider:volume": metric(300, "searches/month"), "first_party:impressions": metric(300, "count", "first_party") }, new Date("2026-09-30T00:00:00.000Z")),
+    row("e-o11b", "keyword_rank", { query: "seo packages", url: "https://x.com/packages", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "provider:position": metric(11, "rank"), "provider:volume": metric(300, "searches/month"), "first_party:impressions": metric(200, "count", "first_party") }, new Date("2026-10-31T00:00:00.000Z")),
     // O12 page experience
     row("e-o12", "vitals", { url: "https://x.com/home" }, { "first_party:lcpSeconds": metric(3.4, "seconds", "first_party") }),
     // O13 user pain point (one-legged: why only)
