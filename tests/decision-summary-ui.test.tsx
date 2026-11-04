@@ -69,3 +69,19 @@ describe("decision summary panel", () => {
     expect(html).not.toContain("Actionable");
   });
 });
+
+describe("opportunity labels", () => {
+  it("does not prescribe consolidation or a refresh as the plan", async () => {
+    const { OPPORTUNITY_LABELS } = await import("@/lib/funnel/labels");
+    expect(OPPORTUNITY_LABELS.O10_cannibalization.play).not.toMatch(/^Consolidate/);
+    expect(OPPORTUNITY_LABELS.O10_cannibalization.play).toMatch(/Consolidate only if/);
+    expect(OPPORTUNITY_LABELS.O11_freshness_decay.play).not.toMatch(/^Refresh the page/);
+    expect(OPPORTUNITY_LABELS.O11_freshness_decay.play).toMatch(/before changing anything/);
+  });
+
+  it("does not require keyword validation to answer a customer need", async () => {
+    const { OPPORTUNITY_LABELS } = await import("@/lib/funnel/labels");
+    expect(OPPORTUNITY_LABELS.O13_user_pain_point.play).not.toMatch(/keyword/i);
+    expect(OPPORTUNITY_LABELS.O13_user_pain_point.label).toBe("Customer need");
+  });
+});

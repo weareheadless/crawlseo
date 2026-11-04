@@ -156,9 +156,12 @@ Not verified, and therefore not claimed:
   closest evidence: legacy findings become `unverified` and leave the actionable
   set, but are not proven false until a crawl stores page text.
 - No independent SEO review of the resulting board.
-- No browser/accessibility check of the detail page. The decision panel has a
-  server-render test (`tests/decision-summary-ui.test.tsx`), and the production
-  build compiles, but nobody looked at it in a browser.
+- No browser/accessibility check of the detail page. What was verified instead: the
+  decision panel has a server-render test, the production build compiles, and the
+  running app served the page over HTTP against seeded rows, rendering "Actionable",
+  "Impact not quantified", "Customer value" and "intervention · update page". The
+  in-app browser could not reach the local server, so layout and accessibility are
+  unreviewed.
 - Joins do not rebuild assessment inputs (see above).
 - No merge, deployment or paid evaluation.
 
