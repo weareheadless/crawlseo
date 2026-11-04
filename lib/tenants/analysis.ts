@@ -193,16 +193,20 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
   const lastRun = await db.researchRun.findFirst({
     where: { siteId: site.id },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, createdAt: true, findingCount: true },
+    select: { id: true, status: true, createdAt: true, findingCount: true, errorCode: true },
   });
   const fresh = (() => {
-    if (!lastRun) return false;
+    // A failed run is not research. Treating it as fresh let a tenant report READY
+    // with zero findings, which is the opposite of what the report is for.
+    if (!lastRun || lastRun.status === "FAILED") return false;
     if (cadence === "manual" || (CADENCE_DAYS[cadence] ?? 0) === 0) return true;
     const { start } = researchCadenceWindow(cadence, new Date(), "UTC");
     return lastRun.createdAt.getTime() >= start.getTime();
   })();
   steps.push(!lastRun
     ? step({ step: "research", status: "missing", detail: "no research run has ever completed" })
+    : lastRun.status === "FAILED"
+      ? step({ step: "research", status: "missing", detail: `last run failed: ${lastRun.errorCode ?? "unknown"}` })
     : fresh
       ? step({ step: "research", status: "ok", detail: `${lastRun.status}, ${lastRun.findingCount} finding(s), ${lastRun.createdAt.toISOString().slice(0, 10)}` })
       : step({ step: "research", status: "missing", detail: `last run ${lastRun.createdAt.toISOString().slice(0, 10)} is outside the ${cadence} window` }));
@@ -314,8 +318,15 @@ export async function ensureTenantAnalysis(
 
   // Research: queue a run when the last one is outside the cadence window.
   if (steps.find((entry) => entry.step === "research")?.status === "missing" && site.projectId) {
-    const topics = Array.isArray(site.siteProfile?.topics)
-      ? site.siteProfile.topics.filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
+    // Read the profile again: the bootstrap above may have created it in this same
+    // call, and the snapshot taken at the top predates the derived topics. A run
+    // created from that snapshot has no topics and fails immediately.
+    const freshProfile = await db.siteProfile.findUnique({
+      where: { siteId: site.id },
+      select: { topics: true, audience: true },
+    });
+    const topics = Array.isArray(freshProfile?.topics)
+      ? freshProfile.topics.filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
       : [];
     const requestedBy = opts.requestedBy ?? site.userId;
     if (!requestedBy) {
@@ -326,7 +337,7 @@ export async function ensureTenantAnalysis(
         kind: "MARKET",
         trigger: "MANUAL",
         topics,
-        audience: typeof site.siteProfile?.audience === "string" ? site.siteProfile.audience : undefined,
+        audience: typeof freshProfile?.audience === "string" ? freshProfile.audience : undefined,
         market: context.market ?? undefined,
         language: context.language,
         questions: [],
