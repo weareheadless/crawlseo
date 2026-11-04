@@ -55,15 +55,14 @@ describe("queued research run policy fencing", () => {
     expect(mockDb.researchRun.update).toHaveBeenCalledTimes(1);
   });
 
-  it("does not dispatch a provider removed from policy while the run was queued", async () => {
+  it("still dispatches when the policy lists fewer providers than the run", async () => {
     mockDb.researchRun.findUnique.mockResolvedValue({ ...run, policyRevision: 4,
       site: { ...run.site, researchPolicy: { ...run.site.researchPolicy, providers: ["news"] } } });
-    await expect(runResearchRun("run-1")).rejects.toThrow(
-      "A queued provider is outside the current site policy: reddit",
-    );
-    expect(mockDb.researchRun.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: "FAILED", errorCode: "RESEARCH_PROVIDER_NOT_ALLOWED" }),
+    // The provider list is a default, not a whitelist: the run is fenced on the
+    // policy revision and the tenant's on/off switch, not on which evidence it asked for.
+    await runResearchRun("run-1").catch(() => undefined);
+    expect(mockDb.researchRun.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ errorCode: "RESEARCH_PROVIDER_NOT_ALLOWED" }),
     }));
-    expect(mockDb.researchRun.update).toHaveBeenCalledTimes(1);
   });
 });

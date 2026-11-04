@@ -30,6 +30,16 @@ export type SiteContext = {
   country: string | null;
   /** The market as the owner wrote it ("France", "Normandie", "United States"). */
   market: string | null;
+  /**
+   * Where the audience searches, which is not where the business sits.
+   *
+   * A Tulum agency selling to US buyers competes in google.com/en-US, and its
+   * keyword data has to come from there. Measuring the business's own country
+   * instead answers a question nobody asked — and for Mexico it fails outright,
+   * because DataForSEO has no English keyword data for that market.
+   */
+  audienceMarket: string | null;
+  audienceCountry: string | null;
   /** A place to name in generated assets: town, region or service area. */
   location: string | null;
   topics: string[];
@@ -38,6 +48,7 @@ export type SiteContext = {
     language: ContextSource;
     country: ContextSource;
     location: ContextSource;
+    audienceCountry: ContextSource;
   };
 };
 
@@ -215,6 +226,17 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     }
   }
 
+  // Audience market: stated by the owner, else named in the audience description.
+  const audienceMarket = firstString(factValue(fields, "audienceMarket"))
+    ?? firstString(factValue(fields, "targetMarket"))
+    ?? firstString(constraints.audienceMarket)
+    ?? firstString(constraints.targetMarket)
+    ?? null;
+  const audienceText = typeof profile?.audience === "string" ? profile.audience : null;
+  let audienceCountry = countryFromText(audienceMarket) ?? countryFromText(audienceText);
+  let audienceSource: ContextSource = audienceCountry ? "site_profile" : "unknown";
+  if (audienceCountry && firstString(factValue(fields, "audienceMarket"))) audienceSource = "business_knowledge";
+
   // Country: explicit market text, then the domain, then an unambiguous language.
   // Null stays null: the DataForSEO catalog decides its own default, once.
   let country = countryFromText(market)
@@ -238,8 +260,10 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     country,
     market,
     location,
+    audienceMarket,
+    audienceCountry,
     topics: stringList(profile?.topics),
     audience: typeof profile?.audience === "string" && profile.audience.trim() ? profile.audience.trim() : null,
-    source: { language: languageSource, country: countrySource, location: locationSource },
+    source: { language: languageSource, country: countrySource, location: locationSource, audienceCountry: audienceSource },
   };
 }

@@ -144,13 +144,11 @@ export async function createResearchRun(
         site.projectId ? tx.project.findUnique({ where: { id: site.projectId }, select: { researchBudgetTimeZone: true } }) : Promise.resolve(null),
       ]);
       if (policy?.enabled === false) throw new ResearchServiceError("Research is disabled by the current site policy", 409);
-      const allowedProviders = Array.isArray(policy?.providers)
-        ? policy.providers.filter((provider): provider is string => typeof provider === "string")
-        : ["reddit", "news", "web"];
-      const unsupported = input.providers.filter((provider) => !allowedProviders.includes(provider));
-      if (unsupported.length) throw new ResearchServiceError(
-        `Requested providers are outside the current site policy: ${unsupported.join(", ")}`, 409,
-      );
+      // `providers` is the default set for a run that does not name one, not a
+      // whitelist. Using it as a gate meant a tenant whose policy predates the
+      // competitor provider could never receive competitor evidence: the analysis
+      // was silently narrower for them than for everyone else, with no way to see
+      // it. Every tenant gets the full analysis; only `enabled` switches it off.
       const effectiveRecencyDays = Math.min(input.recencyDays, Math.max(1, policy?.recencyDays ?? input.recencyDays));
       const budget = Math.max(0, policy?.monthlyBudget ?? 9);
       const now = new Date();
@@ -346,11 +344,10 @@ export async function saveResearchSources(
         const merged = [...new Set([...keys, ...incoming])];
         if (merged.length !== keys.length) await tx.researchSourceIdentity.update({ where: { id: identity.id }, data: { queryKeys: merged } });
       }
-      if (identity && source.contentHash && identity.currentHash === source.contentHash) {
-        const prior = await tx.researchSource.findFirst({ where: { identityId: identity.id, contentHash: source.contentHash },
-          select: { id: true, provider: true, url: true, title: true, community: true, publishedAt: true, excerpt: true, contentHash: true } });
-        if (prior) { saved.push(prior); continue; }
-      }
+      // A source already seen in an earlier run is reused, not re-fetched, but it
+      // still gets a row for THIS run. Returning the earlier run's row left a new
+      // run with sourceCount 0 while its report cited "source 4" — the findings
+      // were real and unauditable. Dedupe lives in the identity, not in the run.
       const existing = source.contentHash
         ? await tx.researchSource.findFirst({
             where: { runId, contentHash: source.contentHash },

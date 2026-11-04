@@ -44,11 +44,41 @@ export type DataForSeoLocaleCatalogEntry = {
   locationCode: number;
 };
 
+/**
+ * What a locale had to give up to be usable.
+ *
+ * DataForSEO does not offer every language in every country — there is no English
+ * keyword data for Mexico, only Spanish. Refusing to resolve then dropped the
+ * whole paid evidence class for an English-language site selling into that market,
+ * silently, because the caller caught the error and continued without it.
+ */
+export type LocaleFallback = {
+  axis: "language" | "country";
+  requested: string;
+  used: string;
+  reason: string;
+};
+
 export type ResolvedDataForSeoLocale = {
   language: string;
   languageCode: string;
   country: string;
   locationCode: number;
+  fallback?: LocaleFallback;
+};
+
+/** The language a country's own searches are overwhelmingly written in. */
+const COUNTRY_LANGUAGE: Readonly<Record<string, string>> = {
+  MX: "es", ES: "es", AR: "es", CO: "es", CL: "es", PE: "es",
+  FR: "fr", BE: "nl", CH: "de", CA: "en", US: "en", GB: "en", AU: "en", IE: "en", NZ: "en",
+  DE: "de", AT: "de", IT: "it", PT: "pt", BR: "pt", NL: "nl", JP: "ja",
+  SE: "sv", DK: "da", NO: "no", FI: "fi", PL: "pl", IN: "en", SG: "en", ZA: "en",
+};
+
+/** Where a language is searched most when the market itself is unknown. */
+const LANGUAGE_COUNTRY: Readonly<Record<string, string>> = {
+  en: "US", es: "ES", fr: "FR", de: "DE", it: "IT", pt: "PT", nl: "NL", ja: "JP",
+  sv: "SE", da: "DK", no: "NO", fi: "FI", pl: "PL",
 };
 
 export function normalizeDataForSeoLanguage(value: unknown, field = "language"): string {
@@ -105,4 +135,75 @@ export function resolveDataForSeoLocaleFromCatalog(
     country,
     locationCode: match.locationCode,
   };
+}
+
+/**
+ * Resolve a locale, giving up one axis rather than giving up the work.
+ *
+ * Order of preference:
+ *  1. the exact pair the site asked for;
+ *  2. the same market in the language that market actually searches in (an
+ *     English-language site selling into Mexico is measured in Spanish);
+ *  3. the same language in the market where that language is searched most.
+ *
+ * Whatever is given up is returned in `fallback`, so the run can record that it
+ * measured a proxy rather than pretend the pair existed.
+ */
+export function resolveDataForSeoLocaleWithFallback(
+  catalog: readonly DataForSeoLocaleCatalogEntry[],
+  languageValue: unknown,
+  countryValue: unknown
+): ResolvedDataForSeoLocale {
+  const language = normalizeDataForSeoLanguage(languageValue);
+  const country = normalizeDataForSeoCountry(countryValue);
+  const languageCode = language.split("-", 1)[0];
+
+  const countryEntries = catalog.filter((entry) => entry.country === country);
+  if (countryEntries.length > 0) {
+    const exact = countryEntries.find(
+      (entry) => entry.languageCode.toLowerCase().split("-", 1)[0] === languageCode
+    );
+    if (exact) {
+      return { language, languageCode: exact.languageCode, country, locationCode: exact.locationCode };
+    }
+    const preferred = countryEntries.find(
+      (entry) => entry.languageCode.toLowerCase().split("-", 1)[0] === COUNTRY_LANGUAGE[country]
+    ) ?? countryEntries[0];
+    const available = [...new Set(countryEntries.map((entry) => entry.languageCode))].sort();
+    return {
+      language: preferred.languageCode,
+      languageCode: preferred.languageCode,
+      country,
+      locationCode: preferred.locationCode,
+      fallback: {
+        axis: "language",
+        requested: `${language}/${country}`,
+        used: `${preferred.languageCode}/${country}`,
+        reason: `DataForSEO has no ${language} keyword data for ${country}; available: ${available.join(", ") || "none"}`,
+      },
+    };
+  }
+
+  const alternativeCountry = LANGUAGE_COUNTRY[languageCode];
+  const alternative = alternativeCountry
+    ? catalog.find((entry) => entry.country === alternativeCountry && entry.languageCode.toLowerCase().split("-", 1)[0] === languageCode)
+    : undefined;
+  if (alternative) {
+    return {
+      language,
+      languageCode: alternative.languageCode,
+      country: alternative.country,
+      locationCode: alternative.locationCode,
+      fallback: {
+        axis: "country",
+        requested: `${language}/${country}`,
+        used: `${alternative.languageCode}/${alternative.country}`,
+        reason: `DataForSEO does not cover ${country}; measured in ${alternative.country}`,
+      },
+    };
+  }
+
+  throw new DataForSeoLocaleError(
+    `DataForSEO supports neither ${country} nor ${language} as a keyword-research locale`
+  );
 }

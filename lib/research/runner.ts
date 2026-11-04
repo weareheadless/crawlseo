@@ -248,23 +248,18 @@ export async function runResearchRun(runId: string) {
   }
 
   const currentPolicy = site.researchPolicy;
-  const allowedProviders = currentPolicy && Array.isArray(currentPolicy.providers)
-    ? stringList(currentPolicy.providers) : ["reddit", "news", "web"];
-  const effectiveAllowedProviders = [...allowedProviders];
-  if (allowedProviders.includes("web")) effectiveAllowedProviders.push("news");
-  const disallowedProviders = currentPolicy
-    ? stringList(run.providerSet).filter((provider) => !effectiveAllowedProviders.includes(provider)) : [];
-  if (currentPolicy && (run.policyRevision !== currentPolicy.revision || currentPolicy.enabled === false || disallowedProviders.length > 0)) {
-    const errorCode = currentPolicy.enabled === false ? "RESEARCH_POLICY_DISABLED"
-      : disallowedProviders.length ? "RESEARCH_PROVIDER_NOT_ALLOWED" : "RESEARCH_POLICY_CHANGED";
+  // A queued run is fenced on the policy revision and the tenant's on/off switch.
+  // It is not fenced on which providers the run asked for: the policy's provider
+  // list is a default, and refusing a supported provider here silently narrowed
+  // the analysis for whole tenants.
+  if (currentPolicy && (run.policyRevision !== currentPolicy.revision || currentPolicy.enabled === false)) {
+    const errorCode = currentPolicy.enabled === false ? "RESEARCH_POLICY_DISABLED" : "RESEARCH_POLICY_CHANGED";
     await db.researchRun.update({ where: { id: run.id }, data: {
       status: "FAILED", errorCode, completedAt: new Date(),
     } });
     throw new Error(currentPolicy.enabled === false
       ? "Research was disabled before this queued run could be dispatched"
-      : disallowedProviders.length
-        ? `A queued provider is outside the current site policy: ${disallowedProviders.join(", ")}`
-        : "Research policy changed before this queued run could be dispatched; create a fresh run");
+      : "Research policy changed before this queued run could be dispatched; create a fresh run");
   }
 
   const dispatchAllowed = await db.$transaction(async (tx) => {
@@ -320,7 +315,10 @@ export async function runResearchRun(runId: string) {
     const context = await resolveSiteContext(db, site.id);
     const language = typeof brief.language === "string" && brief.language.trim() ? brief.language : context.language;
     const market = typeof brief.market === "string" && brief.market.trim() ? brief.market : (context.market ?? "");
-    const country = countryFromText(market) ?? context.country;
+    // Keyword and SERP data follow the audience, not the office. A Tulum agency
+    // selling to US buyers is measured in en/US even though the business and its
+    // market are Mexican.
+    const country = context.audienceCountry ?? countryFromText(market) ?? context.country;
     const constraints = site.siteProfile?.constraints && typeof site.siteProfile.constraints === "object" && !Array.isArray(site.siteProfile.constraints)
       ? site.siteProfile.constraints as Record<string, unknown> : {};
     const exclusions = stringList(constraints.exclusions ?? constraints.excludedTopics).slice(0, 100);
@@ -333,7 +331,9 @@ export async function runResearchRun(runId: string) {
     // paid collection each for the whole plan.
     const requestCount = queryPlan.length * (useNews ? 1 : 0);
     // Competitor evidence is location-specific, so the locale is resolved once.
-    const competitorLocale = useCompetitor && run.projectId
+    // Reddit is read through the search index now, so it needs the locale too.
+    const needsSerpLocale = useCompetitor || useReddit;
+    const competitorLocale = needsSerpLocale && run.projectId
       ? await resolveDataForSeoLocale(run.projectId, language, country).catch(() => null)
       : null;
     const recencyDays = Math.max(1, Math.min(run.recencyDays, site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
@@ -622,6 +622,11 @@ export async function runResearchRun(runId: string) {
       ],
       requested_providers: providers,
       unsupported_providers: unsupportedProviders,
+      // A locale that had to give up an axis says so here, so "measured in Spanish
+      // for the Mexican market" is a recorded decision and not a silent one.
+      locale: competitorLocale
+        ? { languageCode: competitorLocale.languageCode, locationCode: competitorLocale.locationCode, fallback: competitorLocale.fallback ?? null }
+        : null,
       query_plan: queryPlan,
       exclusions_applied: { topics: exclusions, domains: excludedDomains },
       recency_days: effectiveRecencyDays,

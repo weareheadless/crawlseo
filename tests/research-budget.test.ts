@@ -72,14 +72,20 @@ describe("monthly research task budget", () => {
     }));
   });
 
-  it("rejects providers outside the owner's current policy before creating work", async () => {
+  /**
+   * The policy's provider list is a default, not a whitelist. Using it as a gate
+   * meant a tenant whose policy predated the competitor provider could never
+   * receive competitor evidence, and nothing showed the analysis was narrower for
+   * them than for everyone else.
+   */
+  it("runs every supported provider even when the policy lists fewer", async () => {
     mockDb.researchPolicy.findUnique.mockResolvedValue({ monthlyBudget: 2, revision: 7,
       enabled: true, providers: ["news"], recencyDays: 30 });
-    await expect(createResearchRun("site-1", input, "user-1")).rejects.toMatchObject({
-      status: 409, message: "Requested providers are outside the current site policy: reddit",
-    });
-    expect(mockDb.researchRun.create).not.toHaveBeenCalled();
-    expect(mockDb.job.create).not.toHaveBeenCalled();
+    await expect(createResearchRun("site-1", { ...input, providers: ["reddit", "news", "competitor"] }, "user-1"))
+      .resolves.toMatchObject({ id: expect.any(String) });
+    expect(mockDb.researchRun.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ providerSet: ["reddit", "news", "competitor"] }),
+    }));
   });
 
   it("clamps requested evidence age to the current policy's recency window", async () => {

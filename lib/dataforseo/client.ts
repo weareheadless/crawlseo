@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { decrypt, decryptCredential } from "@/lib/encryption";
 import {
   resolveDataForSeoLocaleFromCatalog,
+  resolveDataForSeoLocaleWithFallback,
   type DataForSeoLocaleCatalogEntry,
   type ResolvedDataForSeoLocale,
 } from "@/lib/dataforseo/locale";
@@ -464,7 +465,9 @@ export async function resolveDataForSeoLocale(
   language: unknown,
   country: unknown
 ): Promise<ResolvedDataForSeoLocale> {
-  return resolveDataForSeoLocaleFromCatalog(
+  // Exact pair first; when DataForSEO does not offer it, one axis is sacrificed
+  // and recorded instead of failing the caller.
+  return resolveDataForSeoLocaleWithFallback(
     await getDataForSeoLocaleCatalog(projectId),
     language,
     country
