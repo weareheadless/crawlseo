@@ -181,6 +181,34 @@ describe("assessment validation", () => {
     expect(parsePersistedAssessment("{bad json")).toBeNull();
     expect(parsePersistedAssessment({ need: { state: "maybe" } })).toBeNull();
   });
+
+  it("normalises a persisted assessment with missing optional arrays", () => {
+    const parsed = parsePersistedAssessment({
+      need: { state: "supported", rationale: "r" },
+      offerFit: { state: "supported", rationale: "r" },
+      coverage: [{ pageUrl: "https://site.test/closing", state: "does_not_answer" }],
+      intervention: "update_page",
+      change: "Add a price range",
+    });
+    expect(parsed).toBeTruthy();
+    expect(parsed!.targetPages).toEqual([]);
+    expect(parsed!.uncertainty).toEqual([]);
+    expect(parsed!.review).toBe("none");
+    expect(parsed!.coverage[0].method).toBe("semantic");
+  });
+
+  it("refuses a persisted assessment whose coverage or need state is unusable", () => {
+    expect(parsePersistedAssessment({
+      need: { state: "maybe", rationale: "r" },
+      offerFit: { state: "supported", rationale: "r" },
+      coverage: [],
+    })).toBeNull();
+    expect(parsePersistedAssessment({
+      need: { state: "supported", rationale: "r" },
+      offerFit: { state: "supported", rationale: "r" },
+      coverage: "not a list",
+    })).toBeNull();
+  });
 });
 
 describe("minimum review", () => {

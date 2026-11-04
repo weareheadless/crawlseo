@@ -603,15 +603,58 @@ export function parsePersistedAssessment(value: unknown): NeedAssessment | null 
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  const need = row.need as Record<string, unknown> | undefined;
-  const offerFit = row.offerFit as Record<string, unknown> | undefined;
+  const readEvidence = (raw: unknown) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const entry = raw as Record<string, unknown>;
+    if (!EVIDENCE_STATES.has(entry.state as EvidenceState)) return null;
+    return {
+      state: entry.state as EvidenceState,
+      rationale: typeof entry.rationale === "string" ? entry.rationale : "",
+      evidenceUrls: stringList(entry.evidenceUrls, 12, 2_000),
+    };
+  };
+  const need = readEvidence(row.need);
+  const offerFit = readEvidence(row.offerFit);
   if (!need || !offerFit) return null;
-  if (!EVIDENCE_STATES.has(need.state as EvidenceState) || !EVIDENCE_STATES.has(offerFit.state as EvidenceState)) {
-    return null;
-  }
   if (!Array.isArray(row.coverage)) return null;
-  const premise = row.premise && typeof row.premise === "object"
-    ? row.premise
-    : { state: "unverified", rationale: "no premise verdict was recorded", evidenceUrls: [] };
-  return { ...row, premise } as unknown as NeedAssessment;
+
+  const coverage: CoverageAssessment[] = [];
+  for (const raw of row.coverage) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry.pageUrl !== "string" || !COVERAGE_STATES.has(entry.state as CoverageState)) continue;
+    coverage.push({
+      pageUrl: entry.pageUrl,
+      state: entry.state as CoverageState,
+      method: entry.method === "lexical" || entry.method === "manual" ? entry.method : "semantic",
+      matchedTerms: stringList(entry.matchedTerms, 20, 120),
+      excerpts: stringList(entry.excerpts, 4, 600),
+      note: typeof entry.note === "string" ? entry.note : "",
+    });
+  }
+
+  const premise = readEvidence(row.premise) ?? {
+    state: "unverified" as const,
+    rationale: "no premise verdict was recorded",
+    evidenceUrls: [],
+  };
+  const interventionText = typeof row.intervention === "string" ? (row.intervention as Intervention) : "investigate";
+  const reviewText = typeof row.review === "string" ? (row.review as ReviewRequirement) : "none";
+
+  return {
+    premise,
+    need,
+    offerFit,
+    coverage,
+    intervention: INTERVENTIONS.has(interventionText) ? interventionText : "investigate",
+    change: typeof row.change === "string" ? row.change : "",
+    targetPages: stringList(row.targetPages, 12, 2_000),
+    expectedBenefit: typeof row.expectedBenefit === "string" ? row.expectedBenefit : "",
+    uncertainty: stringList(row.uncertainty, 8, 300),
+    review: REVIEWS.has(reviewText) ? reviewText : "none",
+    successMeasure: typeof row.successMeasure === "string" ? row.successMeasure : "",
+    model: typeof row.model === "string" ? row.model : "unknown",
+    promptVersion: typeof row.promptVersion === "string" ? row.promptVersion : "unknown",
+    assessedAt: typeof row.assessedAt === "string" ? row.assessedAt : "",
+  };
 }

@@ -73,6 +73,17 @@ export type OpportunityDetail = OpportunityRow & {
     track: string | null;
     intervention: string | null;
     benefit: string | null;
+    /** The assessed change and its target, not a reconstructed generic sentence. */
+    change: string | null;
+    targetPages: string[];
+    successMeasure: string | null;
+    uncertainty: string[];
+    coverage: string | null;
+    needRationale: string | null;
+    needEvidenceUrls: string[];
+    offerFitRationale: string | null;
+    offerFitEvidenceUrls: string[];
+    assessmentModel: string | null;
   };
   decidedBy: string | null;
   decidedAt: Date | null;
@@ -211,6 +222,8 @@ function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"]
   const worth = (inputs as { worth?: Record<string, unknown> } | null)?.worth ?? {};
   const assessment = (inputs as { assessment?: { kind?: string; incrementalClicksPerMonth?: number | null } } | null)?.assessment;
   const read = (key: string) => (typeof worth[key] === "string" ? (worth[key] as string) : null);
+  const list = (key: string) =>
+    Array.isArray(worth[key]) ? (worth[key] as unknown[]).filter((value): value is string => typeof value === "string") : [];
   return {
     readiness: read("readiness"),
     measurement: read("measurement") ?? (assessment?.kind === "hypothesis" ? "unquantified" : null),
@@ -220,6 +233,16 @@ function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"]
       assessment?.incrementalClicksPerMonth != null
         ? `about ${Math.round(assessment.incrementalClicksPerMonth)} additional clicks/month in the stated scenario`
         : null,
+    change: read("change"),
+    targetPages: list("targetPages"),
+    successMeasure: read("successMeasure"),
+    uncertainty: list("uncertainty"),
+    coverage: read("coverageSummary"),
+    needRationale: read("needRationale"),
+    needEvidenceUrls: list("needEvidenceUrls"),
+    offerFitRationale: read("offerFitRationale"),
+    offerFitEvidenceUrls: list("offerFitEvidenceUrls"),
+    assessmentModel: read("assessmentModel"),
   };
 }
 

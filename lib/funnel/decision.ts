@@ -241,7 +241,7 @@ export function decideRecommendation(input: RecommendationInput): Recommendation
     reasons.push(`existing coverage answers this need at ${adequate[0].pageUrl}`);
     reasons.push("no inadequacy is demonstrated, so the correct action is to leave it alone");
     return finish(input, tracks, review, {
-      evidenceState: input.need.state === "contradicted" ? "contradicted" : "supported",
+      evidenceState: input.need.state === "supported" ? "supported" : "unverified",
       readiness: "no_action",
       intervention: "maintain",
       reasons,

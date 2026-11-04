@@ -18,6 +18,16 @@ describe("decision summary panel", () => {
           track: "customer_value",
           intervention: "update_page",
           benefit: null,
+          change: "Add a worked cost example and the current fee ranges.",
+          targetPages: ["https://site.test/services"],
+          successMeasure: "A buyer can state the expected cost after reading.",
+          uncertainty: ["the frequency of the question is not measured"],
+          coverage: "partially answers at https://site.test/services",
+          needRationale: "Three buyers asked before booking.",
+          needEvidenceUrls: ["https://forum.test/cost"],
+          offerFitRationale: "The business makes fitted wardrobes.",
+          offerFitEvidenceUrls: ["https://site.test/about"],
+          assessmentModel: "fixture-model",
         },
       })
     );
@@ -26,6 +36,13 @@ describe("decision summary panel", () => {
     expect(html).toContain("Customer value");
     expect(html).toContain("intervention · update page");
     expect(html).toContain("A person still decides whether to do it");
+    expect(html).toContain("Add a worked cost example");
+    expect(html).toContain("https://site.test/services");
+    expect(html).toContain("A buyer can state the expected cost");
+    expect(html).toContain("the frequency of the question is not measured");
+    expect(html).toContain("Three buyers asked before booking.");
+    expect(html).toContain("The business makes fitted wardrobes.");
+    expect(html).toContain("fixture-model");
   });
 
   it("shows a rejected premise as rejected, not as a low-quality idea", () => {

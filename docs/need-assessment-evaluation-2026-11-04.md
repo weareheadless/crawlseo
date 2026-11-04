@@ -121,7 +121,7 @@ finding, the correct output is no work.
 ```
 npx tsc --noEmit                                   # clean
 npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'
-# 1002 passed, 16 skipped
+# 1005 passed, 16 skipped
 npm run build                                      # compiled successfully
 DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run \
   tests/customer-recommendations-postgres.integration.test.ts

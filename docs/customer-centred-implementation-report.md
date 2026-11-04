@@ -78,7 +78,10 @@ only adding an edge.
 - "Both legs" now reads "two evidence legs" with the hint that neither proves the
   other.
 - The opportunity detail page shows readiness, measurement basis, benefit track,
-  intervention and the estimated benefit, before the evidence.
+  intervention and the estimated benefit, before the evidence. It also shows the
+  assessed existing coverage, exact change, target page, success measure, remaining
+  uncertainty and the need/offer-fit rationale with links to the evidence, so the
+  assessment is not hidden in raw JSON.
 - Accepting a recommendation now creates the task with its brief: need, existing
   coverage, target page, the specific change and the success measure
   (`taskPlanFromOpportunity`). Before, the task carried only the title.
@@ -221,7 +224,7 @@ Verified in CI-style runs:
 
 - `npx tsc --noEmit` — clean
 - `npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'`
-  — 1002 passed, 16 skipped
+  — 1005 passed, 16 skipped
 - `npm run build` — compiled successfully
 - `tests/customer-recommendations-postgres.integration.test.ts` — 4 passed on the
   disposable `csv_validation` schema, including the assessment-to-opportunity path.

@@ -89,6 +89,17 @@ describe("readiness", () => {
     expect(() => assertDecision(decision)).not.toThrow();
   });
 
+  it("does not call an adequate answer supported evidence when the need is unverified", () => {
+    const decision = decideRecommendation(
+      base({
+        need: { ...base().need!, state: "unverified" },
+        coverage: [coverage("answers")],
+      })
+    );
+    expect(decision.readiness).toBe("no_action");
+    expect(decision.evidenceState).toBe("unverified");
+  });
+
   it("treats an unassessable page as unknown, not as a demonstrated gap", () => {
     const decision = decideRecommendation(base({ coverage: [coverage("unassessable")] }));
     expect(decision.readiness).toBe("needs_investigation");

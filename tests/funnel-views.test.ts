@@ -122,7 +122,24 @@ describe("funnel read model (wave 4 surfaces)", () => {
           title: "Pain point",
           summary: "s",
           scoreValue: 12,
-          scoreInputs: {},
+          scoreInputs: {
+            worth: {
+              readiness: "actionable",
+              measurement: "unquantified",
+              benefitTrack: "customer_value",
+              intervention: "update_page",
+              change: "Add a worked cost example and the current fee ranges.",
+              targetPages: ["https://site.test/services"],
+              successMeasure: "A buyer can state the expected cost after reading.",
+              uncertainty: ["the frequency of the question is not measured"],
+              coverageSummary: "partially answers at https://site.test/services",
+              needRationale: "Three buyers asked before booking.",
+              needEvidenceUrls: ["https://forum.test/cost"],
+              offerFitRationale: "The business makes fitted wardrobes.",
+              offerFitEvidenceUrls: ["https://site.test/about"],
+              assessmentModel: "fixture-model",
+            },
+          },
           evidenceCompleteness: "why",
           detectedBy: "funnel-refresh",
           firstDetectedAt: new Date(),
@@ -148,6 +165,12 @@ describe("funnel read model (wave 4 surfaces)", () => {
     expect(detail?.howEvidence).toHaveLength(0);
     expect(detail?.completeness).toBe("why");
     expect(detail?.task).toBeNull();
+    expect(detail?.decision.change).toContain("worked cost example");
+    expect(detail?.decision.targetPages).toEqual(["https://site.test/services"]);
+    expect(detail?.decision.successMeasure).toContain("state the expected cost");
+    expect(detail?.decision.uncertainty).toEqual(["the frequency of the question is not measured"]);
+    expect(detail?.decision.needRationale).toContain("Three buyers");
+    expect(detail?.decision.assessmentModel).toBe("fixture-model");
   });
 
   it("returns null for an unknown opportunity instead of an empty shell", async () => {
