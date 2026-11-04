@@ -130,6 +130,24 @@ describe("acquisition execution", () => {
     expect(receipt.skipped.some((row) => row.reason.includes("ceiling"))).toBe(true);
   });
 
+  it("distinguishes no data from a failure", async () => {
+    const collect = vi.fn(async () => ({ evidence: [], spentMicros: 500 }));
+    const receipt = await runAcquisitionPlan(db() as never, {
+      projectId: "p1",
+      siteId: "s1",
+      window,
+      performance: [{
+        query: "q", url: "u", impressions: 100, clicks: 0, ctr: 0,
+        position: 9, observations: 1, segments: 1, firstDate: window.start, lastDate: window.end,
+      }],
+      collect,
+      maxSpendMicros: 100_000,
+    });
+    expect(receipt.noData).toBe(1);
+    expect(receipt.failed).toBe(0);
+    expect(receipt.requests[0].state).toBe("no_data");
+  });
+
   it("records a provider failure per batch without aborting the plan", async () => {
     const collect = vi.fn(async () => {
       throw new Error("A USD research allowance is required before paid collection");
@@ -146,6 +164,7 @@ describe("acquisition execution", () => {
       maxSpendMicros: 100_000,
     });
     expect(receipt.failed).toBe(1);
+    expect(receipt.noData).toBe(0);
     expect(receipt.skipped[0].reason).toContain("allowance");
   });
 });

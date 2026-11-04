@@ -35,6 +35,20 @@ Additional correctness added while reviewing the shadow diff:
 | 23 | The site's own name offered as a winnable rank | `isBrandQuery` + domain-derived brand terms | `funnel-first-party-demand.test.ts` |
 | 24 | A top-ten page with 0% CTR was invisible | O2 covers the snippet band, not only 11–20 | `funnel-first-party-demand.test.ts` ("snippet opportunity") |
 
+## P4 exercised on production (2026-11-04)
+
+`tenant.ts --site <susi> --apply` ran the acquisition pass:
+
+```
+acquisition  20/40 measured (10 cached, 20 no data, 0 failed), $0.029
+```
+
+Twenty exact measurements now sit against queries the site is observed for
+(`akumal real estate`, `beachfront homes for sale under $100k in mexico`,
+`hospitales cancun`, …), where before every measured phrase was disjoint from the
+ranking set. The provider simply has no volume for the other twenty, which is
+recorded as `no_data` rather than a failure.
+
 ## Applied to production (2026-11-04, commit `1e6bced`)
 
 - Migration `20261104150000_opportunity_assessment_version` deployed (additive).

@@ -59,6 +59,19 @@ export async function buildJoinCollectors(
           locationCode: locale.locationCode,
         });
       },
+      /**
+       * Batch keyword metrics for observed queries.
+       *
+       * `keywordMetrics` above derives one related phrase per seed, which is right
+       * for validating a research hypothesis and wrong for enriching a list: a
+       * batch of twenty observed queries came back with a single measurement.
+       */
+      keywordBatch: (request) =>
+        collectKeywordMetrics(db, {
+          ...request,
+          languageCode: locale.languageCode,
+          locationCode: locale.locationCode,
+        }),
       serpSnapshots: (request) =>
         collectSerpSnapshots(db, {
           ...request,

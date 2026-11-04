@@ -41,6 +41,8 @@ export type JoinCollector = (input: {
 export type JoinCollectors = {
   /** Keyword volumes for a query (O13's how leg). */
   keywordMetrics?: JoinCollector;
+  /** Batch keyword volumes for a list of observed queries (acquisition). */
+  keywordBatch?: JoinCollector;
   /** SERP composition for a query (O14's how leg). */
   serpSnapshots?: JoinCollector;
   /** AI visibility for a question (O5's how leg). */

@@ -135,10 +135,12 @@ export type AcquisitionReceipt = {
   window: { start: string; end: string; days: number } | null;
   requested: number;
   measured: number;
+  /** The provider had no measurement for the query (not an error). */
+  noData: number;
   failed: number;
   cached: number;
   spentMicros: number;
-  requests: Array<{ query: string; reason: AcquisitionRequest["reason"]; state: "measured" | "cached" | "failed" }>;
+  requests: Array<{ query: string; reason: AcquisitionRequest["reason"]; state: "measured" | "no_data" | "failed" }>;
   skipped: Array<{ query: string; reason: string }>;
 };
 
@@ -212,6 +214,7 @@ export async function runAcquisitionPlan(
     },
     requested: plan.requests.length,
     measured: 0,
+    noData: 0,
     failed: 0,
     cached: plan.skipped.filter((entry) => entry.reason.startsWith("already measured")).length,
     spentMicros: 0,
@@ -238,15 +241,13 @@ export async function runAcquisitionPlan(
           .filter((value): value is string => typeof value === "string")
           .map(normalize)
       );
+      // A provider returning nothing for a query is not a failure: the query may
+      // simply have no volume. Only a thrown call is a failure.
       for (const request of batch) {
-        const measured = measuredSet.size === 0 || measuredSet.has(normalize(request.query));
-        if (measured) receipt.measured += 1;
-        else receipt.failed += 1;
-        receipt.requests.push({
-          query: request.query,
-          reason: request.reason,
-          state: measured ? "measured" : "failed",
-        });
+        const state = measuredSet.has(normalize(request.query)) ? "measured" : "no_data";
+        if (state === "measured") receipt.measured += 1;
+        else receipt.noData += 1;
+        receipt.requests.push({ query: request.query, reason: request.reason, state });
       }
     } catch (error) {
       for (const request of batch) {

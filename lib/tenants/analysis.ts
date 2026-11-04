@@ -343,7 +343,10 @@ export async function ensureTenantAnalysis(
   const steps = [...before.steps];
   const replace = (entry: TenantStep) => {
     const index = steps.findIndex((existing) => existing.step === entry.step);
+    // A step that only exists during an apply pass (acquisition) has no placeholder
+    // in the read-only report; dropping it silently hid the work and its cost.
     if (index >= 0) steps[index] = entry;
+    else steps.push(entry);
   };
 
   let context = await resolveSiteContext(db, site.id).catch(() => null);
@@ -499,14 +502,15 @@ export async function ensureTenantAnalysis(
             window,
             performance,
             hypotheses,
-            collect: setup.collectors.keywordMetrics!,
+            // The batch collector, not the single-seed derivation used by joins.
+            collect: setup.collectors.keywordBatch!,
             maxSpendMicros: opts.maxAcquisitionSpendMicros ?? 300_000,
             now: opts.now,
           });
           replace(step({
             step: "acquisition",
             status: receipt.measured > 0 ? "fixed" : receipt.requested === 0 ? "ok" : "missing",
-            detail: `${receipt.measured}/${receipt.requested} measured (${receipt.cached} cached, ${receipt.failed} failed), $${(receipt.spentMicros / 1e6).toFixed(3)}`,
+            detail: `${receipt.measured}/${receipt.requested} measured (${receipt.cached} cached, ${receipt.noData} no data, ${receipt.failed} failed), $${(receipt.spentMicros / 1e6).toFixed(3)}`,
           }));
           // New measurements change the assessment inputs, so detection runs again.
           if (receipt.measured > 0) {
