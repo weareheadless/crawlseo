@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { PrismaClient } from "@prisma/client";
 
-import { assertPublicDomain, documentMarkup } from "@/lib/crawler/engine";
+import { documentMarkup, fetchPublicDocument } from "@/lib/crawler/engine";
 import { htmlToText } from "@/lib/projects/business-knowledge-extract";
 import { resolveSiteContext } from "@/lib/site/context";
 import {
@@ -62,6 +62,10 @@ export type PacketOptions = {
   /** Read-only evaluation may supply facts extracted from live pages. */
   businessFacts?: EvidencePacket["businessFacts"];
   maxLiveFetches?: number;
+  /** Called before each network fetch; throw to stop before dispatch. */
+  beforeFetch?: () => void;
+  /** Reports the bytes actually read for budget accounting. */
+  onBytes?: (bytes: number) => void;
   now?: Date;
 };
 
@@ -194,72 +198,74 @@ type RetrievedPage = {
   finalUrl: string;
   note: string | null;
   retrieval: "live" | "unavailable";
+  bytes: number;
 };
 
 const SHELL_MARKERS = /enable javascript|javascript is required|access denied|just a moment|attention required|captcha|cf-challenge|please verify you are human/i;
 
-/** Bounded retrieval through the crawler's public-origin check. */
-export async function retrievePage(url: string, siteDomain: string): Promise<RetrievedPage> {
+/**
+ * Bounded retrieval through the crawler's safe public-document path.
+ *
+ * Redirects are followed manually and every hop is checked before dispatch. The
+ * body is streamed to a byte cap and returned with an explicit truncation flag.
+ */
+export async function retrievePage(
+  url: string,
+  siteDomain: string,
+  opts: { beforeHop?: () => void; maxBytes?: number } = {}
+): Promise<RetrievedPage> {
   const domain = siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
   let target: URL;
   try {
     target = new URL(url);
   } catch {
-    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "invalid URL", retrieval: "unavailable" };
+    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "invalid URL", retrieval: "unavailable", bytes: 0 };
   }
   const host = target.hostname.replace(/^www\./, "").toLowerCase();
   if (host !== domain && !host.endsWith(`.${domain}`)) {
-    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "URL is outside the site domain", retrieval: "unavailable" };
+    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "URL is outside the site domain", retrieval: "unavailable", bytes: 0 };
   }
   try {
-    await assertPublicDomain(host);
-  } catch (error) {
-    return {
-      url,
-      title: null,
-      text: "",
-      html: "",
-      status: 0,
-      finalUrl: url,
-      note: error instanceof Error ? error.message.slice(0, 300) : "origin check failed",
-      retrieval: "unavailable",
-    };
-  }
-  try {
-    const response = await fetch(target, {
-      redirect: "follow",
-      headers: {
-        "User-Agent": "CrawlSEO recommendation evidence (+https://crawlseo.app)",
-        Accept: "text/html,application/xhtml+xml",
+    const doc = await fetchPublicDocument(target.toString(), {
+      maxBytes: opts.maxBytes ?? 2 * 1024 * 1024,
+      timeoutMs: 20_000,
+      beforeHop: () => {
+        opts.beforeHop?.();
       },
-      signal: AbortSignal.timeout(20_000),
     });
-    const finalUrl = response.url || url;
+    const finalUrl = doc.finalUrl || url;
     const finalHost = new URL(finalUrl).hostname.replace(/^www\./, "").toLowerCase();
     if (finalHost !== domain && !finalHost.endsWith(`.${domain}`)) {
-      return { url, title: null, text: "", html: "", status: response.status, finalUrl, note: "redirect left the site domain", retrieval: "unavailable" };
+      return { url, title: null, text: "", html: "", status: doc.statusCode, finalUrl, note: "redirect left the site domain", retrieval: "unavailable", bytes: doc.bytes };
     }
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("html") && !contentType.includes("xml")) {
-      return { url, title: null, text: "", html: "", status: response.status, finalUrl, note: `non-HTML content (${contentType || "unknown"})`, retrieval: "unavailable" };
+    if (!doc.contentType.includes("html") && !doc.contentType.includes("xml")) {
+      return { url, title: null, text: "", html: "", status: doc.statusCode, finalUrl, note: `non-HTML content (${doc.contentType || "unknown"})`, retrieval: "unavailable", bytes: doc.bytes };
     }
-    // Read the whole document: on builder sites the body can sit far beyond the
-    // first 120k characters of head/scripts. Cap the extracted text, not the HTML.
-    const html = await response.text();
+    const html = doc.html;
     const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? null;
     // Wix and similar builders embed base64 payloads inside comments and
     // templates; stripping tags alone would hand the model encoded noise.
     const text = htmlToText(documentMarkup(html)).slice(0, MAX_LIVE_CHARS);
-    if (response.status !== 200) {
-      return { url, title, text: "", html, status: response.status, finalUrl, note: `HTTP ${response.status}`, retrieval: "unavailable" };
+    if (doc.statusCode !== 200) {
+      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: `HTTP ${doc.statusCode}`, retrieval: "unavailable", bytes: doc.bytes };
     }
     if (SHELL_MARKERS.test(html) && text.length < 1_500) {
-      return { url, title, text: "", html, status: response.status, finalUrl, note: "page is a bot challenge or client-rendered shell", retrieval: "unavailable" };
+      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: "page is a bot challenge or client-rendered shell", retrieval: "unavailable", bytes: doc.bytes };
     }
     if (text.length < 80) {
-      return { url, title, text: "", html, status: response.status, finalUrl, note: "no usable body text was extracted", retrieval: "unavailable" };
+      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: "no usable body text was extracted", retrieval: "unavailable", bytes: doc.bytes };
     }
-    return { url, title, text, html, status: response.status, finalUrl, note: null, retrieval: "live" };
+    return {
+      url,
+      title,
+      text,
+      html,
+      status: doc.statusCode,
+      finalUrl,
+      note: doc.truncated ? "document exceeded the byte limit; text may be incomplete" : null,
+      retrieval: "live",
+      bytes: doc.bytes,
+    };
   } catch (error) {
     return {
       url,
@@ -270,6 +276,7 @@ export async function retrievePage(url: string, siteDomain: string): Promise<Ret
       finalUrl: url,
       note: error instanceof Error ? error.message.slice(0, 300) : "retrieval failed",
       retrieval: "unavailable",
+      bytes: 0,
     };
   }
 }
@@ -446,6 +453,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
   const maxLiveFetches = Math.max(0, Math.min(opts.maxLiveFetches ?? 4, 6));
   const limitations: string[] = [];
   const trace: EvidencePacket["trace"] = [];
+  const requests: EvidencePacket["requests"] = [];
 
   const site = await db.site.findUnique({
     where: { id: opts.siteId },
@@ -537,7 +545,21 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     let title = row.title;
     let statusCode = row.statusCode;
     if (!contentText && row.statusCode === 200 && liveFetches < maxLiveFetches) {
-      const live = await retrievePage(row.url, site.domain);
+      let live: RetrievedPage;
+      try {
+        live = await retrievePage(row.url, site.domain, { beforeHop: opts.beforeFetch });
+        opts.onBytes?.(live.bytes);
+      } catch (error) {
+        limitations.push(`page text for ${row.url} was not retrieved: ${error instanceof Error ? error.message.slice(0, 200) : "budget exhausted"}`);
+        pages.push(
+          buildPage(
+            { url: row.url, title, contentText: null, contentHash: row.contentHash, statusCode, language: context?.language ?? null, retrieval: "unavailable", retrievalNote: "fetch budget exhausted" },
+            terms,
+            maxChars
+          )
+        );
+        continue;
+      }
       liveFetches += 1;
       if (live.retrieval === "live") {
         contentText = live.text;
@@ -632,6 +654,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
       })),
       pages,
       links: [],
+      requests,
       trace,
       inventory: rows.slice(0, MAX_INVENTORY).map((row) => ({
         url: row.url,
@@ -653,6 +676,7 @@ export type ExpandResult = {
   requested: number;
   retrieved: number;
   failed: number;
+  progress: boolean;
 };
 
 /**
@@ -666,19 +690,28 @@ export async function expandEvidencePacket(
   db: PacketDb,
   packet: EvidencePacket,
   resolved: ResolvedEvidenceRequest[],
-  opts: { siteDomain: string; maxLiveFetches?: number; round?: number; now?: Date }
+  opts: {
+    siteDomain: string;
+    maxLiveFetches?: number;
+    round?: number;
+    beforeFetch?: () => void;
+    onBytes?: (bytes: number) => void;
+    now?: Date;
+  }
 ): Promise<ExpandResult> {
   const pages = packet.pages.map((page) => ({ ...page, sections: page.sections.map((section) => ({ ...section })) }));
   const links: PacketLink[] = packet.links.map((link) => ({ ...link }));
   const limitations = [...packet.limitations];
   const trace = [...packet.trace];
+  const requests = [...packet.requests];
   const actions: string[] = [];
   const terms = packetTerms(packet.candidate.theme, packet.candidate.summary, packet.candidate.premise);
-  const maxFetches = Math.max(1, Math.min(opts.maxLiveFetches ?? 4, 6));
+  const maxFetches = Math.max(0, Math.min(opts.maxLiveFetches ?? 4, 6));
   const requestedFullText = 20_000;
   let fetches = 0;
   let retrieved = 0;
   let failed = 0;
+  let progress = false;
 
   const site = await db.site.findUnique({ where: { id: packet.siteId }, select: { domain: true } });
   const domain = opts.siteDomain || site?.domain || "";
@@ -695,7 +728,14 @@ export async function expandEvidencePacket(
       return existing;
     }
     fetches += 1;
-    const live = await retrievePage(url, domain);
+    let live: RetrievedPage;
+    try {
+      live = await retrievePage(url, domain, { beforeHop: opts.beforeFetch });
+      opts.onBytes?.(live.bytes);
+    } catch {
+      limitations.push(`evidence request for ${url} was not retrieved: fetch budget exhausted`);
+      return existing;
+    }
     if (live.retrieval !== "live") {
       failed += 1;
       const note = live.note ?? "retrieval failed";
@@ -730,22 +770,53 @@ export async function expandEvidencePacket(
     if (request.type === "page_text" || request.type === "inventory_search") {
       if (!request.url) {
         failed += 1;
+        requests.push({ type: request.type, target: request.target, status: "unavailable", detail: "no retrievable URL" });
         actions.push(`${request.type} ${request.target}: no retrievable URL`);
         continue;
       }
+      const before = pages.find((page) => page.url === request.url);
       const page = await upsertPage(request.url);
-      actions.push(`${request.type} ${request.target}: ${page?.retrieval === "live" ? "retrieved" : "unavailable"}`);
+      const supplied = Boolean(page?.text.trim());
+      if (!supplied) {
+        failed += 1;
+        const budget = limitations.some((line) => line.includes("fetch budget exhausted") || line.includes("live-fetch limit reached"));
+        requests.push({
+          type: request.type,
+          target: request.target,
+          status: budget ? "budget_exhausted" : "unavailable",
+          detail: page?.retrievalNote ?? "no text could be retrieved",
+        });
+        actions.push(`${request.type} ${request.target}: unavailable`);
+        continue;
+      }
+      const changed = !before || before.text !== page?.text;
+      const status = changed || page?.retrieval === "live" ? "fulfilled" : "partial";
+      if (status === "fulfilled") progress = true;
+      requests.push({
+        type: request.type,
+        target: request.target,
+        status,
+        detail: status === "fulfilled" ? "page text supplied" : "page text was already supplied",
+      });
+      actions.push(`${request.type} ${request.target}: ${status}`);
       continue;
     }
     if (request.type === "source_text") {
       const source = packet.sources.find((entry) => entry.id === request.target);
       if (!source) {
         failed += 1;
+        requests.push({ type: "source_text", target: request.target, status: "unavailable", detail: "source is not in the packet" });
         actions.push(`source_text ${request.target}: not in packet`);
         continue;
       }
-      limitations.push(`source ${source.url} has only a stored excerpt; the full external text was not retrieved`);
-      actions.push(`source_text ${request.target}: excerpt already supplied`);
+      limitations.push(`source ${source.url} has only a stored excerpt; external full-text retrieval is not authorised`);
+      requests.push({
+        type: "source_text",
+        target: request.target,
+        status: "unavailable",
+        detail: "only a stored excerpt exists and external full-text retrieval is not authorised",
+      });
+      actions.push(`source_text ${request.target}: unavailable (excerpt only)`);
       continue;
     }
     // journey_links
@@ -755,6 +826,7 @@ export async function expandEvidencePacket(
     }
     if (!page) {
       failed += 1;
+      requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: "page not in packet" });
       actions.push(`journey_links ${request.target}: page not in packet`);
       continue;
     }
@@ -762,6 +834,7 @@ export async function expandEvidencePacket(
       const fetched = await upsertPage(page.url);
       if (!fetched?.text.trim()) {
         failed += 1;
+        requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: "page text unavailable, links unknown" });
         actions.push(`journey_links ${page.url}: page text unavailable, links unknown`);
         continue;
       }
@@ -769,13 +842,23 @@ export async function expandEvidencePacket(
     if (fetches >= maxFetches) {
       failed += 1;
       limitations.push(`journey links for ${page.url} were not inspected: live-fetch limit reached`);
+      requests.push({ type: "journey_links", target: request.target, status: "budget_exhausted", detail: "live-fetch limit reached" });
       continue;
     }
     fetches += 1;
-    const live = await retrievePage(page.url, domain);
+    let live: RetrievedPage;
+    try {
+      live = await retrievePage(page.url, domain, { beforeHop: opts.beforeFetch });
+      opts.onBytes?.(live.bytes);
+    } catch {
+      failed += 1;
+      requests.push({ type: "journey_links", target: request.target, status: "budget_exhausted", detail: "fetch budget exhausted" });
+      continue;
+    }
     if (live.retrieval !== "live") {
       failed += 1;
       limitations.push(`journey links for ${page.url} could not be inspected: ${live.note ?? "retrieval failed"}`);
+      requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: live.note ?? "retrieval failed" });
       continue;
     }
     const found = extractInternalLinks(live.html, live.finalUrl, domain);
@@ -785,6 +868,13 @@ export async function expandEvidencePacket(
       links.push({ fromPageId: page.id, toUrl: link.toUrl, anchor: link.anchor, observation: "observed", status: null });
     }
     limitations.push(`journey links for ${page.url} are observed anchors only; destination status was not checked`);
+    progress = progress || found.length > 0;
+    requests.push({
+      type: "journey_links",
+      target: request.target,
+      status: found.length > 0 ? "fulfilled" : "partial",
+      detail: `${found.length} internal anchors observed; destination status not checked`,
+    });
     actions.push(`journey_links ${page.url}: ${found.length} internal anchors observed`);
   }
 
@@ -806,6 +896,7 @@ export async function expandEvidencePacket(
       sources: packet.sources,
       pages,
       links,
+      requests,
       trace,
       inventory: packet.inventory,
       search: packet.search,
@@ -813,5 +904,5 @@ export async function expandEvidencePacket(
     },
     opts.now ?? new Date()
   );
-  return { packet: expanded, actions, requested: resolved.length, retrieved, failed };
+  return { packet: expanded, actions, requested: resolved.length, retrieved, failed, progress };
 }

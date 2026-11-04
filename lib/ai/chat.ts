@@ -20,6 +20,11 @@ export type ChatJsonInput = {
   timeoutMs?: number;
   /** Total attempts including the first. */
   attempts?: number;
+  /**
+   * Called before every transport attempt. Throw to stop before dispatch; the
+   * caller uses this to charge a shared budget per actual request.
+   */
+  beforeAttempt?: () => void;
 };
 
 export class ChatError extends Error {
@@ -56,6 +61,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
   let lastError: Error = new ChatError("The model could not be reached");
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    input.beforeAttempt?.();
     try {
       return await serialise(async () => {
         const response = await fetch(`${input.config.baseUrl}/chat/completions`, {

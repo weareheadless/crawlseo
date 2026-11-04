@@ -9,8 +9,10 @@ import {
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import {
   RECOMMENDATION_POLICY_VERSION,
+  ANALYSIS_RESOURCE_POLICY,
   decisionFingerprint,
   parsePersistedDecision,
+  parsePersistedPacket,
   validateDecision,
   validateEvidenceRequest,
   type EvidencePacket,
@@ -59,33 +61,73 @@ export type FindingAssessmentResult = {
   ledger?: ReturnType<AnalysisLedger["snapshot"]>;
 };
 
+async function recordAnalysisFailure(
+  db: AssessmentRunDb,
+  input: { projectId: string; siteId: string; findingId: string; packetHash: string; errors: string[]; ledger: unknown; raw: unknown }
+): Promise<void> {
+  try {
+    await db.rawProviderResponse.create({
+      data: {
+        provider: "recommendation-analysis",
+        product: "assessment",
+        endpoint: "internal",
+        requestedAt: new Date(),
+        deliveredAt: new Date(),
+        status: "failed",
+        payload: {
+          projectId: input.projectId,
+          siteId: input.siteId,
+          findingId: input.findingId,
+          packetHash: input.packetHash,
+          errors: input.errors,
+          ledger: input.ledger,
+          raw: input.raw,
+        } as never,
+      },
+    });
+  } catch (error) {
+    console.error("[recommendation] failed to record analysis failure", error);
+  }
+}
+
 function currentModel(): string | null {
   return contentWriterConfig()?.model ?? null;
 }
 
 export function findReusableDecision(
   dimensions: Record<string, unknown> | null,
-  packet: EvidencePacket,
+  initialPacket: EvidencePacket,
   model: string | null
 ): RecommendationDecision | null {
   const decision = parsePersistedDecision(dimensions?.recommendationDecisionJson);
   if (!decision) return null;
-  if (decision.packetHash !== packet.packetHash) return null;
   if (decision.promptVersion !== RECOMMENDATION_PROMPT_VERSION) return null;
   if (decision.policyVersion !== RECOMMENDATION_POLICY_VERSION) return null;
   if (model && decision.model !== model) return null;
-  if (!validateDecision(decision, packet).ok) return null;
-  return decision;
-}
 
-function clippedRaw(raw: unknown): string | null {
-  if (raw == null) return null;
-  try {
-    const text = JSON.stringify(raw);
-    return text.length > 60_000 ? text.slice(0, 60_000) : text;
-  } catch {
-    return null;
+  const assessedAt = Date.parse(decision.assessedAt);
+  if (!Number.isFinite(assessedAt)) return null;
+  const ageMs = Date.now() - assessedAt;
+  if (ageMs < 0 || ageMs > ANALYSIS_RESOURCE_POLICY.reuseMaxAgeDays * 24 * 60 * 60_000) return null;
+
+  // The exact packet the decision used is archived with it. Revalidate against
+  // that packet, not against a freshly rebuilt initial selection.
+  const finalPacket =
+    parsePersistedPacket(dimensions?.recommendationFinalPacketJson) ??
+    parsePersistedPacket(dimensions?.recommendationPacketJson);
+
+  const initialHash = dimensions?.recommendationInitialPacketHash;
+  if (typeof initialHash === "string" && initialHash !== initialPacket.packetHash) return null;
+
+  if (finalPacket) {
+    if (finalPacket.packetHash !== decision.packetHash) return null;
+    return validateDecision(decision, finalPacket).ok ? decision : null;
   }
+
+  // Legacy decisions without an archived final packet are reusable only when the
+  // initial packet itself was the exact input.
+  if (decision.packetHash !== initialPacket.packetHash) return null;
+  return validateDecision(decision, initialPacket).ok ? decision : null;
 }
 
 export async function assessFinding(
@@ -110,13 +152,13 @@ export async function assessFinding(
   const site = await db.site.findUnique({ where: { id: input.siteId }, select: { domain: true } });
   const siteDomain = site?.domain ?? "";
 
-  let packet = await buildEvidencePacket(db, {
+  const initialPacket = await buildEvidencePacket(db, {
     projectId: input.projectId,
     siteId: input.siteId,
     businessFacts: input.businessFacts,
-    // Initial selection gets a small share of retrieval; requested evidence must
-    // still have budget left.
-    maxLiveFetches: Math.min(2, ledger.remainingLiveFetches()),
+    // The initial selection is deterministic stored evidence only. Material live
+    // content is requested explicitly, so replay can compare a stable identity.
+    maxLiveFetches: 0,
     candidate: {
       findingId: input.finding.id,
       dedupKey: input.finding.dedupKey,
@@ -128,6 +170,7 @@ export async function assessFinding(
       sourceIds: input.finding.sourceIds,
     },
   });
+  let packet = initialPacket;
 
   const active = await db.evidenceRecord.findMany({
     where: { projectId: input.projectId, kind: "research_finding", supersededById: null },
@@ -138,7 +181,7 @@ export async function assessFinding(
   if (!input.force) {
     const reusable = findReusableDecision(
       (previous?.dimensions ?? null) as Record<string, unknown> | null,
-      packet,
+      initialPacket,
       // An injected assessor is a test/fixture producer; comparing its model name
       // with the configured live model would invalidate a valid fixture decision.
       input.assessor ? null : currentModel()
@@ -163,6 +206,9 @@ export async function assessFinding(
   let raw: unknown = null;
   let feedback = "";
   let round = 0;
+  let noProgressRounds = 0;
+  const rawAttempts: unknown[] = [];
+  const requestOutcomes: EvidencePacket["requests"] = [];
 
   while (round <= ledger.policy.maxEvidenceRounds) {
     if (!ledger.canCallModel()) {
@@ -176,6 +222,8 @@ export async function assessFinding(
       feedback: feedback || undefined,
     });
     raw = outcome.raw;
+    if (outcome.rawAttempts && outcome.rawAttempts.length > 0) rawAttempts.push(...outcome.rawAttempts);
+    else if (outcome.raw != null) rawAttempts.push(outcome.raw);
 
     if (outcome.kind === "final") {
       decision = outcome.decision;
@@ -216,8 +264,12 @@ export async function assessFinding(
       siteDomain,
       maxLiveFetches: ledger.remainingLiveFetches(),
       round: round + 1,
+      beforeFetch: () => {
+        if (!ledger.canFetch()) throw new Error("analysis fetch budget exhausted before dispatch");
+        ledger.chargeFetchAttempt();
+      },
+      onBytes: (bytes) => ledger.chargeBytes(bytes),
     });
-    ledger.chargeLiveFetches(expanded.retrieved);
     ledger.record({
       round: round + 1,
       action: "retrieval",
@@ -225,6 +277,12 @@ export async function assessFinding(
       at: new Date().toISOString(),
     });
     packet = expanded.packet;
+    requestOutcomes.push(...expanded.packet.requests.slice(requestOutcomes.length));
+    noProgressRounds = expanded.progress ? 0 : noProgressRounds + 1;
+    if (noProgressRounds >= 2) {
+      failure = ["two consecutive evidence requests produced no new evidence"];
+      break;
+    }
     round += 1;
     feedback = "";
   }
@@ -244,9 +302,18 @@ export async function assessFinding(
         ledger: ledger.snapshot(),
       };
     }
-    // A model failure is not a rejection of the customer need. Preserve a previous
-    // valid decision; otherwise record the failed attempt as unassessed.
+    // A model failure is not a rejection of the customer need. Preserve the
+    // previous valid decision and record the failed attempt separately.
     if (previous) {
+      await recordAnalysisFailure(db, {
+        projectId: input.projectId,
+        siteId: input.siteId,
+        findingId: input.finding.id,
+        packetHash: packet.packetHash,
+        errors,
+        ledger: ledger.snapshot(),
+        raw,
+      });
       return {
         findingId: input.finding.id,
         status: "failed",
@@ -271,7 +338,11 @@ export async function assessFinding(
         recommendationOutcome: "assessment_failed",
         recommendationDedupKey: input.finding.dedupKey,
         recommendationPacketHash: packet.packetHash,
-        recommendationPacketJson: JSON.stringify(packet).slice(0, 200_000),
+        recommendationPacketJson: JSON.stringify(packet),
+        recommendationFinalPacketJson: JSON.stringify(packet),
+        recommendationInitialPacketHash: initialPacket.packetHash,
+        recommendationAttemptsJson: JSON.stringify(rawAttempts),
+        recommendationRequestsJson: JSON.stringify(requestOutcomes),
         recommendationAnalysisJson: JSON.stringify(ledger.snapshot()),
       },
       metrics: {},
@@ -331,7 +402,11 @@ export async function assessFinding(
     recommendationDecisionJson: JSON.stringify(decision),
     recommendationDedupKey: decision.dedupKey,
     recommendationPacketHash: decision.packetHash,
-    recommendationPacketJson: JSON.stringify(packet).slice(0, 200_000),
+    recommendationPacketJson: JSON.stringify(packet),
+    recommendationFinalPacketJson: JSON.stringify(packet),
+    recommendationInitialPacketHash: initialPacket.packetHash,
+    recommendationAttemptsJson: JSON.stringify(rawAttempts),
+    recommendationRequestsJson: JSON.stringify(requestOutcomes),
     recommendationAnalysisJson: JSON.stringify(ledger.snapshot()),
     recommendationFingerprint: fingerprint,
     recommendationVersion: decision.schemaVersion,

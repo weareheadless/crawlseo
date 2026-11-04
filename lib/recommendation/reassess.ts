@@ -142,6 +142,7 @@ export async function reassessProjectRecommendations(
       const packet = await buildEvidencePacket(db, {
         projectId: opts.projectId,
         siteId: opts.siteId,
+        maxLiveFetches: 0,
         candidate: {
           findingId: candidate.id,
           dedupKey: candidate.dedupKey,
@@ -172,6 +173,7 @@ export async function reassessProjectRecommendations(
     const currentPacket = await buildEvidencePacket(db, {
       projectId: opts.projectId,
       siteId: opts.siteId,
+      maxLiveFetches: 0,
       candidate: {
         findingId: candidate.id,
         dedupKey: candidate.dedupKey,

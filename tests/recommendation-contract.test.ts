@@ -70,6 +70,7 @@ function packet(over: Partial<EvidencePacket> = {}): EvidencePacket {
     }],
     inventory: [{ url: "https://site.test/warranty", title: "Warranty", status: 200, indexable: true, retrieval: "stored" }],
     links: [],
+    requests: [],
     trace: [],
     search: [],
     limitations: [],

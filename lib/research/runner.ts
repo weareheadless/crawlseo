@@ -641,7 +641,6 @@ export async function runResearchRun(runId: string) {
       // Bridge the findings into funnel evidence so business research reaches
       // the opportunity board (the "why" leg). Additive: the legacy rows above
       // are untouched, so this is safe while the old pipeline still produces.
-      const analysisLedger = new AnalysisLedger();
       if (run.projectId) {
         try {
           await bridgeFindingsToEvidence(db, {
@@ -686,6 +685,21 @@ export async function runResearchRun(runId: string) {
           run.requestedBy ?? "research-worker",
         );
         actionIds.push(result.action.id);
+      }
+    }
+
+    // A run can be resumed after findings were saved but before they were bridged.
+    // Repair that state without creating duplicate evidence.
+    if (run.projectId && existingFindings.length > 0) {
+      try {
+        await bridgeFindingsToEvidence(db, {
+          projectId: run.projectId,
+          siteId: site.id,
+          runId: run.id,
+          ledger: analysisLedger,
+        });
+      } catch (error) {
+        console.error("[research] finding evidence repair failed", error);
       }
     }
 

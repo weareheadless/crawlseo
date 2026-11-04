@@ -400,6 +400,138 @@ async function readBodyCapped(res: Response): Promise<ArrayBuffer> {
   return buf.buffer;
 }
 
+export type PublicDocument = {
+  statusCode: number;
+  html: string;
+  finalUrl: string;
+  bytes: number;
+  contentType: string;
+  /** True when the body exceeded the configured byte limit. */
+  truncated: boolean;
+};
+
+export type PublicDocumentOptions = {
+  maxBytes?: number;
+  timeoutMs?: number;
+  maxRedirects?: number;
+  userAgent?: string;
+  headers?: Record<string, string>;
+  /** Called before every network hop; throw to stop before dispatch. */
+  beforeHop?: (url: string) => void | Promise<void>;
+  /** Test seam: resolve a hostname without real DNS. */
+  resolve?: (hostname: string) => Promise<string>;
+};
+
+function assertSafeUrlShape(url: URL): void {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Blocked: unsupported protocol ${url.protocol}`);
+  }
+  if (url.username || url.password) {
+    throw new Error("Blocked: credentials in URL");
+  }
+  const port = url.port;
+  if (port && port !== "80" && port !== "443") {
+    throw new Error(`Blocked: non-standard port ${port}`);
+  }
+}
+
+/**
+ * Bounded public-document retrieval with manual redirects.
+ *
+ * Every hop is shape-checked and resolved before it is dispatched, so a redirect
+ * cannot make the process contact a private or unsupported destination. The body
+ * is streamed up to a byte limit and returned with an explicit truncation flag.
+ */
+export async function fetchPublicDocument(
+  input: string,
+  opts: PublicDocumentOptions = {}
+): Promise<PublicDocument> {
+  const maxBytes = Math.max(1_024, Math.min(opts.maxBytes ?? 2 * 1024 * 1024, MAX_RESPONSE_BYTES));
+  const timeoutMs = Math.max(1_000, Math.min(opts.timeoutMs ?? FETCH_TIMEOUT_MS, 60_000));
+  const maxRedirects = Math.max(0, Math.min(opts.maxRedirects ?? MAX_REDIRECTS, 10));
+  const resolveHost = opts.resolve ?? (async (hostname: string) => (await lookup(hostname)).address);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const started = Date.now();
+  void started;
+  try {
+    let currentUrl = input;
+    let response: Response | null = null;
+    for (let hop = 0; hop <= maxRedirects; hop += 1) {
+      const parsed = new URL(currentUrl);
+      assertSafeUrlShape(parsed);
+      const address = await resolveHost(parsed.hostname);
+      if (isPrivateIp(address)) {
+        throw new Error(`Blocked: ${parsed.hostname} resolves to private/reserved IP`);
+      }
+      await opts.beforeHop?.(currentUrl);
+      response = await fetch(currentUrl, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": opts.userAgent ?? USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          ...(opts.headers ?? {}),
+        },
+      });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) break;
+        currentUrl = new URL(location, currentUrl).toString();
+        if (hop === maxRedirects) {
+          throw new Error(`Too many redirects (>${maxRedirects})`);
+        }
+        continue;
+      }
+      break;
+    }
+    if (!response) throw new Error("No response");
+
+    const contentType = response.headers.get("content-type") || "";
+    let bytes = 0;
+    let truncated = false;
+    const chunks: Uint8Array[] = [];
+    if (response.body) {
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (bytes + value.byteLength > maxBytes) {
+          const remaining = maxBytes - bytes;
+          if (remaining > 0) chunks.push(value.slice(0, remaining));
+          bytes = maxBytes;
+          truncated = true;
+          await reader.cancel();
+          break;
+        }
+        bytes += value.byteLength;
+        chunks.push(value);
+      }
+    }
+    const buf = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      buf.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const html =
+      contentType.includes("html") || contentType.includes("xml")
+        ? new TextDecoder("utf-8", { fatal: false }).decode(buf)
+        : "";
+    return {
+      statusCode: response.status,
+      html,
+      finalUrl: currentUrl,
+      bytes,
+      contentType,
+      truncated,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchPage(url: string): Promise<{
   statusCode: number;
   html: string;

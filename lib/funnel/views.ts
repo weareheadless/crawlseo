@@ -514,7 +514,11 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       where: { id: row.recommendationEvidenceId },
       select: { dimensions: true },
     });
-    packetJson = (packetRow?.dimensions as { recommendationPacketJson?: unknown } | null)?.recommendationPacketJson ?? null;
+    const dimensions = (packetRow?.dimensions ?? null) as {
+      recommendationFinalPacketJson?: unknown;
+      recommendationPacketJson?: unknown;
+    } | null;
+    packetJson = dimensions?.recommendationFinalPacketJson ?? dimensions?.recommendationPacketJson ?? null;
   }
   const references = resolvePacketReferences(packetJson);
   const taskDecisionId = (task?.plan as { decisionId?: unknown } | null)?.decisionId;

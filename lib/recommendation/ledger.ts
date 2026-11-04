@@ -19,6 +19,8 @@ export type AnalysisLedgerSnapshot = {
   evidenceRounds: number;
   retrievalRequests: number;
   liveFetches: number;
+  bytesFetched: number;
+  elapsedMs: number;
   startedAt: string;
   exhausted: string[];
   trace: AnalysisTraceEntry[];
@@ -31,6 +33,7 @@ export class AnalysisLedger {
   private evidenceRounds = 0;
   private retrievalRequests = 0;
   private liveFetches = 0;
+  private bytesFetched = 0;
   private readonly startedAt = new Date();
   private readonly exhausted = new Set<string>();
   private readonly trace: AnalysisTraceEntry[] = [];
@@ -39,7 +42,20 @@ export class AnalysisLedger {
     this.policy = policy;
   }
 
+  elapsedMs(): number {
+    return Date.now() - this.startedAt.getTime();
+  }
+
+  canStart(): boolean {
+    if (this.elapsedMs() >= this.policy.maxElapsedMs) {
+      this.exhausted.add("elapsed_time");
+      return false;
+    }
+    return true;
+  }
+
   canCallModel(): boolean {
+    if (!this.canStart()) return false;
     if (this.modelCalls >= this.policy.maxModelCalls) {
       this.exhausted.add("model_calls");
       return false;
@@ -77,7 +93,31 @@ export class AnalysisLedger {
     this.trace.push({ round, action: "request_evidence", detail: detail.slice(0, 600), at: new Date().toISOString() });
   }
 
+  canFetch(): boolean {
+    if (!this.canStart()) return false;
+    if (this.liveFetches >= this.policy.maxLiveFetches) {
+      this.exhausted.add("live_fetches");
+      return false;
+    }
+    if (this.bytesFetched >= this.policy.maxTotalBytes) {
+      this.exhausted.add("bytes");
+      return false;
+    }
+    return true;
+  }
+
+  chargeFetchAttempt(): void {
+    this.liveFetches += 1;
+  }
+
+  chargeBytes(bytes: number): void {
+    if (!Number.isFinite(bytes) || bytes <= 0) return;
+    this.bytesFetched += Math.floor(bytes);
+    if (this.bytesFetched >= this.policy.maxTotalBytes) this.exhausted.add("bytes");
+  }
+
   canRetrieve(count: number): boolean {
+    if (!this.canStart()) return false;
     if (this.retrievalRequests + count > this.policy.maxRetrievalRequests) {
       this.exhausted.add("retrieval_requests");
       return false;
@@ -109,6 +149,8 @@ export class AnalysisLedger {
       evidenceRounds: this.evidenceRounds,
       retrievalRequests: this.retrievalRequests,
       liveFetches: this.liveFetches,
+      bytesFetched: this.bytesFetched,
+      elapsedMs: this.elapsedMs(),
       startedAt: this.startedAt.toISOString(),
       exhausted: [...this.exhausted],
       trace: [...this.trace],

@@ -82,7 +82,7 @@ Rules:
 - Need bases: observed_request or observed_repetition require research source refs; search_observation requires actual search refs (query/impression data), not a competitor article; published_question requires a site/source ref; inferred_need is allowed when the evidence supports a reasonable low-risk inference, and its note must explain the inference. If the only bases are inferred_need, the question state must be "unverified"; "supported" requires an observed, published or search basis. A competitor/SERP article shows presence, not this business's customer demand. Do not require private CRM data to notice a plausible customer question.
 - Never claim repeated customer demand from one source, duplicated findings, a competitor page or cluster size.
 - Offer fit needs a business fact ref. A location, shared noun or competitor result is not fit.
-- Coverage: assess each supplied page against the exact question. "answers" and "partially_answers" require verbatim excerpts from that page's text field only. Do not merge sections, paraphrase, or add punctuation that is not present. Missing, empty or unread text is "unassessable", never "does_not_answer". "does_not_answer" is allowed only when you actually inspected supplied text on that page. An existing answer can still have a separate discoverability/journey problem.
+- Coverage: assess each supplied page against the exact question. "answers" and "partially_answers" require verbatim excerpts from that page's text field only. Do not merge sections, paraphrase, or add punctuation that is not present. Missing, empty or unread text is "unassessable", never "does_not_answer". "does_not_answer" is allowed only when you actually inspected supplied text on that page. If the supplied text is truncated, a negative assessment must be section-scoped: set "scope":"section" and "sectionIds" to the inspected section IDs; never claim the whole page lacks an answer from a prefix. An existing answer can still have a separate discoverability/journey problem.
 - The premise is contradicted only when a supplied page answers the finding's claimed gap; cite that page and quote it. A related page of the same type is not enough. An unrelated corpus is a research-quality failure, not a customer need. A false finding premise does not automatically make the underlying customer question useless: if that question is supported or explicitly inferred and an existing page is genuinely inadequate, you may return actionable for the question while recording the premise as contradicted. Use rejected when the customer question itself is unsupported or the business should not serve it.
 - Choose readiness and intervention together:
   - actionable: supported (or explicitly inferred) question + supported offer fit + an evidenced inadequacy or a justified new asset/journey change + a specific change. Missing keyword volume does not prevent this.
@@ -99,9 +99,9 @@ Rules:
 - Prefer restraint over fabricated work, but do not reject a useful low-risk improvement merely because its traffic impact is unquantified.`;
 
 export type AssessmentOutcome =
-  | { kind: "final"; decision: RecommendationDecision; attempts: number; raw: unknown }
-  | { kind: "request"; request: EvidenceRequest; attempts: number; raw: unknown }
-  | { kind: "failure"; errors: string[]; raw: unknown; attempts: number };
+  | { kind: "final"; decision: RecommendationDecision; attempts: number; raw: unknown; rawAttempts?: unknown[] }
+  | { kind: "request"; request: EvidenceRequest; attempts: number; raw: unknown; rawAttempts?: unknown[] }
+  | { kind: "failure"; errors: string[]; raw: unknown; attempts: number; rawAttempts?: unknown[] };
 
 export async function assessRecommendation(
   packet: EvidencePacket,
@@ -117,26 +117,37 @@ export async function assessRecommendation(
   let raw: unknown = null;
   let lastErrors: string[] = [];
   let attempts = 0;
-
+  const rawAttempts: unknown[] = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    if (!ledger.canCallModel()) {
-      lastErrors = ["analysis model-call budget exhausted before a valid result"];
+    if (!ledger.canStart()) {
+      lastErrors = ["analysis wall-clock budget exhausted before a valid result"];
       break;
     }
     attempts = attempt;
-    ledger.chargeModelCall(round, attempt === 1 ? "initial assessment" : "corrected assessment");
+    const userBody = JSON.stringify({
+      packet,
+      ...(feedback ? { validation_feedback: feedback } : {}),
+    });
+    if (userBody.length > ledger.policy.maxInputChars) {
+      lastErrors = [`analysis input is ${userBody.length} characters, above the ${ledger.policy.maxInputChars} character limit`];
+      break;
+    }
     try {
       raw = await chatJson({
         config,
         system: SYSTEM,
-        user: JSON.stringify({
-          packet,
-          ...(feedback ? { validation_feedback: feedback } : {}),
-        }),
+        user: userBody,
         maxTokens: ledger.policy.maxTokens,
         attempts: 3,
         timeoutMs: ledger.policy.timeoutMs,
+        // Charge every transport attempt before it is dispatched, including
+        // retries. A failed request still spends the run's allowance.
+        beforeAttempt: () => {
+          if (!ledger.canCallModel()) throw new Error("analysis model-call budget exhausted before dispatch");
+          ledger.chargeModelCall(round, attempt === 1 ? "assessment transport" : "repair transport");
+        },
       });
+      rawAttempts.push(raw);
     } catch (error) {
       lastErrors = [error instanceof Error ? error.message : String(error)];
       feedback = `Your previous answer could not be read as JSON. Return one complete JSON object and no prose. Error: ${lastErrors[0]}`;
@@ -155,7 +166,7 @@ export async function assessRecommendation(
     }
 
     if (parsed.output.kind === "request_evidence") {
-      return { kind: "request", request: parsed.output.request, attempts, raw };
+      return { kind: "request", request: parsed.output.request, attempts, raw, rawAttempts };
     }
 
     const decision = finaliseDecision({
@@ -166,14 +177,14 @@ export async function assessRecommendation(
       now: opts.now,
     });
     const validation = validateDecision(decision, packet);
-    if (validation.ok) return { kind: "final", decision, attempts, raw };
+    if (validation.ok) return { kind: "final", decision, attempts, raw, rawAttempts };
     lastErrors = validation.errors;
     feedback = `Your previous answer failed integrity validation. Correct these errors and return the complete JSON object again:\n- ${validation.errors.join("\n- ")}`;
     if (!ledger.canRepair()) break;
     ledger.chargeRepair();
   }
 
-  return { kind: "failure", errors: lastErrors, raw, attempts };
+  return { kind: "failure", errors: lastErrors, raw, attempts, rawAttempts };
 }
 
 /** A small deterministic check used by tests and callers that already have a decision. */

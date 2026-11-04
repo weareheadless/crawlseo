@@ -68,6 +68,14 @@ export const ANALYSIS_RESOURCE_POLICY = {
   maxTokens: 16_000,
   timeoutMs: 180_000,
   maxRawResponseChars: 60_000,
+  /** One run may not exceed this wall-clock budget. */
+  maxElapsedMs: 20 * 60_000,
+  /** Maximum serialized model input per call. */
+  maxInputChars: 400_000,
+  /** Total document bytes fetched by one analysis ledger. */
+  maxTotalBytes: 8 * 1024 * 1024,
+  /** Reuse a completed decision only inside this freshness window. */
+  reuseMaxAgeDays: 7,
 } as const;
 
 export type AnalysisResourcePolicy = typeof ANALYSIS_RESOURCE_POLICY;
@@ -170,6 +178,15 @@ export const EvidencePacketSchema = z.object({
   ).max(20),
   pages: z.array(PacketPageSchema).max(10),
   links: z.array(PacketLinkSchema).max(200),
+  /** Evidence requests already attempted, with their terminal outcome. */
+  requests: z.array(
+    z.object({
+      type: z.enum(["page_text", "source_text", "journey_links", "inventory_search"]),
+      target: z.string().max(2_000),
+      status: z.enum(["fulfilled", "partial", "unavailable", "no_progress", "budget_exhausted"]),
+      detail: z.string().max(500),
+    })
+  ).max(40),
   /** What the analysis asked for and what the service did, in order. */
   trace: z.array(
     z.object({
@@ -220,6 +237,12 @@ const AssessmentSchema = z.object({
 const CoverageSchema = z.object({
   pageId: id,
   state: z.enum(COVERAGE_STATES),
+  /**
+   * What the assessment actually inspected. A truncated page cannot support a
+   * whole-page absence claim; the model must name the section scope instead.
+   */
+  scope: z.enum(["whole_page", "section"]).optional(),
+  sectionIds: z.array(id).max(6).optional(),
   rationale: longText,
   excerpts: z.array(z.string().max(1_200)).max(4),
   limitations: z.array(z.string().max(400)).max(4),
@@ -536,9 +559,21 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
     }
     // A negative answer about a page that was never read is not evidence. The
     // model may mark such a page unassessable, or request its text first.
+    const scope = entry.scope ?? "whole_page";
+    if (scope === "section" && (entry.sectionIds?.length ?? 0) === 0) {
+      errors.push(`coverage for ${page.url} is section-scoped but names no inspected section`);
+    }
+    for (const sectionId of entry.sectionIds ?? []) {
+      if (!page.sections.some((section) => section.id === sectionId)) {
+        errors.push(`coverage for ${page.url} names section "${sectionId}" that is not in the supplied text`);
+      }
+    }
     if (entry.state === "does_not_answer") {
       if (page.retrieval === "unavailable" || page.text.trim().length === 0 || page.inspected === 0) {
         errors.push(`coverage for ${page.url} claims no answer, but no page text was inspected`);
+      }
+      if (page.truncated && scope === "whole_page") {
+        errors.push(`coverage for ${page.url} claims the whole page does not answer, but only a truncated section was supplied; assess the relevant section or request the rest`);
       }
     }
     if (entry.state === "unassessable" && page.text.trim().length > 0 && !page.truncated && entry.limitations.length === 0) {
@@ -794,7 +829,17 @@ export function validateEvidenceRequest(
   const inventory = new Set(packet.inventory.map((row) => row.url));
   const domain = opts.siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
 
+  const terminal = new Map(
+    packet.requests.map((row) => [`${row.type}|${row.target}`, row] as const)
+  );
   for (const entry of request.requests) {
+    const previous = terminal.get(`${entry.type}|${entry.target}`);
+    if (previous && ["unavailable", "no_progress", "budget_exhausted"].includes(previous.status)) {
+      errors.push(
+        `request ${entry.type} ${entry.target} was already attempted and is ${previous.status}; use the supplied evidence or return a final decision`
+      );
+      continue;
+    }
     if (entry.type === "page_text") {
       // Models sometimes write page:<url> instead of the packet's page:<hash>.
       // That is a naming variant of the same site page, not a different origin.
@@ -893,6 +938,18 @@ export function finaliseDecision(input: {
     inputLimitations: input.packet.limitations,
   };
   return decision;
+}
+
+export function parsePersistedPacket(value: unknown): EvidencePacket | null {
+  if (typeof value === "string") {
+    try {
+      return parsePersistedPacket(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+  const parsed = EvidencePacketSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function parsePersistedDecision(value: unknown): RecommendationDecision | null {

@@ -149,6 +149,7 @@ export async function shadowRecommendations(
     const packet = await buildEvidencePacket(db, {
       projectId: opts.projectId,
       siteId: opts.siteId,
+      maxLiveFetches: 0,
       candidate: {
         findingId: candidate.id,
         dedupKey: candidate.dedupKey,

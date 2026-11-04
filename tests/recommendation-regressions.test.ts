@@ -102,6 +102,7 @@ function packet(over: Partial<EvidencePacket> = {}): EvidencePacket {
       },
     ],
     links: [],
+    requests: [],
     trace: [],
     inventory: [
       { url: "https://site.test/services", title: "Fitted wardrobes", status: 200, indexable: true, retrieval: "stored" },
