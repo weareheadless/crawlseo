@@ -9,6 +9,7 @@ import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 import { finaliseDecision } from "@/lib/recommendation/contracts";
+import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
 
 /**
  * Database integration for the customer-centred brief (§6, §7).
@@ -22,6 +23,10 @@ import { finaliseDecision } from "@/lib/recommendation/contracts";
  *   DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run ...
  */
 const enabled = process.env.RUN_CUSTOMER_REC_DB_TESTS === "1";
+const isolatedSchema = /[?&]schema=csv_validation(?:&|$)/.test(process.env.DATABASE_URL ?? "");
+if (enabled && !isolatedSchema) {
+  throw new Error("Refusing to run destructive integration tests outside schema=csv_validation");
+}
 const dbDescribe = enabled ? describe : describe.skip;
 
 const workspaces = new Set<string>();
@@ -346,6 +351,25 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     expect(decision.change).toContain("price range");
     expect(decision.question.rationale).toContain("next question");
     expect(opportunity!.scoreValue).toBeGreaterThan(0);
+
+    // Shadow reassessment must not change the published board.
+    const before = await db.opportunity.findMany({
+      where: { projectId: project.id },
+      select: { id: true, title: true, status: true, recommendationDecision: true, recommendationFingerprint: true },
+      orderBy: { id: "asc" },
+    });
+    const shadow = await reassessProjectRecommendations(db, {
+      projectId: project.id,
+      siteId: site.id,
+      dryRun: true,
+    });
+    expect(shadow.current + shadow.stale + shadow.missing).toBeGreaterThan(0);
+    const after = await db.opportunity.findMany({
+      where: { projectId: project.id },
+      select: { id: true, title: true, status: true, recommendationDecision: true, recommendationFingerprint: true },
+      orderBy: { id: "asc" },
+    });
+    expect(after).toEqual(before);
   });
 
   it("restores the board without overwriting a newer human decision", async () => {
@@ -387,6 +411,21 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     const path = join(dir, "board.json");
     await takeBoardSnapshot(db, path);
 
+    // A new recommendation appears after the snapshot and was never reviewed.
+    const newRow = await db.opportunity.create({
+      data: {
+        projectId: project.id,
+        type: "O13_user_pain_point",
+        dimension: "content",
+        title: "New after snapshot",
+        summary: "Not in the reviewed state",
+        dedupKey: "O13:new-after-snapshot",
+        scoreValue: 10,
+        scoreInputs: { worth: { volume: null, ctrAtPosition: null, businessValue: 0.5 } },
+        detectedBy: "integration",
+      },
+    });
+
     // A reanalysis changes the published state.
     await db.opportunity.update({
       where: { id: opportunity.id },
@@ -400,7 +439,8 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
 
     const result = await restoreBoardSnapshot(db, path);
     expect(result.restored).toBeGreaterThan(0);
-    expect(result.conflicts.length).toBe(1);
+    expect(result.conflicts.length).toBe(2);
+    expect(result.conflicts.join(" ")).toContain("created after the snapshot");
 
     const restored = await db.opportunity.findUniqueOrThrow({ where: { id: opportunity.id } });
     expect(restored.title).toBe("Before");
@@ -411,6 +451,10 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     const preserved = await db.opportunity.findUniqueOrThrow({ where: { id: decided.id } });
     expect(preserved.title).toBe("Accepted later");
     expect(preserved.decidedBy).toBe("owner-2");
+
+    const createdAfter = await db.opportunity.findUniqueOrThrow({ where: { id: newRow.id } });
+    expect(createdAfter.status).toBe("parked");
+    expect(createdAfter.parkReason).toBe("rollback_new_row");
     void site;
   });
 

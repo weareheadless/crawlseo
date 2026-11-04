@@ -37,7 +37,7 @@ export type SnapshotRow = {
 export type BoardSnapshot = {
   takenAt: string;
   checksum: string;
-  sites: Array<{ siteId: string; domain: string; opportunities: SnapshotRow[] }>;
+  sites: Array<{ siteId: string; projectId: string; domain: string; opportunities: SnapshotRow[] }>;
 };
 
 export type SnapshotDb = Pick<PrismaClient, "site" | "opportunity">;
@@ -66,6 +66,7 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
     });
     snapshot.sites.push({
       siteId: site.id,
+      projectId: site.projectId!,
       domain: site.domain,
       opportunities: opportunities.map((row) => ({
         ...row,
@@ -105,15 +106,17 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
     for (const row of site.opportunities) {
       const current = await db.opportunity.findUnique({
         where: { id: row.id },
-        select: { decidedAt: true },
+        select: { decidedAt: true, updatedAt: true },
       });
       if (!current) continue;
       if (current.decidedAt && current.decidedAt.getTime() > takenAt) {
         conflicts.push(`${site.domain}: ${row.dedupKey} was decided after the snapshot`);
         continue;
       }
-      await db.opportunity.update({
-        where: { id: row.id },
+      // Compare-and-swap: a row changed between the read and this write is a
+      // concurrent edit, not a row to overwrite.
+      const updated = await db.opportunity.updateMany({
+        where: { id: row.id, updatedAt: current.updatedAt },
         data: {
           title: row.title,
           summary: row.summary,
@@ -129,7 +132,27 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
           assessmentVersion: row.assessmentVersion,
         },
       });
+      if (updated.count === 0) {
+        conflicts.push(`${site.domain}: ${row.dedupKey} changed concurrently`);
+        continue;
+      }
       restored += 1;
+    }
+
+    // A row created after the snapshot was not part of the reviewed state. Park it
+    // unless a human has already accepted or progressed it.
+    const snapshotIds = new Set(site.opportunities.map((row) => row.id));
+    const createdAfter = await db.opportunity.findMany({
+      where: { projectId: site.projectId, status: "detected" },
+      select: { id: true, dedupKey: true },
+    });
+    for (const row of createdAfter) {
+      if (snapshotIds.has(row.id)) continue;
+      await db.opportunity.updateMany({
+        where: { id: row.id, status: "detected" },
+        data: { status: "parked", parkReason: "rollback_new_row", decidedBy: "board-restore", decidedAt: new Date() },
+      });
+      conflicts.push(`${site.domain}: ${row.dedupKey} was created after the snapshot and was parked`);
     }
   }
   return { restored, conflicts };

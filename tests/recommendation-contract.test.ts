@@ -8,6 +8,7 @@ import {
   type EvidencePacket,
   type ModelDecision,
 } from "@/lib/recommendation/contracts";
+import { publishDecision } from "@/lib/recommendation/publish";
 
 /**
  * Deterministic integrity tests for the canonical recommendation contract.
@@ -231,6 +232,43 @@ describe("canonical recommendation integrity", () => {
     expect(validateDecision(decision, p).ok).toBe(true);
     expect(decision.reviews.map((review) => review.requirement)).toEqual(["legal", "technical"]);
     expect(decision.uncertainty).toContain("The document list may change.");
+  });
+
+  it("parks an existing detected row for a canonical rejection", async () => {
+    const p = packet();
+    const decision = decide(p, model({
+      readiness: "rejected",
+      intervention: "maintain",
+      change: null,
+      targets: [],
+      benefits: [],
+      premise: {
+        state: "contradicted",
+        rationale: "The supplied page answers the claimed gap.",
+        references: ["page:p1"],
+      },
+      coverage: [{
+        pageId: "page:p1",
+        state: "answers",
+        rationale: "It answers the question.",
+        excerpts: ["Our warranty covers repairs for twelve months."],
+        limitations: [],
+      }],
+    }));
+    const updates: Array<{ data: { status?: string; parkReason?: string } }> = [];
+    const db = {
+      opportunity: {
+        findUnique: async () => ({ id: "op-1", status: "detected" }),
+        update: async (args: { data: { status?: string; parkReason?: string } }) => {
+          updates.push(args);
+          return { id: "op-1" };
+        },
+      },
+      evidenceEdge: { findMany: async () => [] },
+    } as never;
+    await publishDecision(db, { projectId: "p1", decision, findingType: "CONCERN", evidenceId: "e1" });
+    expect(updates[0]?.data.status).toBe("parked");
+    expect(updates[0]?.data.parkReason).toBe("decision_rejected");
   });
 
   it("carries the packet identity and policy into the decision", () => {
