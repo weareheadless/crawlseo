@@ -41,10 +41,19 @@ describe("specificity, not volume, decides", () => {
   it("does not reduce a phrase to a single hyphenated head term", () => {
     const chosen = pickDerivedKeyword("abat-jour ne tient pas droit", [
       { keyword: "abat-jour", volume: 49_500 },
-      { keyword: "abat-jour sur mesure", volume: 320 },
+      { keyword: "abat-jour pour lampe", volume: 14_800 },
     ]);
-    expect(chosen?.keyword).toBe("abat-jour sur mesure");
-    expect(chosen?.specificity).not.toBe("exact");
+    // "abat-jour pour lampe" keeps one of four words: a different query.
+    expect(chosen).toBeNull();
+  });
+
+  it("accepts a candidate that keeps at least half the phrase", () => {
+    const chosen = pickDerivedKeyword("abat-jour ne tient pas droit", [
+      { keyword: "abat-jour", volume: 49_500 },
+      { keyword: "abat jour ne tient pas droit", volume: 40 },
+    ]);
+    expect(chosen?.keyword).toBe("abat jour ne tient pas droit");
+    expect(chosen?.specificity).toBe("exact");
   });
 
   it("returns nothing rather than a head term when only one exists", () => {
@@ -54,13 +63,21 @@ describe("specificity, not volume, decides", () => {
     ])).toBeNull();
   });
 
-  it("prefers a candidate that keeps every seed word", () => {
+  it("prefers demand among candidates that keep every seed word", () => {
     const chosen = pickDerivedKeyword("restauration de sièges", [
       { keyword: "restauration de sieges anciens", volume: 90 },
       { keyword: "restauration sieges", volume: 2_400 },
     ]);
-    expect(chosen?.keyword).toBe("restauration de sieges anciens");
-    expect(chosen?.specificity).toBe("expanded");
+    expect(chosen?.keyword).toBe("restauration sieges");
     expect(chosen?.dropped).toBe(0);
+  });
+
+  it("keeps the exact phrase over a longer long-tail", () => {
+    const chosen = pickDerivedKeyword("restauration meuble ancien", [
+      { keyword: "restauration meuble ancien", volume: 720 },
+      { keyword: "restauration meuble ancien autour de moi", volume: 20 },
+    ]);
+    expect(chosen?.keyword).toBe("restauration meuble ancien");
+    expect(chosen?.specificity).toBe("exact");
   });
 });

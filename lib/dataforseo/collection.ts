@@ -405,48 +405,71 @@ export type DerivedKeywordChoice = {
   specificity: DerivedKeywordSpecificity;
 };
 
-/** Words as a reader counts them: whitespace-separated, hyphen kept inside a word. */
-export function keywordWords(value: string): string[] {
+/**
+ * Words as a reader counts them: whitespace-separated, a hyphen kept inside its
+ * word, so "abat-jour" is one word and not two.
+ */
+export function keywordUnits(value: string): string[] {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .split(/\s+/)
     .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ""))
-    .filter((word) => word.length >= 3);
+    .filter((word) => word.length > 0);
+}
+
+/**
+ * Tokens for comparison: a hyphen or an apostrophe separates, so "abat jour" and
+ * "abat-jour" are the same phrase written two ways. Short words are dropped
+ * because "de", "un" and "la" carry no subject.
+ */
+export function keywordTokens(value: string): string[] {
+  return keywordUnits(value)
+    .flatMap((word) => word.split(/[^a-z0-9]+/))
+    .filter((token) => token.length >= 3);
 }
 
 export function pickDerivedKeyword(
   seed: string,
   candidates: Array<{ keyword: string; volume: number | null }>
 ): DerivedKeywordChoice | null {
-  const seedWords = new Set(keywordWords(seed));
-  const seedIsPhrase = seedWords.size >= 2;
+  const seedTokens = new Set(keywordTokens(seed));
+  const seedUnits = keywordUnits(seed).length;
+  const seedIsPhrase = seedUnits >= 2;
   const scored = candidates
     .filter((candidate) => typeof candidate.volume === "number" && (candidate.volume ?? 0) >= 10 && candidate.keyword.trim().length > 0)
     .map((candidate) => {
-      const words = new Set(keywordWords(candidate.keyword));
-      const retained = [...words].filter((word) => seedWords.has(word)).length;
-      const dropped = [...seedWords].filter((word) => !words.has(word)).length;
+      const tokens = new Set(keywordTokens(candidate.keyword));
+      const units = keywordUnits(candidate.keyword).length;
+      const retained = [...tokens].filter((token) => seedTokens.has(token)).length;
+      const dropped = [...seedTokens].filter((token) => !tokens.has(token)).length;
       const specificity: DerivedKeywordSpecificity =
-        dropped === 0 && words.size === seedWords.size ? "exact" : dropped === 0 ? "expanded" : "narrowed";
+        dropped === 0 && tokens.size === seedTokens.size ? "exact" : dropped === 0 ? "expanded" : "narrowed";
       return {
         keyword: candidate.keyword.trim(),
         volume: candidate.volume as number,
         retained,
         dropped,
         specificity,
-        words: words.size,
+        units,
       };
     })
-    // A one-word answer to a multi-word phrase is the head term we backed off to,
-    // not the phrase's keyword. Returning nothing is honest; the join leaves the
-    // leg unjoined instead of filing the opportunity under a broader query.
-    .filter((candidate) => (seedIsPhrase ? candidate.words >= 2 && candidate.retained >= 1 : true))
-    // Fewest qualifiers lost first, then the candidate that says the most, then
-    // demand. Volume only breaks ties: it is the one signal that rewards being
-    // broad, which is what we are trying not to be.
-    .sort((a, b) => a.dropped - b.dropped || b.words - a.words || b.volume - a.volume);
+    // Two guards, both about not filing an opportunity under a different query:
+    // a one-word answer to a multi-word phrase is the head term we backed off to,
+    // and a candidate that keeps less than half the phrase's subject is no longer
+    // that phrase. Returning nothing is honest; the join leaves the leg unjoined.
+    .filter((candidate) => (seedIsPhrase
+      ? candidate.units >= 2
+        && candidate.retained >= 1
+        && candidate.retained / Math.max(1, candidate.retained + candidate.dropped) >= 0.5
+      : true))
+    // Fewest qualifiers lost first, then demand. Volume does not rank on its own —
+    // it is the signal that rewards being broad, which is what we are avoiding —
+    // but among candidates that keep the phrase it is the right tiebreak. Ranking
+    // by "says the most" instead produced junk long-tails: a nine-word brand page
+    // title outranked the phrase people search.
+    .sort((a, b) => a.dropped - b.dropped || b.volume - a.volume);
   const best = scored[0];
   if (!best) return null;
   return {
