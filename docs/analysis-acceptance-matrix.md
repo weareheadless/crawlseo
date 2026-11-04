@@ -24,7 +24,7 @@ and the test that fails if it returns. Status is **implemented** or **open**.
 | 17 | Acquisition follows hypotheses instead of observed queries | observed performance is planned first, by impressions, batched, cached 45 days | `funnel-acquisition.test.ts` | implemented |
 | 18 | Cannibalisation/decay asserted as causes | O10 needs observed overlap and asks for a check; O11 states the movement and says the cause is not established | `tests/funnel-decline-overlap.test.ts` | implemented |
 | 19 | Comparison window / decline detection | backfill stores the previous window; O11 compares it | `funnel-decline-overlap.test.ts` | implemented |
-| 20 | Migration, shadow comparison, rollout | `assessmentVersion` migration, `--dry-run`, `scripts/shadow-analysis.ts`, `scripts/reanalyse-all.ts` with snapshot/restore | manual (verified below) | implemented |
+| 20 | Migration, shadow comparison, rollout | `assessmentVersion` migration, `--dry-run`, `scripts/shadow-analysis.ts`, `scripts/reanalyse-all.ts` with snapshot/restore | executed on production | implemented |
 
 Additional correctness added while reviewing the shadow diff:
 
@@ -35,7 +35,15 @@ Additional correctness added while reviewing the shadow diff:
 | 23 | The site's own name offered as a winnable rank | `isBrandQuery` + domain-derived brand terms | `funnel-first-party-demand.test.ts` |
 | 24 | A top-ten page with 0% CTR was invisible | O2 covers the snippet band, not only 11–20 | `funnel-first-party-demand.test.ts` ("snippet opportunity") |
 
-## Published boards after the refresh (2026-11-03)
+## Applied to production (2026-11-04, commit `1e6bced`)
+
+- Migration `20261104150000_opportunity_assessment_version` deployed (additive).
+- Board refreshed for every live tenant with a rollback snapshot in
+  `.releases/board/`; `scripts/reanalyse-all.ts --restore <file>` reverts it.
+- Duplicate site record retired (`scripts/retire-duplicate-sites.ts`).
+- Worker and web released at `1e6bced`.
+
+## Published boards after the refresh (2026-11-04)
 
 | Site | Detected | measured | estimated | technical | hypothesis |
 |---|---:|---:|---:|---:|---:|
@@ -46,8 +54,10 @@ Additional correctness added while reviewing the shadow diff:
 
 Susi's top row is now the measured "beachfront homes for sale under $100k"
 (269 impressions, 10 clicks, position 6.9), not a page-count defect. Atelier,
-Oceanic and Casamigo lead with technical work because they have no query with
-enough impressions to measure an upside — the honest result, not a ranking bug.
+Oceanic and Casamigo lead with technical work because no query has enough
+impressions to measure an upside — the honest result, not a ranking bug.
+
+Oceanic now resolves en/US with the business in MX (previously es/MX).
 
 ## Measured effect (read-only, live data, 2026-11-03)
 
