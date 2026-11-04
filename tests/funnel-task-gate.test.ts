@@ -235,3 +235,21 @@ describe("opportunity store (wave 1)", () => {
     ).rejects.toThrow(/fixed dimension/);
   });
 });
+
+describe("join measurement", () => {
+  it("rebuilds the demand inputs from an arriving volume measurement", async () => {
+    const { assessmentOverridesFromEvidence } = await import("@/lib/funnel/join");
+    const overrides = assessmentOverridesFromEvidence({
+      id: "e1",
+      observedAt: new Date(),
+      dimensions: { query: "closing costs" },
+      metrics: { "provider:volume": { value: 480, unit: "searches/month", source: "provider" } },
+    });
+    expect(overrides).toEqual({ volume: 480, volumeSource: "provider" });
+  });
+
+  it("changes nothing when the evidence carries no measurement", async () => {
+    const { assessmentOverridesFromEvidence } = await import("@/lib/funnel/join");
+    expect(assessmentOverridesFromEvidence({ id: "e2", observedAt: new Date(), dimensions: {}, metrics: {} })).toEqual({});
+  });
+});

@@ -73,6 +73,22 @@ export type EvidenceLike = {
  * when the evidence record genuinely addresses the opportunity (the caller
  * owns matching; this module owns the re-score and the edge write).
  */
+/**
+ * What a newly arrived observation changes about the assessment.
+ *
+ * Attaching an edge and raising completeness is not measurement: a keyword volume
+ * that arrives must replace the demand inputs the score is computed from, or the
+ * board shows "two legs" with no number behind it.
+ */
+export function assessmentOverridesFromEvidence(evidence: EvidenceLike): Partial<ScoreInputs["worth"]> {
+  const metrics = (evidence.metrics ?? {}) as Record<string, { value?: number | null } | undefined>;
+  const volume = metrics["provider:volume"]?.value;
+  if (typeof volume === "number" && Number.isFinite(volume) && volume > 0) {
+    return { volume, volumeSource: "provider" };
+  }
+  return {};
+}
+
 export async function applyJoin(
   db: JoinDb,
   opportunityId: string,
@@ -103,8 +119,10 @@ export async function applyJoin(
     opportunity.evidenceCompleteness === "why" ? 1 : opportunity.evidenceCompleteness === "both" ? 1 : whyCount,
     opportunity.evidenceCompleteness === "how" ? 1 : opportunity.evidenceCompleteness === "both" ? 1 : howCount
   );
+  const overrides = assessmentOverridesFromEvidence(evidence);
   const { scoreValue, inputs } = computeScore({
     ...(scoreInputs as Omit<ScoreInputs, "evidenceCompleteness">),
+    worth: { ...(scoreInputs as Omit<ScoreInputs, "evidenceCompleteness">).worth, ...overrides },
     evidenceCompleteness: joinedLeg,
     freshness: Math.max(scoreInputs.freshness, freshnessFactor(evidence.observedAt, opts.now ?? new Date())),
   });
