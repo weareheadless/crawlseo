@@ -124,6 +124,36 @@ describe("research synthesis", () => {
     expect(result.actions[0].title).toBe("Ownership explanation");
   });
 
+  it("keeps a contradicted finding for the canonical assessor instead of pre-rejecting it", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({
+      findings: [{
+        type: "CONTENT_GAP",
+        theme: "Foreign ownership",
+        summary: "The site has no foreign-ownership answer.",
+        confidence: 70,
+        source_indexes: [0],
+        site_claim: { kind: "missing_answer", statement: "The site has no foreign-ownership answer." },
+      }],
+      actions: [],
+    })));
+    const result = await synthesizeResearch({
+      siteDomain: "example.test",
+      title: "Ownership",
+      topics: ["ownership"],
+      questions: [],
+      sources,
+      candidatePages: [],
+      verifyClaim: () => ({
+        status: "contradicted",
+        reason: "The supplied page already explains foreign ownership.",
+      }),
+    });
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].verification?.status).toBe("contradicted");
+    expect(result.rejected).toHaveLength(1);
+  });
+
   it("drops model actions outside the documented capability set", async () => {
     vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({

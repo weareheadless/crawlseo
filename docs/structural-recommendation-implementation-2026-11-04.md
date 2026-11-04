@@ -86,7 +86,7 @@ algorithm.
   actionable opportunity, rollback, checksum refusal.
 - `tests/funnel-task-gate.test.ts` — investigation cannot be accepted as
   implementation.
-- Full suite: **969 passed, 16 skipped**; `tsc` clean; production build compiles;
+- Full suite: **970 passed, 16 skipped**; `tsc` clean; production build compiles;
   integration **4/4** on `csv_validation`.
 
 These tests prove wiring and integrity, not live SEO judgement.
