@@ -59,7 +59,7 @@ export async function acceptOpportunityAction(siteId: string, opportunityId: str
   const executor = user?.name || user?.email || userId;
   const opportunity = await db.opportunity.findUnique({
     where: { id: opportunityId },
-    select: { title: true, summary: true, scoreInputs: true },
+    select: { title: true, summary: true, scoreInputs: true, recommendationDecision: true },
   });
   if (!opportunity) redirect(`/sites/${siteId}/opportunities`);
   const taskId = await acceptOpportunityIntoTask(db as never, opportunityId, {
@@ -67,6 +67,7 @@ export async function acceptOpportunityAction(siteId: string, opportunityId: str
     assignedTo: executor,
     // The task carries the decision it came from: target page, change and check.
     plan: taskPlanFromOpportunity(opportunity),
+    recommendationDecision: opportunity.recommendationDecision,
   });
   revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
   revalidatePath(`/sites/${siteId}/work`);

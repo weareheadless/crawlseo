@@ -5,9 +5,8 @@ import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
-import { assessCustomerNeed } from "@/lib/funnel/assess-need";
-import { assertDecision } from "@/lib/funnel/decision";
-import { parsePersistedAssessment, type NeedAssessment } from "@/lib/research/need-assessment";
+import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
+import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -25,6 +24,11 @@ export type DetectorCandidate = {
   whyEvidenceIds: string[];
   howEvidenceIds: string[];
   scoreInputs: Omit<ScoreInputs, "evidenceCompleteness">;
+  /** The canonical decision this candidate projects, when it has one. */
+  recommendationDecision?: RecommendationDecision;
+  recommendationVersion?: string;
+  recommendationFingerprint?: string;
+  recommendationEvidenceId?: string;
 };
 
 type Evidence = Pick<EvidenceRecord, "id" | "kind" | "observedAt" | "dimensions" | "metrics">;
@@ -108,25 +112,6 @@ export function businessValueFromKnowledge(evidence: Evidence[]): { value: numbe
   return byKind(evidence, "knowledge_fact").length > 0
     ? { value: 0.9, source: "knowledge" }
     : { value: 0.5, source: "unknown" };
-}
-
-/**
- * The assessment behind a decision, persisted with the recommendation.
- *
- * Without it a board can show "actionable" but not why, and a later reader cannot
- * tell a checked conclusion from a model's guess.
- */
-function assessmentProvenance(assessment: NeedAssessment | null) {
-  if (!assessment) return {};
-  return {
-    needRationale: assessment.need.rationale,
-    needEvidenceUrls: assessment.need.evidenceUrls,
-    offerFitRationale: assessment.offerFit.rationale,
-    offerFitEvidenceUrls: assessment.offerFit.evidenceUrls,
-    assessmentModel: assessment.model,
-    assessmentPromptVersion: assessment.promptVersion,
-    assessedAt: assessment.assessedAt,
-  };
 }
 
 const RELEVANCE_STOPWORDS = new Set([
@@ -466,6 +451,73 @@ function group<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
 
 const byQuery = (row: Evidence) => `${dim(row, "query") ?? ""}`;
 const byQuestion = (row: Evidence) => `${dim(row, "question") ?? ""}`;
+
+/**
+ * Project the canonical decision; do not decide again here.
+ *
+ * A legacy finding without a decision stays visible as explicitly unassessed
+ * backlog. It is never made actionable from its prose or from a knowledge record.
+ */
+function canonicalDecisionCandidates(evidence: Evidence[], type: "O13_user_pain_point" | "O14_offer_positioning_gap"): DetectorCandidate[] {
+  const rows = byKind(evidence, "research_finding").filter((row) =>
+    type === "O13_user_pain_point" ? dim(row, "painPoint") === "true" : dim(row, "positioningGap") === "true"
+  );
+  const candidates: DetectorCandidate[] = [];
+  for (const row of rows) {
+    const decision = parsePersistedDecision(dim(row, "recommendationDecisionJson"));
+    if (!decision) {
+      // A recorded contradiction is evidence that the premise is false. It must not
+      // become work merely because it predates the canonical decision.
+      if (dim(row, "verification") === "contradicted") continue;
+      const theme = dim(row, "theme") ?? dim(row, "title") ?? "Unassessed research finding";
+      candidates.push({
+        type,
+        title: theme,
+        summary: "This finding predates the canonical assessment. It is not actionable until it is reassessed against the business and its pages.",
+        dedupKey: `${type === "O13_user_pain_point" ? "O13" : "O14"}:legacy:${row.id}`,
+        whyEvidenceIds: [row.id],
+        howEvidenceIds: [],
+        scoreInputs: scoreDefaults({
+          worth: {
+            volume: null,
+            ctrAtPosition: null,
+            businessValue: 0.5,
+            businessValueSource: "unknown",
+            readiness: "research_backlog",
+            measurement: "unquantified",
+            intervention: "investigate",
+            targetPages: [],
+            coverageSummary: "not assessed",
+          },
+          winProbability: { playTypeFactor: 0.5 },
+          effort: { playTypeBase: 10, sizeFactor: 1 },
+          freshness: freshnessFactor(row.observedAt, new Date()),
+        }),
+      });
+      continue;
+    }
+    if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
+    candidates.push({
+      type,
+      title: decision.question.text,
+      summary: decision.question.rationale,
+      dedupKey: decision.dedupKey,
+      whyEvidenceIds: [row.id],
+      howEvidenceIds: [],
+      scoreInputs: scoreInputsFromDecision(decision) as Omit<ScoreInputs, "evidenceCompleteness">,
+      recommendationDecision: decision,
+      recommendationVersion: decision.schemaVersion,
+      recommendationFingerprint: decisionFingerprint({
+        packetHash: decision.packetHash,
+        policyVersion: decision.policyVersion,
+        promptVersion: decision.promptVersion,
+        model: decision.model,
+      }),
+      recommendationEvidenceId: row.id,
+    });
+  }
+  return candidates;
+}
 
 const DETECTORS: Detector[] = [
   {
@@ -976,148 +1028,13 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O13_user_pain_point",
-    // A customer need becomes work only when the decision contract says so. A
-    // contradicted premise and a research-quality failure are dropped here, not
-    // published at a lower score.
-    detect: (evidence) => {
-      const knowledge = businessValueFromKnowledge(evidence);
-      const candidates: DetectorCandidate[] = [];
-      for (const cluster of clusterFindings(
-        byKind(evidence, "research_finding")
-          .filter((row) => dim(row, "painPoint") === "true")
-          .map((row) => ({
-            id: row.id,
-            theme: dim(row, "theme") ?? null,
-            summary: dim(row, "painPointSummary") ?? "",
-            confidence: 0,
-            createdAt: row.observedAt,
-            row,
-          }))
-      )) {
-        const row = cluster.representative.row;
-        const statement = dim(row, "painPointSummary") ?? "";
-        const assessment = parsePersistedAssessment(dim(row, "assessmentJson"));
-        const decision = assessCustomerNeed({
-          label: dim(row, "theme") ?? undefined,
-          statement,
-          clusterSize: cluster.members.length,
-          verification: dim(row, "verification") ?? null,
-          verificationReason: dim(row, "verificationReason") ?? null,
-          coverageState: dim(row, "coverageState") ?? null,
-          coveragePage: dim(row, "coveragePage") ?? null,
-          coverageComplete: dim(row, "coverageComplete") === "true",
-          businessFit: knowledge,
-          kind: "need",
-          assessment,
-        });
-        if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
-        assertDecision(decision);
-        candidates.push({
-          type: "O13_user_pain_point" as const,
-          // Label from the theme; the prose belongs in the summary, where a reader
-          // can open it instead of scrolling past it on the board.
-          title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Customer need",
-          summary: statement || `Research surfaced a customer need worth checking.`,
-          dedupKey: `O13:${cluster.key}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: cluster.members.map((member) => member.row.id),
-          howEvidenceIds: [],
-          scoreInputs: scoreDefaults({
-            worth: {
-              volume: null,
-              ctrAtPosition: null,
-              businessValue: knowledge.value,
-              businessValueSource: knowledge.source,
-              readiness: decision.readiness,
-              measurement: "unquantified",
-              benefitTrack: decision.tracks[0],
-              intervention: decision.intervention,
-              change: decision.change,
-              successMeasure: decision.successMeasure,
-              targetPages: decision.targetPages,
-              coverageSummary: decision.coverage[0]
-                ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
-                : "no page assessed",
-              ...assessmentProvenance(assessment),
-            },
-            winProbability: { playTypeFactor: 0.5 },
-            effort: { playTypeBase: 16, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
-          }),
-        });
-      }
-      return candidates;
-    },
+    // A customer need becomes work only through the canonical decision. Legacy
+    // findings without one are visible as unassessed backlog, never actionable.
+    detect: (evidence) => canonicalDecisionCandidates(evidence, "O13_user_pain_point"),
   },
   {
     type: "O14_offer_positioning_gap",
-    detect: (evidence) => {
-      const knowledge = businessValueFromKnowledge(evidence);
-      const candidates: DetectorCandidate[] = [];
-      for (const cluster of clusterFindings(
-        byKind(evidence, "research_finding")
-          .filter((row) => dim(row, "positioningGap") === "true")
-          .map((row) => ({
-            id: row.id,
-            theme: dim(row, "theme") ?? null,
-            summary: dim(row, "gapSummary") ?? "",
-            confidence: 0,
-            createdAt: row.observedAt,
-            row,
-          }))
-      )) {
-        const row = cluster.representative.row;
-        const statement = dim(row, "gapSummary") ?? "";
-        const assessment = parsePersistedAssessment(dim(row, "assessmentJson"));
-        const decision = assessCustomerNeed({
-          label: dim(row, "theme") ?? undefined,
-          statement,
-          clusterSize: cluster.members.length,
-          verification: dim(row, "verification") ?? null,
-          verificationReason: dim(row, "verificationReason") ?? null,
-          coverageState: dim(row, "coverageState") ?? null,
-          coveragePage: dim(row, "coveragePage") ?? null,
-          coverageComplete: dim(row, "coverageComplete") === "true",
-          businessFit: knowledge,
-          kind: "offer",
-          assessment,
-        });
-        if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
-        assertDecision(decision);
-        candidates.push({
-          type: "O14_offer_positioning_gap" as const,
-          title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Positioning gap",
-          summary: statement || `Research and SERP evidence suggest a positioning gap worth checking.`,
-          dedupKey: `O14:${cluster.key}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: cluster.members.map((member) => member.row.id),
-          howEvidenceIds: [],
-          scoreInputs: scoreDefaults({
-            worth: {
-              volume: null,
-              ctrAtPosition: null,
-              businessValue: knowledge.value,
-              businessValueSource: knowledge.source,
-              readiness: decision.readiness,
-              measurement: "unquantified",
-              benefitTrack: decision.tracks[0],
-              intervention: decision.intervention,
-              change: decision.change,
-              successMeasure: decision.successMeasure,
-              targetPages: decision.targetPages,
-              coverageSummary: decision.coverage[0]
-                ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
-                : "no page assessed",
-              ...assessmentProvenance(assessment),
-            },
-            winProbability: { playTypeFactor: 0.5 },
-            effort: { playTypeBase: 12, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
-          }),
-        });
-      }
-      return candidates;
-    },
+    detect: (evidence) => canonicalDecisionCandidates(evidence, "O14_offer_positioning_gap"),
   },
 ];
 
@@ -1233,6 +1150,10 @@ export async function runDetectors(
         scoreInputs: candidate.scoreInputs,
         whyEvidenceIds: candidate.whyEvidenceIds,
         howEvidenceIds: candidate.howEvidenceIds,
+        recommendationDecision: candidate.recommendationDecision,
+        recommendationVersion: candidate.recommendationVersion,
+        recommendationFingerprint: candidate.recommendationFingerprint,
+        recommendationEvidenceId: candidate.recommendationEvidenceId,
       });
       if (result.created) created += 1;
       else updated += 1;
@@ -1264,13 +1185,50 @@ export async function runDetectors(
   const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
+  const suppressed = opts.dryRun ? [] : await applyDecisionSuppression(db, { projectId, detectedBy, evidence });
   return {
     created,
     updated,
-    parked: [...parked, ...superseded, ...capped],
+    parked: [...parked, ...superseded, ...capped, ...suppressed],
     disabled,
     ...(opts.dryRun ? { candidates } : {}),
   };
+}
+
+/**
+ * A canonical rejected/no-action decision must remove a previously detected row
+ * even when no candidate for its type survives. Otherwise an old premise stays
+ * visible because the detector simply stopped emitting it.
+ */
+export async function applyDecisionSuppression(
+  db: DetectorDb,
+  opts: { projectId: string; detectedBy: string; evidence: Evidence[] }
+): Promise<string[]> {
+  const suppressed = new Map<string, string>();
+  for (const row of opts.evidence) {
+    const decision = parsePersistedDecision(dim(row, "recommendationDecisionJson"));
+    if (!decision) continue;
+    if (decision.readiness === "rejected" || decision.readiness === "no_action") {
+      suppressed.set(decision.dedupKey, decision.readiness);
+    }
+  }
+  if (suppressed.size === 0) return [];
+  const existing = await db.opportunity.findMany({
+    where: { projectId: opts.projectId, status: "detected", dedupKey: { in: [...suppressed.keys()] } },
+    select: { id: true, dedupKey: true },
+  });
+  for (const row of existing) {
+    await db.opportunity.update({
+      where: { id: row.id },
+      data: {
+        status: "parked",
+        parkReason: `decision_${suppressed.get(row.dedupKey) ?? "rejected"}`,
+        decidedBy: opts.detectedBy,
+        decidedAt: new Date(),
+      },
+    });
+  }
+  return existing.map((row) => row.id);
 }
 
 /**
@@ -1311,10 +1269,12 @@ export async function applyOpenCap(
   // would silently undo a decision.
   const open = await db.opportunity.findMany({
     where: { projectId: opts.projectId, status: "detected" },
-    select: { id: true, scoreValue: true },
+    select: { id: true, scoreValue: true, recommendationDecision: true },
     orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "asc" }],
   });
-  const overflow = open.slice(opts.cap);
+  // A resource cap must not hide a canonical decision. Legacy rows remain capped.
+  const capped = open.filter((row) => row.recommendationDecision == null);
+  const overflow = capped.slice(opts.cap);
   if (overflow.length === 0) return [];
   await db.opportunity.updateMany({
     where: { id: { in: overflow.map((row) => row.id) }, status: "detected" },

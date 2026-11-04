@@ -33,6 +33,11 @@ export type UpsertOpportunityInput = {
   whyEvidenceIds: string[];
   /** evidence record ids on the how leg (search/technical) */
   howEvidenceIds: string[];
+  /** The complete validated decision, when this candidate came from the canonical producer. */
+  recommendationDecision?: unknown;
+  recommendationVersion?: string | null;
+  recommendationFingerprint?: string | null;
+  recommendationEvidenceId?: string | null;
 };
 
 const TYPE_DIMENSION: Record<OpportunityType, OpportunityDimension> = {
@@ -101,6 +106,14 @@ export async function upsertOpportunity(
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,
+          ...(input.recommendationDecision !== undefined
+            ? {
+                recommendationDecision: input.recommendationDecision as Prisma.InputJsonValue,
+                recommendationVersion: input.recommendationVersion ?? null,
+                recommendationFingerprint: input.recommendationFingerprint ?? null,
+                recommendationEvidenceId: input.recommendationEvidenceId ?? null,
+              }
+            : {}),
           lastScoredAt: new Date(),
         },
         select: { id: true, status: true },
@@ -118,6 +131,14 @@ export async function upsertOpportunity(
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,
+          ...(input.recommendationDecision !== undefined
+            ? {
+                recommendationDecision: input.recommendationDecision as Prisma.InputJsonValue,
+                recommendationVersion: input.recommendationVersion ?? null,
+                recommendationFingerprint: input.recommendationFingerprint ?? null,
+                recommendationEvidenceId: input.recommendationEvidenceId ?? null,
+              }
+            : {}),
           detectedBy: input.detectedBy,
           lastScoredAt: new Date(),
         },
@@ -167,14 +188,20 @@ export async function applyHysteresis(
 ): Promise<string[]> {
   const drifting = await db.opportunity.findMany({
     where: { projectId: opts.projectId, status: "detected", scoreValue: { lt: opts.threshold } },
-    select: { id: true, scoreInputs: true },
+    select: { id: true, scoreInputs: true, recommendationDecision: true },
   });
-  // Freshness decay must not quietly park a recommendation the evidence supports.
-  // A supported need whose organic impact is unquantified has a low index by
-  // design; letting the index remove it is the failure this contract exists to stop.
+  // The compatibility index must not hide a classified recommendation. A supported
+  // need with unquantified impact, an investigation or a backlog row is not a
+  // low-score hypothesis; the score is only a legacy ordering device.
   const actionable = drifting.filter((row) => {
+    if (row.recommendationDecision != null) return true;
     const worth = (row.scoreInputs as { worth?: { readiness?: unknown } } | null)?.worth;
-    return worth?.readiness === "actionable";
+    return (
+      worth?.readiness === "actionable" ||
+      worth?.readiness === "needs_investigation" ||
+      worth?.readiness === "research_backlog" ||
+      worth?.readiness === "no_action"
+    );
   });
   const parked = drifting.filter((row) => !actionable.includes(row));
   for (const row of parked) {

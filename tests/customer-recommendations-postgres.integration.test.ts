@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
+import { finaliseDecision } from "@/lib/recommendation/contracts";
 
 /**
  * Database integration for the customer-centred brief (§6, §7).
@@ -88,7 +89,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     await db.$disconnect();
   });
 
-  it("rejects a contradicted legacy premise and keeps a supported need actionable", async () => {
+  it("rejects a recorded contradiction and keeps an unassessed legacy finding in backlog", async () => {
     const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
     const { project, site } = await seedTenant(suffix);
 
@@ -130,6 +131,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
           painPoint: "true",
           painPointSummary: "Customers ask whether a fitted wardrobe can be moved to a new house when they relocate.",
           query: null,
+          verification: "unverified",
           assessmentJson: JSON.stringify({
             premise: { state: "unverified", rationale: "the page does not settle the move question", evidenceUrls: [] },
             need: { state: "supported", rationale: "customers ask before relocating", evidenceUrls: [] },
@@ -203,9 +205,8 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     const need = opportunities.find((row) => row.title === "Can a wardrobe be moved house");
     expect(need).toBeTruthy();
     const worth = (need!.scoreInputs as { worth: Record<string, unknown> }).worth;
-    expect(worth.readiness).toBe("actionable");
+    expect(worth.readiness).toBe("research_backlog");
     expect(worth.measurement).toBe("unquantified");
-    expect(need!.scoreValue).toBeGreaterThan(0);
   });
 
   it("persists an assessment and turns it into an actionable recommendation", async () => {
@@ -273,29 +274,57 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
       projectId: project.id,
       siteId: site.id,
       runId: run.id,
-      assess: async () => ({
-        premise: { state: "unverified", rationale: "the page lists the service without a price", evidenceUrls: [] },
-        need: { state: "supported", rationale: "homeowners ask before booking", evidenceUrls: [] },
-        offerFit: { state: "supported", rationale: "the business makes fitted wardrobes", evidenceUrls: [] },
-        coverage: [{
-          pageUrl: `https://customer-rec-${suffix}.example/services`,
-          state: "does_not_answer",
-          method: "semantic",
-          matchedTerms: [],
-          excerpts: ["Fitted wardrobes are made to measure for each room."],
-          note: "lists the service but gives no cost range",
-        }],
-        intervention: "update_page",
-        change: "Add a price range for a typical fitted wardrobe and what the quote includes.",
-        targetPages: [`https://customer-rec-${suffix}.example/services`],
-        expectedBenefit: "A homeowner can judge the budget before booking.",
-        uncertainty: ["demand is not measured"],
-        review: "none",
-        successMeasure: "A homeowner can state a typical range after reading.",
-        model: "fixture-model",
-        promptVersion: "need-assessment/1",
-        assessedAt: "2026-11-04T00:00:00.000Z",
-      }),
+      assess: async (packet) => {
+        const page = packet.pages.find((entry) => entry.url.endsWith("/services"))!;
+        const model = {
+          question: {
+            text: "What does a fitted wardrobe cost?",
+            audience: "homeowners",
+            journeyStage: "consideration",
+            bases: [{ basis: "inferred_need" as const, references: [], note: "Homeowners ask about cost before booking a survey" }],
+            state: "unverified" as const,
+            rationale: "The finding and the service page show that cost is the next question, but no direct customer source is stored.",
+          },
+          premise: { state: "unverified" as const, rationale: "The finding's absence claim is not what is being tested here.", references: [] },
+          offerFit: {
+            state: "supported" as const,
+            rationale: "The business makes fitted wardrobes.",
+            references: ["fact:services"],
+          },
+          coverage: [{
+            pageId: page.id,
+            state: "does_not_answer" as const,
+            rationale: "The page lists the service but gives no cost range.",
+            excerpts: [],
+            limitations: [],
+          }],
+          readiness: "actionable" as const,
+          intervention: "update_page" as const,
+          change: "Add a price range for a typical fitted wardrobe and what the quote includes.",
+          investigation: null,
+          targets: [{ pageId: page.id, pageUrl: page.url, sectionId: null, role: "update" as const, rationale: "The service page is where the question arises." }],
+          benefits: [{
+            track: "customer_value" as const,
+            mechanism: "A homeowner can judge the budget before booking.",
+            measurement: "unquantified" as const,
+            baselineReference: null,
+            assumptions: [],
+            uncertainty: ["demand is not measured"],
+          }],
+          effort: { size: "small" as const, rationale: "One section on an existing page.", uncertainty: [] },
+          risks: [],
+          reviews: [],
+          success: { measure: "A homeowner can state a typical range after reading.", instrumentation: "unavailable" as const, rationale: "No enquiry tracking is connected." },
+          uncertainty: ["demand is not measured"],
+          contradictions: [],
+          reasons: ["A specific existing-page improvement is justified by the service content and the inferred buying question."],
+        };
+        return {
+          ok: true as const,
+          attempts: 1,
+          decision: finaliseDecision({ model, packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/1" }),
+        };
+      },
     });
 
     expect(result.assessed).toBe(1);
@@ -303,20 +332,19 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
       where: { projectId: project.id, kind: "research_finding", supersededById: null },
       select: { dimensions: true },
     });
-    expect((stored.dimensions as Record<string, unknown>).assessmentModel).toBe("fixture-model");
+    expect((stored.dimensions as Record<string, unknown>).recommendationModel).toBe("fixture-model");
 
     await refreshFunnelForSite(db, site.id, { detectedBy: "integration" });
     const opportunity = await db.opportunity.findFirst({
       where: { projectId: project.id, type: "O13_user_pain_point", title: { contains: "fitted wardrobe" } },
-      select: { scoreInputs: true, scoreValue: true },
+      select: { scoreInputs: true, scoreValue: true, recommendationDecision: true },
     });
     expect(opportunity).toBeTruthy();
-    const worth = (opportunity!.scoreInputs as { worth: Record<string, unknown> }).worth;
-    expect(worth.readiness).toBe("actionable");
-    expect(worth.measurement).toBe("unquantified");
-    expect(worth.change).toContain("price range");
-    expect(worth.needRationale).toBe("homeowners ask before booking");
-    expect(worth.assessmentModel).toBe("fixture-model");
+    const decision = opportunity!.recommendationDecision as Record<string, any>;
+    expect(decision.readiness).toBe("actionable");
+    expect(decision.intervention).toBe("update_page");
+    expect(decision.change).toContain("price range");
+    expect(decision.question.rationale).toContain("next question");
     expect(opportunity!.scoreValue).toBeGreaterThan(0);
   });
 

@@ -29,6 +29,7 @@ export type DecisionSummary = {
   offerFitRationale?: string | null;
   offerFitEvidenceUrls?: string[];
   assessmentModel?: string | null;
+  reviews?: string[];
 };
 
 const READINESS_TONE: Record<string, string> = {
@@ -138,6 +139,9 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
             </Row>
           )}
           {decision.successMeasure && <Row label="Success measure">{decision.successMeasure}</Row>}
+          {(decision.reviews?.length ?? 0) > 0 && (
+            <Row label="Review required">{decision.reviews!.join(" · ")}</Row>
+          )}
           {uncertainty.length > 0 && (
             <div className="text-xs text-foreground/85">
               <span className="text-muted-foreground">Still uncertain: </span>

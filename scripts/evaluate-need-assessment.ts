@@ -1,46 +1,31 @@
 /**
- * Evaluate the real need-assessment path against live sites.
+ * Read-only evaluation of the production recommendation path.
  *
  *   npx tsx scripts/evaluate-need-assessment.ts --domain=www.susimacdonald.com \
  *     --finding="Foreign land ownership" --out=/tmp/opencode/susi.json
  *
- * What it does, in order, and nothing else:
- *
- *  1. reads the tenant, its findings and its extracted business facts (read-only);
- *  2. selects candidate pages from the crawl inventory, then retrieves their actual
- *     public text — the crawl rows are used for URLs, not as proof of content;
- *  3. if the tenant has no business knowledge, runs the same extraction core the
- *     monthly pipeline uses, without writing a revision;
- *  4. runs the real model assessment for each selected finding;
- *  5. prints the inputs, the retrieved excerpts, the structured assessment and the
- *     resulting decision.
- *
- * It publishes nothing, writes no recommendation, and calls no paid search API. It
- * does call the configured content model, because mocked reasoning cannot show
- * whether the assessment understands a real business.
+ * This is a wrapper around the same packet builder, model assessor and validator
+ * the monthly pipeline uses. It does not rank pages, build its own evidence or
+ * qualify anything itself. It writes no evidence, opportunity, task or knowledge
+ * revision and calls no paid search provider. It does call the configured content
+ * model, because mocked reasoning cannot establish SEO judgement.
  */
 import { writeFileSync } from "node:fs";
 
 import { db } from "@/lib/db";
-import { assessCustomerNeed } from "@/lib/funnel/assess-need";
 import {
   extractBusinessKnowledgeFromPages,
   htmlToText,
 } from "@/lib/projects/business-knowledge-extract";
-import {
-  assessNeed,
-  loadBusinessFacts,
-  type AssessmentFact,
-  type AssessmentPage,
-  type AssessmentSource,
-} from "@/lib/research/need-assessment";
-import { contentTerms } from "@/lib/research/page-coverage";
+import type { EvidencePacket } from "@/lib/recommendation/contracts";
+import { assessFinding } from "@/lib/recommendation/run";
+import { validateDecision } from "@/lib/recommendation/contracts";
 
 type Args = {
   domain: string;
   findings: string[];
   maxFindings: number;
-  maxPages: number;
+  need: string | null;
   out: string | null;
 };
 
@@ -57,7 +42,7 @@ function parseArgs(argv: string[]): Args {
     domain,
     findings: all("finding"),
     maxFindings: Math.max(1, Math.min(Number(value("max-findings") ?? 3), 6)),
-    maxPages: Math.max(1, Math.min(Number(value("max-pages") ?? 6), 10)),
+    need: value("need"),
     out: value("out"),
   };
 }
@@ -66,7 +51,7 @@ async function fetchPage(url: string): Promise<{ url: string; title: string; tex
   try {
     const response = await fetch(url, {
       redirect: "follow",
-      headers: { "User-Agent": "CrawlSEO need assessment evaluation (+https://crawlseo.app)" },
+      headers: { "User-Agent": "CrawlSEO recommendation evaluation (+https://crawlseo.app)" },
       signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) return null;
@@ -78,89 +63,18 @@ async function fetchPage(url: string): Promise<{ url: string; title: string; tex
   }
 }
 
-/**
- * Rank candidate pages by the finding's own subject, not by its whole sentence.
- *
- * The label is the subject ("Abat-jour sur mesure sans page dédiée"); the summary
- * is prose that mentions other pages by name, so weighting it equally would rank a
- * page because the finding said "/shop" rather than because it answers the need.
- * Generic document words are dropped for the same reason: every product URL
- * contains "page", which says nothing about the need.
- */
-const RANK_STOPWORDS = new Set([
-  "page", "pages", "site", "website", "content", "contenu", "candidate", "candidat",
-  "section", "article", "articles", "post", "blog",
-]);
-
-function rankTerms(value: string): string[] {
-  return contentTerms(value).filter((term) => !RANK_STOPWORDS.has(term));
-}
-
-function rank(
-  urls: Array<{ url: string; title: string | null }>,
-  label: string,
-  statement: string
-): Array<{ url: string; title: string | null }> {
-  const labelTerms = rankTerms(label);
-  const statementTerms = rankTerms(statement);
-  return urls
-    .map((page) => {
-      const haystack = `${page.title ?? ""} ${page.url}`
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      const labelMatched = labelTerms.filter((term) => haystack.includes(term)).length;
-      const statementMatched = statementTerms.filter((term) => haystack.includes(term)).length;
-      return { page, score: labelMatched * 10 + statementMatched };
-    })
-    .sort((a, b) => b.score - a.score || a.page.url.length - b.page.url.length)
-    .map((row) => row.page);
-}
-
-function factsFromExtraction(
-  fields: Record<string, unknown>,
-  sourceUrl: string
-): AssessmentFact[] {
-  const facts: AssessmentFact[] = [];
-  for (const [field, value] of Object.entries(fields)) {
-    if (field === "contentLanguage") continue;
-    const values = Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-      : typeof value === "string" && value.trim()
-        ? [value]
-        : [];
-    if (values.length > 0) {
-      facts.push({ field, values, sourceUrl, provenance: "ai_observation/assumed/model" });
-    }
-  }
-  return facts;
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const site = await db.site.findFirst({
     where: { domain: args.domain, retiredAt: null },
-    select: { id: true, domain: true, projectId: true, userId: true },
+    select: { id: true, domain: true, projectId: true },
   });
   if (!site) throw new Error(`no active site for ${args.domain}`);
   if (!site.projectId) throw new Error(`${args.domain} has no project`);
 
-  const crawl = await db.crawl.findFirst({
-    where: { siteId: site.id, status: "COMPLETED" },
-    orderBy: { finishedAt: "desc" },
-    select: { id: true, pagesFound: true, maxPages: true, finishedAt: true },
-  });
-  const inventory = crawl
-    ? await db.auditPage.findMany({
-        where: { crawlId: crawl.id },
-        select: { url: true, title: true },
-        take: 500,
-      })
-    : [];
-
   const findings = (
     await db.evidenceRecord.findMany({
-      where: { projectId: site.projectId, kind: "research_finding", supersededById: null },
+      where: { projectId: site.projectId, siteId: site.id, kind: "research_finding", supersededById: null },
       select: { id: true, dimensions: true, observedAt: true },
       orderBy: { observedAt: "desc" },
     })
@@ -178,195 +92,215 @@ async function main() {
     .slice(0, args.maxFindings);
 
   const report: Record<string, unknown> = {
-    schemaVersion: "need-assessment-evaluation/1",
+    schemaVersion: "recommendation-evaluation/1",
     generatedAt: new Date().toISOString(),
     domain: site.domain,
     projectId: site.projectId,
-    crawl: crawl
-      ? { pagesFound: crawl.pagesFound, maxPages: crawl.maxPages, finishedAt: crawl.finishedAt?.toISOString() ?? null }
-      : null,
     findingsSelected: findings.map((row) => String(row.dimensions.theme ?? "(no theme)")),
     extraction: null as unknown,
     assessments: [] as unknown[],
   };
 
-  let facts = await loadBusinessFacts(db, site.projectId);
-  const pageCache = new Map<string, { url: string; title: string; text: string }>();
-
-  const fetchFor = async (urls: string[]) => {
+  // A tenant with no knowledge is not blocked: its own pages are the source. The
+  // extraction core is the same one the monthly bootstrap uses, run without a write.
+  let extractedFacts: EvidencePacket["businessFacts"] = [];
+  const knowledge = await db.businessKnowledgeDocument.findUnique({
+    where: { projectId: site.projectId },
+    select: { id: true },
+  });
+  if (!knowledge) {
+    const crawl = await db.crawl.findFirst({
+      where: { siteId: site.id, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      select: { id: true },
+    });
+    const inventory = crawl
+      ? await db.auditPage.findMany({ where: { crawlId: crawl.id }, select: { url: true }, take: 10 })
+      : [];
     const pages: Array<{ url: string; title: string; text: string }> = [];
-    for (const url of urls) {
-      const cached = pageCache.get(url);
-      if (cached) {
-        pages.push(cached);
-        continue;
-      }
-      const page = await fetchPage(url);
-      if (page) {
-        pageCache.set(url, page);
-        pages.push(page);
-      }
+    for (const page of inventory) {
+      const fetched = await fetchPage(page.url);
+      if (fetched) pages.push(fetched);
     }
-    return pages;
-  };
-
-  // A tenant with no knowledge is not blocked: its own pages are the source. This is
-  // the same extraction core the monthly pipeline calls, run without a write so the
-  // evaluation does not change the tenant.
-  if (facts.length === 0) {
-    const sample = await fetchFor(rank(inventory, "", "").slice(0, 10).map((page) => page.url));
-    if (sample.length === 0) throw new Error(`no page could be retrieved for ${site.domain}`);
-    const extracted = await extractBusinessKnowledgeFromPages(sample);
-    facts = factsFromExtraction(extracted.fields as Record<string, unknown>, sample[0].url);
+    if (pages.length === 0) throw new Error(`no page could be retrieved for ${site.domain}`);
+    const extracted = await extractBusinessKnowledgeFromPages(pages);
+    extractedFacts = Object.entries(extracted.fields as Record<string, unknown>)
+      .filter(([field, value]) => field !== "contentLanguage" && value != null)
+      .map(([field, value]) => ({
+        id: `fact:${field}`,
+        field,
+        value: Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string").join("; ") : String(value),
+        sourceUrl: pages[0].url,
+        provenanceKind: "ai_observation",
+        provenanceStatus: "assumed",
+        publicationUse: "internal_only",
+        documentRevision: null,
+      }))
+      .filter((fact) => fact.value.trim().length > 0);
     report.extraction = {
-      method: "extractBusinessKnowledgeFromPages (same core as extractBusinessKnowledgeFromSite)",
+      method: "extractBusinessKnowledgeFromPages (same core as the monthly bootstrap)",
       pagesRead: extracted.pagesRead,
-      pageUrls: sample.map((page) => page.url),
+      pageUrls: pages.map((page) => page.url),
       contentLanguage: extracted.contentLanguage,
       extractedFields: extracted.extracted,
       fields: extracted.fields,
-      factsUsed: facts,
       written: false,
     };
     process.stdout.write(`\n=== ${site.domain} :: automatic business-knowledge extraction\n`);
-    process.stdout.write(`pages read: ${extracted.pagesRead} (${sample.map((page) => page.url).join(", ")})\n`);
+    process.stdout.write(`pages read: ${extracted.pagesRead} (${pages.map((page) => page.url).join(", ")})\n`);
     process.stdout.write(`language: ${extracted.contentLanguage ?? "unknown"}\n`);
     process.stdout.write(`fields: ${extracted.extracted.join(", ") || "none"}\n`);
-    process.stdout.write(`facts: ${JSON.stringify(facts).slice(0, 1_200)}\n`);
-    process.stdout.write("written: false (evaluation does not create a knowledge revision)\n");
+    process.stdout.write("written: false\n");
   }
 
-  if (findings.length === 0) {
+  if (findings.length === 0 && args.need) {
+    const need = args.need.trim();
+    const candidate = {
+      findingId: "eval-need",
+      dedupKey: `O13:eval:${need.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80)}`,
+      findingType: "CONCERN",
+      theme: need.slice(0, 120),
+      summary: need,
+      premise: need,
+      observedAt: new Date(),
+      sourceIds: [] as string[],
+    };
+    const assessed = await assessFinding(db, {
+      projectId: site.projectId,
+      siteId: site.id,
+      persist: false,
+      force: true,
+      businessFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
+      finding: {
+        id: candidate.findingId,
+        runId: "evaluation",
+        type: candidate.findingType,
+        theme: candidate.theme,
+        summary: candidate.summary,
+        premise: candidate.premise,
+        observedAt: candidate.observedAt,
+        sourceIds: candidate.sourceIds,
+        dedupKey: candidate.dedupKey,
+        dimensions: { painPoint: "true", theme: candidate.theme, painPointSummary: candidate.summary },
+      },
+    });
+    const packet = assessed.packet;
+    const validation = assessed.decision && packet ? validateDecision(assessed.decision, packet) : { ok: false, errors: assessed.errors };
+    (report.assessments as unknown[]).push({
+      finding: { id: candidate.findingId, theme: candidate.theme, summary: candidate.summary, type: candidate.findingType },
+      packet: packet ? {
+        packetId: packet.packetId,
+        packetHash: packet.packetHash,
+        limitations: packet.limitations,
+        context: packet.context,
+        businessFacts: packet.businessFacts,
+        sources: packet.sources,
+        pages: packet.pages,
+        inventory: packet.inventory,
+        search: packet.search,
+      } : null,
+      assessment: assessed.decision,
+      validation,
+      raw: assessed.raw ?? null,
+    });
+    process.stdout.write(`\n=== ${site.domain} :: explicit inferred need\n`);
+    process.stdout.write(`need: ${need}\n`);
+    process.stdout.write(`packet ${packet?.packetHash.slice(0, 16) ?? "none"} · pages ${packet?.pages.length ?? 0} · facts ${packet?.businessFacts.length ?? 0}\n`);
+    if (!assessed.decision) process.stdout.write(`assessment failed: ${assessed.errors.join("; ")}\n`);
+    else {
+      process.stdout.write(`decision: ${assessed.decision.readiness} / ${assessed.decision.intervention}\n`);
+      for (const reason of assessed.decision.reasons) process.stdout.write(`  - ${reason}\n`);
+      if (!validation.ok) process.stdout.write(`validation errors: ${validation.errors.join("; ")}\n`);
+    }
+  }
+
+  if (findings.length === 0 && !args.need) {
     process.stdout.write(`\n${site.domain}: no research finding selected, so no recommendation can be made. Nothing was created.\n`);
   }
 
   for (const finding of findings) {
     const dimensions = finding.dimensions;
-    const label = String(dimensions.theme ?? "");
-    const statement = String(dimensions.painPointSummary ?? dimensions.gapSummary ?? "");
-    const candidates = rank(inventory, label, statement).slice(0, args.maxPages);
-    const root = inventory.find((page) => {
-      try {
-        return new URL(page.url).pathname === "/";
-      } catch {
-        return false;
-      }
-    });
-    if (root && !candidates.some((page) => page.url === root.url)) candidates.unshift(root);
-    const retrieved = await fetchFor(candidates.map((page) => page.url));
-
     const findingId = typeof dimensions.findingId === "string" ? dimensions.findingId : null;
-    const storedFinding = findingId
+    const stored = findingId
       ? await db.researchFinding.findUnique({
           where: { id: findingId },
-          select: { evidenceSourceIds: true },
+          select: { id: true, runId: true, type: true, theme: true, summary: true, evidenceSourceIds: true, createdAt: true },
         })
       : null;
-    const sourceIds = Array.isArray(storedFinding?.evidenceSourceIds)
-      ? storedFinding.evidenceSourceIds.filter((value): value is string => typeof value === "string")
-      : [];
-    const sourceRows = sourceIds.length
-      ? await db.researchSource.findMany({
-          where: { id: { in: sourceIds.slice(0, 8) } },
-          select: { url: true, title: true, excerpt: true, provider: true },
-        })
-      : [];
-    const sources: AssessmentSource[] = sourceRows.map((row) => ({ ...row, excerpt: row.excerpt ?? null }));
-
-    const pages: AssessmentPage[] = retrieved.map((page) => ({
-      url: page.url,
-      title: page.title,
-      contentText: page.text,
-    }));
-
-    const input = {
-      statement,
-      label,
-      audience: null,
-      market: null,
-      businessFacts: facts,
-      pages,
-      sources,
-      coverageComplete: false,
-    };
-
-    let assessment = null as Awaited<ReturnType<typeof assessNeed>> | null;
-    let assessmentError: string | null = null;
-    try {
-      assessment = await assessNeed(input);
-    } catch (error) {
-      assessmentError = error instanceof Error ? error.message : String(error);
+    if (!stored) {
+      process.stdout.write(`\n${site.domain}: finding "${String(dimensions.theme ?? "")}" has no stored research row; skipped.\n`);
+      continue;
     }
+    const sourceIds = Array.isArray(stored.evidenceSourceIds)
+      ? stored.evidenceSourceIds.filter((value): value is string => typeof value === "string")
+      : [];
+    const theme = stored.theme;
+    const summary = String(dimensions.painPointSummary ?? dimensions.gapSummary ?? stored.summary);
+    const dedupKey = typeof dimensions.recommendationDedupKey === "string"
+      ? dimensions.recommendationDedupKey
+      : `${stored.type.toUpperCase().includes("POSITION") ? "O14" : "O13"}:${stored.id}`;
 
-    const decision = assessCustomerNeed({
-      label,
-      statement,
-      clusterSize: 1,
-      verification: typeof dimensions.verification === "string" ? dimensions.verification : null,
-      verificationReason: typeof dimensions.verificationReason === "string" ? dimensions.verificationReason : null,
-      coverageState: typeof dimensions.coverageState === "string" ? dimensions.coverageState : null,
-      coveragePage: typeof dimensions.coveragePage === "string" ? dimensions.coveragePage : null,
-      coverageComplete: false,
-      businessFit: { value: 0.9, source: "knowledge" },
-      kind: dimensions.positioningGap === "true" ? "offer" : "need",
-      assessment,
+    const assessed = await assessFinding(db, {
+      projectId: site.projectId,
+      siteId: site.id,
+      persist: false,
+      force: true,
+      businessFacts: extractedFacts.length > 0 ? extractedFacts : undefined,
+      finding: {
+        id: stored.id,
+        runId: stored.runId,
+        type: stored.type,
+        theme,
+        summary,
+        premise: summary,
+        observedAt: stored.createdAt,
+        sourceIds,
+        dedupKey,
+        dimensions: dimensions as Record<string, string | number | boolean | null>,
+      },
     });
 
+    const packet = assessed.packet;
+    const validation = assessed.decision && packet ? validateDecision(assessed.decision, packet) : { ok: false, errors: assessed.errors };
     (report.assessments as unknown[]).push({
-      finding: {
-        id: finding.id,
-        theme: label,
-        statement,
-        verification: dimensions.verification ?? null,
-        verificationReason: dimensions.verificationReason ?? null,
-      },
-      inputs: {
-        businessFacts: facts,
-        pages: pages.map((page) => ({
+      finding: { id: stored.id, theme, summary, type: stored.type },
+      packet: packet ? {
+        packetId: packet.packetId,
+        packetHash: packet.packetHash,
+        limitations: packet.limitations,
+        context: packet.context,
+        businessFacts: packet.businessFacts,
+        sources: packet.sources,
+        pages: packet.pages.map((page) => ({
+          id: page.id,
           url: page.url,
           title: page.title,
-          characters: page.contentText.length,
-          excerpt: page.contentText.slice(0, 500),
+          retrieval: page.retrieval,
+          truncated: page.truncated,
+          characters: page.text.length,
+          text: page.text,
+          sections: page.sections,
         })),
-        sources: sources.map((source) => ({
-          url: source.url,
-          title: source.title,
-          provider: source.provider,
-          excerpt: (source.excerpt ?? "").slice(0, 300),
-        })),
-      },
-      assessment,
-      assessmentError,
-      decision: {
-        readiness: decision.readiness,
-        evidenceState: decision.evidenceState,
-        intervention: decision.intervention,
-        measurement: decision.measurement,
-        tracks: decision.tracks,
-        review: decision.review,
-        targetPages: decision.targetPages,
-        change: decision.change,
-        expectedBenefit: decision.expectedBenefit,
-        successMeasure: decision.successMeasure,
-        uncertainty: decision.uncertainty,
-        reasons: decision.reasons,
-      },
+        inventory: packet.inventory,
+        search: packet.search,
+      } : null,
+      assessment: assessed.decision,
+      validation,
+      raw: assessed.raw ?? null,
     });
 
-    process.stdout.write(`\n=== ${site.domain} :: ${label}\n`);
-    process.stdout.write(`need: ${statement}\n`);
-    process.stdout.write(`pages retrieved: ${pages.length} (${pages.map((page) => page.url).join(", ")})\n`);
-    process.stdout.write(`sources: ${sources.length}\n`);
-    if (assessmentError) process.stdout.write(`assessment failed: ${assessmentError}\n`);
-    if (assessment) {
-      process.stdout.write(`assessment: need=${assessment.need.state} offerFit=${assessment.offerFit.state} coverage=${assessment.coverage.map((row) => `${row.state}@${row.pageUrl}`).join(" | ") || "none"}\n`);
-      process.stdout.write(`  intervention=${assessment.intervention} review=${assessment.review}\n`);
-      for (const row of assessment.coverage) {
-        if (row.excerpts.length > 0) process.stdout.write(`  quote (${row.pageUrl}): ${row.excerpts[0].slice(0, 240)}\n`);
-      }
+    process.stdout.write(`\n=== ${site.domain} :: ${theme}\n`);
+    process.stdout.write(`packet ${packet?.packetHash.slice(0, 16) ?? "none"} · pages ${packet?.pages.length ?? 0} · sources ${packet?.sources.length ?? 0} · facts ${packet?.businessFacts.length ?? 0}\n`);
+    if (packet && packet.limitations.length > 0) process.stdout.write(`limitations: ${packet.limitations.join(" | ")}\n`);
+    if (!assessed.decision) {
+      process.stdout.write(`assessment failed: ${assessed.errors.join("; ")}\n`);
+      if (assessed.raw) process.stdout.write(`raw: ${JSON.stringify(assessed.raw).slice(0, 2_000)}\n`);
+      continue;
     }
-    process.stdout.write(`decision: ${decision.readiness} / ${decision.intervention} / ${decision.measurement}\n`);
-    for (const reason of decision.reasons) process.stdout.write(`  - ${reason}\n`);
+    process.stdout.write(`decision: ${assessed.decision.readiness} / ${assessed.decision.intervention} / ${assessed.decision.benefits[0]?.measurement ?? "no benefit"}\n`);
+    process.stdout.write(`question: ${assessed.decision.question.text}\n`);
+    for (const reason of assessed.decision.reasons) process.stdout.write(`  - ${reason}\n`);
+    if (!validation.ok) process.stdout.write(`validation errors: ${validation.errors.join("; ")}\n`);
   }
 
   if (args.out) {

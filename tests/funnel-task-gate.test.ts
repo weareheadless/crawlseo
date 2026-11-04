@@ -59,6 +59,18 @@ describe("task gate (wave 2)", () => {
     ).rejects.toThrow(/human executor/);
   });
 
+  it("refuses to turn an investigation into implementation work", async () => {
+    const { db, store } = opportunityDb();
+    store.set("op1", { id: "op1", status: "detected", dedupKey: "d1" });
+    await expect(
+      acceptOpportunityIntoTask(db as never, "op1", {
+        title: "Investigate",
+        assignedTo: "dana",
+        recommendationDecision: { readiness: "needs_investigation" },
+      })
+    ).rejects.toThrow(/cannot be accepted into implementation work/);
+  });
+
   it("accepting an opportunity creates the task at the single gate and moves the opportunity to accepted", async () => {
     const { db, store } = opportunityDb();
     store.set("op1", { id: "op1", status: "detected", dedupKey: "d1" });

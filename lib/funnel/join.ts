@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { addEdge, type EdgeDb } from "@/lib/funnel/edges";
 import { upsertOpportunity, completenessLeg } from "@/lib/funnel/opportunity";
 import { computeScore, freshnessFactor, type ScoreInputs } from "@/lib/funnel/scoring";
+import { parsePersistedDecision } from "@/lib/recommendation/contracts";
 
 /**
  * Missing-leg join scheduler (docs/seo-funnel-spine-plan.md §2.3).
@@ -156,7 +157,33 @@ export function taskPlanFromOpportunity(opportunity: {
   title: string;
   summary: string;
   scoreInputs: unknown;
+  recommendationDecision?: unknown;
 }): Record<string, unknown> {
+  const decision = parsePersistedDecision(opportunity.recommendationDecision);
+  if (decision) {
+    return {
+      decisionVersion: decision.schemaVersion,
+      decisionId: decision.decisionId,
+      packetHash: decision.packetHash,
+      readiness: decision.readiness,
+      intervention: decision.intervention,
+      question: decision.question.text,
+      needRationale: decision.question.rationale,
+      needBases: decision.question.bases,
+      offerFitRationale: decision.offerFit.rationale,
+      coverage: decision.coverage,
+      change: decision.change,
+      investigation: decision.investigation,
+      targets: decision.targets,
+      benefits: decision.benefits,
+      effort: decision.effort,
+      risks: decision.risks,
+      reviews: decision.reviews,
+      success: decision.success,
+      uncertainty: decision.uncertainty,
+      contradictions: decision.contradictions,
+    };
+  }
   const worth = (opportunity.scoreInputs as { worth?: Record<string, unknown> } | null)?.worth ?? {};
   const read = (key: string) => (typeof worth[key] === "string" ? (worth[key] as string) : null);
   const targetPages = Array.isArray(worth.targetPages)
@@ -185,8 +212,19 @@ export function taskPlanFromOpportunity(opportunity: {
 export async function acceptOpportunityIntoTask(
   db: TaskDb,
   opportunityId: string,
-  input: { title: string; assignedTo: string; plan?: unknown; agentPreparedById?: string }
+  input: { title: string; assignedTo: string; plan?: unknown; agentPreparedById?: string; recommendationDecision?: unknown }
 ): Promise<string> {
+  const rawDecision = input.recommendationDecision as { readiness?: unknown } | null | undefined;
+  if (rawDecision && typeof rawDecision.readiness === "string" && rawDecision.readiness !== "actionable") {
+    throw new Error(`opportunity readiness "${rawDecision.readiness}" cannot be accepted into implementation work`);
+  }
+  const decision = parsePersistedDecision(input.recommendationDecision);
+  if (input.recommendationDecision != null && !decision) {
+    throw new Error("the recommendation decision is malformed and cannot be accepted");
+  }
+  if (decision && decision.readiness !== "actionable") {
+    throw new Error(`opportunity readiness "${decision.readiness}" cannot be accepted into implementation work`);
+  }
   const opportunity = await db.opportunity.findUnique({ where: { id: opportunityId }, select: { status: true, id: true } });
   if (!opportunity) throw new Error("opportunity not found");
   if (!["detected", "parked", "in_progress"].includes(opportunity.status)) {

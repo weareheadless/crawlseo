@@ -8,6 +8,8 @@ import type {
   TaskStatus,
 } from "@prisma/client";
 
+import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
+
 /**
  * Funnel read models (docs/seo-funnel-spine-plan.md §5).
  *
@@ -66,6 +68,8 @@ export type OpportunityRow = {
 
 export type OpportunityDetail = OpportunityRow & {
   scoreInputs: unknown;
+  /** The complete canonical decision, when this row has one. */
+  recommendation: RecommendationDecision | null;
   /** The decision the board and the detail page both render. */
   decision: {
     readiness: string | null;
@@ -84,6 +88,7 @@ export type OpportunityDetail = OpportunityRow & {
     offerFitRationale: string | null;
     offerFitEvidenceUrls: string[];
     assessmentModel: string | null;
+    reviews: string[];
   };
   decidedBy: string | null;
   decidedAt: Date | null;
@@ -243,6 +248,31 @@ function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"]
     offerFitRationale: read("offerFitRationale"),
     offerFitEvidenceUrls: list("offerFitEvidenceUrls"),
     assessmentModel: read("assessmentModel"),
+    reviews: [],
+  };
+}
+
+/** Project the canonical decision into the shared presentation shape. */
+function decisionFromCanonical(decision: RecommendationDecision): OpportunityDetail["decision"] {
+  const firstBenefit = decision.benefits[0];
+  const firstCoverage = decision.coverage[0];
+  return {
+    readiness: decision.readiness,
+    measurement: firstBenefit?.measurement ?? "unquantified",
+    track: firstBenefit?.track ?? null,
+    intervention: decision.intervention,
+    benefit: firstBenefit?.mechanism ?? null,
+    change: decision.change,
+    targetPages: decision.targets.map((target) => target.pageUrl).filter((url): url is string => Boolean(url)),
+    successMeasure: decision.success.measure,
+    uncertainty: decision.uncertainty,
+    coverage: firstCoverage ? `${firstCoverage.state.replaceAll("_", " ")} at ${firstCoverage.pageId}` : null,
+    needRationale: decision.question.rationale,
+    needEvidenceUrls: decision.question.bases.flatMap((basis) => basis.references),
+    offerFitRationale: decision.offerFit.rationale,
+    offerFitEvidenceUrls: decision.offerFit.references,
+    assessmentModel: decision.model,
+    reviews: decision.reviews.map((review) => `${review.requirement.replaceAll("_", " ")}: ${review.reason}`),
   };
 }
 
@@ -273,6 +303,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       clusterId: true,
       dedupKey: true,
       scoreInputs: true,
+      recommendationDecision: true,
     },
   });
 
@@ -297,6 +328,8 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
   return opportunities.map((row) => {
     const rowEdges = edges.filter((edge) => edge.toId === row.id);
     const first = rowEdges.map((edge) => evidenceById.get(edge.fromId)).find((value): value is RawEvidence => Boolean(value));
+    const canonical = parsePersistedDecision(row.recommendationDecision);
+    const legacy = decisionFromScoreInputs(row.scoreInputs);
     return {
       id: row.id,
       type: row.type,
@@ -311,8 +344,8 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       clusterSlug: row.clusterId ? clusterSlug.get(row.clusterId) ?? null : null,
       reason: first ? headlineFor(first) : null,
       evidenceCount: rowEdges.length,
-      readiness: decisionFromScoreInputs(row.scoreInputs).readiness,
-      measurement: decisionFromScoreInputs(row.scoreInputs).measurement,
+      readiness: canonical?.readiness ?? legacy.readiness,
+      measurement: canonical ? canonical.benefits[0]?.measurement ?? "unquantified" : legacy.measurement,
     };
   });
 }
@@ -338,6 +371,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       decidedAt: true,
       parkReason: true,
       dedupKey: true,
+      recommendationDecision: true,
     },
   });
   if (!row) return null;
@@ -381,6 +415,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       ])
     : [[], []];
 
+  const canonical = parsePersistedDecision(row.recommendationDecision);
   return {
     id: row.id,
     type: row.type,
@@ -388,11 +423,14 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     dimension: row.dimension,
     title: row.title,
     summary: row.summary,
-    readiness: decisionFromScoreInputs(row.scoreInputs).readiness,
-    measurement: decisionFromScoreInputs(row.scoreInputs).measurement,
+    readiness: canonical?.readiness ?? decisionFromScoreInputs(row.scoreInputs).readiness,
+    measurement: canonical
+      ? canonical.benefits[0]?.measurement ?? "unquantified"
+      : decisionFromScoreInputs(row.scoreInputs).measurement,
     score: row.scoreValue,
     scoreInputs: row.scoreInputs,
-    decision: decisionFromScoreInputs(row.scoreInputs),
+    recommendation: canonical,
+    decision: canonical ? decisionFromCanonical(canonical) : decisionFromScoreInputs(row.scoreInputs),
     completeness: row.evidenceCompleteness,
     detectedBy: row.detectedBy,
     firstDetectedAt: row.firstDetectedAt,

@@ -246,6 +246,15 @@ model Opportunity {
   /// Declared, recomputable scoring inputs (worth, win probability, effort,
   /// completeness, freshness, stability) — never a black box.
   scoreInputs        Json
+  /// The complete validated recommendation decision for this row. Null for legacy
+  /// rows that predate the canonical contract; those are never presented as freshly
+  /// validated.
+  recommendationDecision Json?
+  /// Version/fingerprint of the decision and the immutable evidence record it came
+  /// from, so a stale projection can be detected and rolled back.
+  recommendationVersion String?
+  recommendationFingerprint String?
+  recommendationEvidenceId String?
   evidenceCompleteness EvidenceLeg      @default(none)
   /// Version of the impact-assessment model behind scoreValue. A row scored by an
   /// older model is identifiable without deleting it, so a rollout can be compared

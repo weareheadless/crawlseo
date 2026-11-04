@@ -27,7 +27,7 @@ import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
-import { assessNeed } from "@/lib/research/need-assessment";
+import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -643,10 +643,6 @@ export async function runResearchRun(runId: string) {
             projectId: run.projectId,
             siteId: site.id,
             runId: run.id,
-            // The monthly pipeline assesses each winnable finding against the
-            // business facts and the actual page text. Without this call the
-            // finding stays in the research backlog by design.
-            assess: assessNeed,
           });
         } catch (error) {
           console.error("[research] finding evidence bridge failed", error);
@@ -684,6 +680,21 @@ export async function runResearchRun(runId: string) {
           run.requestedBy ?? "research-worker",
         );
         actionIds.push(result.action.id);
+      }
+    }
+
+    // Existing findings are not frozen at their first assessment. This runs even
+    // when the run created no new findings; reuse is keyed to the sealed packet,
+    // so only changed evidence or policy costs a model call.
+    if (run.projectId) {
+      try {
+        await reassessProjectRecommendations(db, {
+          projectId: run.projectId,
+          siteId: site.id,
+          maxAssessments: 6,
+        });
+      } catch (error) {
+        console.error("[research] recommendation reassessment failed", error);
       }
     }
 

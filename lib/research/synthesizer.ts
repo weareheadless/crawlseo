@@ -296,8 +296,10 @@ export async function synthesizeResearch(input: {
       ? input.verifyClaim(finding.siteClaim)
       : verifySiteClaim(finding.siteClaim, inventory);
     if (verification.status === "contradicted") {
+      // Keep the finding: the lexical/inventory check is diagnostic evidence, not
+      // the canonical semantic decision. The recommendation producer sees the
+      // finding and its flagged premise, then decides whether it is work.
       rejected.push({ theme: finding.theme, reason: verification.reason });
-      continue;
     }
     verifiedIndex.set(originalIndex, keptFindings.length);
     keptFindings.push({ ...finding, verification });
