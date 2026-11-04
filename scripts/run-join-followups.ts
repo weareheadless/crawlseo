@@ -15,6 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 
 import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
+import { resolveSiteContext } from "@/lib/site/context";
 import {
   collectAiVisibility,
   collectDerivedKeywordMetrics,
@@ -39,8 +40,8 @@ function parseArgs(argv: string[]) {
   return {
     siteId,
     maxSpendMicros: Math.max(0, Number(values.get("max-spend-micros") ?? 0)),
-    language: values.get("language") ?? "fr",
-    country: values.get("country") ?? "FR",
+    language: values.get("language") ?? null,
+    country: values.get("country") ?? null,
     dryRun,
   };
 }
@@ -53,7 +54,14 @@ async function main() {
     select: { id: true, domain: true, projectId: true },
   });
   if (!site.projectId) throw new Error("site is not attached to a project");
-  const locale = await resolveDataForSeoLocale(site.projectId, args.language, args.country);
+  // Explicit flags win; otherwise the site's own context answers, so this script
+  // is not a French script that happens to work on other sites.
+  const context = await resolveSiteContext(db as never, site.id);
+  const locale = await resolveDataForSeoLocale(
+    site.projectId,
+    args.language ?? context.language,
+    args.country ?? context.country
+  );
 
   if (args.dryRun) {
     const { computeFollowUps } = await import("@/lib/funnel/join");

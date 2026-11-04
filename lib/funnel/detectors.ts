@@ -689,8 +689,10 @@ const DETECTORS: Detector[] = [
         .filter((row) => dim(row, "painPoint") === "true")
         .map((row) => ({
           type: "O13_user_pain_point" as const,
-          title: `User pain point without content: ${dim(row, "painPointSummary") ?? dim(row, "question") ?? "need"}`,
-          summary: `Research surfaced a real customer need with no (or weak) on-site answer — awaiting keyword validation.`,
+          // Label from the theme; the prose belongs in the summary, where a reader
+          // can open it instead of scrolling past it on the board.
+          title: dim(row, "title") ?? dim(row, "query") ?? dim(row, "painPointSummary") ?? "Customer need",
+          summary: dim(row, "painPointSummary") ?? `Research surfaced a real customer need with no (or weak) on-site answer.`,
           dedupKey: `O13:${dim(row, "painPointSummary") ?? dim(row, "question") ?? row.id}`,
           clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: [row.id],
@@ -710,8 +712,8 @@ const DETECTORS: Detector[] = [
         .filter((row) => dim(row, "positioningGap") === "true")
         .map((row) => ({
           type: "O14_offer_positioning_gap" as const,
-          title: `Positioning gap: ${dim(row, "gapSummary") ?? "competitors position an offer we do not articulate"}`,
-          summary: `Research + SERP show a positioning gap worth a content/positioning update.`,
+          title: dim(row, "title") ?? dim(row, "query") ?? "Positioning gap",
+          summary: dim(row, "gapSummary") ?? `Research + SERP show a positioning gap worth a content/positioning update.`,
           dedupKey: `O14:${dim(row, "gapSummary") ?? row.id}`,
           clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: [row.id],

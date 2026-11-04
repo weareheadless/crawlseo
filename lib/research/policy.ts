@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { resolveSiteContext } from "@/lib/site/context";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -38,9 +39,10 @@ export type ResearchConfigInput = {
 };
 
 export async function getResearchConfig(siteId: string) {
-  const [profile, policy] = await Promise.all([
+  const [profile, policy, context] = await Promise.all([
     db.siteProfile.findUnique({ where: { siteId } }),
     db.researchPolicy.findUnique({ where: { siteId } }),
+    resolveSiteContext(db, siteId).catch(() => null),
   ]);
   const constraints = profile?.constraints && typeof profile.constraints === "object" && !Array.isArray(profile.constraints)
     ? profile.constraints as Record<string, unknown>
@@ -55,7 +57,10 @@ export async function getResearchConfig(siteId: string) {
     providers: stringList(policy?.providers).length > 0 ? stringList(policy?.providers) : ["reddit", "news", "web"],
     audience: typeof profile?.audience === "string" ? profile.audience : "",
     market: typeof constraints.market === "string" ? constraints.market : "",
-    language: profile?.language ?? "en",
+    // The same resolver the runner uses, so settings and execution cannot
+    // disagree. Empty (not "en") when the site has not said what language it is.
+    language: context?.language ?? "",
+    languageSource: context?.source.language ?? "unknown",
     cadence: normalizeResearchCadence(policy?.cadence),
     enabled: policy?.enabled ?? true,
     maxSources: policy?.maxSources ?? 30,

@@ -19,7 +19,7 @@ import { generateDraftForAction } from "@/lib/research/content";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
-import { researchCountry } from "@/lib/research/locale";
+import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
@@ -314,9 +314,13 @@ export async function runResearchRun(runId: string) {
     const sourceErrors: string[] = unsupportedProviders.map((provider) => provider === "web"
       ? "web: general web search is not implemented; Google News RSS is available through the news provider"
       : `${provider}: provider is not implemented; no results were reported for this capability`);
-    const language = typeof brief.language === "string" ? brief.language : "en";
-    const market = typeof brief.market === "string" ? brief.market : "";
-    const country = researchCountry(market, language);
+    // The brief may target a market explicitly; otherwise the site's own context
+    // answers, and a site with no language fails loudly instead of running in
+    // English.
+    const context = await resolveSiteContext(db, site.id);
+    const language = typeof brief.language === "string" && brief.language.trim() ? brief.language : context.language;
+    const market = typeof brief.market === "string" && brief.market.trim() ? brief.market : (context.market ?? "");
+    const country = countryFromText(market) ?? context.country;
     const constraints = site.siteProfile?.constraints && typeof site.siteProfile.constraints === "object" && !Array.isArray(site.siteProfile.constraints)
       ? site.siteProfile.constraints as Record<string, unknown> : {};
     const exclusions = stringList(constraints.exclusions ?? constraints.excludedTopics).slice(0, 100);
@@ -390,7 +394,8 @@ export async function runResearchRun(runId: string) {
           const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
             query: topic,
             language,
-            country,
+            // The feed needs a `gl` edition; the provider owns that fallback.
+            country: country ?? undefined,
             limit: 10,
           }));
           for (const source of sources ?? []) addCollected({ ...source,

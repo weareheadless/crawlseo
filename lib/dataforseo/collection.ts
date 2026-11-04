@@ -383,30 +383,79 @@ async function askChatGpt(auth: string, question: string): Promise<AiCall | null
  *
  * A gap finding names a phrase like "retapisser un siège soi-même"; Labs has no
  * volume for it, so the how-leg join collected nothing. This asks related_keywords
- * for what people do search around the phrase, prefers a candidate that shares a
- * token with it, and stores the winner with `derivedFrom` for provenance.
+ * for what people do search around the phrase and keeps the candidate that stays
+ * closest to it.
+ *
+ * "Closest" is measured, not listed. The previous rule counted tokens, and a
+ * hyphenated compound counted as two: "abat-jour" looked like a phrase and beat
+ * "abat-jour sur mesure" on volume, so a chair-upholstery pain point was filed
+ * under a 49,500/month lighting head term. Words are now counted the way people
+ * count them, and a candidate that reduces a phrase to one word is a head term,
+ * not a derivation.
  */
+export type DerivedKeywordSpecificity = "exact" | "narrowed" | "expanded";
+
+export type DerivedKeywordChoice = {
+  keyword: string;
+  volume: number;
+  /** Seed words the candidate kept. */
+  retained: number;
+  /** Seed words the candidate dropped — the qualifiers it lost. */
+  dropped: number;
+  specificity: DerivedKeywordSpecificity;
+};
+
+/** Words as a reader counts them: whitespace-separated, hyphen kept inside a word. */
+export function keywordWords(value: string): string[] {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ""))
+    .filter((word) => word.length >= 3);
+}
+
 export function pickDerivedKeyword(
   seed: string,
   candidates: Array<{ keyword: string; volume: number | null }>
-): { keyword: string; volume: number; shared: number } | null {
-  const normalise = (value: string) =>
-    value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
-  const seedTokens = new Set(normalise(seed));
-  const seedIsPhrase = seedTokens.size >= 2;
+): DerivedKeywordChoice | null {
+  const seedWords = new Set(keywordWords(seed));
+  const seedIsPhrase = seedWords.size >= 2;
   const scored = candidates
     .filter((candidate) => typeof candidate.volume === "number" && (candidate.volume ?? 0) >= 10 && candidate.keyword.trim().length > 0)
-    .map((candidate) => ({
-      keyword: candidate.keyword.trim(),
-      volume: candidate.volume as number,
-      shared: normalise(candidate.keyword).filter((token) => seedTokens.has(token)).length,
-      tokens: normalise(candidate.keyword).length,
-    }))
-    // A single generic word ("tenue", "siège") is not the phrase's keyword: when
-    // the seed is a phrase, keep candidates that are phrases too and share a token.
-    .filter((candidate) => (seedIsPhrase ? candidate.shared >= 1 && candidate.tokens >= 2 : true))
-    .sort((a, b) => b.shared - a.shared || b.volume - a.volume);
-  return scored[0] ?? null;
+    .map((candidate) => {
+      const words = new Set(keywordWords(candidate.keyword));
+      const retained = [...words].filter((word) => seedWords.has(word)).length;
+      const dropped = [...seedWords].filter((word) => !words.has(word)).length;
+      const specificity: DerivedKeywordSpecificity =
+        dropped === 0 && words.size === seedWords.size ? "exact" : dropped === 0 ? "expanded" : "narrowed";
+      return {
+        keyword: candidate.keyword.trim(),
+        volume: candidate.volume as number,
+        retained,
+        dropped,
+        specificity,
+        words: words.size,
+      };
+    })
+    // A one-word answer to a multi-word phrase is the head term we backed off to,
+    // not the phrase's keyword. Returning nothing is honest; the join leaves the
+    // leg unjoined instead of filing the opportunity under a broader query.
+    .filter((candidate) => (seedIsPhrase ? candidate.words >= 2 && candidate.retained >= 1 : true))
+    // Fewest qualifiers lost first, then the candidate that says the most, then
+    // demand. Volume only breaks ties: it is the one signal that rewards being
+    // broad, which is what we are trying not to be.
+    .sort((a, b) => a.dropped - b.dropped || b.words - a.words || b.volume - a.volume);
+  const best = scored[0];
+  if (!best) return null;
+  return {
+    keyword: best.keyword,
+    volume: best.volume,
+    retained: best.retained,
+    dropped: best.dropped,
+    specificity: best.specificity,
+  };
 }
 
 /** Phrases to try, longest first: the phrase, its unaccented form, its head terms. */
@@ -483,7 +532,12 @@ export async function collectDerivedKeywordMetrics(
   if (typeof match?.cpc === "number") metrics["provider:cpc"] = { value: match.cpc, unit: "currency", source: "provider" };
   if (typeof match?.competition === "number") metrics["provider:competition"] = { value: match.competition, unit: "score", source: "provider" };
 
-  const dimensions = { query: chosen.keyword, derivedFrom: input.seed, sharedTokens: chosen.shared };
+  const dimensions = {
+    query: chosen.keyword,
+    derivedFrom: input.seed,
+    sharedTokens: chosen.retained,
+    specificity: chosen.specificity,
+  };
   const stored = await storeEvidenceRecord(db, {
     projectId: input.projectId,
     siteId: input.siteId,

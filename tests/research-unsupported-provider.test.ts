@@ -34,7 +34,15 @@ vi.mock("@/lib/agent-tasks/service", () => ({ createAgentTaskForAction: vi.fn() 
 vi.mock("@/lib/research/content", () => ({ generateDraftForAction: vi.fn() }));
 vi.mock("@/lib/research/automation", () => ({ autoAgentDecision: vi.fn() }));
 vi.mock("@/lib/research/synthesizer", () => ({ synthesizeResearch: vi.fn() }));
-vi.mock("@/lib/research/locale", () => ({ researchCountry: vi.fn(() => "US") }));
+vi.mock("@/lib/site/context", () => ({
+  countryFromText: vi.fn(() => null),
+  resolveSiteContext: vi.fn(async () => ({
+    siteId: "site-1", projectId: "project-1", domain: "example.com",
+    language: "en", country: "US", market: null, location: null,
+    topics: [], audience: null,
+    source: { language: "site_profile", country: "language", location: "unknown" },
+  })),
+}));
 vi.mock("@/lib/connectors/events", () => ({ emitConnectorEvent: vi.fn() }));
 
 import { runResearchRun } from "@/lib/research/runner";

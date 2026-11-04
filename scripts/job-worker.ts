@@ -35,7 +35,7 @@ import {
   collectSerpSnapshots,
 } from "@/lib/dataforseo/collection";
 import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
-import { researchCountry } from "@/lib/research/locale";
+import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 
 loadEnvConfig(process.cwd());
 
@@ -191,12 +191,14 @@ async function executeJob(
       });
       if (scheduled?.trigger === "SCHEDULED" && scheduled.projectId && scheduled.siteId) {
         try {
-          // Locale comes from the run's own brief, so the monthly pass works for
-          // any market rather than assuming one.
+          // Locale comes from the site's own context (brief overrides when it
+          // names a market), so the monthly pass works for any market rather
+          // than assuming one.
           const brief = (scheduled.brief ?? {}) as { language?: string; market?: string };
-          const site = await db.site.findUnique({ where: { id: scheduled.siteId }, select: { domain: true } });
-          const language = brief.language ?? "en";
-          const country = researchCountry(brief.market, language);
+          const context = await resolveSiteContext(db as never, scheduled.siteId);
+          const site = { domain: context.domain };
+          const language = brief.language?.trim() || context.language;
+          const country = countryFromText(brief.market) ?? context.country;
           const locale = await resolveDataForSeoLocale(scheduled.projectId, language, country).catch(() => null);
           const joins = await runJoinFollowUps(db as never, {
             projectId: scheduled.projectId,

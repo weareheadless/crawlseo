@@ -46,6 +46,23 @@ const POSITIONING_TYPES = new Set([
   "COMPETITOR", "POSITIONING", "MARKET_GAP", "OPPORTUNITY", "POSITIONING_GAP", "COMPETITOR_GAP",
 ]);
 
+/**
+ * The label an opportunity carries on the board.
+ *
+ * A finding has three parts and they are not interchangeable: `theme` is the
+ * label, `primaryQuery` is the keyword the join validates, `summary` is the prose
+ * that justifies the finding. The detectors used to put the summary in the title,
+ * which produced 150-character paragraphs where a label belonged, while the theme
+ * sat unused in the same row.
+ */
+function findingTitle(finding: StoredFinding): string {
+  const theme = finding.theme?.trim();
+  if (theme) return theme.slice(0, 120);
+  const query = finding.primaryQuery?.trim();
+  if (query) return query.slice(0, 120);
+  return finding.summary.trim().slice(0, 120);
+}
+
 export function findingDimensions(finding: StoredFinding): Record<string, string | number | boolean | null> {
   const isPainPoint = PAIN_POINT_TYPES.has(finding.type);
   const isPositioning = POSITIONING_TYPES.has(finding.type);
@@ -54,6 +71,7 @@ export function findingDimensions(finding: StoredFinding): Record<string, string
     runId: finding.runId,
     findingType: finding.type,
     theme: finding.theme,
+    title: findingTitle(finding),
     // The phrase to validate; the join runner collects on this, not on the theme.
     query: finding.primaryQuery ?? null,
     // The detectors read these two flags; a finding without a winnable gap
