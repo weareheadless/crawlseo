@@ -44,9 +44,33 @@ export type CoverageState = (typeof COVERAGE_STATES)[number];
 export type NeedBasis = (typeof NEED_BASES)[number];
 export type TargetRole = (typeof TARGET_ROLES)[number];
 
-export const EVIDENCE_PACKET_VERSION = "evidence-packet/1";
-export const RECOMMENDATION_DECISION_VERSION = "recommendation-decision/1";
-export const RECOMMENDATION_POLICY_VERSION = "recommendation-policy/1";
+export const EVIDENCE_PACKET_VERSION = "evidence-packet/2";
+export const RECOMMENDATION_DECISION_VERSION = "recommendation-decision/2";
+export const RECOMMENDATION_POLICY_VERSION = "recommendation-policy/2";
+export const ANALYSIS_RESULT_VERSION = "recommendation-analysis/1";
+
+/**
+ * Bounded analysis resources.
+ *
+ * These are execution limits, not SEO thresholds. They exist so one candidate
+ * cannot spend an unbounded amount of money or time, and so a request for more
+ * evidence terminates deterministically. Raising them does not make an
+ * unsupported recommendation true.
+ */
+export const ANALYSIS_RESOURCE_POLICY = {
+  version: "analysis-budget/1",
+  maxModelCalls: 30,
+  maxRepairAttempts: 3,
+  maxEvidenceRounds: 3,
+  maxRequestsPerRound: 6,
+  maxRetrievalRequests: 24,
+  maxLiveFetches: 12,
+  maxTokens: 16_000,
+  timeoutMs: 180_000,
+  maxRawResponseChars: 60_000,
+} as const;
+
+export type AnalysisResourcePolicy = typeof ANALYSIS_RESOURCE_POLICY;
 
 const id = z.string().min(1).max(300);
 const shortText = z.string().min(1).max(400);
@@ -79,7 +103,22 @@ export const PacketPageSchema = z.object({
   retrieval: z.enum(["stored", "live", "unavailable"]),
   status: z.number().int(),
   language: z.string().nullable(),
+  /** Characters of the page body that were actually supplied and inspected. */
+  inspected: z.number().int().nonnegative(),
+  /** Known body length at retrieval time, before sectioning. */
+  totalChars: z.number().int().nonnegative(),
+  /** Why retrieval failed or produced no usable text; null when text was read. */
+  retrievalNote: z.string().max(400).nullable(),
   sections: z.array(z.object({ id, locator: z.string().max(200), text: z.string() })).max(12),
+});
+
+export const PacketLinkSchema = z.object({
+  fromPageId: id,
+  toUrl: z.string().max(2_000),
+  anchor: z.string().max(300),
+  /** "observed" means the anchor exists in fetched HTML; status is unverified. */
+  observation: z.enum(["observed", "checked"]),
+  status: z.number().int().nullable(),
 });
 
 export const EvidencePacketSchema = z.object({
@@ -130,6 +169,16 @@ export const EvidencePacketSchema = z.object({
     })
   ).max(20),
   pages: z.array(PacketPageSchema).max(10),
+  links: z.array(PacketLinkSchema).max(200),
+  /** What the analysis asked for and what the service did, in order. */
+  trace: z.array(
+    z.object({
+      round: z.number().int().nonnegative(),
+      action: z.enum(["packet", "request_evidence", "retrieval", "final_decision", "failure"]),
+      detail: z.string().max(600),
+      at: z.string(),
+    })
+  ).max(40),
   inventory: z.array(
     z.object({
       url: z.string(),
@@ -158,6 +207,7 @@ export const EvidencePacketSchema = z.object({
 
 export type EvidencePacket = z.infer<typeof EvidencePacketSchema>;
 export type PacketPage = z.infer<typeof PacketPageSchema>;
+export type PacketLink = z.infer<typeof PacketLinkSchema>;
 export type PacketReference = z.infer<typeof PacketReferenceSchema>;
 
 const AssessmentSchema = z.object({
@@ -232,6 +282,17 @@ export const ModelDecisionSchema = z.object({
   readiness: z.enum(READINESS),
   intervention: z.enum(INTERVENTIONS),
   change: z.string().max(1_000).nullable(),
+  /**
+   * Required when create_asset is chosen although a supplied page answers the
+   * question partially or fully: the distinct intent that existing page does not
+   * serve, and why. Code checks that the justification exists; the AI owns it.
+   */
+  assetJustification: z
+    .object({
+      distinctIntent: z.string().min(1).max(600),
+      whyExistingInsufficient: z.string().min(1).max(600),
+    })
+    .nullable(),
   investigation: InvestigationSchema.nullable(),
   targets: z.array(TargetSchema).max(6),
   benefits: z.array(BenefitSchema).max(4),
@@ -253,6 +314,40 @@ export const ModelDecisionSchema = z.object({
 });
 
 export type ModelDecision = z.infer<typeof ModelDecisionSchema>;
+
+/**
+ * A request to inspect evidence the service can obtain itself.
+ *
+ * This is analysis work in progress, not a customer recommendation: it carries no
+ * readiness and must be resolved by the service before a final decision.
+ */
+export const EvidenceRequestSchema = z.object({
+  kind: z.literal("request_evidence"),
+  requests: z
+    .array(
+      z.object({
+        type: z.enum(["page_text", "source_text", "journey_links", "inventory_search"]),
+        /** page:<id>, source:<id>, a URL, or a short discovery query. */
+        target: z.string().min(1).max(2_000),
+        question: z.string().min(1).max(600),
+        whyItMatters: z.string().min(1).max(600),
+      })
+    )
+    .min(1)
+    .max(6),
+  rationale: z.string().min(1).max(800),
+});
+
+export type EvidenceRequest = z.infer<typeof EvidenceRequestSchema>;
+
+export const AnalysisTraceEntrySchema = z.object({
+  round: z.number().int().nonnegative(),
+  action: z.enum(["packet", "request_evidence", "retrieval", "final_decision", "failure"]),
+  detail: z.string().max(600),
+  at: z.string(),
+});
+
+export type AnalysisTraceEntry = z.infer<typeof AnalysisTraceEntrySchema>;
 
 export const RecommendationDecisionSchema = ModelDecisionSchema.extend({
   schemaVersion: z.literal(RECOMMENDATION_DECISION_VERSION),
@@ -293,7 +388,9 @@ export function hashValue(value: unknown): string {
 
 /** The packet hash covers evidence content, not its generated identity or time. */
 export function hashPacket(packet: Omit<EvidencePacket, "packetHash"> & { packetHash?: string }): string {
-  const { packetHash: _ignored, packetId: _packetId, generatedAt: _generatedAt, ...body } = packet;
+  // Trace entries record the service's actions and timestamps; they are not
+  // evidence and must not change the evidence identity.
+  const { packetHash: _ignored, packetId: _packetId, generatedAt: _generatedAt, trace: _trace, ...body } = packet;
   return hashValue(body);
 }
 
@@ -426,6 +523,10 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
       errors.push(`coverage names page "${entry.pageId}" that is not in the packet`);
       continue;
     }
+    if (coverageByPage.has(entry.pageId)) {
+      errors.push(`coverage names page ${page.url} more than once; return one assessment per page`);
+      continue;
+    }
     coverageByPage.set(entry.pageId, entry);
     if (entry.state === "answers" || entry.state === "partially_answers") {
       if (entry.excerpts.length === 0) errors.push(`coverage "${entry.state}" for ${page.url} has no verbatim excerpt`);
@@ -433,8 +534,15 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
         if (!pageTextContains(page, excerpt)) errors.push(`coverage excerpt for ${page.url} does not occur in the supplied text`);
       }
     }
-    if (entry.state === "unassessable" && page.retrieval !== "unavailable" && !page.truncated) {
-      errors.push(`coverage for ${page.url} is marked unassessable although text was supplied`);
+    // A negative answer about a page that was never read is not evidence. The
+    // model may mark such a page unassessable, or request its text first.
+    if (entry.state === "does_not_answer") {
+      if (page.retrieval === "unavailable" || page.text.trim().length === 0 || page.inspected === 0) {
+        errors.push(`coverage for ${page.url} claims no answer, but no page text was inspected`);
+      }
+    }
+    if (entry.state === "unassessable" && page.text.trim().length > 0 && !page.truncated && entry.limitations.length === 0) {
+      errors.push(`coverage for ${page.url} is unassessable despite supplied text; state the extraction limitation`);
     }
   }
 
@@ -456,6 +564,17 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
     if (decision.intervention !== "investigate") errors.push("an investigation readiness must use the investigate intervention");
     if (!decision.investigation) errors.push("an investigation needs a bounded question, evidence to inspect, criteria and deliverable");
     if (decision.change?.trim()) errors.push("an investigation must not carry an implementation change");
+    // Asking a person to inspect content the packet already contains is unfinished
+    // machine analysis. Such a request must be an evidence request instead.
+    for (const item of decision.investigation?.inspect ?? []) {
+      const lower = item.toLowerCase();
+      const supplied = packet.pages.find(
+        (page) => page.text.trim().length > 0 && (lower.includes(page.id.toLowerCase()) || lower.includes(page.url.toLowerCase()))
+      );
+      if (supplied) {
+        errors.push(`investigation asks to inspect ${supplied.url}, which was already supplied; complete that inspection before returning a final decision`);
+      }
+    }
   }
 
   if (decision.readiness === "no_action") {
@@ -504,9 +623,15 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
   if (decision.intervention === "create_asset") {
     const answered = decision.coverage.some((entry) => entry.state === "answers" || entry.state === "partially_answers");
     const unassessable = decision.coverage.some((entry) => entry.state === "unassessable");
-    if (answered) errors.push("create_asset cannot be justified when an existing page answers the question");
     if (unassessable) errors.push("create_asset cannot be justified while relevant page text is unassessable");
     if (decision.coverage.length === 0) errors.push("create_asset needs at least one assessed page that does not answer");
+    if (answered) {
+      // A distinct intent may justify a new asset, but only with the AI's explicit
+      // reasoning. Code checks that it exists; it does not decide whether it is true.
+      if (!decision.assetJustification) {
+        errors.push("create_asset alongside an answering page needs assetJustification: the distinct intent and why the existing answer is insufficient");
+      }
+    }
   }
 
   for (const benefit of decision.benefits) {
@@ -531,139 +656,74 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
   return { ok: errors.length === 0, errors };
 }
 
-const ENUM_ALIASES: Record<string, Record<string, string>> = {
-  readiness: {
-    actionable_work: "actionable",
-    action: "actionable",
-    investigate: "needs_investigation",
-    investigation: "needs_investigation",
-    backlog: "research_backlog",
-    no_change: "no_action",
-    noaction: "no_action",
-    maintain: "no_action",
-    reject: "rejected",
-    insufficient_evidence: "research_backlog",
-    needs_more_evidence: "needs_investigation",
-    partial: "needs_investigation",
-  },
-  intervention: {
-    update: "update_page",
-    update_existing: "update_page",
-    create: "create_asset",
-    new_asset: "create_asset",
-    link: "improve_journey",
-    linking: "improve_journey",
-    no_change: "maintain",
-    none: "maintain",
-    investigate_more: "investigate",
-  },
-  evidenceState: {
-    unknown: "unverified",
-    not_assessed: "unverified",
-    insufficient: "unverified",
-    unsupported: "unverified",
-    false: "contradicted",
-    true: "supported",
-    not_applicable: "unverified",
-    "n/a": "unverified",
-    partial: "unverified",
-    mixed: "unverified",
-    supported_with_caveats: "supported",
-    contradicted_by_content: "contradicted",
-  },
-  coverageState: {
-    answer: "answers",
-    partial: "partially_answers",
-    partial_answer: "partially_answers",
-    does_not: "does_not_answer",
-    no_answer: "does_not_answer",
-    unknown: "unassessable",
-    not_assessed: "unassessable",
-    not_applicable: "unassessable",
-    "n/a": "unassessable",
-    mixed: "partially_answers",
-  },
-  targetRole: {
-    update_page: "update",
-    update_existing: "update",
-    link: "link_to",
-    internal_link: "link_to",
-    new: "new_asset",
-    create: "new_asset",
-  },
-  measurement: {
-    none: "unquantified",
-    unknown: "unquantified",
-    not_measured: "unquantified",
-    not_quantified: "unquantified",
-    unmeasured: "unquantified",
-    qualitative: "unquantified",
-    no_data: "unquantified",
-    estimated: "forecast",
-    estimate: "forecast",
-    scenario: "forecast",
-    measured: "observed_baseline",
-    measured_baseline: "observed_baseline",
-    baseline: "observed_baseline",
-  },
-  reviewRequirement: {
-    expert: "subject_matter_expert",
-    sme: "subject_matter_expert",
-    legal_review: "legal",
-    medical_review: "medical",
-    technical_review: "technical",
-  },
-  instrumentation: {
-    yes: "available",
-    no: "unavailable",
-    unknown: "unknown",
-  },
-};
+/**
+ * Transport normalisation only.
+ *
+ * A model may write "Update Page" or "update-page"; that is the same enum name.
+ * Anything that changes meaning (for example "partial" → "partially_answers")
+ * is refused and returned to the model as a validation error.
+ */
+const TRANSPORT_ENUMS = {
+  readiness: READINESS,
+  intervention: INTERVENTIONS,
+  evidenceState: EVIDENCE_STATES,
+  coverageState: COVERAGE_STATES,
+  targetRole: TARGET_ROLES,
+  measurement: MEASUREMENTS,
+  reviewRequirement: REVIEW_REQUIREMENTS,
+  instrumentation: ["available", "unavailable", "unknown"],
+  basis: NEED_BASES,
+  track: BENEFIT_TRACKS,
+  effort: ["small", "medium", "large", "unknown"],
+  requestType: ["page_text", "source_text", "journey_links", "inventory_search"],
+} as const;
 
-function alias(value: unknown, group: keyof typeof ENUM_ALIASES): unknown {
+function transportValue(value: unknown, allowed: readonly string[]): unknown {
   if (typeof value !== "string") return value;
-  return ENUM_ALIASES[group][value.toLowerCase()] ?? value;
+  const candidate = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return allowed.includes(candidate) ? candidate : value;
 }
 
-/**
- * Map common model vocabulary to the contract's enums before schema validation.
- *
- * This is vocabulary compatibility, not a change of meaning: the decision still
- * has to satisfy the same integrity checks.
- */
 export function normaliseModelDecision(raw: unknown): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
-  const row = structuredClone(raw) as Record<string, any>;
-  if (row.readiness) row.readiness = alias(row.readiness, "readiness");
-  if (row.intervention) row.intervention = alias(row.intervention, "intervention");
+  const row = structuredClone(raw) as Record<string, unknown>;
+  const set = (target: Record<string, unknown> | undefined, key: string, group: keyof typeof TRANSPORT_ENUMS) => {
+    if (!target || !(key in target)) return;
+    target[key] = transportValue(target[key], TRANSPORT_ENUMS[group]);
+  };
+  set(row, "readiness", "readiness");
+  set(row, "intervention", "intervention");
   for (const key of ["question", "premise", "offerFit"]) {
-    if (row[key]?.state) row[key].state = alias(row[key].state, "evidenceState");
+    set(row[key] as Record<string, unknown> | undefined, "state", "evidenceState");
   }
   if (Array.isArray(row.coverage)) {
-    for (const entry of row.coverage) {
-      if (entry?.state) entry.state = alias(entry.state, "coverageState");
-    }
+    for (const entry of row.coverage) set(entry as Record<string, unknown>, "state", "coverageState");
   }
   if (Array.isArray(row.targets)) {
-    const fallbackRole =
-      row.intervention === "improve_journey" ? "link_to" : row.intervention === "create_asset" ? "new_asset" : "update";
-    for (const target of row.targets) {
-      if (!target) continue;
-      const mapped = target.role ? alias(target.role, "targetRole") : fallbackRole;
-      target.role = TARGET_ROLES.includes(mapped as never) ? mapped : fallbackRole;
-    }
+    for (const target of row.targets) set(target as Record<string, unknown>, "role", "targetRole");
   }
   if (Array.isArray(row.benefits)) {
     for (const benefit of row.benefits) {
-      if (benefit?.measurement) benefit.measurement = alias(benefit.measurement, "measurement");
+      set(benefit as Record<string, unknown>, "measurement", "measurement");
+      set(benefit as Record<string, unknown>, "track", "track");
     }
   }
   if (Array.isArray(row.reviews)) {
-    for (const review of row.reviews) {
-      if (review?.requirement) review.requirement = alias(review.requirement, "reviewRequirement");
-    }
+    for (const review of row.reviews) set(review as Record<string, unknown>, "requirement", "reviewRequirement");
   }
-  if (row.success?.instrumentation) row.success.instrumentation = alias(row.success.instrumentation, "instrumentation");
+  if (row.success && typeof row.success === "object") {
+    set(row.success as Record<string, unknown>, "instrumentation", "instrumentation");
+  }
+  if (Array.isArray(row.requests)) {
+    for (const request of row.requests) set(request as Record<string, unknown>, "type", "requestType");
+  }
+  const question = row.question as { bases?: unknown } | undefined;
+  if (Array.isArray(question?.bases)) {
+    for (const basis of question.bases) set(basis as Record<string, unknown>, "basis", "basis");
+  }
+  if (row.effort && typeof row.effort === "object") {
+    set(row.effort as Record<string, unknown>, "size", "effort");
+  }
   return row;
 }
 
@@ -678,6 +738,137 @@ export function parseModelDecision(raw: unknown): { ok: true; decision: ModelDec
   return { ok: true, decision: parsed.data };
 }
 
+export type ModelOutput =
+  | { kind: "request_evidence"; request: EvidenceRequest }
+  | { kind: "final_decision"; decision: ModelDecision };
+
+/** Parse either an evidence request or a final decision from one model answer. */
+export function parseModelOutput(raw: unknown): { ok: true; output: ModelOutput } | { ok: false; errors: string[] } {
+  const kind = (raw as { kind?: unknown } | null)?.kind;
+  if (kind === "request_evidence") {
+    const parsed = EvidenceRequestSchema.safeParse(normaliseModelDecision(raw));
+    if (!parsed.success) {
+      return {
+        ok: false,
+        errors: parsed.error.issues.map((issue) => `request.${issue.path.join(".") || "body"}: ${issue.message}`),
+      };
+    }
+    return { ok: true, output: { kind: "request_evidence", request: parsed.data } };
+  }
+  if (kind !== undefined && kind !== "final_decision") {
+    return { ok: false, errors: [`kind: expected "request_evidence" or "final_decision", received ${JSON.stringify(kind)}`] };
+  }
+  const parsed = parseModelDecision(raw);
+  if (!parsed.ok) return parsed;
+  return { ok: true, output: { kind: "final_decision", decision: parsed.decision } };
+}
+
+export type EvidenceRequestValidation = { ok: boolean; errors: string[]; resolved: ResolvedEvidenceRequest[] };
+
+export type ResolvedEvidenceRequest = {
+  type: EvidenceRequest["requests"][number]["type"];
+  target: string;
+  /** Existing packet identity, or a URL/query the service may retrieve. */
+  pageId: string | null;
+  url: string | null;
+};
+
+/**
+ * Check a request against the packet and the site scope.
+ *
+ * A request may name an existing packet item or a URL on the site's own domain.
+ * It may not smuggle in another tenant or an arbitrary external origin. Discovery
+ * searches only the known inventory; no new web crawl is implied.
+ */
+export function validateEvidenceRequest(
+  request: EvidenceRequest,
+  packet: EvidencePacket,
+  opts: { siteDomain: string; maxRequests?: number }
+): EvidenceRequestValidation {
+  const errors: string[] = [];
+  const resolved: ResolvedEvidenceRequest[] = [];
+  const max = Math.max(1, Math.min(opts.maxRequests ?? 4, 6));
+  if (request.requests.length > max) errors.push(`request_evidence: at most ${max} requests are allowed per round`);
+  const pages = new Map(packet.pages.map((page) => [page.id, page]));
+  const sources = new Map(packet.sources.map((source) => [source.id, source]));
+  const inventory = new Set(packet.inventory.map((row) => row.url));
+  const domain = opts.siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
+
+  for (const entry of request.requests) {
+    if (entry.type === "page_text") {
+      // Models sometimes write page:<url> instead of the packet's page:<hash>.
+      // That is a naming variant of the same site page, not a different origin.
+      const target = entry.target.startsWith("page:http") ? entry.target.slice("page:".length) : entry.target;
+      const page = pages.get(target);
+      if (page) {
+        if (page.retrieval !== "unavailable" && page.text.trim() && !page.truncated) {
+          errors.push(`request for ${page.url} asks for text that was already supplied in full`);
+        }
+        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url });
+        continue;
+      }
+      let url: URL | null = null;
+      try {
+        url = new URL(target);
+      } catch {
+        url = null;
+      }
+      if (!url) {
+        errors.push(`page_text target "${entry.target}" is neither a supplied page id nor a URL`);
+        continue;
+      }
+      const host = url.hostname.replace(/^www\./, "").toLowerCase();
+      if (host !== domain && !host.endsWith(`.${domain}`)) {
+        errors.push(`page_text target ${entry.target} is outside the site domain`);
+        continue;
+      }
+      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: url.toString() });
+      continue;
+    }
+    if (entry.type === "source_text") {
+      const source = sources.get(entry.target);
+      if (!source) {
+        errors.push(`source_text target "${entry.target}" is not in the packet`);
+        continue;
+      }
+      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: source.url });
+      continue;
+    }
+    if (entry.type === "journey_links") {
+      const target = entry.target.startsWith("page:http") ? entry.target.slice("page:".length) : entry.target;
+      const page = pages.get(target);
+      if (page) {
+        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url });
+        continue;
+      }
+      // A known inventory URL may be inspected for links even when its text was
+      // not in the initial selection. The service fetches it before reading links.
+      if (inventory.has(target)) {
+        resolved.push({ type: entry.type, target: entry.target, pageId: null, url: target });
+        continue;
+      }
+      errors.push(`journey_links target "${entry.target}" is neither a supplied page nor a known inventory URL`);
+      continue;
+    }
+    // inventory_search
+    const terms = entry.target.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term) => term.length >= 3);
+    if (terms.length === 0) {
+      errors.push("inventory_search needs at least one word of three characters or more");
+      continue;
+    }
+    const matches = [...inventory].filter((url) => {
+      const lower = url.toLowerCase();
+      return terms.some((term) => lower.includes(term));
+    });
+    if (matches.length === 0) {
+      errors.push(`inventory_search "${entry.target}" found no known page; absence in the known inventory is not proof of absence`);
+      continue;
+    }
+    resolved.push({ type: entry.type, target: entry.target, pageId: null, url: matches[0] });
+  }
+  return { ok: errors.length === 0, errors, resolved };
+}
+
 export function finaliseDecision(input: {
   model: ModelDecision;
   packet: EvidencePacket;
@@ -685,22 +876,10 @@ export function finaliseDecision(input: {
   promptVersion: string;
   now?: Date;
 }): RecommendationDecision {
-  // Models sometimes emit two coverage rows for the same page. Keep the checked
-  // positive row when present, otherwise the first; this is structural cleanup,
-  // not a change to the assessment.
-  const byPage = new Map<string, ModelDecision["coverage"][number]>();
-  for (const entry of input.model.coverage) {
-    const previous = byPage.get(entry.pageId);
-    if (!previous) {
-      byPage.set(entry.pageId, entry);
-      continue;
-    }
-    const positive = entry.state === "answers" || entry.state === "partially_answers";
-    if (positive && entry.excerpts.length > 0) byPage.set(entry.pageId, entry);
-  }
+  // Identity and versions only. Coverage, targets, readiness and every other
+  // semantic field are exactly what the model authored.
   const decision: RecommendationDecision = {
     ...input.model,
-    coverage: [...byPage.values()],
     schemaVersion: RECOMMENDATION_DECISION_VERSION,
     decisionId: `decision-${randomUUID()}`,
     candidateId: input.packet.candidate.findingId,

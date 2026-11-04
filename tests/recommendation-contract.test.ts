@@ -63,9 +63,14 @@ function packet(over: Partial<EvidencePacket> = {}): EvidencePacket {
       retrieval: "stored",
       status: 200,
       language: "en",
+      inspected: 70,
+      totalChars: 70,
+      retrievalNote: null,
       sections: [{ id: "section:p1:0", locator: "chars:0-70", text: "Our warranty covers repairs for twelve months." }],
     }],
     inventory: [{ url: "https://site.test/warranty", title: "Warranty", status: 200, indexable: true, retrieval: "stored" }],
+    links: [],
+    trace: [],
     search: [],
     limitations: [],
   });
@@ -98,6 +103,7 @@ function model(over: Partial<ModelDecision> = {}): ModelDecision {
     readiness: "actionable",
     intervention: "update_page",
     change: "List the documents required for a warranty claim.",
+    assetJustification: null,
     investigation: null,
     targets: [{ pageId: "page:p1", pageUrl: "https://site.test/warranty", sectionId: null, role: "update", rationale: "The warranty page is the natural place." }],
     benefits: [{

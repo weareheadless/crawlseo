@@ -3,7 +3,9 @@ import type { PrismaClient } from "@prisma/client";
 import { contentWriterConfigured } from "@/lib/ai-seo/writer";
 import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { buildEvidencePacket } from "@/lib/recommendation/packet";
-import { assessFinding, type AssessmentRunDb, type FindingForAssessment } from "@/lib/recommendation/run";
+import { assessFinding, findReusableDecision, type AssessmentRunDb, type FindingForAssessment } from "@/lib/recommendation/run";
+import { AnalysisLedger } from "@/lib/recommendation/ledger";
+import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import type { assessRecommendation } from "@/lib/recommendation/assess";
 
 /**
@@ -70,6 +72,8 @@ export async function reassessProjectRecommendations(
     dryRun?: boolean;
     maxAssessments?: number;
     assessor?: typeof assessRecommendation;
+    /** Shared across candidates so one run has one budget. */
+    ledger?: AnalysisLedger;
   }
 ): Promise<ReassessResult> {
   const result: ReassessResult = {
@@ -84,12 +88,17 @@ export async function reassessProjectRecommendations(
     outcomes: [],
   };
 
+  // Oldest first: a stable cursor gives later candidates a turn instead of
+  // re-checking the same first rows forever.
   const rows = await db.evidenceRecord.findMany({
     where: { projectId: opts.projectId, siteId: opts.siteId, kind: "research_finding", supersededById: null },
-    select: { id: true, dimensions: true },
+    select: { id: true, dimensions: true, observedAt: true },
+    orderBy: { observedAt: "asc" },
   });
 
   const maxAssessments = Math.max(0, Math.min(opts.maxAssessments ?? 6, 12));
+  const ledger = opts.ledger ?? new AnalysisLedger();
+  const model = opts.assessor ? null : contentWriterConfig()?.model ?? null;
   let attempts = 0;
 
   for (const row of rows) {
@@ -158,6 +167,34 @@ export async function reassessProjectRecommendations(
       continue;
     }
 
+    // Reuse is checked before the budget: an unchanged candidate costs a packet
+    // build, not a model call, and must not starve a stale candidate behind it.
+    const currentPacket = await buildEvidencePacket(db, {
+      projectId: opts.projectId,
+      siteId: opts.siteId,
+      candidate: {
+        findingId: candidate.id,
+        dedupKey: candidate.dedupKey,
+        findingType: candidate.type,
+        theme: candidate.theme,
+        summary: candidate.summary,
+        premise: candidate.premise,
+        observedAt: candidate.observedAt,
+        sourceIds: candidate.sourceIds,
+      },
+    });
+    const reusable = findReusableDecision(dimensions, currentPacket, model);
+    if (reusable) {
+      result.reused += 1;
+      result.outcomes.push({
+        findingId: candidate.id,
+        theme: candidate.theme,
+        status: "reused",
+        readiness: reusable.readiness,
+      });
+      continue;
+    }
+
     if (!contentWriterConfigured() && !opts.assessor) {
       result.skipped += 1;
       result.outcomes.push({
@@ -187,6 +224,7 @@ export async function reassessProjectRecommendations(
       siteId: opts.siteId,
       finding: candidate,
       assessor: opts.assessor,
+      ledger,
     });
     if (assessed.status === "reused") result.reused += 1;
     else if (assessed.status === "assessed") result.assessed += 1;

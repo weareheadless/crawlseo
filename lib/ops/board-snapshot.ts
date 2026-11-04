@@ -34,13 +34,28 @@ export type SnapshotRow = {
   updatedAt: string;
 };
 
+export type SnapshotEvidenceRow = {
+  id: string;
+  supersededById: string | null;
+  observedAt: string;
+};
+
 export type BoardSnapshot = {
   takenAt: string;
   checksum: string;
-  sites: Array<{ siteId: string; projectId: string; domain: string; opportunities: SnapshotRow[] }>;
+  sites: Array<{
+    siteId: string;
+    projectId: string;
+    domain: string;
+    opportunities: SnapshotRow[];
+    /** Active/superseded selection for research evidence at snapshot time. */
+    evidence: SnapshotEvidenceRow[];
+  }>;
 };
 
-export type SnapshotDb = Pick<PrismaClient, "site" | "opportunity">;
+export type SnapshotDb = Pick<PrismaClient, "site" | "opportunity" | "evidenceRecord"> & {
+  $transaction?: PrismaClient["$transaction"];
+};
 
 function checksumOf(snapshot: BoardSnapshot): string {
   const body = JSON.stringify({ ...snapshot, checksum: undefined });
@@ -64,6 +79,10 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
         assessmentVersion: true, decidedBy: true, decidedAt: true, updatedAt: true,
       },
     });
+    const evidence = await db.evidenceRecord.findMany({
+      where: { projectId: site.projectId!, kind: "research_finding" },
+      select: { id: true, supersededById: true, observedAt: true },
+    });
     snapshot.sites.push({
       siteId: site.id,
       projectId: site.projectId!,
@@ -72,6 +91,11 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
         ...row,
         decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
         updatedAt: row.updatedAt.toISOString(),
+      })),
+      evidence: evidence.map((row) => ({
+        id: row.id,
+        supersededById: row.supersededById,
+        observedAt: row.observedAt.toISOString(),
       })),
     });
   }
@@ -158,6 +182,20 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
         data: { status: "parked", parkReason: "rollback_new_row", decidedBy: "board-restore", decidedAt: new Date() },
       });
       conflicts.push(`${site.domain}: ${row.dedupKey} was created after the snapshot and was parked`);
+    }
+
+    // Restore which research evidence was active. A record observed after the
+    // snapshot is newer history and is not rewound.
+    for (const row of site.evidence ?? []) {
+      const observedAt = new Date(row.observedAt);
+      if (observedAt.getTime() > takenAt) {
+        conflicts.push(`${site.domain}: evidence ${row.id} is newer than the snapshot and was left unchanged`);
+        continue;
+      }
+      await db.evidenceRecord.updateMany({
+        where: { id: row.id },
+        data: { supersededById: row.supersededById ?? null },
+      });
     }
   }
   return { restored, conflicts };

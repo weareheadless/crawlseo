@@ -98,6 +98,8 @@ export async function publishDecision(
     decision: RecommendationDecision;
     findingType: string;
     evidenceId: string;
+    /** The evidence record this decision supersedes, when it is a reassessment. */
+    previousEvidenceId?: string | null;
   }
 ): Promise<{ published: boolean; opportunityId: string | null }> {
   const { decision } = input;
@@ -116,7 +118,11 @@ export async function publishDecision(
     // Legacy rows may have been created under an older dedup key. The evidence edge
     // still identifies the opportunity this finding produced.
     const linked = await db.evidenceEdge.findMany({
-      where: { fromType: "evidence_record", fromId: input.evidenceId, toType: "opportunity" },
+      where: {
+        fromType: "evidence_record",
+        fromId: { in: [input.evidenceId, input.previousEvidenceId].filter((id): id is string => Boolean(id)) },
+        toType: "opportunity",
+      },
       select: { toId: true },
     });
     const ids = new Set<string>(linked.map((edge) => edge.toId));
@@ -145,7 +151,11 @@ export async function publishDecision(
   // has a canonical actionable decision, the unassessed legacy placeholder must not
   // remain as a second recommendation.
   const linked = await db.evidenceEdge.findMany({
-    where: { fromType: "evidence_record", fromId: input.evidenceId, toType: "opportunity" },
+    where: {
+      fromType: "evidence_record",
+      fromId: { in: [input.evidenceId, input.previousEvidenceId].filter((id): id is string => Boolean(id)) },
+      toType: "opportunity",
+    },
     select: { toId: true },
   });
   for (const edge of linked) {

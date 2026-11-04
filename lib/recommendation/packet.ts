@@ -2,26 +2,30 @@ import { createHash } from "node:crypto";
 
 import type { PrismaClient } from "@prisma/client";
 
-import { resolveSiteContext } from "@/lib/site/context";
+import { assertPublicDomain, documentMarkup } from "@/lib/crawler/engine";
 import { htmlToText } from "@/lib/projects/business-knowledge-extract";
+import { resolveSiteContext } from "@/lib/site/context";
 import {
   RECOMMENDATION_POLICY_VERSION,
   sealPacket,
   type EvidencePacket,
+  type PacketLink,
   type PacketPage,
+  type ResolvedEvidenceRequest,
 } from "@/lib/recommendation/contracts";
 
 /**
  * Build the one evidence packet every assessment receives.
  *
- * Production, reassessment and evaluation call this function. There is no second
- * retrieval or ranking implementation, because a different input path cannot prove
- * what the monthly pipeline does.
+ * Production, reassessment, shadow and evaluation call this module. There is no
+ * second retrieval or ranking implementation, because a different input path
+ * cannot prove what the monthly pipeline does.
  *
- * The packet is deliberately finite and explicit: selected page sections, the
- * known inventory, sources, business facts and the limitations of what was read.
  * Lexical matching chooses candidate sections; it does not judge whether they
- * answer the question.
+ * answer the question. Selection is relevance-first, so the homepage cannot
+ * consume the page budget merely by existing. When stored text is missing the
+ * service may retrieve the page through the existing safe fetch path, and the
+ * model may request more evidence before it returns a final decision.
  */
 
 export type PacketDb = Pick<
@@ -57,14 +61,17 @@ export type PacketOptions = {
   maxSources?: number;
   /** Read-only evaluation may supply facts extracted from live pages. */
   businessFacts?: EvidencePacket["businessFacts"];
+  maxLiveFetches?: number;
   now?: Date;
 };
 
-const DEFAULT_MAX_PAGES = 4;
-const DEFAULT_MAX_CHARS = 2_500;
+const DEFAULT_MAX_PAGES = 6;
+const DEFAULT_MAX_CHARS = 3_000;
 const DEFAULT_MAX_SOURCES = 8;
-const MAX_INVENTORY = 200;
+const MAX_INVENTORY = 500;
 const MAX_SEARCH = 40;
+const MAX_LINKS = 200;
+const MAX_LIVE_CHARS = 120_000;
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "without", "from", "this", "that", "these", "those",
@@ -80,7 +87,7 @@ const STOPWORDS = new Set([
   "cover", "answers", "answer", "missing", "absent", "dedicated", "dédiée",
 ]);
 
-/** Unicode-safe terms: the old ASCII split discarded non-Latin scripts entirely. */
+/** Unicode-safe terms: an ASCII split would discard non-Latin scripts entirely. */
 export function packetTerms(...values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const terms: string[] = [];
@@ -103,22 +110,6 @@ function pageId(url: string): string {
   return `page:${shortHash(url)}`;
 }
 
-/** Bounded fallback when the crawl stored no text. It uses the same public page. */
-async function fetchLiveText(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, {
-      redirect: "follow",
-      headers: { "User-Agent": "CrawlSEO recommendation evidence (+https://crawlseo.app)" },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!response.ok) return null;
-    const text = htmlToText(await response.text()).slice(0, 8_000);
-    return text.length > 200 ? text : null;
-  } catch {
-    return null;
-  }
-}
-
 function sourceId(id: string): string {
   return `source:${id}`;
 }
@@ -129,6 +120,257 @@ function factId(field: string): string {
 
 function searchId(id: string): string {
   return `search:${id}`;
+}
+
+/** A lower-cased, accent-folded string plus a map back to original offsets. */
+function normaliseWithMap(text: string): { lower: string; map: number[] } {
+  let lower = "";
+  const map: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const folded = text[index].normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    for (const char of folded) {
+      lower += char;
+      map.push(index);
+    }
+  }
+  map.push(text.length);
+  return { lower, map };
+}
+
+/**
+ * Build overlapping windows around the need's terms, on the original text.
+ *
+ * The old implementation searched a whitespace-normalised copy and then sliced
+ * the original with those offsets, which shifted every section after the first
+ * collapsed space. The index map keeps offsets honest.
+ */
+export function relevantSections(text: string, terms: string[], maxChars: number): Array<{ locator: string; text: string }> {
+  if (!text.trim()) return [];
+  const { lower, map } = normaliseWithMap(text);
+  const windows: Array<{ start: number; end: number }> = [];
+  const windowSize = Math.max(700, Math.min(1_800, Math.floor(maxChars / 2)));
+  for (const term of terms.slice(0, 10)) {
+    let index = lower.indexOf(term);
+    let found = 0;
+    while (index >= 0 && found < 2) {
+      const start = map[Math.max(0, index - Math.floor(windowSize / 3))] ?? 0;
+      const end = map[Math.min(lower.length, index + windowSize)] ?? text.length;
+      windows.push({ start, end });
+      index = lower.indexOf(term, index + term.length);
+      found += 1;
+    }
+  }
+  if (windows.length === 0) {
+    windows.push({ start: 0, end: Math.min(text.length, maxChars) });
+  }
+  windows.sort((a, b) => a.start - b.start);
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const window of windows) {
+    const last = merged[merged.length - 1];
+    if (last && window.start <= last.end + 120) last.end = Math.max(last.end, window.end);
+    else merged.push({ ...window });
+  }
+  const sections: Array<{ locator: string; text: string }> = [];
+  let budget = maxChars;
+  for (const window of merged) {
+    if (budget <= 0) break;
+    const slice = text
+      .slice(window.start, Math.min(window.end, window.start + budget))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!slice) continue;
+    sections.push({ locator: `chars:${window.start}-${window.start + slice.length}`, text: slice });
+    budget -= slice.length;
+  }
+  return sections.slice(0, 8);
+}
+
+type RetrievedPage = {
+  url: string;
+  title: string | null;
+  text: string;
+  html: string;
+  status: number;
+  finalUrl: string;
+  note: string | null;
+  retrieval: "live" | "unavailable";
+};
+
+const SHELL_MARKERS = /enable javascript|javascript is required|access denied|just a moment|attention required|captcha|cf-challenge|please verify you are human/i;
+
+/** Bounded retrieval through the crawler's public-origin check. */
+export async function retrievePage(url: string, siteDomain: string): Promise<RetrievedPage> {
+  const domain = siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "invalid URL", retrieval: "unavailable" };
+  }
+  const host = target.hostname.replace(/^www\./, "").toLowerCase();
+  if (host !== domain && !host.endsWith(`.${domain}`)) {
+    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "URL is outside the site domain", retrieval: "unavailable" };
+  }
+  try {
+    await assertPublicDomain(host);
+  } catch (error) {
+    return {
+      url,
+      title: null,
+      text: "",
+      html: "",
+      status: 0,
+      finalUrl: url,
+      note: error instanceof Error ? error.message.slice(0, 300) : "origin check failed",
+      retrieval: "unavailable",
+    };
+  }
+  try {
+    const response = await fetch(target, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": "CrawlSEO recommendation evidence (+https://crawlseo.app)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    const finalUrl = response.url || url;
+    const finalHost = new URL(finalUrl).hostname.replace(/^www\./, "").toLowerCase();
+    if (finalHost !== domain && !finalHost.endsWith(`.${domain}`)) {
+      return { url, title: null, text: "", html: "", status: response.status, finalUrl, note: "redirect left the site domain", retrieval: "unavailable" };
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("html") && !contentType.includes("xml")) {
+      return { url, title: null, text: "", html: "", status: response.status, finalUrl, note: `non-HTML content (${contentType || "unknown"})`, retrieval: "unavailable" };
+    }
+    // Read the whole document: on builder sites the body can sit far beyond the
+    // first 120k characters of head/scripts. Cap the extracted text, not the HTML.
+    const html = await response.text();
+    const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? null;
+    // Wix and similar builders embed base64 payloads inside comments and
+    // templates; stripping tags alone would hand the model encoded noise.
+    const text = htmlToText(documentMarkup(html)).slice(0, MAX_LIVE_CHARS);
+    if (response.status !== 200) {
+      return { url, title, text: "", html, status: response.status, finalUrl, note: `HTTP ${response.status}`, retrieval: "unavailable" };
+    }
+    if (SHELL_MARKERS.test(html) && text.length < 1_500) {
+      return { url, title, text: "", html, status: response.status, finalUrl, note: "page is a bot challenge or client-rendered shell", retrieval: "unavailable" };
+    }
+    if (text.length < 80) {
+      return { url, title, text: "", html, status: response.status, finalUrl, note: "no usable body text was extracted", retrieval: "unavailable" };
+    }
+    return { url, title, text, html, status: response.status, finalUrl, note: null, retrieval: "live" };
+  } catch (error) {
+    return {
+      url,
+      title: null,
+      text: "",
+      html: "",
+      status: 0,
+      finalUrl: url,
+      note: error instanceof Error ? error.message.slice(0, 300) : "retrieval failed",
+      retrieval: "unavailable",
+    };
+  }
+}
+
+export function extractInternalLinks(html: string, fromUrl: string, siteDomain: string): Array<{ toUrl: string; anchor: string }> {
+  const domain = siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
+  const links: Array<{ toUrl: string; anchor: string }> = [];
+  const seen = new Set<string>();
+  for (const match of documentMarkup(html).matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    let absolute: string;
+    try {
+      absolute = new URL(match[1], fromUrl).toString();
+    } catch {
+      continue;
+    }
+    const host = new URL(absolute).hostname.replace(/^www\./, "").toLowerCase();
+    if (host !== domain && !host.endsWith(`.${domain}`)) continue;
+    const anchor = htmlToText(match[2]).slice(0, 200);
+    const key = `${absolute}|${anchor}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push({ toUrl: absolute, anchor });
+    if (links.length >= MAX_LINKS) break;
+  }
+  return links;
+}
+
+function buildPage(
+  row: {
+    url: string;
+    title: string | null;
+    contentText: string | null;
+    contentHash: string | null;
+    statusCode: number;
+    language: string | null;
+    retrieval: "stored" | "live" | "unavailable";
+    retrievalNote: string | null;
+  },
+  terms: string[],
+  maxChars: number
+): PacketPage {
+  const text = row.contentText ?? "";
+  const selected = relevantSections(text, terms, maxChars);
+  const supplied = selected.map((section) => section.text).join("\n\n");
+  const truncated = supplied.length < text.length;
+  const id = pageId(row.url);
+  return {
+    id,
+    url: row.url,
+    title: row.title,
+    contentHash: row.contentHash ?? (text ? createHash("sha256").update(text).digest("hex") : null),
+    text: supplied,
+    truncated,
+    retrieval: row.retrieval,
+    status: row.statusCode,
+    language: row.language,
+    inspected: supplied.length,
+    totalChars: text.length,
+    retrievalNote: row.retrievalNote,
+    sections: selected.map((section, index) => ({
+      id: `section:${id}:${index}`,
+      locator: section.locator,
+      text: section.text,
+    })),
+  };
+}
+
+/** A requested page is supplied whole, not re-sectioned, so it can be assessed. */
+function buildFullPage(
+  row: {
+    url: string;
+    title: string | null;
+    contentText: string | null;
+    contentHash: string | null;
+    statusCode: number;
+    language: string | null;
+    retrieval: "stored" | "live" | "unavailable";
+    retrievalNote: string | null;
+  },
+  maxChars: number
+): PacketPage {
+  const full = row.contentText ?? "";
+  const text = full.slice(0, maxChars);
+  const id = pageId(row.url);
+  return {
+    id,
+    url: row.url,
+    title: row.title,
+    contentHash: row.contentHash ?? (full ? createHash("sha256").update(full).digest("hex") : null),
+    text,
+    truncated: full.length > maxChars,
+    retrieval: row.retrieval,
+    status: row.statusCode,
+    language: row.language,
+    inspected: text.length,
+    totalChars: full.length,
+    retrievalNote: row.retrievalNote,
+    sections: text
+      ? [{ id: `section:${id}:0`, locator: `chars:0-${text.length}`, text }]
+      : [],
+  };
 }
 
 function factValue(value: unknown): string[] {
@@ -165,79 +407,45 @@ function dimension(dimensions: unknown, key: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** Build overlapping windows around the need's terms, not a fixed page prefix. */
-export function relevantSections(text: string, terms: string[], maxChars: number): Array<{ locator: string; text: string }> {
-  if (!text.trim()) return [];
-  const lower = text.normalize("NFKC").replace(/\s+/g, " ").toLowerCase();
-  const windows: Array<{ start: number; end: number }> = [];
-  const windowSize = Math.max(700, Math.min(1_600, Math.floor(maxChars / 2)));
-  for (const term of terms.slice(0, 8)) {
-    let index = lower.indexOf(term);
-    let found = 0;
-    while (index >= 0 && found < 2) {
-      windows.push({ start: Math.max(0, index - Math.floor(windowSize / 3)), end: Math.min(text.length, index + windowSize) });
-      index = lower.indexOf(term, index + term.length);
-      found += 1;
-    }
-  }
-  if (windows.length === 0) {
-    windows.push({ start: 0, end: Math.min(text.length, maxChars) });
-  }
-  windows.sort((a, b) => a.start - b.start);
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const window of windows) {
-    const last = merged[merged.length - 1];
-    if (last && window.start <= last.end + 80) last.end = Math.max(last.end, window.end);
-    else merged.push({ ...window });
-  }
-  const sections: Array<{ locator: string; text: string }> = [];
-  let budget = maxChars;
-  for (const window of merged) {
-    if (budget <= 0) break;
-    const slice = text.slice(window.start, Math.min(window.end, window.start + budget)).replace(/\s+/g, " ").trim();
-    if (!slice) continue;
-    sections.push({ locator: `chars:${window.start}-${window.start + slice.length}`, text: slice });
-    budget -= slice.length;
-  }
-  return sections.slice(0, 8);
-}
-
-function buildPage(row: {
+export type InventoryRow = {
   url: string;
   title: string | null;
   contentText: string | null;
   contentHash: string | null;
   statusCode: number;
-  language: string | null;
-}, terms: string[], maxChars: number): PacketPage {
-  const text = row.contentText ?? "";
-  const selected = relevantSections(text, terms, maxChars);
-  const supplied = selected.map((section) => section.text).join("\n\n");
-  const truncated = supplied.length < text.length;
-  const id = pageId(row.url);
-  return {
-    id,
-    url: row.url,
-    title: row.title,
-    contentHash: row.contentHash,
-    text: supplied,
-    truncated,
-    retrieval: text ? "stored" : "unavailable",
-    status: row.statusCode,
-    language: row.language,
-    sections: selected.map((section, index) => ({
-      id: `section:${id}:${index}`,
-      locator: section.locator,
-      text: section.text,
-    })),
-  };
+  indexable: boolean;
+};
+
+/** The complete known inventory, bounded only by the existing crawl size. */
+export async function loadInventory(db: PacketDb, crawlId: string): Promise<InventoryRow[]> {
+  return db.auditPage.findMany({
+    where: { crawlId },
+    select: { url: true, title: true, contentText: true, contentHash: true, statusCode: true, indexable: true },
+    orderBy: { url: "asc" },
+    take: MAX_INVENTORY,
+  });
+}
+
+function rankRows(rows: InventoryRow[], terms: string[]): Array<{ row: InventoryRow; score: number }> {
+  return rows
+    .map((row) => {
+      const haystack = `${row.title ?? ""} ${row.url} ${(row.contentText ?? "").slice(0, 6_000)}`
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      return { row, score };
+    })
+    .sort((a, b) => b.score - a.score || a.row.url.length - b.row.url.length);
 }
 
 export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Promise<EvidencePacket> {
   const maxPages = Math.max(1, Math.min(opts.maxPages ?? DEFAULT_MAX_PAGES, 10));
-  const maxChars = Math.max(1_000, Math.min(opts.maxCharsPerPage ?? DEFAULT_MAX_CHARS, 8_000));
+  const maxChars = Math.max(800, Math.min(opts.maxCharsPerPage ?? DEFAULT_MAX_CHARS, 8_000));
   const maxSources = Math.max(1, Math.min(opts.maxSources ?? DEFAULT_MAX_SOURCES, 20));
+  const maxLiveFetches = Math.max(0, Math.min(opts.maxLiveFetches ?? 4, 6));
   const limitations: string[] = [];
+  const trace: EvidencePacket["trace"] = [];
 
   const site = await db.site.findUnique({
     where: { id: opts.siteId },
@@ -284,6 +492,9 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     }
     if (document.acceptedRevision == null) limitations.push("business knowledge is a working revision, not owner-accepted");
   }
+  if (document && businessFacts.length === 0) {
+    limitations.push("the business knowledge document contains no usable facts; offer fit may be unverified");
+  }
 
   const crawl = await db.crawl.findFirst({
     where: { siteId: opts.siteId, status: "COMPLETED" },
@@ -292,27 +503,9 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
   });
   if (!crawl) limitations.push("no completed crawl exists; site coverage cannot be assessed");
 
-  const rows: Array<{
-    url: string;
-    title: string | null;
-    contentText: string | null;
-    contentHash: string | null;
-    statusCode: number;
-    indexable: boolean;
-  }> = [];
+  const rows = crawl ? await loadInventory(db, crawl.id) : [];
   if (crawl) {
-    for (let skip = 0; skip < MAX_INVENTORY; skip += 500) {
-      const batch = await db.auditPage.findMany({
-        where: { crawlId: crawl.id },
-        select: { url: true, title: true, contentText: true, contentHash: true, statusCode: true, indexable: true },
-        orderBy: { url: "asc" },
-        skip,
-        take: 500,
-      });
-      rows.push(...batch);
-      if (batch.length < 500) break;
-    }
-    if (rows.length >= MAX_INVENTORY) limitations.push(`inventory was limited to ${MAX_INVENTORY} pages`);
+    if (rows.length >= MAX_INVENTORY) limitations.push(`inventory was limited to ${MAX_INVENTORY} known pages`);
     if (crawl.maxPages > 0 && crawl.pagesFound >= crawl.maxPages) {
       limitations.push(`the crawl reached its ${crawl.maxPages}-page cap, so the inventory is incomplete`);
     }
@@ -325,38 +518,46 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
   }
 
   const terms = packetTerms(opts.candidate.theme, opts.candidate.summary, opts.candidate.premise);
-  const ranked = rows
-    .map((row) => {
-      const haystack = `${row.title ?? ""} ${row.url} ${(row.contentText ?? "").slice(0, 4_000)}`
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase();
-      const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
-      return { row, score };
-    })
-    .sort((a, b) => b.score - a.score || a.row.url.length - b.row.url.length);
+  const ranked = rankRows(rows, terms);
   const selectedRows = ranked.filter((entry) => entry.score > 0).slice(0, maxPages).map((entry) => entry.row);
-  const root = rows.find((row) => {
-    try {
-      return new URL(row.url).pathname === "/";
-    } catch {
-      return false;
+  if (selectedRows.length < 2) {
+    for (const entry of ranked) {
+      if (selectedRows.length >= Math.min(2, maxPages)) break;
+      if (!selectedRows.some((row) => row.url === entry.row.url)) selectedRows.push(entry.row);
     }
-  });
-  if (root && !selectedRows.some((row) => row.url === root.url)) selectedRows.unshift(root);
+  }
+  if (selectedRows.length === 0 && rows.length > 0) selectedRows.push(rows[0]);
+
   const pages: PacketPage[] = [];
   let liveFetches = 0;
   for (const row of selectedRows.slice(0, maxPages)) {
     let contentText = row.contentText;
-    if (!contentText && row.statusCode === 200 && liveFetches < 3) {
-      const live = await fetchLiveText(row.url);
-      if (live) {
-        contentText = live;
-        liveFetches += 1;
+    let retrieval: "stored" | "live" | "unavailable" = contentText ? "stored" : "unavailable";
+    let note: string | null = contentText ? null : "no stored page text";
+    let title = row.title;
+    let statusCode = row.statusCode;
+    if (!contentText && row.statusCode === 200 && liveFetches < maxLiveFetches) {
+      const live = await retrievePage(row.url, site.domain);
+      liveFetches += 1;
+      if (live.retrieval === "live") {
+        contentText = live.text;
+        retrieval = "live";
+        note = null;
+        title = live.title ?? title;
+        statusCode = live.status;
         limitations.push(`page text for ${row.url} came from a bounded live fetch, not the stored crawl`);
+      } else {
+        note = live.note;
+        limitations.push(`page text for ${row.url} could not be retrieved: ${live.note}`);
       }
     }
-    pages.push(buildPage({ ...row, contentText, language: context?.language ?? null }, terms, maxChars));
+    pages.push(
+      buildPage(
+        { url: row.url, title, contentText, contentHash: row.contentHash, statusCode, language: context?.language ?? null, retrieval, retrievalNote: note },
+        terms,
+        maxChars
+      )
+    );
   }
   if (pages.some((page) => page.truncated)) {
     limitations.push("selected page text was sectioned or truncated; unread sections are unknown");
@@ -391,6 +592,13 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     source: row.kind,
   }));
 
+  trace.push({
+    round: 0,
+    action: "packet",
+    detail: `assembled ${pages.length} pages, ${sourceRows.length} sources, ${effectiveFacts.length} facts`,
+    at: new Date().toISOString(),
+  });
+
   return sealPacket(
     {
       projectId: opts.projectId,
@@ -423,6 +631,8 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
         language: row.language,
       })),
       pages,
+      links: [],
+      trace,
       inventory: rows.slice(0, MAX_INVENTORY).map((row) => ({
         url: row.url,
         title: row.title,
@@ -431,8 +641,177 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
         retrieval: row.contentText ? "stored" : "unavailable",
       })),
       search,
-      limitations,
+      limitations: limitations.slice(0, 20),
     },
     opts.now ?? new Date()
   );
+}
+
+export type ExpandResult = {
+  packet: EvidencePacket;
+  actions: string[];
+  requested: number;
+  retrieved: number;
+  failed: number;
+};
+
+/**
+ * Resolve evidence requests against the site and return a new sealed packet.
+ *
+ * Requests never authorise a new web crawl: page retrieval is limited to the
+ * site's own origin, and inventory discovery only searches known URLs. A request
+ * that cannot be satisfied becomes an explicit limitation, not an absence claim.
+ */
+export async function expandEvidencePacket(
+  db: PacketDb,
+  packet: EvidencePacket,
+  resolved: ResolvedEvidenceRequest[],
+  opts: { siteDomain: string; maxLiveFetches?: number; round?: number; now?: Date }
+): Promise<ExpandResult> {
+  const pages = packet.pages.map((page) => ({ ...page, sections: page.sections.map((section) => ({ ...section })) }));
+  const links: PacketLink[] = packet.links.map((link) => ({ ...link }));
+  const limitations = [...packet.limitations];
+  const trace = [...packet.trace];
+  const actions: string[] = [];
+  const terms = packetTerms(packet.candidate.theme, packet.candidate.summary, packet.candidate.premise);
+  const maxFetches = Math.max(1, Math.min(opts.maxLiveFetches ?? 4, 6));
+  const requestedFullText = 20_000;
+  let fetches = 0;
+  let retrieved = 0;
+  let failed = 0;
+
+  const site = await db.site.findUnique({ where: { id: packet.siteId }, select: { domain: true } });
+  const domain = opts.siteDomain || site?.domain || "";
+  const round = opts.round ?? 1;
+
+  const upsertPage = async (url: string) => {
+    const existingIndex = pages.findIndex((page) => page.url === url);
+    const existing = existingIndex >= 0 ? pages[existingIndex] : null;
+    // A requested page must be supplied in full enough to assess. Sectioning a
+    // page again would make the model request it forever.
+    if (existing && existing.text.trim() && !existing.truncated) return existing;
+    if (fetches >= maxFetches) {
+      limitations.push(`evidence request for ${url} was not retrieved: live-fetch limit reached`);
+      return existing;
+    }
+    fetches += 1;
+    const live = await retrievePage(url, domain);
+    if (live.retrieval !== "live") {
+      failed += 1;
+      const note = live.note ?? "retrieval failed";
+      limitations.push(`evidence request for ${url} failed: ${note}`);
+      if (existing) {
+        existing.retrieval = "unavailable";
+        existing.retrievalNote = note;
+      }
+      return existing;
+    }
+    retrieved += 1;
+    const page = buildFullPage(
+      {
+        url,
+        title: live.title,
+        contentText: live.text,
+        contentHash: createHash("sha256").update(live.text).digest("hex"),
+        statusCode: live.status,
+        language: existing?.language ?? packet.context.language,
+        retrieval: "live",
+        retrievalNote: null,
+      },
+      requestedFullText
+    );
+    limitations.push(`page text for ${url} was retrieved on request and is not stored crawl text`);
+    if (existingIndex >= 0) pages[existingIndex] = page;
+    else if (pages.length < 10) pages.push(page);
+    return page;
+  };
+
+  for (const request of resolved) {
+    if (request.type === "page_text" || request.type === "inventory_search") {
+      if (!request.url) {
+        failed += 1;
+        actions.push(`${request.type} ${request.target}: no retrievable URL`);
+        continue;
+      }
+      const page = await upsertPage(request.url);
+      actions.push(`${request.type} ${request.target}: ${page?.retrieval === "live" ? "retrieved" : "unavailable"}`);
+      continue;
+    }
+    if (request.type === "source_text") {
+      const source = packet.sources.find((entry) => entry.id === request.target);
+      if (!source) {
+        failed += 1;
+        actions.push(`source_text ${request.target}: not in packet`);
+        continue;
+      }
+      limitations.push(`source ${source.url} has only a stored excerpt; the full external text was not retrieved`);
+      actions.push(`source_text ${request.target}: excerpt already supplied`);
+      continue;
+    }
+    // journey_links
+    let page = request.pageId ? pages.find((entry) => entry.id === request.pageId) : undefined;
+    if (!page && request.url) {
+      page = (await upsertPage(request.url)) ?? undefined;
+    }
+    if (!page) {
+      failed += 1;
+      actions.push(`journey_links ${request.target}: page not in packet`);
+      continue;
+    }
+    if (!page.text.trim()) {
+      const fetched = await upsertPage(page.url);
+      if (!fetched?.text.trim()) {
+        failed += 1;
+        actions.push(`journey_links ${page.url}: page text unavailable, links unknown`);
+        continue;
+      }
+    }
+    if (fetches >= maxFetches) {
+      failed += 1;
+      limitations.push(`journey links for ${page.url} were not inspected: live-fetch limit reached`);
+      continue;
+    }
+    fetches += 1;
+    const live = await retrievePage(page.url, domain);
+    if (live.retrieval !== "live") {
+      failed += 1;
+      limitations.push(`journey links for ${page.url} could not be inspected: ${live.note ?? "retrieval failed"}`);
+      continue;
+    }
+    const found = extractInternalLinks(live.html, live.finalUrl, domain);
+    for (const link of found) {
+      if (links.length >= MAX_LINKS) break;
+      if (links.some((entry) => entry.fromPageId === page.id && entry.toUrl === link.toUrl && entry.anchor === link.anchor)) continue;
+      links.push({ fromPageId: page.id, toUrl: link.toUrl, anchor: link.anchor, observation: "observed", status: null });
+    }
+    limitations.push(`journey links for ${page.url} are observed anchors only; destination status was not checked`);
+    actions.push(`journey_links ${page.url}: ${found.length} internal anchors observed`);
+  }
+
+  trace.push({
+    round,
+    action: "retrieval",
+    detail: actions.join("; ").slice(0, 600) || "no request could be resolved",
+    at: new Date().toISOString(),
+  });
+
+  const expanded = sealPacket(
+    {
+      projectId: packet.projectId,
+      siteId: packet.siteId,
+      policyVersion: packet.policyVersion,
+      candidate: packet.candidate,
+      businessFacts: packet.businessFacts,
+      context: packet.context,
+      sources: packet.sources,
+      pages,
+      links,
+      trace,
+      inventory: packet.inventory,
+      search: packet.search,
+      limitations: limitations.slice(0, 20),
+    },
+    opts.now ?? new Date()
+  );
+  return { packet: expanded, actions, requested: resolved.length, retrieved, failed };
 }

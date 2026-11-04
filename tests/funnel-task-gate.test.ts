@@ -31,6 +31,12 @@ const opportunityDb = () => {
         return record;
       }),
       findMany: vi.fn(async () => [...store.values()]),
+      updateMany: vi.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+        const record = store.get(args.where.id);
+        if (!record) return { count: 0 };
+        Object.assign(record, args.data);
+        return { count: 1 };
+      }),
       groupBy: vi.fn().mockResolvedValue([]),
     },
     evidenceEdge: {

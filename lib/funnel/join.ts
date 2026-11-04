@@ -144,7 +144,11 @@ export async function applyJoin(
  * The task gate (plan §3, Wave 2): a task can only exist by accepting an
  * opportunity, at exactly one place. Agent output never creates tasks.
  */
-export type TaskDb = Pick<PrismaClient, "task" | "opportunity">;
+export type TaskDb = Pick<PrismaClient, "task" | "opportunity"> & {
+  $transaction?: PrismaClient["$transaction"];
+};
+
+const MIGRATED_TYPES = new Set(["O13_user_pain_point", "O14_offer_positioning_gap"]);
 
 /**
  * The brief a person receives when they accept a recommendation.
@@ -162,17 +166,20 @@ export function taskPlanFromOpportunity(opportunity: {
   const decision = parsePersistedDecision(opportunity.recommendationDecision);
   if (decision) {
     return {
+      kind: decision.readiness === "needs_investigation" ? "investigation" : "implementation",
       decisionVersion: decision.schemaVersion,
       decisionId: decision.decisionId,
       packetHash: decision.packetHash,
       readiness: decision.readiness,
       intervention: decision.intervention,
       question: decision.question.text,
+      premise: decision.premise,
       needRationale: decision.question.rationale,
       needBases: decision.question.bases,
       offerFitRationale: decision.offerFit.rationale,
       coverage: decision.coverage,
       change: decision.change,
+      assetJustification: decision.assetJustification,
       investigation: decision.investigation,
       targets: decision.targets,
       benefits: decision.benefits,
@@ -192,6 +199,7 @@ export function taskPlanFromOpportunity(opportunity: {
   const list = (key: string) =>
     Array.isArray(worth[key]) ? (worth[key] as unknown[]).filter((value): value is string => typeof value === "string") : [];
   return {
+    kind: "legacy",
     readiness: read("readiness"),
     intervention: read("intervention"),
     benefitTrack: read("benefitTrack"),
@@ -203,29 +211,40 @@ export function taskPlanFromOpportunity(opportunity: {
     offerFitEvidenceUrls: list("offerFitEvidenceUrls"),
     assessmentModel: read("assessmentModel"),
     existingCoverage: read("coverageSummary"),
-    targetPages,
     change: read("change"),
+    targetPages,
     successMeasure: read("successMeasure"),
+    uncertainty: list("uncertainty"),
   };
 }
 
+/**
+ * Accept one opportunity into human work.
+ *
+ * The authoritative decision is loaded from the opportunity, not trusted from the
+ * caller. A migrated recommendation must be a valid actionable decision or a
+ * genuine bounded investigation; legacy-unassessed rows cannot become
+ * implementation work. The task and the opportunity transition are written
+ * together, with a version precondition that refuses a stale page.
+ */
 export async function acceptOpportunityIntoTask(
   db: TaskDb,
   opportunityId: string,
   input: { title: string; assignedTo: string; plan?: unknown; agentPreparedById?: string; recommendationDecision?: unknown }
 ): Promise<string> {
-  const rawDecision = input.recommendationDecision as { readiness?: unknown } | null | undefined;
-  if (rawDecision && typeof rawDecision.readiness === "string" && rawDecision.readiness !== "actionable") {
-    throw new Error(`opportunity readiness "${rawDecision.readiness}" cannot be accepted into implementation work`);
-  }
-  const decision = parsePersistedDecision(input.recommendationDecision);
-  if (input.recommendationDecision != null && !decision) {
-    throw new Error("the recommendation decision is malformed and cannot be accepted");
-  }
-  if (decision && decision.readiness !== "actionable") {
-    throw new Error(`opportunity readiness "${decision.readiness}" cannot be accepted into implementation work`);
-  }
-  const opportunity = await db.opportunity.findUnique({ where: { id: opportunityId }, select: { status: true, id: true } });
+  const opportunity = await db.opportunity.findUnique({
+    where: { id: opportunityId },
+    select: {
+      id: true,
+      status: true,
+      type: true,
+      title: true,
+      summary: true,
+      scoreInputs: true,
+      recommendationDecision: true,
+      recommendationFingerprint: true,
+    },
+  });
   if (!opportunity) throw new Error("opportunity not found");
   if (!["detected", "parked", "in_progress"].includes(opportunity.status)) {
     throw new Error(`opportunity status "${opportunity.status}" cannot be accepted into a task`);
@@ -233,21 +252,61 @@ export async function acceptOpportunityIntoTask(
   if (!input.assignedTo || input.assignedTo.trim() === "") {
     throw new Error("a task requires a human executor (plan decision 3)");
   }
-  const task = await db.task.create({
-    data: {
-      opportunityId,
-      title: input.title,
-      assignedTo: input.assignedTo,
-      status: "todo",
-      plan: (input.plan ?? undefined) as never,
-      agentPreparedById: input.agentPreparedById ?? null,
-    },
-    select: { id: true },
-  });
-  await db.opportunity.update({
-    where: { id: opportunityId },
-    data: { status: "accepted", decidedBy: input.assignedTo, decidedAt: new Date() },
-  });
+
+  const rawDecision = input.recommendationDecision as { readiness?: unknown } | null | undefined;
+  if (rawDecision && typeof rawDecision.readiness === "string" && rawDecision.readiness !== "actionable") {
+    throw new Error(`opportunity readiness "${rawDecision.readiness}" cannot be accepted into implementation work`);
+  }
+  const decision = parsePersistedDecision(opportunity.recommendationDecision);
+  if (MIGRATED_TYPES.has(opportunity.type)) {
+    if (!decision) {
+      throw new Error("this recommendation has not been assessed under the current contract and cannot become work");
+    }
+    if (decision.readiness !== "actionable" && decision.readiness !== "needs_investigation") {
+      throw new Error(`opportunity readiness "${decision.readiness}" cannot be accepted into work`);
+    }
+    if (input.recommendationDecision != null) {
+      const supplied = parsePersistedDecision(input.recommendationDecision);
+      if (!supplied || supplied.decisionId !== decision.decisionId) {
+        throw new Error("the recommendation changed since this page was loaded; review the current decision before accepting");
+      }
+    }
+  } else if (input.recommendationDecision != null) {
+    const supplied = parsePersistedDecision(input.recommendationDecision);
+    if (!supplied) throw new Error("the recommendation decision is malformed and cannot be accepted");
+    if (supplied.readiness !== "actionable") {
+      throw new Error(`opportunity readiness "${supplied.readiness}" cannot be accepted into implementation work`);
+    }
+  }
+
+  const plan = decision
+    ? taskPlanFromOpportunity(opportunity)
+    : ((input.plan ?? undefined) as Record<string, unknown> | undefined);
+  const expectedFingerprint = opportunity.recommendationFingerprint ?? null;
+
+  const write = async (tx: Pick<PrismaClient, "task" | "opportunity">) => {
+    const where = { id: opportunityId, status: opportunity.status, recommendationFingerprint: expectedFingerprint };
+    const updated = await tx.opportunity.updateMany({
+      where,
+      data: { status: "accepted", decidedBy: input.assignedTo, decidedAt: new Date() },
+    });
+    if (updated.count === 0) {
+      throw new Error("the recommendation changed while it was being accepted; reload and review it");
+    }
+    return tx.task.create({
+      data: {
+        opportunityId,
+        title: input.title,
+        assignedTo: input.assignedTo,
+        status: "todo",
+        plan: (plan ?? undefined) as never,
+        agentPreparedById: input.agentPreparedById ?? null,
+      },
+      select: { id: true },
+    });
+  };
+
+  const task = db.$transaction ? await db.$transaction((tx) => write(tx)) : await write(db);
   return task.id;
 }
 

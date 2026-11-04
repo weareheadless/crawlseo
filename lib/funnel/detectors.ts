@@ -466,9 +466,8 @@ function canonicalDecisionCandidates(evidence: Evidence[], type: "O13_user_pain_
   for (const row of rows) {
     const decision = parsePersistedDecision(dim(row, "recommendationDecisionJson"));
     if (!decision) {
-      // A recorded contradiction is evidence that the premise is false. It must not
-      // become work merely because it predates the canonical decision.
-      if (dim(row, "verification") === "contradicted") continue;
+      // A legacy lexical verdict is diagnostic. It must not suppress canonical
+      // assessment; the row stays visible as explicitly unassessed backlog.
       const theme = dim(row, "theme") ?? dim(row, "title") ?? "Unassessed research finding";
       candidates.push({
         type,

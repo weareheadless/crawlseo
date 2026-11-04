@@ -122,7 +122,7 @@ export async function reassessLegacyFindings(
   const inventory = buildPageInventory(pages.map((page) => ({ url: page.url, contentScore: 0 })));
   const blocked = pages.filter((page) => page.statusCode !== 200).length;
   const capped = crawl.maxPages > 0 && crawl.pagesFound >= crawl.maxPages;
-  result.coverageComplete = !capped && blocked === 0;
+  result.coverageComplete = !capped && blocked === 0 && result.pagesWithText > 0;
 
   const findings = await db.evidenceRecord.findMany({
     where: { projectId: input.projectId, kind: "research_finding", supersededById: null },
@@ -168,7 +168,7 @@ export async function reassessLegacyFindings(
       siteId: input.siteId,
       kind: "research_finding",
       observedAt: finding.observedAt,
-      producer: "reassessment",
+      producer: "legacy-diagnostic",
       dimensions: {
         ...dimensions,
         verification: verification.status,

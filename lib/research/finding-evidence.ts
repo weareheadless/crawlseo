@@ -4,6 +4,7 @@ import { storeEvidenceRecord } from "@/lib/funnel/evidence";
 import { assessFinding, type AssessmentRunDb } from "@/lib/recommendation/run";
 import type { RecommendationDecision } from "@/lib/recommendation/contracts";
 import type { assessRecommendation } from "@/lib/recommendation/assess";
+import type { AnalysisLedger } from "@/lib/recommendation/ledger";
 
 /**
  * Bridge: business research findings → funnel evidence.
@@ -153,6 +154,8 @@ export async function bridgeFindingsToEvidence(
     assess?: typeof assessRecommendation;
     /** Bounded attempts, including failures. Reuse does not consume an attempt. */
     maxAssessments?: number;
+    /** Shared across new findings and reassessment in one run. */
+    ledger?: AnalysisLedger;
   }
 ): Promise<FindingBridgeResult> {
   const findings = (await db.researchFinding.findMany({
@@ -227,6 +230,7 @@ export async function bridgeFindingsToEvidence(
       projectId: opts.projectId,
       siteId: opts.siteId,
       assessor: opts.assess,
+      ledger: opts.ledger,
       finding: {
         id: finding.id,
         runId: finding.runId,

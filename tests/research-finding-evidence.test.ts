@@ -42,6 +42,7 @@ function decisionFor(packet: EvidencePacket): ModelDecision {
     readiness: "actionable",
     intervention: "update_page",
     change: "Add a price range and what the quotation includes.",
+    assetJustification: null,
     investigation: null,
     targets: page
       ? [{ pageId: page.id, pageUrl: page.url, sectionId: null, role: "update", rationale: "The service page is where the question arises." }]
@@ -160,9 +161,10 @@ describe("research finding → canonical decision → evidence", () => {
   it("assesses an eligible finding and publishes the same decision", async () => {
     const { db, evidence, opportunities } = fakeDb([finding()]);
     const assess = vi.fn(async (packet: EvidencePacket) => ({
-      ok: true as const,
+      kind: "final" as const,
       attempts: 1,
-      decision: finaliseDecision({ model: decisionFor(packet), packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/1" }),
+      raw: null,
+      decision: finaliseDecision({ model: decisionFor(packet), packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/2" }),
     }));
     const result = await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess });
     expect(result.assessed).toBe(1);
@@ -176,9 +178,10 @@ describe("research finding → canonical decision → evidence", () => {
   it("reuses a decision when the sealed packet is unchanged", async () => {
     const { db } = fakeDb([finding()]);
     const assess = vi.fn(async (packet: EvidencePacket) => ({
-      ok: true as const,
+      kind: "final" as const,
       attempts: 1,
-      decision: finaliseDecision({ model: decisionFor(packet), packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/1" }),
+      raw: null,
+      decision: finaliseDecision({ model: decisionFor(packet), packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/2" }),
     }));
     await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess });
     await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess });
@@ -191,7 +194,7 @@ describe("research finding → canonical decision → evidence", () => {
       projectId: "p1",
       siteId: "s1",
       runId: "run-1",
-      assess: async () => ({ ok: false as const, attempts: 2, errors: ["invalid output"], raw: null }),
+      assess: async () => ({ kind: "failure" as const, attempts: 2, errors: ["invalid output"], raw: null }),
     });
     expect(result.assessed).toBe(0);
     expect(result.assessmentFailures).toHaveLength(1);
@@ -201,7 +204,7 @@ describe("research finding → canonical decision → evidence", () => {
 
   it("counts failed attempts against the assessment ceiling", async () => {
     const { db } = fakeDb([finding({ id: "f1" }), finding({ id: "f2", theme: "second question" })]);
-    const assess = vi.fn(async () => ({ ok: false as const, attempts: 1, errors: ["bad"], raw: null }));
+    const assess = vi.fn(async () => ({ kind: "failure" as const, attempts: 1, errors: ["bad"], raw: null }));
     await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess, maxAssessments: 1 });
     expect(assess).toHaveBeenCalledTimes(1);
   });

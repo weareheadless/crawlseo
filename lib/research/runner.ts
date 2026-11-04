@@ -28,6 +28,7 @@ import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
+import { AnalysisLedger } from "@/lib/recommendation/ledger";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -537,6 +538,9 @@ export async function runResearchRun(runId: string) {
     const supersededByExternalAuthority = await isSupersededByExternalAuthority(site.id);
     let synthesis: Awaited<ReturnType<typeof synthesizeResearch>> | null = null;
     const actionIds: string[] = [];
+    // One analysis budget for this run: new findings and existing-finding
+    // reassessment share it, so a second lane cannot bypass the ceiling.
+    const analysisLedger = new AnalysisLedger();
     if (existingFindings.length === 0 && savedSources.length > 0) {
       const latestCrawl = await db.crawl.findFirst({
         where: { siteId: site.id, status: "COMPLETED" },
@@ -637,12 +641,14 @@ export async function runResearchRun(runId: string) {
       // Bridge the findings into funnel evidence so business research reaches
       // the opportunity board (the "why" leg). Additive: the legacy rows above
       // are untouched, so this is safe while the old pipeline still produces.
+      const analysisLedger = new AnalysisLedger();
       if (run.projectId) {
         try {
           await bridgeFindingsToEvidence(db, {
             projectId: run.projectId,
             siteId: site.id,
             runId: run.id,
+            ledger: analysisLedger,
           });
         } catch (error) {
           console.error("[research] finding evidence bridge failed", error);
@@ -692,6 +698,7 @@ export async function runResearchRun(runId: string) {
           projectId: run.projectId,
           siteId: site.id,
           maxAssessments: 6,
+          ledger: analysisLedger,
         });
       } catch (error) {
         console.error("[research] recommendation reassessment failed", error);

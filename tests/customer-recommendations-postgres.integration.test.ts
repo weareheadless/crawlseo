@@ -204,8 +204,12 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
       where: { projectId: project.id, status: "detected" },
       select: { type: true, title: true, scoreValue: true, scoreInputs: true },
     });
-    // The contradicted premise produces no customer-need opportunity at all.
-    expect(opportunities.find((row) => row.title === "Fitted wardrobe pricing")).toBeUndefined();
+    // A legacy lexical verdict is diagnostic: the row stays visible as explicitly
+    // unassessed backlog instead of being silently removed or made actionable.
+    const contradictedRow = opportunities.find((row) => row.title === "Fitted wardrobe pricing");
+    expect(contradictedRow).toBeTruthy();
+    const contradictedWorth = (contradictedRow!.scoreInputs as { worth: Record<string, unknown> }).worth;
+    expect(contradictedWorth.readiness).toBe("research_backlog");
 
     const need = opportunities.find((row) => row.title === "Can a wardrobe be moved house");
     expect(need).toBeTruthy();
@@ -306,6 +310,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
           readiness: "actionable" as const,
           intervention: "update_page" as const,
           change: "Add a price range for a typical fitted wardrobe and what the quote includes.",
+          assetJustification: null,
           investigation: null,
           targets: [{ pageId: page.id, pageUrl: page.url, sectionId: null, role: "update" as const, rationale: "The service page is where the question arises." }],
           benefits: [{
@@ -325,9 +330,10 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
           reasons: ["A specific existing-page improvement is justified by the service content and the inferred buying question."],
         };
         return {
-          ok: true as const,
+          kind: "final" as const,
           attempts: 1,
-          decision: finaliseDecision({ model, packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/1" }),
+          raw: null,
+          decision: finaliseDecision({ model, packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/2" }),
         };
       },
     });

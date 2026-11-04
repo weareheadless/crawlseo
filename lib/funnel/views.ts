@@ -85,6 +85,13 @@ export type OpportunityDetail = OpportunityRow & {
     successMeasure: string | null;
     uncertainty: string[];
     coverage: string | null;
+    coverageDetail: Array<{ pageId: string; url: string | null; state: string; rationale: string; excerpts: string[] }>;
+    premise: { state: string; rationale: string } | null;
+    investigation: { question: string; inspect: string[]; decisionCriteria: string[]; deliverable: string } | null;
+    benefits: Array<{ track: string; mechanism: string; measurement: string; uncertainty: string[] }>;
+    risks: string[];
+    contradictions: string[];
+    references: Array<{ ref: string; label: string; url: string | null }>;
     needRationale: string | null;
     needEvidenceUrls: string[];
     offerFitRationale: string | null;
@@ -245,6 +252,13 @@ function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"]
     successMeasure: read("successMeasure"),
     uncertainty: list("uncertainty"),
     coverage: read("coverageSummary"),
+    coverageDetail: [],
+    premise: null,
+    investigation: null,
+    benefits: [],
+    risks: [],
+    contradictions: [],
+    references: [],
     needRationale: read("needRationale"),
     needEvidenceUrls: list("needEvidenceUrls"),
     offerFitRationale: read("offerFitRationale"),
@@ -254,10 +268,72 @@ function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"]
   };
 }
 
+type ResolvedReference = { label: string; url: string | null };
+
+/** Resolve packet refs to readable labels and URLs for the detail page. */
+function resolvePacketReferences(packetJson: unknown): Map<string, ResolvedReference> {
+  const refs = new Map<string, ResolvedReference>();
+  const packet = (() => {
+    if (typeof packetJson === "string") {
+      try {
+        return JSON.parse(packetJson) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return (packetJson ?? null) as Record<string, unknown> | null;
+  })();
+  if (!packet) return refs;
+  const facts = Array.isArray(packet.businessFacts) ? (packet.businessFacts as Array<Record<string, unknown>>) : [];
+  for (const fact of facts) {
+    if (typeof fact.id !== "string") continue;
+    refs.set(fact.id, {
+      label: `Business fact: ${String(fact.field ?? fact.id)}`,
+      url: typeof fact.sourceUrl === "string" ? fact.sourceUrl : null,
+    });
+  }
+  const sources = Array.isArray(packet.sources) ? (packet.sources as Array<Record<string, unknown>>) : [];
+  for (const source of sources) {
+    if (typeof source.id !== "string") continue;
+    refs.set(source.id, {
+      label: typeof source.title === "string" && source.title ? source.title : String(source.url ?? source.id),
+      url: typeof source.url === "string" ? source.url : null,
+    });
+  }
+  const pages = Array.isArray(packet.pages) ? (packet.pages as Array<Record<string, unknown>>) : [];
+  for (const page of pages) {
+    if (typeof page.id !== "string") continue;
+    const url = typeof page.url === "string" ? page.url : null;
+    refs.set(page.id, { label: url ?? page.id, url });
+    const sections = Array.isArray(page.sections) ? (page.sections as Array<Record<string, unknown>>) : [];
+    for (const section of sections) {
+      if (typeof section.id !== "string") continue;
+      refs.set(section.id, { label: `${url ?? page.id} (${String(section.locator ?? "section")})`, url });
+    }
+  }
+  const search = Array.isArray(packet.search) ? (packet.search as Array<Record<string, unknown>>) : [];
+  for (const row of search) {
+    if (typeof row.id !== "string") continue;
+    refs.set(row.id, {
+      label: `Search: ${String(row.query ?? row.id)}`,
+      url: typeof row.pageUrl === "string" ? row.pageUrl : null,
+    });
+  }
+  return refs;
+}
+
 /** Project the canonical decision into the shared presentation shape. */
-function decisionFromCanonical(decision: RecommendationDecision): OpportunityDetail["decision"] {
+function decisionFromCanonical(
+  decision: RecommendationDecision,
+  references: Map<string, ResolvedReference> = new Map()
+): OpportunityDetail["decision"] {
   const firstBenefit = decision.benefits[0];
-  const firstCoverage = decision.coverage[0];
+  const resolve = (ref: string) => references.get(ref) ?? { label: ref, url: null };
+  const usedRefs = new Set<string>();
+  const collect = (refs: string[]) => refs.forEach((ref) => usedRefs.add(ref));
+  decision.question.bases.forEach((basis) => collect(basis.references));
+  collect(decision.premise.references);
+  collect(decision.offerFit.references);
   return {
     readiness: decision.readiness,
     measurement: firstBenefit?.measurement ?? "unquantified",
@@ -268,7 +344,27 @@ function decisionFromCanonical(decision: RecommendationDecision): OpportunityDet
     targetPages: decision.targets.map((target) => target.pageUrl).filter((url): url is string => Boolean(url)),
     successMeasure: decision.success.measure,
     uncertainty: decision.uncertainty,
-    coverage: firstCoverage ? `${firstCoverage.state.replaceAll("_", " ")} at ${firstCoverage.pageId}` : null,
+    coverage: decision.coverage[0]
+      ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${resolve(decision.coverage[0].pageId).label}`
+      : null,
+    coverageDetail: decision.coverage.map((entry) => ({
+      pageId: entry.pageId,
+      url: resolve(entry.pageId).url,
+      state: entry.state,
+      rationale: entry.rationale,
+      excerpts: entry.excerpts,
+    })),
+    premise: { state: decision.premise.state, rationale: decision.premise.rationale },
+    investigation: decision.investigation,
+    benefits: decision.benefits.map((benefit) => ({
+      track: benefit.track,
+      mechanism: benefit.mechanism,
+      measurement: benefit.measurement,
+      uncertainty: benefit.uncertainty,
+    })),
+    risks: decision.risks,
+    contradictions: decision.contradictions,
+    references: [...usedRefs].map((ref) => ({ ref, ...resolve(ref) })),
     needRationale: decision.question.rationale,
     needEvidenceUrls: decision.question.bases.flatMap((basis) => basis.references),
     offerFitRationale: decision.offerFit.rationale,
@@ -374,6 +470,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       parkReason: true,
       dedupKey: true,
       recommendationDecision: true,
+      recommendationEvidenceId: true,
     },
   });
   if (!row) return null;
@@ -411,6 +508,15 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
   });
 
   const canonical = parsePersistedDecision(row.recommendationDecision);
+  let packetJson: unknown = null;
+  if (canonical && row.recommendationEvidenceId) {
+    const packetRow = await db.evidenceRecord.findUnique({
+      where: { id: row.recommendationEvidenceId },
+      select: { dimensions: true },
+    });
+    packetJson = (packetRow?.dimensions as { recommendationPacketJson?: unknown } | null)?.recommendationPacketJson ?? null;
+  }
+  const references = resolvePacketReferences(packetJson);
   const taskDecisionId = (task?.plan as { decisionId?: unknown } | null)?.decisionId;
   const decisionChanged = Boolean(
     task && canonical && typeof taskDecisionId === "string" && taskDecisionId !== canonical.decisionId
@@ -438,7 +544,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
     decisionChanged,
-    decision: canonical ? decisionFromCanonical(canonical) : decisionFromScoreInputs(row.scoreInputs),
+    decision: canonical ? decisionFromCanonical(canonical, references) : decisionFromScoreInputs(row.scoreInputs),
     completeness: row.evidenceCompleteness,
     detectedBy: row.detectedBy,
     firstDetectedAt: row.firstDetectedAt,

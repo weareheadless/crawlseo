@@ -51,7 +51,8 @@ function mockDb(seed: Array<Record<string, unknown>>) {
       }),
       updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
         let count = 0;
-        for (const id of args.where.id.in) {
+        const ids = typeof args.where.id === "string" ? [args.where.id] : args.where.id.in;
+        for (const id of ids) {
           const row = opportunities.get(id);
           if (row) { Object.assign(row, args.data); count += 1; }
         }
@@ -73,7 +74,8 @@ function mockDb(seed: Array<Record<string, unknown>>) {
       }),
       updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
         let count = 0;
-        for (const id of args.where.id.in) {
+        const ids = typeof args.where.id === "string" ? [args.where.id] : args.where.id.in;
+        for (const id of ids) {
           const row = opportunities.get(id);
           if (row) { Object.assign(row, args.data); count += 1; }
         }

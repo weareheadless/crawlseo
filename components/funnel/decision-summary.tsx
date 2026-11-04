@@ -30,6 +30,13 @@ export type DecisionSummary = {
   offerFitEvidenceUrls?: string[];
   assessmentModel?: string | null;
   reviews?: string[];
+  coverageDetail?: Array<{ pageId: string; url: string | null; state: string; rationale: string; excerpts: string[] }>;
+  premise?: { state: string; rationale: string } | null;
+  investigation?: { question: string; inspect: string[]; decisionCriteria: string[]; deliverable: string } | null;
+  benefits?: Array<{ track: string; mechanism: string; measurement: string; uncertainty: string[] }>;
+  risks?: string[];
+  contradictions?: string[];
+  references?: Array<{ ref: string; label: string; url: string | null }>;
 };
 
 const READINESS_TONE: Record<string, string> = {
@@ -127,7 +134,50 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
       {hasDetail && (
         <div className="space-y-1.5 border-t border-border pt-3">
           {decision.coverage && <Row label="Existing coverage">{decision.coverage}</Row>}
+          {(decision.coverageDetail?.length ?? 0) > 0 && (
+            <div className="text-xs text-foreground/85">
+              <span className="text-muted-foreground">Pages assessed: </span>
+              <ul className="mt-1 space-y-1 pl-4">
+                {decision.coverageDetail!.map((entry) => (
+                  <li key={entry.pageId} className="list-disc">
+                    {entry.url ? <SourceLink url={entry.url} /> : <span>{entry.pageId}</span>} —{" "}
+                    {entry.state.replaceAll("_", " ")}. {entry.rationale}
+                    {entry.excerpts.length > 0 && (
+                      <span className="text-muted-foreground"> “{entry.excerpts[0].slice(0, 220)}”</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {decision.premise && (
+            <Row label="Finding premise">
+              {decision.premise.state.replaceAll("_", " ")}. {decision.premise.rationale}
+            </Row>
+          )}
           {decision.change && <Row label="Change">{decision.change}</Row>}
+          {decision.investigation && (
+            <div className="rounded border border-border bg-background/40 p-3 text-xs text-foreground/85">
+              <p className="font-medium text-foreground">Bounded investigation</p>
+              <p className="mt-1">{decision.investigation.question}</p>
+              <p className="mt-2 text-muted-foreground">Inspect</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {decision.investigation.inspect.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-muted-foreground">Decide by</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {decision.investigation.decisionCriteria.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <p className="mt-2">
+                <span className="text-muted-foreground">Deliverable: </span>
+                {decision.investigation.deliverable}
+              </p>
+            </div>
+          )}
           {targetPages.length > 0 && (
             <Row label={targetPages.length === 1 ? "Target page" : "Target pages"}>
               {targetPages.map((url, index) => (
@@ -138,7 +188,23 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
               ))}
             </Row>
           )}
+          {(decision.benefits?.length ?? 0) > 0 && (
+            <div className="text-xs text-foreground/85">
+              <span className="text-muted-foreground">Benefit: </span>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {decision.benefits!.map((benefit) => (
+                  <li key={`${benefit.track}-${benefit.mechanism}`}>
+                    {benefit.track.replaceAll("_", " ")} ({benefit.measurement.replaceAll("_", " ")}): {benefit.mechanism}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {decision.successMeasure && <Row label="Success measure">{decision.successMeasure}</Row>}
+          {(decision.risks?.length ?? 0) > 0 && <Row label="Risks">{decision.risks!.join(" · ")}</Row>}
+          {(decision.contradictions?.length ?? 0) > 0 && (
+            <Row label="Contradictions">{decision.contradictions!.join(" · ")}</Row>
+          )}
           {(decision.reviews?.length ?? 0) > 0 && (
             <Row label="Review required">{decision.reviews!.join(" · ")}</Row>
           )}
@@ -165,12 +231,15 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
                     {needEvidenceUrls.length > 0 && (
                       <p className="mt-0.5">
                         <span className="text-muted-foreground">Sources: </span>
-                        {needEvidenceUrls.map((url, index) => (
-                          <span key={url}>
-                            {index > 0 ? ", " : ""}
-                            <SourceLink url={url} />
-                          </span>
-                        ))}
+                        {needEvidenceUrls.map((ref, index) => {
+                          const resolved = decision.references?.find((entry) => entry.ref === ref);
+                          return (
+                            <span key={ref}>
+                              {index > 0 ? ", " : ""}
+                              {resolved?.url ? <SourceLink url={resolved.url} /> : <span>{resolved?.label ?? ref}</span>}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
                   </div>
@@ -184,12 +253,15 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
                     {offerFitEvidenceUrls.length > 0 && (
                       <p className="mt-0.5">
                         <span className="text-muted-foreground">Business facts: </span>
-                        {offerFitEvidenceUrls.map((url, index) => (
-                          <span key={url}>
-                            {index > 0 ? ", " : ""}
-                            <SourceLink url={url} />
-                          </span>
-                        ))}
+                        {offerFitEvidenceUrls.map((ref, index) => {
+                          const resolved = decision.references?.find((entry) => entry.ref === ref);
+                          return (
+                            <span key={ref}>
+                              {index > 0 ? ", " : ""}
+                              {resolved?.url ? <SourceLink url={resolved.url} /> : <span>{resolved?.label ?? ref}</span>}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
                   </div>

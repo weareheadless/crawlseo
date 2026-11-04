@@ -1,3 +1,7 @@
+> **Superseded by the corrective pass:** this report described the one-shot reviewer.
+> The current implementation and verified results are in
+> `docs/structural-recommendation-handoff-2026-11-04.md`.
+
 # Structural recommendation implementation — 2026-11-04
 
 ## What changed

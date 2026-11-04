@@ -94,6 +94,10 @@ export type ExtractBusinessKnowledgeResult = {
   contentLanguage: string | null;
   /** Fields the model returned, so a caller can see what was found before writing. */
   extracted: string[];
+  /** The values themselves, so an evaluation can inspect them without writing. */
+  fields: Extracted;
+  /** Pages the extractor read, with their retrieved text. */
+  pageUrls: string[];
   documentId: string;
   revision: number;
   state: string;
@@ -218,20 +222,31 @@ export async function extractBusinessKnowledgeFromSite(
 
   const knowledge = await extractBusinessKnowledgeFromPages(pages);
   const parsed = knowledge.fields;
-  const sourceUrl = pages[0].url;
+  const normalise = (value: string) => value.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+  const attribute = (value: string | string[] | undefined): string | null => {
+    const needles = (Array.isArray(value) ? value : [value])
+      .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+      .map(normalise);
+    if (needles.length === 0) return null;
+    const page = pages.find((candidate) => {
+      const text = normalise(candidate.text);
+      return needles.every((needle) => text.includes(needle));
+    });
+    return page?.url ?? null;
+  };
   const now = new Date().toISOString();
   const provenance = {
     kind: "ai_observation" as const,
     sourceId: "crawler-extractor",
     originSystem: "crawlseo",
     // The identifier schema forbids slashes; the full URL stays in evidenceUri.
-    originRecordId: createHash("sha256").update(sourceUrl).digest("hex").slice(0, 32),
+    originRecordId: createHash("sha256").update(`${site.domain}:${now}`).digest("hex").slice(0, 32),
     originRevision: null,
     actor: { type: "model" as const, id: "crawler-extractor" },
     status: "assumed" as const,
     recordedAt: now,
     observedAt: now,
-    evidenceUri: sourceUrl,
+    evidenceUri: attribute(parsed.businessName) ?? attribute(parsed.location) ?? pages[0].url,
   };
   const fact = (value: string | string[] | undefined, locale?: string) => {
     if (value === undefined) return undefined;
@@ -239,9 +254,12 @@ export async function extractBusinessKnowledgeFromSite(
       ? value.map((entry) => String(entry).trim()).filter(Boolean).slice(0, 30)
       : String(value).trim();
     if (Array.isArray(clean) ? clean.length === 0 : clean.length === 0) return undefined;
+    const source = attribute(value);
     return {
       value: clean,
-      provenance,
+      // A field is attributed only to a page that actually contains its value.
+      // When no page contains it, the source is absent rather than the first page.
+      provenance: source ? { ...provenance, evidenceUri: source } : { ...provenance, evidenceUri: null },
       publicationUse: "internal_only" as const,
       ...(locale ? { locale } : {}),
     };
@@ -264,7 +282,16 @@ export async function extractBusinessKnowledgeFromSite(
   const contentLanguage = knowledge.contentLanguage;
 
   if (opts.dryRun) {
-    return { contentLanguage, extracted: Object.keys(changes), documentId: "", revision: 0, state: "dry-run", pagesRead: pages.length };
+    return {
+      contentLanguage,
+      extracted: Object.keys(changes),
+      fields: parsed,
+      pageUrls: pages.map((page) => page.url),
+      documentId: "",
+      revision: 0,
+      state: "dry-run",
+      pagesRead: pages.length,
+    };
   }
 
   const head = await db.businessKnowledgeDocument.findUnique({
@@ -294,6 +321,8 @@ export async function extractBusinessKnowledgeFromSite(
   return {
     contentLanguage,
     extracted: Object.keys(changes),
+    fields: parsed,
+    pageUrls: pages.map((page) => page.url),
     documentId: result.documentId,
     revision: result.revision,
     state: result.state,
