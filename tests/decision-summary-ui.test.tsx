@@ -61,6 +61,22 @@ describe("decision summary panel", () => {
     expect(html).toContain("what the site already answers");
   });
 
+  it("shows an adequate answer as no change, not as a missed opportunity", () => {
+    const html = renderToStaticMarkup(
+      DecisionSummaryPanel({
+        decision: {
+          readiness: "no_action",
+          measurement: "unquantified",
+          track: null,
+          intervention: "maintain",
+          benefit: null,
+        },
+      })
+    );
+    expect(html).toContain("No change");
+    expect(html).toContain("no work is proposed");
+  });
+
   it("renders nothing misleading when a legacy row has no decision", () => {
     const html = renderToStaticMarkup(
       DecisionSummaryPanel({ decision: { readiness: null, measurement: null, track: null, intervention: null, benefit: null } })

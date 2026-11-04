@@ -273,6 +273,7 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
                   row.readiness === "actionable" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
                   row.readiness === "needs_investigation" && "border-amber-500/30 bg-amber-500/10 text-amber-300",
                   row.readiness === "research_backlog" && "border-sky-500/30 bg-sky-500/10 text-sky-300",
+                  row.readiness === "no_action" && "border-border bg-background/60 text-muted-foreground",
                   row.readiness === "rejected" && "border-red-500/30 bg-red-500/10 text-red-300"
                 )}
                 title={READINESS_LABELS[row.readiness as keyof typeof READINESS_LABELS]?.hint}

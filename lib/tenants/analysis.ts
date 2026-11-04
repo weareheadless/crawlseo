@@ -359,7 +359,7 @@ export async function ensureTenantAnalysis(
   let extraction: Awaited<ReturnType<typeof extractBusinessKnowledgeFromSite>> | null = null;
   if ((knowledgeMissing || languageMissing) && site.projectId) {
     try {
-      extraction = await extractBusinessKnowledgeFromSite(db, { projectId: site.projectId });
+      extraction = await extractBusinessKnowledgeFromSite(db, { projectId: site.projectId, siteId: site.id });
       replace(step({
         step: "business-knowledge",
         status: "fixed",

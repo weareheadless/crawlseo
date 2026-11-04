@@ -18,6 +18,23 @@ const finding = (over: Partial<Record<string, unknown>> = {}) => ({
   ...over,
 });
 
+const assessment = () => ({
+  premise: { state: "unverified" as const, rationale: "not assessed", evidenceUrls: [] },
+  need: { state: "supported" as const, rationale: "two buyers asked", evidenceUrls: [] },
+  offerFit: { state: "supported" as const, rationale: "the site sells this", evidenceUrls: [] },
+  coverage: [],
+  intervention: "investigate" as const,
+  change: "Check the pricing page",
+  targetPages: [],
+  expectedBenefit: "Buyers can judge the price",
+  uncertainty: ["demand is not measured"],
+  review: "none" as const,
+  successMeasure: "the page answers the question",
+  model: "fixture-model",
+  promptVersion: "need-assessment/1",
+  assessedAt: "2026-11-04T00:00:00.000Z",
+});
+
 function fakeDb(findings: Array<Record<string, unknown>>) {
   const evidence: Array<Record<string, unknown>> = [];
   const db = {
@@ -37,6 +54,11 @@ function fakeDb(findings: Array<Record<string, unknown>>) {
       }),
     },
     demandMapCluster: { findMany: vi.fn().mockResolvedValue([]) },
+    businessKnowledgeDocument: { findUnique: vi.fn().mockResolvedValue(null) },
+    businessKnowledgeRevision: { findFirst: vi.fn().mockResolvedValue(null) },
+    crawl: { findFirst: vi.fn().mockResolvedValue(null) },
+    auditPage: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
+    researchSource: { findMany: vi.fn().mockResolvedValue([]) },
     opportunity: {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
@@ -100,7 +122,59 @@ describe("business research → funnel evidence bridge", () => {
   it("handles a run with no findings without writing anything", async () => {
     const { db, evidence } = fakeDb([]);
     const result = await bridgeFindingsToEvidence(db, { projectId: "p1", runId: "run-1" });
-    expect(result).toEqual({ findings: 0, stored: 0, actionable: 0 });
+    expect(result).toEqual({ findings: 0, stored: 0, actionable: 0, assessed: 0, assessmentFailures: [] });
     expect(evidence).toHaveLength(0);
+  });
+
+  it("stores the validated assessment with the finding evidence", async () => {
+    const { db, evidence } = fakeDb([finding({ type: "PAIN_POINT", evidenceSourceIds: ["src-1"] })]);
+    const assess = vi.fn(async () => assessment());
+
+    const result = await bridgeFindingsToEvidence(db, {
+      projectId: "p1",
+      siteId: "s1",
+      runId: "run-1",
+      assess: assess as never,
+    });
+
+    expect(result.assessed).toBe(1);
+    expect(assess).toHaveBeenCalledTimes(1);
+    const dimensions = evidence[0].dimensions as Record<string, unknown>;
+    expect(dimensions.assessmentModel).toBe("fixture-model");
+    expect(dimensions.assessmentPromptVersion).toBe("need-assessment/1");
+    expect(JSON.parse(String(dimensions.assessmentJson)).offerFit.state).toBe("supported");
+  });
+
+  it("replays without a second active row or a second model call", async () => {
+    const { db, evidence } = fakeDb([finding({ type: "PAIN_POINT" })]);
+    const assess = vi.fn(async () => assessment());
+    await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess: assess as never });
+    const second = await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess: assess as never });
+    expect(second.stored).toBe(1);
+    expect(assess).toHaveBeenCalledTimes(1);
+    expect(evidence).toHaveLength(1);
+  });
+
+  it("keeps a finding unassessed when the assessment fails", async () => {
+    const { db, evidence } = fakeDb([finding({ type: "PAIN_POINT" })]);
+    const result = await bridgeFindingsToEvidence(db, {
+      projectId: "p1",
+      siteId: "s1",
+      runId: "run-1",
+      assess: async () => {
+        throw new Error("model unavailable");
+      },
+    });
+    expect(result.assessed).toBe(0);
+    expect(result.assessmentFailures).toHaveLength(1);
+    const dimensions = evidence[0].dimensions as Record<string, unknown>;
+    expect(dimensions.assessmentJson).toBeUndefined();
+  });
+
+  it("does not assess context-only findings", async () => {
+    const { db } = fakeDb([finding({ type: "GENERAL" })]);
+    const assess = vi.fn();
+    await bridgeFindingsToEvidence(db, { projectId: "p1", siteId: "s1", runId: "run-1", assess });
+    expect(assess).not.toHaveBeenCalled();
   });
 });

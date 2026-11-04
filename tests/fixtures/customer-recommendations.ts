@@ -15,6 +15,23 @@ export type FixturePage = {
   statusCode?: number;
 };
 
+export type FixtureAssessment = {
+  needState: "supported" | "unverified" | "contradicted";
+  offerFitState: "supported" | "unverified" | "contradicted";
+  coverage: Array<{
+    pageUrl: string;
+    state: "answers" | "partially_answers" | "does_not_answer" | "unassessable";
+    note: string;
+    excerpts?: string[];
+  }>;
+  intervention: "maintain" | "update_page" | "improve_journey" | "create_asset" | "investigate";
+  change: string;
+  targetPages?: string[];
+  expectedBenefit?: string;
+  successMeasure?: string;
+  review?: "none" | "subject_matter_expert" | "legal" | "medical";
+};
+
 export type FixtureFinding = {
   type: "CONCERN" | "CONTENT_GAP" | "POSITIONING_GAP" | "QUESTION";
   theme: string;
@@ -23,6 +40,14 @@ export type FixtureFinding = {
   claim?: { kind: "missing_page_type" | "missing_answer" | "absent_offering"; pageType?: string; statement: string };
   /** Business fit the fixture establishes. Defaults to supported. */
   businessFit?: "supported" | "contradicted";
+  /**
+   * A pre-made assessment for the deterministic regression suite.
+   *
+   * This is fixture reasoning, not evidence that the model reasons well. The real
+   * assessment is exercised by `scripts/evaluate-need-assessment.ts`; keeping the
+   * two separate stops a fixture from being reported as live quality.
+   */
+  assessment?: FixtureAssessment;
 };
 
 export type TenantFixture = {
@@ -149,6 +174,22 @@ export const TENANT_FIXTURES: TenantFixture[] = [
         type: "CONCERN",
         theme: "Closing and title process",
         summary: "Buyers ask what closing costs and title checks actually involve before they commit.",
+        assessment: {
+          needState: "supported",
+          offerFitState: "supported",
+          coverage: [{
+            pageUrl: "https://www.susimacdonald.com/post/how-to-buy-your-dream-home-in-mexico-as-a-foreigner",
+            state: "partially_answers",
+            note: "It names the cost categories but gives no worked example or current figures.",
+            excerpts: ["Budget for the appraisal, the inspection, the closing, the registration and the taxes."],
+          }],
+          intervention: "update_page",
+          change: "Add a worked closing-cost example with the current fee ranges and the title-check steps.",
+          targetPages: ["https://www.susimacdonald.com/post/how-to-buy-your-dream-home-in-mexico-as-a-foreigner"],
+          expectedBenefit: "A buyer can judge the total cost and the title check before committing.",
+          successMeasure: "A buyer can state the expected closing cost after reading the page.",
+          review: "legal",
+        },
       },
     ],
     expectations: {
@@ -177,6 +218,22 @@ export const TENANT_FIXTURES: TenantFixture[] = [
         type: "CONCERN",
         theme: "Projets hôtels, restaurants et prescripteurs",
         summary: "Les prescripteurs attendent des références et des modalités de projet pour les commandes hôtelières.",
+        assessment: {
+          needState: "supported",
+          offerFitState: "supported",
+          coverage: [{
+            pageUrl: "https://www.atelier-harmonie.com/b2b",
+            state: "partially_answers",
+            note: "The page states the B2B offer but gives no project references or delivery terms.",
+            excerpts: ["Nous travaillons avec les hôtels, les restaurants, les architectes d'intérieur et les décorateurs"],
+          }],
+          intervention: "update_page",
+          change: "Add two hotel project references and the lead time and delivery terms for professional orders.",
+          targetPages: ["https://www.atelier-harmonie.com/b2b"],
+          expectedBenefit: "A hotel buyer can judge whether the atelier can deliver their project.",
+          successMeasure: "A hotel buyer can find a comparable project and the delivery terms on the page.",
+          review: "none",
+        },
       },
     ],
     expectations: {
@@ -222,6 +279,22 @@ export const TENANT_FIXTURES: TenantFixture[] = [
         type: "CONCERN",
         theme: "Beginner depth safety and lanyard use",
         summary: "A beginner asks about deep dives without a lanyard and supervised depth progression before booking a course.",
+        assessment: {
+          needState: "supported",
+          offerFitState: "supported",
+          coverage: [{
+            pageUrl: "https://oceanicvibes.com/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide",
+            state: "partially_answers",
+            note: "The guide covers safety supervision and depth progression but not lanyard use or a beginner depth limit.",
+            excerpts: ["certification level, instructor experience, group size, depth progression and safety supervision"],
+          }],
+          intervention: "update_page",
+          change: "Add a beginner section on lanyard use and the maximum supervised depth for a first course.",
+          targetPages: ["https://oceanicvibes.com/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide"],
+          expectedBenefit: "A beginner can ask the right safety questions before booking.",
+          successMeasure: "A beginner can state the lanyard rule and the supervised depth limit after reading.",
+          review: "subject_matter_expert",
+        },
       },
       {
         type: "QUESTION",
@@ -247,6 +320,21 @@ export const TENANT_FIXTURES: TenantFixture[] = [
         type: "CONCERN",
         theme: "Customers cannot tell what a fitted wardrobe costs",
         summary: "Homeowners repeatedly ask what a fitted wardrobe costs before they will book a survey.",
+        assessment: {
+          needState: "supported",
+          offerFitState: "supported",
+          coverage: [{
+            pageUrl: "https://unseen.example/services",
+            state: "does_not_answer",
+            note: "The page lists the services and a quotation, but gives no cost range or example.",
+          }],
+          intervention: "update_page",
+          change: "Add a price range for a typical fitted wardrobe and what the written quotation includes.",
+          targetPages: ["https://unseen.example/services"],
+          expectedBenefit: "A homeowner can judge whether the budget is plausible before booking a survey.",
+          successMeasure: "A homeowner can state a typical range and what the quote covers.",
+          review: "none",
+        },
       },
     ],
     expectations: {

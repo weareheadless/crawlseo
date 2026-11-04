@@ -7,6 +7,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
+import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 
 /**
  * Database integration for the customer-centred brief (§6, §7).
@@ -129,6 +130,29 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
           painPoint: "true",
           painPointSummary: "Customers ask whether a fitted wardrobe can be moved to a new house when they relocate.",
           query: null,
+          assessmentJson: JSON.stringify({
+            premise: { state: "unverified", rationale: "the page does not settle the move question", evidenceUrls: [] },
+            need: { state: "supported", rationale: "customers ask before relocating", evidenceUrls: [] },
+            offerFit: { state: "supported", rationale: "the business makes fitted wardrobes", evidenceUrls: [] },
+            coverage: [{
+              pageUrl: `https://customer-rec-${suffix}.example/services`,
+              state: "partially_answers",
+              method: "semantic",
+              matchedTerms: [],
+              excerpts: ["Fitted wardrobes are made to measure for each room."],
+              note: "it lists the service but not whether a wardrobe can be moved",
+            }],
+            intervention: "update_page",
+            change: "Add a paragraph on dismantling and re-fitting a wardrobe during a move.",
+            targetPages: [`https://customer-rec-${suffix}.example/services`],
+            expectedBenefit: "A moving customer can judge whether to keep the wardrobe.",
+            uncertainty: ["the frequency of the question is not measured"],
+            review: "none",
+            successMeasure: "A moving customer can answer the question from the page.",
+            model: "fixture-model",
+            promptVersion: "need-assessment/1",
+            assessedAt: "2026-11-04T00:00:00.000Z",
+          }),
         },
         metrics: { "first_party:confidence": { value: 60, unit: "score", source: "first_party" } },
         observationHash: `legacy2-${suffix}`,
@@ -182,6 +206,118 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     expect(worth.readiness).toBe("actionable");
     expect(worth.measurement).toBe("unquantified");
     expect(need!.scoreValue).toBeGreaterThan(0);
+  });
+
+  it("persists an assessment and turns it into an actionable recommendation", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site } = await seedTenant(suffix);
+
+    const document = await db.businessKnowledgeDocument.create({
+      data: {
+        projectId: project.id,
+        logicalId: `assessment-knowledge-${suffix}`,
+        revision: 1,
+        acceptedRevision: 1,
+      },
+    });
+    await db.businessKnowledgeRevision.create({
+      data: {
+        documentId: document.id,
+        revision: 1,
+        state: "accepted",
+        fields: {
+          services: {
+            value: ["fitted wardrobes", "bespoke furniture"],
+            provenance: {
+              kind: "ai_observation",
+              sourceId: "crawler-extractor",
+              originSystem: "crawlseo",
+              originRecordId: "fixture",
+              originRevision: null,
+              actor: { type: "model", id: "crawler-extractor" },
+              status: "assumed",
+              recordedAt: "2026-11-04T00:00:00.000Z",
+              observedAt: "2026-11-04T00:00:00.000Z",
+              evidenceUri: `https://customer-rec-${suffix}.example/services`,
+            },
+            publicationUse: "internal_only",
+          },
+        },
+        reason: "integration fixture",
+        changedFields: {},
+        affectedActionIds: [],
+        serviceCaller: "integration",
+      },
+    });
+
+    const run = await db.researchRun.create({
+      data: {
+        siteId: site.id,
+        projectId: project.id,
+        title: "Assessment fixture",
+        brief: { topics: ["fitted wardrobes"] },
+        status: "COMPLETED",
+      },
+    });
+    const finding = await db.researchFinding.create({
+      data: {
+        runId: run.id,
+        type: "CONCERN",
+        theme: "Customers cannot tell what a fitted wardrobe costs",
+        summary: "Homeowners ask about cost before booking a survey.",
+        evidenceSourceIds: [],
+      },
+    });
+
+    const result = await bridgeFindingsToEvidence(db, {
+      projectId: project.id,
+      siteId: site.id,
+      runId: run.id,
+      assess: async () => ({
+        premise: { state: "unverified", rationale: "the page lists the service without a price", evidenceUrls: [] },
+        need: { state: "supported", rationale: "homeowners ask before booking", evidenceUrls: [] },
+        offerFit: { state: "supported", rationale: "the business makes fitted wardrobes", evidenceUrls: [] },
+        coverage: [{
+          pageUrl: `https://customer-rec-${suffix}.example/services`,
+          state: "does_not_answer",
+          method: "semantic",
+          matchedTerms: [],
+          excerpts: ["Fitted wardrobes are made to measure for each room."],
+          note: "lists the service but gives no cost range",
+        }],
+        intervention: "update_page",
+        change: "Add a price range for a typical fitted wardrobe and what the quote includes.",
+        targetPages: [`https://customer-rec-${suffix}.example/services`],
+        expectedBenefit: "A homeowner can judge the budget before booking.",
+        uncertainty: ["demand is not measured"],
+        review: "none",
+        successMeasure: "A homeowner can state a typical range after reading.",
+        model: "fixture-model",
+        promptVersion: "need-assessment/1",
+        assessedAt: "2026-11-04T00:00:00.000Z",
+      }),
+    });
+
+    expect(result.assessed).toBe(1);
+    const stored = await db.evidenceRecord.findFirstOrThrow({
+      where: { projectId: project.id, kind: "research_finding", supersededById: null },
+      select: { dimensions: true },
+    });
+    expect((stored.dimensions as Record<string, unknown>).assessmentModel).toBe("fixture-model");
+
+    await refreshFunnelForSite(db, site.id, { detectedBy: "integration" });
+    const opportunity = await db.opportunity.findFirst({
+      where: { projectId: project.id, type: "O13_user_pain_point", title: { contains: "fitted wardrobe" } },
+      select: { scoreInputs: true, scoreValue: true },
+    });
+    expect(opportunity).toBeTruthy();
+    const worth = (opportunity!.scoreInputs as { worth: Record<string, unknown> }).worth;
+    expect(worth.readiness).toBe("actionable");
+    expect(worth.measurement).toBe("unquantified");
+    expect(worth.change).toContain("price range");
+    expect(worth.needRationale).toBe("homeowners ask before booking");
+    expect(worth.assessmentModel).toBe("fixture-model");
+    expect(opportunity!.scoreValue).toBeGreaterThan(0);
   });
 
   it("restores the board without overwriting a newer human decision", async () => {

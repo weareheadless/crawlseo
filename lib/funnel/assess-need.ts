@@ -4,12 +4,19 @@ import {
   type RecommendationDecision,
   type ReviewRequirement,
 } from "@/lib/funnel/decision";
+import { minimumReview, strongerReview, type NeedAssessment } from "@/lib/research/need-assessment";
 
 /**
  * Build a recommendation decision for a research finding.
  *
  * One implementation, used by the detectors and by the acceptance fixtures, so a
  * test cannot assert a decision the product does not make.
+ *
+ * The assessment is the only thing that can make a need "supported". A knowledge
+ * document that merely exists, a finding that merely asserts the need, or a lexical
+ * overlap with a page is not enough: without an assessment the finding stays in the
+ * research backlog. This adapter therefore never invents a change, a benefit or a
+ * business fit.
  */
 export function assessCustomerNeed(input: {
   statement: string;
@@ -27,59 +34,107 @@ export function assessCustomerNeed(input: {
   businessFitState?: "supported" | "unverified" | "contradicted";
   businessFitRationale?: string;
   kind: "need" | "offer";
+  /** The persisted, validated assessment of this need, when one was made. */
+  assessment?: NeedAssessment | null;
 }): RecommendationDecision {
-  const contradicted = input.verification === "contradicted";
   const reason = input.verificationReason ?? "";
   // The failure can be stated by the verification or by the finding itself: a
   // finding whose theme is "the sources are off-topic" is a pipeline failure even
   // when nothing verified it.
-  const sourcesUnusable = /unusable|irrelevant|no evidence|hors sujet|off[- ]topic/i.test(`${reason} ${input.label ?? ""} ${input.statement}`);
-  const coverage: CoverageAssessment[] = input.coverageState && input.coveragePage
-    ? [{
-        pageUrl: input.coveragePage,
-        state: input.coverageState as CoverageAssessment["state"],
-        method: "lexical",
-        matchedTerms: [],
-        excerpts: [],
-        note: reason || "from research verification",
-      }]
-    : [];
-  const review: ReviewRequirement = /legal|medical|safety|juridique|juridico|sécurité|salud/i.test(input.statement)
-    ? "subject_matter_expert"
-    : "none";
-  const targetPages = coverage.map((row) => row.pageUrl);
+  const sourcesUnusable = /unusable|irrelevant|no evidence|hors sujet|off[- ]topic/i.test(
+    `${reason} ${input.label ?? ""} ${input.statement}`
+  );
+  const review: ReviewRequirement = minimumReview(`${input.statement} ${input.label ?? ""}`);
+  const assessment = input.assessment ?? null;
+
+  // A positive page match can contradict the finding's own gap claim even when no
+  // verification was recorded. The assessment is proposition-level: it says whether
+  // the supplied pages settle the premise, with a quote.
+  const assessedContradiction = assessment?.premise.state === "contradicted";
+  const contradicted = input.verification === "contradicted" || assessedContradiction;
+  const contradictionReason = input.verification === "contradicted"
+    ? reason || "the premise is contradicted by the site"
+    : assessment?.premise.rationale ?? "the premise is contradicted by the site";
+
+  const legacyCoverage: CoverageAssessment[] =
+    input.coverageState && input.coveragePage
+      ? [
+          {
+            pageUrl: input.coveragePage,
+            state: input.coverageState as CoverageAssessment["state"],
+            method: "lexical",
+            matchedTerms: [],
+            excerpts: [],
+            note: reason || "from research verification",
+          },
+        ]
+      : [];
+
+  const coverage = assessment ? assessment.coverage : legacyCoverage;
+  const targetPages = assessment ? assessment.targetPages : [];
+
   return decideRecommendation({
     need: {
       statement: input.statement,
       audience: null,
-      sources: [],
+      sources: assessment ? assessment.need.evidenceUrls : [],
       observations: input.clusterSize,
+      // Only a validated assessment establishes the need. The finding's own
+      // assertion is not evidence, and a contradicted premise stays contradicted.
+      state: contradicted
+        ? "contradicted"
+        : assessment
+          ? assessment.need.state
+          : "unverified",
       sourcesUnusable,
       contradicted,
-      contradictionReason: contradicted ? reason : undefined,
+      contradictionReason: contradicted ? contradictionReason : undefined,
     },
     businessFit: {
-      state: input.businessFitState
-        ?? (input.businessFit.source === "knowledge" ? "supported" : "unverified"),
-      rationale: input.businessFitRationale
-        ?? (input.businessFit.source === "knowledge"
-          ? "the business knowledge names an offer this need relates to"
-          : "business knowledge does not yet connect this need to an offer"),
-      basis: input.businessFit.source === "knowledge" ? ["business knowledge"] : [],
+      state: contradicted
+        ? "unverified"
+        : assessment
+          ? assessment.offerFit.state
+          : input.businessFitState === "contradicted"
+            ? "contradicted"
+            : "unverified",
+      rationale: assessment
+        ? assessment.offerFit.rationale
+        : input.businessFitState === "contradicted"
+          ? input.businessFitRationale ?? "the business should not serve this need"
+          : input.businessFit.source === "knowledge"
+            ? "business knowledge exists, but it has not been assessed against this need"
+            : "business knowledge does not connect this need to an offer",
+      basis: assessment
+        ? assessment.offerFit.evidenceUrls
+        : input.businessFitState === "contradicted"
+          ? ["assessment"]
+          : [],
     },
     coverage,
     coverageComplete: input.coverageComplete,
     measurement: "unquantified",
     targetPages,
-    change: targetPages.length > 0
-      ? `Update ${targetPages[0]} so it answers: ${input.statement.slice(0, 200)}`
-      : `Add an answer that covers: ${input.statement.slice(0, 200)}`,
-    expectedBenefit: input.kind === "need"
-      ? "Customers get a direct answer where the site currently leaves them to infer it"
-      : "The offer is stated where customers compare alternatives",
-    uncertainty: ["organic demand for this question is not measured"],
+    change: assessment?.change ?? "",
+    expectedBenefit: assessment?.expectedBenefit ?? "",
+    uncertainty: assessment
+      ? assessment.uncertainty
+      : [
+          "the need has not been assessed against the site's offers and pages",
+          "organic demand for this question is not measured",
+        ],
     effort: "small",
-    review,
-    successMeasure: "the page answers the question in an owner review",
+    review: assessment ? strongerReview(assessment.review, review) : review,
+    successMeasure: assessment?.successMeasure ?? "",
+    assessment: assessment
+      ? {
+          model: assessment.model,
+          promptVersion: assessment.promptVersion,
+          needRationale: assessment.need.rationale,
+          needEvidenceUrls: assessment.need.evidenceUrls,
+          offerFitRationale: assessment.offerFit.rationale,
+          offerFitEvidenceUrls: assessment.offerFit.evidenceUrls,
+        }
+      : null,
   });
 }

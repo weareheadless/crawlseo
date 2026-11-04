@@ -25,7 +25,7 @@ import { chatJson } from "@/lib/ai/chat";
 const MAX_PAGES = 10;
 const MAX_CHARS_PER_PAGE = 6_000;
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -66,6 +66,15 @@ type Extracted = {
   voice?: string;
 };
 
+export type ExtractedKnowledge = {
+  contentLanguage: string | null;
+  /** The facts the model found, unvalidated and with no storage yet. */
+  fields: Extracted;
+  /** Which fields carried a value. */
+  extracted: string[];
+  pagesRead: number;
+};
+
 // Language-neutral on purpose: the prompt asks for the site's own language, so a
 // French atelier and a Mexican agency get the same instruction.
 const SYSTEM = `You extract business knowledge from a website for a company document.
@@ -94,6 +103,53 @@ export type ExtractBusinessKnowledgeResult = {
 type ExtractDb = PrismaClient;
 
 /**
+ * Extract business facts from pages that were already retrieved.
+ *
+ * Split from the storage path so an evaluation can run the real extractor against
+ * a site without writing a knowledge revision, and so the product has one
+ * extraction prompt rather than a second copy for tests.
+ */
+export async function extractBusinessKnowledgeFromPages(
+  pages: Array<{ url: string; text: string; title: string }>
+): Promise<ExtractedKnowledge> {
+  if (pages.length === 0) throw new Error("no page could be fetched");
+
+  const config = contentWriterConfig();
+  if (!config) throw new Error("CONTENT_LLM_API_KEY is not configured");
+
+  const userPrompt = pages
+    .map((page, index) => `--- PAGE ${index + 1}: ${page.url}\nTITLE: ${page.title}\n${page.text}`)
+    .join("\n\n");
+
+  // A page that renders client-side yields almost no text, and the model answers
+  // with nothing rather than an empty object. That is "no facts found", not a
+  // failed step: the run continues and the step reports what it could not read.
+  let parsed: Extracted = {};
+  try {
+    parsed = (await chatJson({
+      config,
+      system: SYSTEM,
+      user: userPrompt,
+      maxTokens: 3_000,
+      attempts: 4,
+    })) as Extracted;
+  } catch (error) {
+    if (!/empty response/i.test(error instanceof Error ? error.message : "")) throw error;
+  }
+
+  const contentLanguage =
+    typeof parsed.contentLanguage === "string" && /^[a-z]{2}$/i.test(parsed.contentLanguage.trim())
+      ? parsed.contentLanguage.trim().toLowerCase()
+      : null;
+
+  const extracted = Object.entries(parsed)
+    .filter(([key, value]) => key !== "contentLanguage" && value !== undefined && value !== null)
+    .map(([key]) => key);
+
+  return { contentLanguage, fields: parsed, extracted, pagesRead: pages.length };
+}
+
+/**
  * Read the site's own pages and write a working business-knowledge revision.
  *
  * Pages come from traffic evidence first, then one representative per top-level
@@ -103,7 +159,7 @@ type ExtractDb = PrismaClient;
  */
 export async function extractBusinessKnowledgeFromSite(
   db: ExtractDb,
-  opts: { projectId: string; dryRun?: boolean }
+  opts: { projectId: string; /** The site to read; without it, the project's first site. */ siteId?: string; dryRun?: boolean }
 ): Promise<ExtractBusinessKnowledgeResult> {
   const project = await db.project.findUniqueOrThrow({
     where: { id: opts.projectId },
@@ -111,11 +167,16 @@ export async function extractBusinessKnowledgeFromSite(
       id: true,
       workspaceId: true,
       name: true,
-      sites: { select: { id: true, domain: true }, take: 1, orderBy: { createdAt: "asc" } },
+      sites: {
+        where: opts.siteId ? { id: opts.siteId } : undefined,
+        select: { id: true, domain: true },
+        take: 1,
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   const site = project.sites[0];
-  if (!site) throw new Error("project has no site");
+  if (!site) throw new Error(opts.siteId ? `project has no site ${opts.siteId}` : "project has no site");
 
   const crawlEvidence = await db.evidenceRecord.findMany({
     where: { projectId: project.id, kind: "gsc_page", supersededById: null },
@@ -155,29 +216,8 @@ export async function extractBusinessKnowledgeFromSite(
   }
   if (pages.length === 0) throw new Error("no page could be fetched");
 
-  const config = contentWriterConfig();
-  if (!config) throw new Error("CONTENT_LLM_API_KEY is not configured");
-
-  const userPrompt = pages
-    .map((page, index) => `--- PAGE ${index + 1}: ${page.url}\nTITLE: ${page.title}\n${page.text}`)
-    .join("\n\n");
-
-  // A page that renders client-side yields almost no text, and the model answers
-  // with nothing rather than an empty object. That is "no facts found", not a
-  // failed step: the run continues and the step reports what it could not read.
-  let parsed: Extracted = {};
-  try {
-    parsed = (await chatJson({
-      config,
-      system: SYSTEM,
-      user: userPrompt,
-      maxTokens: 3_000,
-      attempts: 4,
-    })) as Extracted;
-  } catch (error) {
-    if (!/empty response/i.test(error instanceof Error ? error.message : "")) throw error;
-  }
-
+  const knowledge = await extractBusinessKnowledgeFromPages(pages);
+  const parsed = knowledge.fields;
   const sourceUrl = pages[0].url;
   const now = new Date().toISOString();
   const provenance = {
@@ -221,9 +261,7 @@ export async function extractBusinessKnowledgeFromSite(
     }).filter(([, value]) => value !== undefined)
   );
 
-  const contentLanguage = typeof parsed.contentLanguage === "string" && /^[a-z]{2}$/i.test(parsed.contentLanguage.trim())
-    ? parsed.contentLanguage.trim().toLowerCase()
-    : null;
+  const contentLanguage = knowledge.contentLanguage;
 
   if (opts.dryRun) {
     return { contentLanguage, extracted: Object.keys(changes), documentId: "", revision: 0, state: "dry-run", pagesRead: pages.length };

@@ -6,6 +6,7 @@ import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
 import { assessCustomerNeed } from "@/lib/funnel/assess-need";
+import { parsePersistedAssessment, type NeedAssessment } from "@/lib/research/need-assessment";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -106,6 +107,25 @@ export function businessValueFromKnowledge(evidence: Evidence[]): { value: numbe
   return byKind(evidence, "knowledge_fact").length > 0
     ? { value: 0.9, source: "knowledge" }
     : { value: 0.5, source: "unknown" };
+}
+
+/**
+ * The assessment behind a decision, persisted with the recommendation.
+ *
+ * Without it a board can show "actionable" but not why, and a later reader cannot
+ * tell a checked conclusion from a model's guess.
+ */
+function assessmentProvenance(assessment: NeedAssessment | null) {
+  if (!assessment) return {};
+  return {
+    needRationale: assessment.need.rationale,
+    needEvidenceUrls: assessment.need.evidenceUrls,
+    offerFitRationale: assessment.offerFit.rationale,
+    offerFitEvidenceUrls: assessment.offerFit.evidenceUrls,
+    assessmentModel: assessment.model,
+    assessmentPromptVersion: assessment.promptVersion,
+    assessedAt: assessment.assessedAt,
+  };
 }
 
 const RELEVANCE_STOPWORDS = new Set([
@@ -975,6 +995,7 @@ const DETECTORS: Detector[] = [
       )) {
         const row = cluster.representative.row;
         const statement = dim(row, "painPointSummary") ?? "";
+        const assessment = parsePersistedAssessment(dim(row, "assessmentJson"));
         const decision = assessCustomerNeed({
           label: dim(row, "theme") ?? undefined,
           statement,
@@ -986,8 +1007,9 @@ const DETECTORS: Detector[] = [
           coverageComplete: dim(row, "coverageComplete") === "true",
           businessFit: knowledge,
           kind: "need",
+          assessment,
         });
-        if (decision.readiness === "rejected") continue;
+        if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
         candidates.push({
           type: "O13_user_pain_point" as const,
           // Label from the theme; the prose belongs in the summary, where a reader
@@ -1014,6 +1036,7 @@ const DETECTORS: Detector[] = [
               coverageSummary: decision.coverage[0]
                 ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
                 : "no page assessed",
+              ...assessmentProvenance(assessment),
             },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 16, sizeFactor: 1 },
@@ -1043,6 +1066,7 @@ const DETECTORS: Detector[] = [
       )) {
         const row = cluster.representative.row;
         const statement = dim(row, "gapSummary") ?? "";
+        const assessment = parsePersistedAssessment(dim(row, "assessmentJson"));
         const decision = assessCustomerNeed({
           label: dim(row, "theme") ?? undefined,
           statement,
@@ -1054,8 +1078,9 @@ const DETECTORS: Detector[] = [
           coverageComplete: dim(row, "coverageComplete") === "true",
           businessFit: knowledge,
           kind: "offer",
+          assessment,
         });
-        if (decision.readiness === "rejected") continue;
+        if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
         candidates.push({
           type: "O14_offer_positioning_gap" as const,
           title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Positioning gap",
@@ -1080,6 +1105,7 @@ const DETECTORS: Detector[] = [
               coverageSummary: decision.coverage[0]
                 ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
                 : "no page assessed",
+              ...assessmentProvenance(assessment),
             },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 12, sizeFactor: 1 },

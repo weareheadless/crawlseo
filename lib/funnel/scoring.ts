@@ -54,7 +54,7 @@ export type ScoreInputs = {
     /** Marks a page/site defect whose traffic impact is not quantifiable. */
     technical?: boolean;
     /** Decision readiness from the recommendation contract, when it was decided. */
-    readiness?: "actionable" | "needs_investigation" | "research_backlog" | "rejected";
+    readiness?: "actionable" | "needs_investigation" | "research_backlog" | "no_action" | "rejected";
     /** How the benefit is known. */
     measurement?: "observed_baseline" | "forecast" | "unquantified";
     /** Which value track the work belongs to. */
@@ -69,6 +69,16 @@ export type ScoreInputs = {
     targetPages?: string[];
     /** What the site already does about the need, in one line. */
     coverageSummary?: string;
+    /** Why the need itself is supported, and by which sources. */
+    needRationale?: string;
+    needEvidenceUrls?: string[];
+    /** Why this business should serve the need, and by which facts. */
+    offerFitRationale?: string;
+    offerFitEvidenceUrls?: string[];
+    /** Which assessment produced this decision. */
+    assessmentModel?: string;
+    assessmentPromptVersion?: string;
+    assessedAt?: string;
   };
   /** win probability components (0–1 each) */
   winProbability: {

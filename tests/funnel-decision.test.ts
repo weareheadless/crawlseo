@@ -34,8 +34,9 @@ const base = (over: Partial<RecommendationInput> = {}): RecommendationInput => (
   need: {
     statement: "Buyers ask what closing costs they will actually pay",
     audience: "international buyers",
-    sources: ["a repeat buyer question in the sales conversation"],
+    sources: ["https://buyer-forum.test/closing-costs"],
     observations: 3,
+    state: "supported",
   },
   businessFit: fit(),
   coverage: [coverage("partially_answers")],
@@ -66,22 +67,47 @@ describe("readiness", () => {
     expect(decision.intervention).toBe("investigate");
   });
 
+  it("turns a need that only a finding asserts into backlog, not work", () => {
+    const decision = decideRecommendation(
+      base({ need: { ...base().need!, state: "unverified" } })
+    );
+    expect(decision.readiness).toBe("research_backlog");
+    expect(decision.change).toBeTruthy();
+  });
+
   it("turns a need with no business-fit evidence into backlog, not work", () => {
     const decision = decideRecommendation(base({ businessFit: fit("unverified") }));
     expect(decision.readiness).toBe("research_backlog");
     expect(decision.evidenceState).toBe("unverified");
   });
 
-  it("improves an existing adequate answer instead of commissioning a duplicate", () => {
+  it("leaves an adequate answer alone even when a change is proposed", () => {
     const decision = decideRecommendation(base({ coverage: [coverage("answers")] }));
-    expect(decision.readiness).toBe("actionable");
-    expect(decision.intervention).toBe("update_page");
-    expect(decision.reasons.join(" ")).toContain("rather than creating a second one");
+    expect(decision.readiness).toBe("no_action");
+    expect(decision.intervention).toBe("maintain");
+    expect(decision.tracks).toEqual([]);
+    expect(() => assertDecision(decision)).not.toThrow();
   });
 
-  it("creates a new asset only when no existing page answers and none is targeted", () => {
-    const decision = decideRecommendation(base({ coverage: [coverage("does_not_answer")], targetPages: [] }));
+  it("treats an unassessable page as unknown, not as a demonstrated gap", () => {
+    const decision = decideRecommendation(base({ coverage: [coverage("unassessable")] }));
+    expect(decision.readiness).toBe("needs_investigation");
+    expect(decision.intervention).toBe("investigate");
+  });
+
+  it("creates a new asset only when no existing page answers, the crawl is complete and none is targeted", () => {
+    const decision = decideRecommendation(
+      base({ coverage: [], coverageComplete: true, targetPages: [] })
+    );
     expect(decision.intervention).toBe("create_asset");
+    expect(decision.readiness).toBe("actionable");
+  });
+
+  it("does not create a new asset from an incomplete crawl", () => {
+    const decision = decideRecommendation(
+      base({ coverage: [], coverageComplete: false, targetPages: [] })
+    );
+    expect(decision.readiness).toBe("needs_investigation");
   });
 });
 

@@ -3,7 +3,11 @@
 Commit series implementing `Customer-centred SEO recommendations — coding AI execution brief`.
 This report states what was built, what was verified, and what remains. It is not a
 claim that the boards are now useful: the end-to-end acceptance in §7 has not been
-run against production data, and no production write, merge or deployment was made.
+run against production data, and no production write, merge or deployment was made
+in this boundary. Three additive migrations were applied to the application database
+during earlier work in this series (`audit_page_content_text`,
+`research_finding_verification`, `acquisition_receipt`); that history is recorded
+here rather than hidden behind a blanket "no production write".
 
 ## Work package 1 — fixtures
 
@@ -55,15 +59,16 @@ demote a supported low-risk intervention".
 
 ## Work package 4 — assessment, joins, acquisition
 
-- `computeScore` bands by readiness, not by whether a volume number exists: rejected
-  0, backlog ≤10, investigation ≤15, actionable-with-unquantified-impact ≤30.
+- `computeScore` keeps a compatibility index for existing consumers. Readiness is
+  decided before it and does not depend on it; the index is not evidence and no
+  constant was tuned to move a tenant's card.
 - Acquisition reserves a share of the budget for customer-need queries so incidental
   traffic cannot starve them; seeds come from the finding's primary query, never a
   display title; "no data" answers are cached with an expiry so the same phrase is
   not paid for twice.
 
-Not done: joins still do not rebuild assessment inputs from newly arrived evidence
-(brief §4). The join writes an edge and recomputes from old inputs.
+Joins rebuild demand inputs from a newly arrived measurement (`d3bf65a`) instead of
+only adding an edge.
 
 ## Work package 5 — decision surface
 
@@ -143,14 +148,82 @@ because they contradicted the wrong things: one matched a competitor's quoted
 pages". The rule is now deliberately narrow and still yields no contradictions on
 legacy prose, which is why the dry run shows none.
 
+## Customer-need qualification repair (later pass, 2026-11-04)
+
+The earlier claim that work package 3 was complete was wrong. `assessCustomerNeed`
+still treated the existence of a business-knowledge document as supported business
+fit, invented a generic page update, and let a lexical coverage record plus that
+change become actionable. This pass replaced that boundary.
+
+- `lib/research/need-assessment.ts` asks the configured model to assess the finding's
+  premise, the customer need, offer fit, per-page coverage, intervention and success
+  measure from the extracted facts, the finding's sources and actual page text. Every
+  URL must be one we supplied; every positive coverage claim must carry a verbatim
+  excerpt from that page. Unsupported claims are downgraded to unknown.
+- `lib/funnel/assess-need.ts` uses only that assessment to establish support. Without
+  one, the finding stays in the research backlog: knowledge presence alone is not fit,
+  and the adapter no longer invents a change or a benefit.
+- `lib/funnel/decision.ts` adds `no_action`: an adequate answer is left alone even when
+  a change is proposed. An unassessable page is an investigation, never a demonstrated
+  gap. A supported need plus an evidenced inadequacy and a specific change remains
+  actionable with no keyword volume.
+- `lib/research/finding-evidence.ts` runs the assessment during the monthly research
+  bridge, bounded per run, and persists it with the finding evidence. The detector
+  carries the need rationale, offer-fit rationale, evidence URLs and model version into
+  the recommendation record.
+- `extractBusinessKnowledgeFromSite` now accepts the site it is extracting. It used to
+  take the project's oldest site, so a preview mirror could supply the facts used to
+  judge a production site. The monthly analysis passes the site it is analysing.
+
+Deterministic regression: `tests/need-assessment.test.ts` (validation and review),
+`tests/funnel-decision.test.ts` (no-action and unassessable branches), and the tenant
+fixtures with explicit pre-made assessments. These prove wiring, not that the model
+reasons well; the fixtures say so in their comments.
+
+### Real assessment runs (read-only, no recommendations published)
+
+`scripts/evaluate-need-assessment.ts` reads the tenant and its findings, retrieves
+candidate pages from the crawl inventory over public HTTP, reuses the real extraction
+core when knowledge is missing, and runs the real model assessment. It writes no
+knowledge revision, opportunity, task or paid search call.
+
+| Site | Finding | Result |
+|---|---|---|
+| susimacdonald.com | Foreign land ownership and fideicomiso | **rejected** — the supplied posts explain the fideicomiso and the restricted zone; the model cited both |
+| atelier-harmonie.com | Corpus de sources hors sujet | **rejected** — pipeline-quality failure; the pages were retrieved but the sources are off-topic |
+| atelier-harmonie.com | Abat-jour sur mesure sans page dédiée | **research backlog** — the dedicated page was retrieved, but its Wix HTML contains only boilerplate, so coverage is unassessable; no work was proposed |
+| casamigo.net | Mexico City not covered by site inventory | **rejected** — offer fit contradicted: the extracted facts limit the service area to Riviera Maya markets |
+| Astrid preview (unseen) | none | **automatic extraction** — 8 pages read, language `es`, 9 fields extracted, nothing written |
+
+Susi evidence, verbatim from the assessment:
+
+> "The finding says no candidate page addresses foreign ownership or restricted-zone
+> land, but two supplied posts do. One is specifically about fideicomisos in Mexico's
+> restricted zones, and the other explains that foreigners cannot own land within the
+> restricted zone and says there are two options."
+
+Honest limitations:
+
+- The live fetch does not execute JavaScript. On Wix, the dedicated page's body text
+  is client-rendered, so the assessment could not read it and did not claim absence.
+  A crawl that stores rendered text, or a headless fetch, is still needed for that
+  page.
+- The assessment runs for findings bridged by the monthly research runner. Existing
+  evidence rows have no assessment and remain backlog until re-bridged; no production
+  board was refreshed.
+- These are single real runs, not a statistically meaningful evaluation of model
+  quality, and they have not had independent SEO review.
+
 ## Work package 7 — proof
 
 Verified in CI-style runs:
 
 - `npx tsc --noEmit` — clean
 - `npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'`
-  — 968 passed, 12 skipped
+  — 1002 passed, 16 skipped
 - `npm run build` — compiled successfully
+- `tests/customer-recommendations-postgres.integration.test.ts` — 4 passed on the
+  disposable `csv_validation` schema, including the assessment-to-opportunity path.
 
 `tests/customer-recommendations.e2e.test.ts` runs all five tenants plus negative
 controls through inventory → coverage → verification → decision, and asserts the
@@ -159,7 +232,8 @@ expected readiness and reason for each finding.
 Not verified, and therefore not claimed:
 
 - No end-to-end run against production data. The read-only dry run above is the
-  closest evidence: legacy findings become `unverified` and leave the actionable
+  closest mechanical evidence; the real assessment runs above are the closest
+  qualitative evidence. Legacy findings become `unverified` and leave the actionable
   set, but are not proven false until a crawl stores page text.
 - No independent SEO review of the resulting board.
 - No browser/accessibility check of the detail page. What was verified instead: the
@@ -168,7 +242,8 @@ Not verified, and therefore not claimed:
   "Impact not quantified", "Customer value" and "intervention · update page". The
   in-app browser could not reach the local server, so layout and accessibility are
   unreviewed.
-- Joins do not rebuild assessment inputs (see above).
+- Joins rebuild assessment inputs, but the full monthly worker rerun/idempotency and
+  budget-failure acceptance in §7 has not been exercised.
 - No merge, deployment or paid evaluation.
 
 ## Next step

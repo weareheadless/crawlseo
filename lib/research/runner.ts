@@ -27,6 +27,7 @@ import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
+import { assessNeed } from "@/lib/research/need-assessment";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -638,7 +639,15 @@ export async function runResearchRun(runId: string) {
       // are untouched, so this is safe while the old pipeline still produces.
       if (run.projectId) {
         try {
-          await bridgeFindingsToEvidence(db, { projectId: run.projectId, siteId: site.id, runId: run.id });
+          await bridgeFindingsToEvidence(db, {
+            projectId: run.projectId,
+            siteId: site.id,
+            runId: run.id,
+            // The monthly pipeline assesses each winnable finding against the
+            // business facts and the actual page text. Without this call the
+            // finding stays in the research backlog by design.
+            assess: assessNeed,
+          });
         } catch (error) {
           console.error("[research] finding evidence bridge failed", error);
         }

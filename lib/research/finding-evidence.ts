@@ -1,6 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { storeEvidenceRecord } from "@/lib/funnel/evidence";
+import { computeObservationHash, storeEvidenceRecord, supersedeEvidenceRecord, type EvidenceRecordPayload } from "@/lib/funnel/evidence";
+import {
+  assessNeed,
+  loadNeedAssessmentInput,
+  type AssessmentDb,
+  type NeedAssessment,
+  type NeedAssessmentInput,
+} from "@/lib/research/need-assessment";
 
 /**
  * Bridge: business research findings → funnel evidence.
@@ -15,7 +22,9 @@ import { storeEvidenceRecord } from "@/lib/funnel/evidence";
  * that pipeline is still the producer.
  */
 
-export type FindingBridgeDb = Pick<PrismaClient, "researchFinding" | "evidenceRecord"> & Parameters<typeof storeEvidenceRecord>[0];
+export type FindingBridgeDb = Pick<PrismaClient, "researchFinding" | "evidenceRecord"> &
+  Parameters<typeof storeEvidenceRecord>[0] &
+  AssessmentDb;
 
 type StoredFinding = {
   id: string;
@@ -28,6 +37,7 @@ type StoredFinding = {
   sentiment: string | null;
   urgency: string | null;
   verification?: unknown;
+  evidenceSourceIds?: unknown;
   createdAt: Date;
 };
 
@@ -125,11 +135,27 @@ export type FindingBridgeResult = {
   stored: number;
   /** Findings that carry a winnable gap and can therefore reach the board. */
   actionable: number;
+  /** How many findings were assessed against the business and its pages. */
+  assessed: number;
+  /** Findings whose assessment could not be made, with the reason. */
+  assessmentFailures: Array<{ theme: string; reason: string }>;
 };
 
 export async function bridgeFindingsToEvidence(
   db: FindingBridgeDb,
-  opts: { projectId: string; siteId?: string | null; runId: string }
+  opts: {
+    projectId: string;
+    siteId?: string | null;
+    runId: string;
+    /**
+     * The assessment to run. The monthly pipeline passes the model-backed
+     * assessor; a caller that omits it writes unassessed findings, which the
+     * decision contract keeps in the research backlog.
+     */
+    assess?: (input: NeedAssessmentInput) => Promise<NeedAssessment>;
+    /** Bounded so one run cannot assess an unbounded number of findings. */
+    maxAssessments?: number;
+  }
 ): Promise<FindingBridgeResult> {
   const findings = (await db.researchFinding.findMany({
     where: { runId: opts.runId },
@@ -144,20 +170,99 @@ export async function bridgeFindingsToEvidence(
       sentiment: true,
       urgency: true,
       verification: true,
+      evidenceSourceIds: true,
       createdAt: true,
     },
   })) as StoredFinding[];
 
+  const assessor = opts.assess;
+  const maxAssessments = Math.max(0, Math.min(opts.maxAssessments ?? 6, 12));
   let stored = 0;
   let actionable = 0;
+  let assessed = 0;
+  const assessmentFailures: Array<{ theme: string; reason: string }> = [];
+
+  // A replay must not create a second active finding row just because the model
+  // phrased its assessment differently. The active row for each finding is located
+  // first, its assessment reused when the statement is unchanged, and a changed
+  // assessment supersedes it instead of accumulating.
+  const activeRows = await db.evidenceRecord.findMany({
+    where: { projectId: opts.projectId, kind: "research_finding", supersededById: null },
+    select: { id: true, observationHash: true, dimensions: true },
+  });
+  const activeByFinding = new Map<string, { id: string; hash: string; dimensions: Record<string, unknown> }>();
+  for (const row of activeRows) {
+    const findingId = (row.dimensions as { findingId?: unknown } | null)?.findingId;
+    if (typeof findingId === "string") {
+      activeByFinding.set(findingId, {
+        id: row.id,
+        hash: row.observationHash,
+        dimensions: (row.dimensions ?? {}) as Record<string, unknown>,
+      });
+    }
+  }
+
   for (const finding of findings) {
     const dimensions = findingDimensions(finding);
     if (dimensions.painPoint === "true" || dimensions.positioningGap === "true") actionable += 1;
-    await storeEvidenceRecord(db, {
+
+    const existing = activeByFinding.get(finding.id);
+    const statement = String(dimensions.painPointSummary ?? dimensions.gapSummary ?? finding.summary);
+    const sameStatement = Boolean(
+      existing &&
+        (existing.dimensions.painPointSummary === statement || existing.dimensions.gapSummary === statement)
+    );
+    const reusableAssessment =
+      sameStatement && typeof existing?.dimensions.assessmentJson === "string"
+        ? existing.dimensions.assessmentJson
+        : null;
+
+    if (reusableAssessment) {
+      // Reuse the persisted assessment: a replay is free and stable, and a model
+      // that would answer differently on a second pass does not rewrite history.
+      dimensions.assessmentJson = reusableAssessment;
+      for (const key of ["assessmentModel", "assessmentPromptVersion", "assessedAt"]) {
+        const value = existing!.dimensions[key];
+        if (typeof value === "string") dimensions[key] = value;
+      }
+    } else if (
+      assessor &&
+      opts.siteId &&
+      assessed < maxAssessments &&
+      (dimensions.painPoint === "true" || dimensions.positioningGap === "true")
+    ) {
+      // Assess only what can become customer work, and only when an assessor was
+      // supplied. A failure leaves the finding unassessed (backlog), never
+      // "supported".
+      const sourceIds = Array.isArray(finding.evidenceSourceIds)
+        ? finding.evidenceSourceIds.filter((value): value is string => typeof value === "string")
+        : [];
+      try {
+        const input = await loadNeedAssessmentInput(db, {
+          projectId: opts.projectId,
+          siteId: opts.siteId,
+          statement,
+          label: finding.theme,
+          sourceIds,
+        });
+        const assessment = await assessor(input);
+        dimensions.assessmentJson = JSON.stringify(assessment);
+        dimensions.assessmentModel = assessment.model;
+        dimensions.assessmentPromptVersion = assessment.promptVersion;
+        dimensions.assessedAt = assessment.assessedAt;
+        assessed += 1;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message.slice(0, 240) : "unknown assessment failure";
+        assessmentFailures.push({ theme: finding.theme, reason });
+        console.error(`[research] need assessment failed for "${finding.theme}": ${reason}`);
+      }
+    }
+
+    const payload: EvidenceRecordPayload = {
       projectId: opts.projectId,
       siteId: opts.siteId ?? null,
       kind: "research_finding",
-      // The finding's own timestamp, so a replay is idempotent.
+      // The finding's own timestamp, so a replay keeps the same observation time.
       observedAt: finding.createdAt,
       producer: "research-runner",
       dimensions,
@@ -165,11 +270,22 @@ export async function bridgeFindingsToEvidence(
         // Declared, with a unit: confidence is a 0–100 judgement, not a count.
         "first_party:confidence": { value: finding.confidence, unit: "score", source: "first_party" },
       },
-    });
+    };
+    const hash = computeObservationHash(payload);
+    if (existing && existing.hash === hash) {
+      // Byte-for-byte the same observation: nothing to write.
+      stored += 1;
+      continue;
+    }
+    if (existing) {
+      await supersedeEvidenceRecord(db, existing.id, payload);
+    } else {
+      await storeEvidenceRecord(db, payload);
+    }
     stored += 1;
   }
 
-  return { findings: findings.length, stored, actionable };
+  return { findings: findings.length, stored, actionable, assessed, assessmentFailures };
 }
 
 /**

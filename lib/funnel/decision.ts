@@ -19,7 +19,7 @@
 
 export type EvidenceState = "supported" | "unverified" | "contradicted";
 
-export type Readiness = "actionable" | "needs_investigation" | "research_backlog" | "rejected";
+export type Readiness = "actionable" | "needs_investigation" | "research_backlog" | "no_action" | "rejected";
 
 /** What kind of value the work produces. Tracks are not added together. */
 export type BenefitTrack = "customer_value" | "organic_growth" | "technical_health";
@@ -74,11 +74,29 @@ export type NeedEvidence = {
   sources: string[];
   /** How many independent observations support it. */
   observations: number;
+  /**
+   * What the evidence establishes about the need itself.
+   *
+   * Missing means "not assessed": a knowledge document mentioning the subject, or
+   * a finding asserting the need, does not make it supported. Only an assessment
+   * that cites evidence can promote it.
+   */
+  state?: EvidenceState;
   /** The research found its own sources unusable. */
   sourcesUnusable?: boolean;
   /** The need was contradicted by evidence about the site or the market. */
   contradicted?: boolean;
   contradictionReason?: string;
+};
+
+/** How the need and offer fit were assessed, kept with the decision. */
+export type AssessmentProvenance = {
+  model: string;
+  promptVersion: string;
+  needRationale: string;
+  needEvidenceUrls: string[];
+  offerFitRationale: string;
+  offerFitEvidenceUrls: string[];
 };
 
 export type RecommendationInput = {
@@ -107,6 +125,8 @@ export type RecommendationInput = {
   effort: "small" | "medium" | "large";
   review?: ReviewRequirement;
   successMeasure: string;
+  /** The assessment behind need support and offer fit, when one was made. */
+  assessment?: AssessmentProvenance | null;
 };
 
 export type RecommendationDecision = RecommendationInput & {
@@ -207,66 +227,82 @@ export function decideRecommendation(input: RecommendationInput): Recommendation
     });
   }
 
-  const supporting = input.coverage.filter((row) => row.state === "answers" || row.state === "partially_answers");
   const adequate = input.coverage.filter((row) => row.state === "answers");
+  const evidencedGap = input.coverage.filter(
+    (row) => row.state === "partially_answers" || row.state === "does_not_answer"
+  );
+  const unassessable = input.coverage.filter((row) => row.state === "unassessable");
+  const needSupported = input.need.state === "supported";
 
-  // 5. An existing page that already answers the need changes the intervention:
-  //    improve what exists instead of commissioning a duplicate.
+  // 5. A page that already answers the need needs no work. A nonempty change alone
+  //    does not make an adequate answer inadequate: that was the defect this branch
+  //    closes. Only a demonstrated inadequacy may justify touching the page.
   if (adequate.length > 0) {
     reasons.push(`existing coverage answers this need at ${adequate[0].pageUrl}`);
-    if (input.change.trim().length === 0) {
-      return finish(input, tracks, review, {
-        evidenceState: "supported",
-        readiness: "needs_investigation",
-        intervention: "investigate",
-        reasons,
-      });
-    }
-  }
-
-  // Finding a page is enough to act on it. Whole-site completeness only matters for
-  // claiming absence: an unretrieved part of the site cannot prove a page is missing.
-  const coverageResolved = input.coverage.length > 0;
-  const evidenceState: EvidenceState = input.businessFit.state === "supported" ? "supported" : "unverified";
-
-  // 6. A supported need with a verified intervention is actionable even when the
-  //    organic benefit is unquantified. Missing keyword data is not missing value.
-  if (input.businessFit.state === "supported" && coverageResolved && input.change.trim().length > 0) {
-    if (adequate.length > 0) {
-      reasons.push("improve the existing answer rather than creating a second one");
-      return finish(input, tracks, review, {
-        evidenceState: "supported",
-        readiness: "actionable",
-        intervention: "update_page",
-        reasons,
-      });
-    }
-    if (supporting.length > 0) {
-      reasons.push("an existing page partly answers the need; the change completes it");
-      return finish(input, tracks, review, {
-        evidenceState: "supported",
-        readiness: "actionable",
-        intervention: "update_page",
-        reasons,
-      });
-    }
-    reasons.push(input.targetPages.length > 0
-      ? "a verified gap on an existing page with a specific change"
-      : "no existing page answers the need and the intervention is a new asset");
+    reasons.push("no inadequacy is demonstrated, so the correct action is to leave it alone");
     return finish(input, tracks, review, {
-      evidenceState: "supported",
-      readiness: "actionable",
-      intervention: input.targetPages.length > 0 ? "update_page" : "create_asset",
+      evidenceState: input.need.state === "contradicted" ? "contradicted" : "supported",
+      readiness: "no_action",
+      intervention: "maintain",
       reasons,
     });
   }
 
-  // 7. A supported need whose coverage or solution is unresolved is a bounded
-  //    investigation, not an open-ended "research more".
-  if (input.businessFit.state === "supported") {
-    reasons.push(input.coverage.length === 0
-      ? "the need is supported but no page has been assessed against it"
-      : "the need is supported but the coverage or the change is unresolved");
+  // 6. Readiness is decided from the evidence, not from a page record existing.
+  //    A finding's assertion or a knowledge document mentioning the subject is not
+  //    proof that customers need this or that the business should serve it.
+  if (!needSupported) {
+    reasons.push("the customer need is not established by evidence");
+    return finish(input, tracks, review, {
+      evidenceState: "unverified",
+      readiness: "research_backlog",
+      intervention: "investigate",
+      reasons,
+    });
+  }
+  if (input.businessFit.state !== "supported") {
+    reasons.push("the need is not yet shown to fit this business");
+    return finish(input, tracks, review, {
+      evidenceState: "unverified",
+      readiness: "research_backlog",
+      intervention: "investigate",
+      reasons,
+    });
+  }
+
+  const evidenceState: EvidenceState = "supported";
+
+  // 7. A supported need plus an evidenced inadequacy and a specific change is
+  //    actionable even when the organic benefit is unquantified. Missing keyword
+  //    data is not missing value.
+  if (evidencedGap.length > 0 && input.change.trim().length > 0 && input.targetPages.length > 0) {
+    reasons.push(
+      evidencedGap[0].state === "partially_answers"
+        ? "an existing page partly answers the need; the change completes it"
+        : "a verified gap on an existing page with a specific change"
+    );
+    return finish(input, tracks, review, {
+      evidenceState,
+      readiness: "actionable",
+      intervention: "update_page",
+      reasons,
+    });
+  }
+
+  // 8. A supported need whose coverage or solution is unresolved is a bounded
+  //    investigation, not an open-ended "research more". An unassessable page is
+  //    unknown, never a demonstrated gap.
+  if (input.coverage.length === 0) {
+    if (input.coverageComplete && input.change.trim().length > 0 && input.targetPages.length === 0) {
+      reasons.push("no existing page answers the need and the intervention is a new asset");
+      return finish(input, tracks, review, {
+        evidenceState,
+        readiness: "actionable",
+        intervention: "create_asset",
+        reasons,
+      });
+    }
+    reasons.push("the need is supported but no page has been assessed against it");
     return finish(input, tracks, review, {
       evidenceState,
       readiness: "needs_investigation",
@@ -275,12 +311,14 @@ export function decideRecommendation(input: RecommendationInput): Recommendation
     });
   }
 
-  // 8. A need with no business-fit evidence yet is backlog: worth keeping, not
-  //    worth commissioning work for.
-  reasons.push("the need is not yet shown to fit this business");
+  reasons.push(
+    unassessable.length > 0
+      ? "relevant page text could not be assessed, so the coverage is unknown"
+      : "the need is supported but the coverage or the change is unresolved"
+  );
   return finish(input, tracks, review, {
-    evidenceState: "unverified",
-    readiness: "research_backlog",
+    evidenceState,
+    readiness: "needs_investigation",
     intervention: "investigate",
     reasons,
   });
@@ -305,10 +343,16 @@ function finish(
   review: ReviewRequirement,
   decided: Pick<RecommendationDecision, "evidenceState" | "readiness" | "intervention" | "reasons">
 ): RecommendationDecision {
+  const noAction = decided.readiness === "no_action";
   return {
     ...input,
     ...decided,
-    tracks: decided.readiness === "rejected" ? [] : tracks,
+    // No action means no proposed work: keeping the input's change would let a
+    // later reader accept a change the decision just declined to justify.
+    change: noAction ? "" : input.change,
+    targetPages: noAction ? [] : input.targetPages,
+    successMeasure: noAction ? "" : input.successMeasure,
+    tracks: decided.readiness === "rejected" || noAction ? [] : tracks,
     review,
   };
 }
@@ -320,6 +364,12 @@ export function assertDecision(decision: RecommendationDecision): void {
     if (decision.successMeasure.trim().length === 0) throw new Error("an actionable recommendation needs a success measure");
     if (decision.evidenceState === "contradicted") throw new Error("a contradicted premise cannot be actionable");
     if (decision.tracks.length === 0) throw new Error("an actionable recommendation needs at least one benefit track");
+    if (decision.intervention === "maintain") throw new Error("a maintain decision is not actionable work");
+  }
+  if (decision.readiness === "no_action") {
+    if (decision.intervention !== "maintain") throw new Error("a no-action decision must be a maintain intervention");
+    if (decision.change.trim().length > 0) throw new Error("a no-action decision must not propose a change");
+    if (decision.tracks.length > 0) throw new Error("a no-action decision produces no benefit track");
   }
   if (decision.readiness === "rejected" && decision.tracks.length > 0) {
     throw new Error("a rejected recommendation produces no benefit track");
@@ -342,6 +392,10 @@ export const READINESS_LABELS: Record<Readiness, { label: string; hint: string }
   research_backlog: {
     label: "Research backlog",
     hint: "Worth keeping, not yet shown to fit this business.",
+  },
+  no_action: {
+    label: "No change",
+    hint: "The site already answers this need and no improvement is demonstrated.",
   },
   rejected: {
     label: "Rejected",

@@ -20,6 +20,7 @@ const READINESS_TONE: Record<string, string> = {
   actionable: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   needs_investigation: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   research_backlog: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  no_action: "border-border bg-background/60 text-muted-foreground",
   rejected: "border-red-500/30 bg-red-500/10 text-red-300",
 };
 
@@ -67,7 +68,9 @@ export function DecisionSummaryPanel({ decision }: { decision: DecisionSummary }
             ? "The need is real; what the site already answers, or the right change, is unresolved."
             : readiness === "rejected"
               ? "A contradicted premise or a research-quality failure. Kept for audit, not offered as work."
-              : "Readiness is recorded from the evidence, not from the score."}
+              : readiness === "no_action"
+                ? "The site already answers this need and no improvement is demonstrated, so no work is proposed."
+                : "Readiness is recorded from the evidence, not from the score."}
       </p>
     </div>
   );
