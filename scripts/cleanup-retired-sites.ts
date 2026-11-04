@@ -47,6 +47,18 @@ const TARGETS: Target[] = [
     reason: "retired duplicate; the live record is cmuriqdgv00m8oyqfit3vbvbw. The row anchors an immutable legacy-budget receipt, so it is retired rather than deleted",
   },
   {
+    siteId: "cmvr4ncjf0006oypd4l2xv9jk",
+    domain: "helloada-site-5fe73d3d38ff6f77.weareheadless.workers.dev",
+    deleteProject: true,
+    reason: "failed provisioning: 0 opportunities, 0 evidence, 0 research runs",
+  },
+  {
+    siteId: "cmw17xpy40004oyefsc9nh7nc",
+    domain: "helloada-site-ff8e9af06f56201f.weareheadless.workers.dev",
+    deleteProject: true,
+    reason: "failed provisioning: 0 opportunities, 0 evidence, 0 research runs",
+  },
+  {
     siteId: "cmum1h8bs0024oyqfaddg1p9k",
     domain: "atelier-harmonie.weareheadless.workers.dev",
     deleteProject: false,
