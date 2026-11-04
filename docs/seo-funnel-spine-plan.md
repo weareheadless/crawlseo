@@ -94,7 +94,7 @@ A page-level defect (O7, O8) has no query demand of its own. Its worth comes fro
 
 Every paid collection reserves against the project's DS-08 allowance before the call and settles the actual cost after (`lib/dataforseo/collection.ts`); the reservation amount is the per-operation ceiling and the ledger records what was really spent.
 
-Follow-up joins execute (`lib/funnel/join-runner.ts`): a missing **why** leg is joined from business knowledge when a fact shares a meaningful token with the opportunity, and the join is reported as skipped when nothing matches — never guessed. A missing **how** leg runs its declared collection (keyword volumes for O13, SERP for O14, AI visibility for O5), which is paid, so the automatic path (crawl job, refresh) spends nothing and a human runs `scripts/run-join-followups.ts` with an explicit ceiling.
+Follow-up joins execute (`lib/funnel/join-runner.ts`): a missing **why** leg is joined from business knowledge when a fact shares a meaningful token with the opportunity, and the join is reported as skipped when nothing matches — never guessed. A missing **how** leg runs its declared collection (keyword volumes for O13, SERP for O14, AI visibility for O5), which is paid, so it runs through the tenant pipeline (`lib/tenants/analysis.ts`) with an explicit ceiling, on the monthly cycle rather than by hand.
 
 The legs are scored, not gated: an opportunity with one leg is immediately valid and visible (pipelines leak; a one-legged opportunity is often still the best work available). Follow-up collection runs automatically to join the missing leg and upgrade the score. The board sorts by score, so "worth doing AND winnable" floats to the top without hiding the leaks.
 

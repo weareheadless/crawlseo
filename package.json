@@ -37,7 +37,9 @@
     "test:dataforseo:mcp": "npx tsx scripts/test-dataforseo-mcp.ts",
     "provision:oceanicvibes": "npx tsx scripts/provision-oceanicvibes.ts",
     "seed:demo": "npx tsx scripts/seed-demo.ts",
-    "seed:demo:clean": "npx tsx scripts/seed-demo.ts --clean"
+    "seed:demo:clean": "npx tsx scripts/seed-demo.ts --clean",
+    "monthly:cycle": "npx tsx scripts/monthly-cycle.ts",
+    "tenant": "npx tsx scripts/tenant.ts"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",

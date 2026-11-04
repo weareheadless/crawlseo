@@ -4,6 +4,7 @@ import { createResearchRun } from "@/lib/research/service";
 import { normalizeResearchCadence } from "@/lib/research/policy";
 import { researchCadenceWindow } from "@/lib/research/schedule";
 import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
+import { resolveSiteContext } from "@/lib/site/context";
 
 loadEnvConfig(process.cwd());
 
@@ -44,6 +45,7 @@ async function main() {
       results.push({ site: site.domain, status: "skipped", reason: "manual cadence or no topics" });
       continue;
     }
+    const context = await resolveSiteContext(db, site.id);
     const timeZone = site.project?.researchBudgetTimeZone ?? "UTC";
     const window = researchCadenceWindow(cadence, new Date(), timeZone);
     const latest = await db.researchRun.findFirst({
@@ -64,15 +66,13 @@ async function main() {
           trigger: "SCHEDULED",
           topics,
           audience: typeof profile.audience === "string" ? profile.audience : undefined,
-          market: profile.constraints && typeof profile.constraints === "object" && !Array.isArray(profile.constraints)
-            ? String((profile.constraints as Record<string, unknown>).market ?? "") || undefined
-            : undefined,
-          language: profile.language || "en",
+          // The same site context the pipeline and the runner use: the audience's
+          // market decides the locale, and the provider list is not a policy gate.
+          market: context.market ?? undefined,
+          language: context.language,
           questions: [],
           recencyDays: policy.recencyDays ?? 90,
-          providers: stringList(policy.providers).length > 0
-            ? stringList(policy.providers) as Array<"reddit" | "news" | "web">
-            : ["reddit", "news"],
+          providers: ["reddit", "news", "competitor"],
         },
         site.userId ?? "research-scheduler",
         window.key,

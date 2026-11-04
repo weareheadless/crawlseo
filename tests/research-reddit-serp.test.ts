@@ -29,20 +29,25 @@ describe("reddit evidence from the search index", () => {
           { url: "https://www.reddit.com/r/vinted_france/comments/abc/x/", title: "Abat-jour qui ne tient plus", description: "Le mien ne tient plus droit depuis…", rank: 1, domain: "reddit.com" },
           { url: "https://www.reddit.com/r/bricolage/comments/def/y/", title: "Retapisser un fauteuil", description: "Première fois, des conseils ?", rank: 2, domain: "reddit.com" },
           { url: "https://www.marginalia.fr/article", title: "Un article", description: "hors sujet", rank: 3, domain: "marginalia.fr" },
+          // Google returns most threads as an opaque redirect; it is not a link to
+          // the discussion, so it is not evidence.
+          { url: "https://google.com/goto?url=CAESqAEB6zswFTiPdnJq4GSImjbWL4U", title: "Real Talk on Region 8 : r/tulum", description: "…", rank: 4, domain: "google.com" },
         ],
       },
     });
   });
 
-  it("queries the site, and keeps only reddit results", async () => {
+  it("asks for the threads and keeps only citable reddit URLs", async () => {
     const sources = await fetchRedditSerpSources({
       projectId: "p1",
       queries: ["abat-jour ne tient pas droit"],
       languageCode: "fr",
       locationCode: 2250,
     });
+    // `site:` is accepted and ignored by the endpoint, so the query asks for the
+    // threads by name and the URL filter does the restricting.
     expect(mocks.executeDataForSeoOrganicSerp).toHaveBeenCalledWith(expect.objectContaining({
-      keyword: "site:reddit.com abat-jour ne tient pas droit",
+      keyword: "abat-jour ne tient pas droit reddit",
     }));
     expect(sources.map((source) => source.url)).toEqual([
       "https://www.reddit.com/r/vinted_france/comments/abc/x/",

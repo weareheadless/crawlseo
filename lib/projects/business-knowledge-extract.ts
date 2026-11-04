@@ -1,43 +1,29 @@
-/**
- * Business knowledge extraction from the live site.
- *
- * Reads a handful of crawled/live pages, asks the content model for the canonical
- * fields, and writes them as a **working** revision with `ai_observation`
- * provenance and status `assumed`, publicationUse `internal_only`.
- *
- * That is deliberately not owner-confirmed: it gives the funnel a why leg it can
- * cite, while the document still says "nobody verified this". Acceptance stays the
- * owner's call through the existing acceptance service.
- *
- *   npx tsx scripts/business-knowledge-extract.ts --project <projectId> [--dry-run]
- */
-
 import { createHash } from "node:crypto";
 
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 import { writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { chatJson } from "@/lib/ai/chat";
 
+/**
+ * Business knowledge extracted from the live site.
+ *
+ * This was a script, run by hand for one tenant, which meant every other tenant
+ * had no business knowledge until someone remembered. The funnel's why-leg reads
+ * business facts, so "no knowledge document" was quietly making the analysis
+ * thinner for every tenant nobody had run it for.
+ *
+ * It is a library function now: the tenant pipeline calls it, the CLI calls the
+ * pipeline, and nothing else decides whether a site has knowledge.
+ *
+ * What it produces is deliberately not owner-confirmed: a working revision with
+ * `ai_observation` provenance, status `assumed`, `publicationUse: internal_only`.
+ * Acceptance stays the owner's call.
+ */
+
 const MAX_PAGES = 10;
 const MAX_CHARS_PER_PAGE = 6_000;
-
-function parseArgs(argv: string[]) {
-  const values = new Map<string, string>();
-  const dryRun = argv.includes("--dry-run");
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg.startsWith("--") || arg === "--dry-run") continue;
-    const value = argv[i + 1];
-    if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}`);
-    values.set(arg.slice(2), value);
-    i += 1;
-  }
-  const projectId = values.get("project");
-  if (!projectId) throw new Error("--project <projectId> is required");
-  return { projectId, dryRun };
-}
 
 function htmlToText(html: string): string {
   return html
@@ -79,26 +65,51 @@ type Extracted = {
   voice?: string;
 };
 
-const SYSTEM = `Tu extrais la connaissance metier d'un site web pour un document d'entreprise.
-Reponds uniquement en JSON avec les cles: businessName (texte), services (liste), location (texte),
-serviceArea (liste), differentiators (liste), audienceMotivations (liste), concerns (liste),
-conversionGoals (liste), voice (texte).
-Regles: n'invente rien. Si une information n'apparait pas explicitement sur les pages, omets la cle.
-Les valeurs doivent etre courtes, factuelles, dans la langue du contenu du site, et citees telles quelles quand c'est un nom.`;
+// Language-neutral on purpose: the prompt asks for the site's own language, so a
+// French atelier and a Mexican agency get the same instruction.
+const SYSTEM = `You extract business knowledge from a website for a company document.
+Answer with JSON only, keys: businessName (text), services (list), location (text),
+serviceArea (list), differentiators (list), audienceMotivations (list), concerns (list),
+conversionGoals (list), voice (text).
+Rules: invent nothing. If a fact does not appear explicitly on the pages, omit the key.
+Values must be short, factual, in the language of the site content, and quoted verbatim when they are a name.
+Always return a JSON object. Return {} when the pages contain no extractable business fact.`;
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const db = new PrismaClient();
+export type ExtractBusinessKnowledgeResult = {
+  /** Fields the model returned, so a caller can see what was found before writing. */
+  extracted: string[];
+  documentId: string;
+  revision: number;
+  state: string;
+  pagesRead: number;
+};
 
+type ExtractDb = PrismaClient;
+
+/**
+ * Read the site's own pages and write a working business-knowledge revision.
+ *
+ * Pages come from traffic evidence first, then one representative per top-level
+ * sitemap section, then the root. Traffic pages alone miss service sections that
+ * rarely rank — a service offered on its own page was absent from an earlier
+ * extraction for exactly that reason.
+ */
+export async function extractBusinessKnowledgeFromSite(
+  db: ExtractDb,
+  opts: { projectId: string; dryRun?: boolean }
+): Promise<ExtractBusinessKnowledgeResult> {
   const project = await db.project.findUniqueOrThrow({
-    where: { id: args.projectId },
-    select: { id: true, workspaceId: true, name: true, sites: { select: { id: true, domain: true }, take: 1, orderBy: { createdAt: "asc" } } },
+    where: { id: opts.projectId },
+    select: {
+      id: true,
+      workspaceId: true,
+      name: true,
+      sites: { select: { id: true, domain: true }, take: 1, orderBy: { createdAt: "asc" } },
+    },
   });
   const site = project.sites[0];
   if (!site) throw new Error("project has no site");
 
-  // Crawled pages, by traffic, then the site root. The crawl already knows which
-  // URLs matter, so extraction reads the same pages the funnel scores.
   const crawlEvidence = await db.evidenceRecord.findMany({
     where: { projectId: project.id, kind: "gsc_page", supersededById: null },
     select: { dimensions: true, metrics: true },
@@ -111,9 +122,7 @@ async function main() {
     .filter((row) => row.url)
     .sort((a, b) => b.impressions - a.impressions)
     .map((row) => row.url);
-  // Traffic pages alone miss service sections that rarely rank (tapisserie was
-  // absent from the extracted services because its page was not fetched). Add one
-  // representative per top-level path from the sitemap.
+
   const origin = `https://${site.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
   const sitemapSections: string[] = [];
   try {
@@ -138,7 +147,6 @@ async function main() {
     if (page) pages.push(page);
   }
   if (pages.length === 0) throw new Error("no page could be fetched");
-  process.stdout.write(`read ${pages.length} pages: ${pages.map((p) => p.url).join(", ")}\n`);
 
   const config = contentWriterConfig();
   if (!config) throw new Error("CONTENT_LLM_API_KEY is not configured");
@@ -147,7 +155,10 @@ async function main() {
     .map((page, index) => `--- PAGE ${index + 1}: ${page.url}\nTITLE: ${page.title}\n${page.text}`)
     .join("\n\n");
 
-  let parsed: Extracted;
+  // A page that renders client-side yields almost no text, and the model answers
+  // with nothing rather than an empty object. That is "no facts found", not a
+  // failed step: the run continues and the step reports what it could not read.
+  let parsed: Extracted = {};
   try {
     parsed = (await chatJson({
       config,
@@ -157,9 +168,8 @@ async function main() {
       attempts: 4,
     })) as Extracted;
   } catch (error) {
-    throw new Error(`content model failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (!/empty response/i.test(error instanceof Error ? error.message : "")) throw error;
   }
-  const extracted = parsed;
 
   const sourceUrl = pages[0].url;
   const now = new Date().toISOString();
@@ -192,25 +202,26 @@ async function main() {
 
   const changes = Object.fromEntries(
     Object.entries({
-      businessName: fact(extracted.businessName),
-      services: fact(extracted.services),
-      location: fact(extracted.location),
-      serviceArea: fact(extracted.serviceArea),
-      differentiators: fact(extracted.differentiators),
-      audienceMotivations: fact(extracted.audienceMotivations),
-      concerns: fact(extracted.concerns),
-      conversionGoals: fact(extracted.conversionGoals),
-      voice: fact(extracted.voice),
+      businessName: fact(parsed.businessName),
+      services: fact(parsed.services),
+      location: fact(parsed.location),
+      serviceArea: fact(parsed.serviceArea),
+      differentiators: fact(parsed.differentiators),
+      audienceMotivations: fact(parsed.audienceMotivations),
+      concerns: fact(parsed.concerns),
+      conversionGoals: fact(parsed.conversionGoals),
+      voice: fact(parsed.voice),
     }).filter(([, value]) => value !== undefined)
   );
 
-  process.stdout.write(JSON.stringify({ extracted: Object.keys(changes), dryRun: args.dryRun }, null, 1) + "\n");
-  if (args.dryRun) {
-    await db.$disconnect();
-    return;
+  if (opts.dryRun) {
+    return { extracted: Object.keys(changes), documentId: "", revision: 0, state: "dry-run", pagesRead: pages.length };
   }
 
-  const head = await db.businessKnowledgeDocument.findUnique({ where: { projectId: project.id }, select: { logicalId: true, revision: true } });
+  const head = await db.businessKnowledgeDocument.findUnique({
+    where: { projectId: project.id },
+    select: { logicalId: true, revision: true },
+  });
   const documentId = head?.logicalId ?? `business-${project.id}`;
   const result = await writeBusinessKnowledge(
     {
@@ -231,11 +242,11 @@ async function main() {
     }
   );
 
-  process.stdout.write(JSON.stringify({ documentId: result.documentId, revision: result.revision, state: result.state, fields: Object.keys(changes).length }, null, 1) + "\n");
-  await db.$disconnect();
+  return {
+    extracted: Object.keys(changes),
+    documentId: result.documentId,
+    revision: result.revision,
+    state: result.state,
+    pagesRead: pages.length,
+  };
 }
-
-main().catch((error) => {
-  process.stderr.write(`${String(error).slice(0, 500)}\n`);
-  process.exitCode = 1;
-});

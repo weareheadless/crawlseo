@@ -28,14 +28,8 @@ import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataf
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
-import {
-  collectAiVisibility,
-  collectDerivedKeywordMetrics,
-  collectKeywordMetrics,
-  collectSerpSnapshots,
-} from "@/lib/dataforseo/collection";
-import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
-import { countryFromText, resolveSiteContext } from "@/lib/site/context";
+import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
+import { runMonthlyCycle } from "@/lib/jobs/monthly-cycle";
 
 loadEnvConfig(process.cwd());
 
@@ -189,64 +183,18 @@ async function executeJob(
         where: { id: researchRunId },
         select: { trigger: true, projectId: true, siteId: true, brief: true },
       });
-      if (scheduled?.trigger === "SCHEDULED" && scheduled.projectId && scheduled.siteId) {
+      // The scheduled pass runs the same tenant pipeline every other entry point
+      // runs, so a monthly run and a manual one cannot diverge.
+      if (scheduled?.siteId) {
         try {
-          // Locale comes from the site's own context (brief overrides when it
-          // names a market), so the monthly pass works for any market rather
-          // than assuming one.
-          const brief = (scheduled.brief ?? {}) as { language?: string; market?: string };
-          const context = await resolveSiteContext(db as never, scheduled.siteId);
-          const site = { domain: context.domain };
-          const language = brief.language?.trim() || context.language;
-          const country = countryFromText(brief.market) ?? context.country;
-          const locale = await resolveDataForSeoLocale(scheduled.projectId, language, country).catch(() => null);
-          const joins = await runJoinFollowUps(db as never, {
-            projectId: scheduled.projectId,
-            siteId: scheduled.siteId,
-            maxSpendMicros: 300_000,
-            collectors: locale && site
-              ? {
-                  keywordMetrics: async (input) => {
-                    const seed = input.queries[0];
-                    if (!seed) return { evidence: [], spentMicros: 0 };
-                    const derived = await collectDerivedKeywordMetrics(db as never, {
-                      projectId: input.projectId,
-                      siteId: input.siteId,
-                      seed,
-                      languageCode: locale.languageCode,
-                      locationCode: locale.locationCode,
-                    });
-                    if (derived.evidence.length > 0) return derived;
-                    return collectKeywordMetrics(db as never, {
-                      ...input,
-                      languageCode: locale.languageCode,
-                      locationCode: locale.locationCode,
-                    });
-                  },
-                  serpSnapshots: (input) =>
-                    collectSerpSnapshots(db as never, {
-                      ...input,
-                      languageCode: locale.languageCode,
-                      locationCode: locale.locationCode,
-                      domain: site.domain,
-                    }),
-                  aiVisibility: (input) =>
-                    collectAiVisibility(db as never, {
-                      ...input,
-                      languageCode: locale.languageCode,
-                      locationCode: locale.locationCode,
-                      domain: site.domain,
-                    }),
-                }
-              : undefined,
+          const analysis = await ensureTenantAnalysis(db as never, scheduled.siteId, {
+            apply: true,
+            maxJoinSpendMicros: 300_000,
           });
-          if (joins.joined.length > 0 || joins.skipped.length > 0) {
-            console.log(
-              `[CrawlSEO worker] scheduled joins: joined=${joins.joined.length} skipped=${joins.skipped.length} spent=$${(joins.spentMicros / 1e6).toFixed(4)}`
-            );
-          }
+          const joins = analysis.steps.find((step) => step.step === "joins");
+          console.log(`[CrawlSEO worker] tenant analysis after scheduled run: ${joins?.detail ?? "no join step"}`);
         } catch (error) {
-          console.error("[CrawlSEO worker] scheduled join follow-ups failed", error);
+          console.error("[CrawlSEO worker] scheduled tenant analysis failed", error);
         }
       }
       return;
@@ -352,10 +300,36 @@ export async function main(): Promise<void> {
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
 
+  // The monthly cycle runs from the worker, not from a script someone remembers
+  // to run: every site, once a month, crawl -> search console -> research, and the
+  // research run's completion runs the tenant pipeline.
+  const cycleEveryMs = Number(process.env.MONTHLY_CYCLE_INTERVAL_MS ?? 6 * 60 * 60 * 1000);
+  let cycleRunning = false;
+  const runCycle = async () => {
+    if (cycleRunning) return;
+    cycleRunning = true;
+    try {
+      const results = await runMonthlyCycle(db);
+      const queued = results.flatMap((site) => site.stages.filter((stage) => stage.status === "queued").map((stage) => `${site.domain}:${stage.stage}`));
+      const failed = results.flatMap((site) => site.stages.filter((stage) => stage.status === "failed").map((stage) => `${site.domain}:${stage.stage}=${stage.detail}`));
+      if (queued.length || failed.length) {
+        console.log(`[CrawlSEO worker] monthly cycle: ${queued.length} queued, ${failed.length} failed`, JSON.stringify({ queued, failed }));
+      }
+    } catch (error) {
+      console.error("[CrawlSEO worker] monthly cycle failed", error instanceof Error ? error.message : "unknown");
+    } finally {
+      cycleRunning = false;
+    }
+  };
+  void runCycle();
+  const cycleTimer = setInterval(() => void runCycle(), Math.max(60_000, cycleEveryMs));
+  cycleTimer.unref?.();
+
   while (!stopping) {
     const worked = await processNextJob();
     if (!worked) await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
+  clearInterval(cycleTimer);
   await db.$disconnect();
   console.error(`[CrawlSEO worker] ${workerId} stopped`);
 }

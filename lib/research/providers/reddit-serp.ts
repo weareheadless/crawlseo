@@ -47,7 +47,11 @@ function hostname(url: string): string {
   }
 }
 
-/** Only reddit.com pages are community evidence; anything else is a misfire. */
+/**
+ * Only a real reddit.com URL is citable. Google returns most Reddit threads as
+ * `google.com/goto?url=CAES…` — an opaque redirect token, not a link to the thread —
+ * and citing that would be citing a search engine, not a discussion.
+ */
 function isReddit(url: string): boolean {
   const host = hostname(url);
   return host === "reddit.com" || host.endsWith(".reddit.com") || host === "redd.it";
@@ -68,11 +72,14 @@ export async function fetchRedditSerpSources(input: RedditSerpProviderInput): Pr
     try {
       const call = await withResearchBudget(input.projectId, {
         operation: "dataforseo:research_serp",
-        detail: { query: `site:reddit.com ${query}`, locale: `${input.languageCode}:${input.locationCode}`, provider: "reddit" },
+        detail: { query: `${query} reddit`, locale: `${input.languageCode}:${input.locationCode}`, provider: "reddit" },
         run: () =>
           executeDataForSeoOrganicSerp({
             projectId: input.projectId,
-            keyword: `site:reddit.com ${query}`,
+            // `site:` is accepted by the endpoint and then ignored: it returns the
+            // ordinary organic set. Asking for "<query> reddit" surfaces the threads
+            // and the URL filter below keeps only the ones we can cite.
+            keyword: `${query} reddit`,
             languageCode: input.languageCode,
             locationCode: input.locationCode,
           }),
@@ -91,7 +98,7 @@ export async function fetchRedditSerpSources(input: RedditSerpProviderInput): Pr
             deliveredAt: new Date(),
             costMicros: BigInt(call.spentMicros),
             status: "succeeded",
-            payload: { query: `site:reddit.com ${query}`, organic: serp.result.organic } as never,
+            payload: { query: `${query} reddit`, organic: serp.result.organic } as never,
           },
         }).catch(() => undefined);
       }

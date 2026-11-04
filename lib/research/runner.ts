@@ -376,6 +376,8 @@ export async function runResearchRun(runId: string) {
     // next query too. Record it once and stop calling it, instead of filling the
     // run report with five copies of the same failure.
     const unavailable = new Set<string>();
+    /** Non-fatal: a provider that ran and found nothing, which is not a failure. */
+    const providerNotes: string[] = [];
     const recordProviderError = (provider: string, error: unknown, fallback: string) => {
       const message = error instanceof Error ? error.message : fallback;
       sourceErrors.push(`${provider}: ${message}`);
@@ -422,6 +424,9 @@ export async function runResearchRun(runId: string) {
             db: db as never,
           });
           for (const source of sources) addCollected(source);
+          // Zero is a real answer, and a silent one would read as "nobody is
+          // discussing this" when it means "no citable thread ranked".
+          if (sources.length === 0) providerNotes.push("reddit: no citable reddit.com result ranked for these queries");
         } catch (error) {
           recordProviderError("reddit", error, "Reddit search lookup failed");
         }
@@ -622,6 +627,7 @@ export async function runResearchRun(runId: string) {
       ],
       requested_providers: providers,
       unsupported_providers: unsupportedProviders,
+      provider_notes: providerNotes,
       // A locale that had to give up an axis says so here, so "measured in Spanish
       // for the Mexican market" is a recorded decision and not a silent one.
       locale: competitorLocale
