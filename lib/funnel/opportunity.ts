@@ -69,13 +69,25 @@ export async function upsertOpportunity(
     throw new Error(`opportunity type ${input.type} has fixed dimension ${TYPE_DIMENSION[input.type]}`);
   }
 
-  const leg = completenessLeg(input.whyEvidenceIds.length, input.howEvidenceIds.length);
-  const { scoreValue, inputs } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
-
   const existing = await db.opportunity.findUnique({
     where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: input.dedupKey } },
-    select: { id: true, status: true },
+    select: { id: true, status: true, evidenceCompleteness: true },
   });
+
+  // A refresh re-detects one leg and knows nothing about the other: the detectors
+  // pass `howEvidenceIds: []` because the how leg is attached later by the join
+  // runner. Recomputing from the detector's input alone demoted every joined
+  // opportunity back to why-only on the next research pass — 23 of them in one
+  // refresh, with their join edges still in the graph. A leg, once attached, is
+  // only removed deliberately, never by a refresh that did not look at it.
+  const heldLeg = existing?.evidenceCompleteness;
+  const heldWhy = heldLeg === "both" || heldLeg === "why" ? 1 : 0;
+  const heldHow = heldLeg === "both" || heldLeg === "how" ? 1 : 0;
+  const leg = completenessLeg(
+    Math.max(input.whyEvidenceIds.length, heldWhy),
+    Math.max(input.howEvidenceIds.length, heldHow)
+  );
+  const { scoreValue, inputs } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
 
   const record = existing
     ? await db.opportunity.update({
