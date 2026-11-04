@@ -5,6 +5,7 @@ import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
+import { assessCustomerNeed } from "@/lib/funnel/assess-need";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -738,6 +739,10 @@ const DETECTORS: Detector[] = [
                 volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
                 technical: true,
                 severity: dim(row, "severity") === "CRITICAL" ? 1 : dim(row, "severity") === "WARNING" ? 0.6 : 0.3,
+                readiness: "actionable",
+                measurement: "unquantified",
+                benefitTrack: "technical_health",
+                intervention: "technical_fix",
               },
               winProbability: { playTypeFactor: 0.9 },
               effort: { playTypeBase: 3, sizeFactor: 1 },
@@ -782,6 +787,10 @@ const DETECTORS: Detector[] = [
                   volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
                   technical: true,
                   severity: dim(row, "severity") === "CRITICAL" ? 1 : dim(row, "severity") === "WARNING" ? 0.6 : 0.3,
+                  readiness: "actionable",
+                  measurement: "unquantified",
+                  benefitTrack: "technical_health",
+                  intervention: "technical_fix",
                 },
                 winProbability: { playTypeFactor: 1.0 },
                 effort: { playTypeBase: 2, sizeFactor: 1 },
@@ -845,7 +854,16 @@ const DETECTORS: Detector[] = [
           scoreInputs: scoreDefaults({
             // No demand of its own and no declared play: this is a question to
             // answer, so it stays a hypothesis rather than claiming an upside.
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.6, volumeSource: "unknown" },
+            worth: {
+              volume: null,
+              ctrAtPosition: null,
+              businessValue: 0.6,
+              volumeSource: "unknown",
+              readiness: "needs_investigation",
+              measurement: "unquantified",
+              benefitTrack: "organic_growth",
+              intervention: "investigate",
+            },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 4, sizeFactor: 1 },
             freshness: freshnessFactor(first.observedAt, new Date()),
@@ -899,6 +917,11 @@ const DETECTORS: Detector[] = [
               windowDays,
               observedCtr: num(row, "first_party:ctr") ?? null,
               observedImpressions: currentImpressions,
+              // The decline is observed; the cause is not, so the play is a check.
+              readiness: "needs_investigation",
+              measurement: "observed_baseline",
+              benefitTrack: "organic_growth",
+              intervention: "investigate",
             },
             winProbability: { rankDistance: rankDistanceFactor(currentPosition) },
             effort: { playTypeBase: 5, sizeFactor: 1 },
@@ -932,10 +955,13 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O13_user_pain_point",
-    // Findings that describe the same need are one opportunity, not one per
-    // re-phrasing: a re-run used to add a second row for the same insight.
-    detect: (evidence) =>
-      clusterFindings(
+    // A customer need becomes work only when the decision contract says so. A
+    // contradicted premise and a research-quality failure are dropped here, not
+    // published at a lower score.
+    detect: (evidence) => {
+      const knowledge = businessValueFromKnowledge(evidence);
+      const candidates: DetectorCandidate[] = [];
+      for (const cluster of clusterFindings(
         byKind(evidence, "research_finding")
           .filter((row) => dim(row, "painPoint") === "true")
           .map((row) => ({
@@ -946,31 +972,58 @@ const DETECTORS: Detector[] = [
             createdAt: row.observedAt,
             row,
           }))
-      ).map((cluster) => ({
+      )) {
+        const row = cluster.representative.row;
+        const statement = dim(row, "painPointSummary") ?? "";
+        const decision = assessCustomerNeed({
+          label: dim(row, "theme") ?? undefined,
+          statement,
+          clusterSize: cluster.members.length,
+          verification: dim(row, "verification") ?? null,
+          verificationReason: dim(row, "verificationReason") ?? null,
+          coverageState: dim(row, "coverageState") ?? null,
+          coveragePage: dim(row, "coveragePage") ?? null,
+          coverageComplete: dim(row, "coverageComplete") === "true",
+          businessFit: knowledge,
+          kind: "need",
+        });
+        if (decision.readiness === "rejected") continue;
+        candidates.push({
           type: "O13_user_pain_point" as const,
           // Label from the theme; the prose belongs in the summary, where a reader
           // can open it instead of scrolling past it on the board.
-          // `title` was added to the evidence dimensions after some findings were
-          // stored, so older rows fall back to the theme before the query: a query
-          // is a keyword, not a label.
-          title: dim(cluster.representative.row, "title") ?? dim(cluster.representative.row, "theme") ?? dim(cluster.representative.row, "query") ?? "Customer need",
-          summary: dim(cluster.representative.row, "painPointSummary") ?? `Research surfaced a real customer need with no (or weak) on-site answer.`,
+          title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Customer need",
+          summary: statement || `Research surfaced a customer need worth checking.`,
           dedupKey: `O13:${cluster.key}`,
-          clusterSlug: dim(cluster.representative.row, "cluster"),
+          clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: cluster.members.map((member) => member.row.id),
           howEvidenceIds: [],
           scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.9 },
+            worth: {
+              volume: null,
+              ctrAtPosition: null,
+              businessValue: knowledge.value,
+              businessValueSource: knowledge.source,
+              readiness: decision.readiness,
+              measurement: "unquantified",
+              benefitTrack: decision.tracks[0],
+              intervention: decision.intervention,
+            },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 16, sizeFactor: 1 },
-            freshness: freshnessFactor(cluster.representative.row.observedAt, new Date()),
+            freshness: freshnessFactor(row.observedAt, new Date()),
           }),
-        })),
+        });
+      }
+      return candidates;
+    },
   },
   {
     type: "O14_offer_positioning_gap",
-    detect: (evidence) =>
-      clusterFindings(
+    detect: (evidence) => {
+      const knowledge = businessValueFromKnowledge(evidence);
+      const candidates: DetectorCandidate[] = [];
+      for (const cluster of clusterFindings(
         byKind(evidence, "research_finding")
           .filter((row) => dim(row, "positioningGap") === "true")
           .map((row) => ({
@@ -981,21 +1034,49 @@ const DETECTORS: Detector[] = [
             createdAt: row.observedAt,
             row,
           }))
-      ).map((cluster) => ({
+      )) {
+        const row = cluster.representative.row;
+        const statement = dim(row, "gapSummary") ?? "";
+        const decision = assessCustomerNeed({
+          label: dim(row, "theme") ?? undefined,
+          statement,
+          clusterSize: cluster.members.length,
+          verification: dim(row, "verification") ?? null,
+          verificationReason: dim(row, "verificationReason") ?? null,
+          coverageState: dim(row, "coverageState") ?? null,
+          coveragePage: dim(row, "coveragePage") ?? null,
+          coverageComplete: dim(row, "coverageComplete") === "true",
+          businessFit: knowledge,
+          kind: "offer",
+        });
+        if (decision.readiness === "rejected") continue;
+        candidates.push({
           type: "O14_offer_positioning_gap" as const,
-          title: dim(cluster.representative.row, "title") ?? dim(cluster.representative.row, "theme") ?? dim(cluster.representative.row, "query") ?? "Positioning gap",
-          summary: dim(cluster.representative.row, "gapSummary") ?? `Research + SERP show a positioning gap worth a content/positioning update.`,
+          title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Positioning gap",
+          summary: statement || `Research and SERP evidence suggest a positioning gap worth checking.`,
           dedupKey: `O14:${cluster.key}`,
-          clusterSlug: dim(cluster.representative.row, "cluster"),
+          clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: cluster.members.map((member) => member.row.id),
           howEvidenceIds: [],
           scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.8 },
+            worth: {
+              volume: null,
+              ctrAtPosition: null,
+              businessValue: knowledge.value,
+              businessValueSource: knowledge.source,
+              readiness: decision.readiness,
+              measurement: "unquantified",
+              benefitTrack: decision.tracks[0],
+              intervention: decision.intervention,
+            },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 12, sizeFactor: 1 },
-            freshness: freshnessFactor(cluster.representative.row.observedAt, new Date()),
+            freshness: freshnessFactor(row.observedAt, new Date()),
           }),
-        })),
+        });
+      }
+      return candidates;
+    },
   },
 ];
 

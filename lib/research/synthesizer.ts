@@ -126,6 +126,11 @@ export async function synthesizeResearch(input: {
   candidatePages: string[];
   /** Every page type the crawl found and how many pages it has. */
   pageTypes?: PageTypeInventory[];
+  /**
+   * Settle a claim with everything the caller holds (inventory, page content,
+   * crawl completeness). Defaults to the inventory-only check.
+   */
+  verifyClaim?: (claim: SiteClaim) => Verification;
   /** Title/H1/description of the sampled pages, so the model can check coverage. */
   pageSummaries?: Array<{ url: string; type: string; title: string | null; h1s: string[]; description: string | null }>;
 }): Promise<ResearchSynthesis> {
@@ -287,7 +292,9 @@ export async function synthesizeResearch(input: {
       keptFindings.push({ ...finding, verification: { status: "unverified", reason: "the finding makes no claim about the site" } });
       continue;
     }
-    const verification = verifySiteClaim(finding.siteClaim, inventory);
+    const verification = input.verifyClaim
+      ? input.verifyClaim(finding.siteClaim)
+      : verifySiteClaim(finding.siteClaim, inventory);
     if (verification.status === "contradicted") {
       rejected.push({ theme: finding.theme, reason: verification.reason });
       continue;

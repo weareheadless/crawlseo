@@ -450,6 +450,7 @@ export async function createResearchFinding(
     sentiment?: string;
     urgency?: string;
     suggestedActionKind?: string;
+    verification?: { status: string; reason: string } | null;
   },
   sourceIds: string[],
 ) {
@@ -475,6 +476,7 @@ export async function createResearchFinding(
         urgency: input.urgency,
         evidenceSourceIds: json(sourceIds),
         suggestedActionKind: input.suggestedActionKind,
+        verification: input.verification ? json(input.verification) : undefined,
       },
     });
     await tx.researchRun.update({

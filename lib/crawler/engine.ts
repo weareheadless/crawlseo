@@ -59,6 +59,8 @@ type PageSnapshot = {
   bytes: number;
   loadMs: number;
   contentHash: string;
+  /** Extracted body text, so coverage claims can be checked against content. */
+  contentText: string;
   indexable: boolean;
 };
 
@@ -365,6 +367,7 @@ function parseHtml(
     bytes,
     loadMs,
     contentHash,
+    contentText: bodyText.slice(0, 20_000),
     indexable,
   };
 }
@@ -1072,6 +1075,7 @@ async function executeCrawl(
           hreflangTags: p.hreflangTags.length > 0 ? p.hreflangTags : undefined,
           contentScore: p.contentScore,
           contentHash: p.contentHash,
+          contentText: p.contentText,
           responseTimeMs: p.loadMs,
           byteSize: p.bytes,
           indexable: p.indexable,

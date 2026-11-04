@@ -479,12 +479,24 @@ export async function ensureTenantAnalysis(
       replace(step({ step: "acquisition", status: "missing", detail: "no performance window: nothing observed to enrich" }));
     } else {
       const performance = await readQueryPagePerformance(db, site.id, window);
-      const hypotheses: HypothesisCandidate[] = (await db.opportunity.findMany({
-        where: { projectId: site.projectId, status: "detected", type: { in: ["O13_user_pain_point", "O14_offer_positioning_gap"] } },
-        select: { id: true, title: true, dedupKey: true },
-        take: 25,
-      })).map((row) => ({ query: row.title.replace(/^[^:]+:\s*/, "").replace(/^"|"$/g, "").trim(), opportunityId: row.id, title: row.title }))
-        .filter((row) => row.query.length > 2 && row.query.length <= 80);
+      // Search seeds come from the finding's own primary query, never from a
+      // display title: a title is a label, and a sentence is not a search phrase.
+      const findings = await db.evidenceRecord.findMany({
+        where: { projectId: site.projectId, kind: "research_finding", supersededById: null },
+        select: { dimensions: true },
+      });
+      const bySeed = new Map<string, number>();
+      for (const row of findings) {
+        const query = (row.dimensions as { query?: unknown } | null)?.query;
+        if (typeof query !== "string") continue;
+        const clean = query.trim();
+        if (clean.length < 3 || clean.length > 80) continue;
+        bySeed.set(clean, (bySeed.get(clean) ?? 0) + 1);
+      }
+      const hypotheses: HypothesisCandidate[] = [...bySeed.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 25)
+        .map(([query, observations]) => ({ query, observations, opportunityId: "" }));
       const setup = await buildJoinCollectors(db, {
         projectId: site.projectId,
         siteId: site.id,

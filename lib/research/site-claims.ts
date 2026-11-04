@@ -12,6 +12,8 @@
  * finding of absence.
  */
 
+import type { CoverageAssessment } from "@/lib/funnel/decision";
+
 export type SiteClaimKind = "missing_page_type" | "missing_answer" | "absent_offering";
 
 export type SiteClaim = {
@@ -27,6 +29,9 @@ export type VerificationStatus = "supported" | "contradicted" | "unverified";
 export type Verification = {
   status: VerificationStatus;
   reason: string;
+  /** What the pages actually do about the claim, when they were assessed. */
+  coverage?: CoverageAssessment[];
+  coverageComplete?: boolean;
 };
 
 export type PageTypeInventory = {
@@ -34,6 +39,20 @@ export type PageTypeInventory = {
   pages: number;
   /** A page of that type that exists, so the claim can be checked by example. */
   sample?: string;
+};
+
+/**
+ * Everything needed to settle a claim about the site.
+ *
+ * `crawlComplete` matters: an inventory that reached its page cap, or that could
+ * not fetch part of the site, cannot prove a page type is absent.
+ */
+export type ClaimContext = {
+  inventory: PageTypeInventory[];
+  /** Page-content assessments for the claim's subject, when they were made. */
+  coverage?: CoverageAssessment[];
+  /** True only when the whole known inventory was retrieved and assessed. */
+  coverageComplete?: boolean;
 };
 
 /**
@@ -66,33 +85,79 @@ function inventoryMatches(claimType: string, inventory: PageTypeInventory[]): Pa
 }
 
 /**
- * Verify one claim against the page inventory.
+ * Verify one claim against what we actually hold.
  *
- * `missing_page_type` is the only claim we can settle mechanically today, because
- * the crawl holds the inventory. Claims about an answer or an offer need the page
- * content, so they stay `unverified` rather than being treated as proven absence.
+ * The rule that was wrong: an unmatched path-derived page type used to be treated
+ * as proof of absence. A URL sample cannot prove a semantic absence, so absence is
+ * only supported when the coverage is complete and no page answers the subject.
+ * A positive page-content match contradicts the claim regardless of its URL.
  */
-export function verifySiteClaim(claim: SiteClaim, inventory: PageTypeInventory[]): Verification {
+export function verifySiteClaim(
+  claim: SiteClaim,
+  context: PageTypeInventory[] | ClaimContext
+): Verification {
+  const ctx: ClaimContext = Array.isArray(context) ? { inventory: context } : context;
+  const coverage = ctx.coverage ?? [];
+  const answered = coverage.filter((row) => row.state === "answers" || row.state === "partially_answers");
+
   if (claim.kind === "missing_page_type") {
+    if (claim.pageType) {
+      const match = inventoryMatches(claim.pageType, ctx.inventory);
+      if (match) {
+        return {
+          status: "contradicted",
+          reason: `the crawl holds ${match.pages} ${match.type} page(s)${match.sample ? `, e.g. ${match.sample}` : ""}`,
+        };
+      }
+    }
+    // Content can settle it even when the path naming does not.
+    if (answered.length > 0) {
+      return {
+        status: "contradicted",
+        reason: `${answered[0].pageUrl} already covers this (${answered[0].note})`,
+        coverage,
+        coverageComplete: ctx.coverageComplete,
+      };
+    }
     if (!claim.pageType) {
       return { status: "unverified", reason: "the claim names no page type to check" };
     }
-    const match = inventoryMatches(claim.pageType, inventory);
-    if (match) {
-      return {
-        status: "contradicted",
-        reason: `the crawl holds ${match.pages} ${match.type} page(s)${match.sample ? `, e.g. ${match.sample}` : ""}`,
-      };
+    if (ctx.coverageComplete) {
+      return { status: "supported", reason: `no ${claim.pageType} page appears in the complete crawl inventory` };
     }
     return {
-      status: "supported",
-      reason: `no ${claim.pageType} page appears in the crawl inventory`,
+      status: "unverified",
+      reason: "the crawl does not cover the whole site, so an absent page type is not proven",
+      coverage,
+      coverageComplete: ctx.coverageComplete,
     };
   }
 
+  // An answer or offer claim is settled by content, never by a URL sample.
+  if (answered.length > 0) {
+    return {
+      status: "contradicted",
+      reason: `${answered[0].pageUrl} already answers this (${answered[0].note})`,
+      coverage,
+      coverageComplete: ctx.coverageComplete,
+    };
+  }
+  if (coverage.some((row) => row.state === "unassessable")) {
+    return {
+      status: "unverified",
+      reason: "some relevant pages could not be retrieved, so absence is not established",
+      coverage,
+      coverageComplete: ctx.coverageComplete,
+    };
+  }
+  if (ctx.coverageComplete && coverage.length > 0) {
+    return { status: "supported", reason: "the assessed pages do not answer this need", coverage, coverageComplete: true };
+  }
   return {
     status: "unverified",
-    reason: "an answer or offer claim needs the page content; the inventory alone cannot settle it",
+    reason: "no page content was assessed for this claim",
+    coverage,
+    coverageComplete: ctx.coverageComplete,
   };
 }
 

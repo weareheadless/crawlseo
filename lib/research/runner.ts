@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { db } from "@/lib/db";
 import { fetchRedditSerpSources } from "@/lib/research/providers/reddit-serp";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
@@ -20,6 +20,9 @@ import { autoAgentDecision } from "@/lib/research/automation";
 import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
 import { buildPageInventory } from "@/lib/research/page-inventory";
+import { assessCoverage, type CoveragePage } from "@/lib/research/page-coverage";
+import { verifySiteClaim } from "@/lib/research/site-claims";
+import type { CoverageAssessment } from "@/lib/funnel/decision";
 import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
@@ -207,6 +210,27 @@ export async function automateRunActions(input: {
   }
 
   return { drafts, agentTasks, skipped };
+}
+
+/**
+ * Whether the latest crawl covered the whole known site.
+ *
+ * A crawl that reached its page cap, or that was blocked on part of the site, is a
+ * sample. A sample can find a page; it cannot prove one does not exist.
+ */
+async function crawlCoversWholeSite(
+  db: PrismaClient,
+  siteId: string,
+  crawlId: string | null
+): Promise<boolean> {
+  if (!crawlId) return false;
+  const crawl = await db.crawl.findUnique({ where: { id: crawlId }, select: { pagesFound: true, maxPages: true } });
+  if (!crawl) return false;
+  if (crawl.maxPages > 0 && crawl.pagesFound >= crawl.maxPages) return false;
+  const blocked = await db.auditPage.count({
+    where: { crawlId, OR: [{ statusCode: { gte: 400 } }, { statusCode: 429 }] },
+  });
+  return blocked === 0;
 }
 
 export async function runResearchRun(runId: string) {
@@ -530,6 +554,33 @@ export async function runResearchRun(runId: string) {
           )
         : null;
 
+      // Every page of the latest crawl, with its text, so a claim about what the
+      // site answers can be checked against content rather than a URL sample.
+      const coveragePages: CoveragePage[] = latestCrawl
+        ? (await db.auditPage.findMany({
+            where: { crawlId: latestCrawl.id },
+            select: { url: true, title: true, contentText: true, statusCode: true, indexable: true },
+          })).map((page) => ({
+            url: page.url,
+            title: page.title,
+            contentText: page.contentText ?? null,
+            unavailableReason: page.statusCode !== 200
+              ? `HTTP ${page.statusCode}`
+              : page.contentText
+                ? null
+                : "no text extracted",
+          }))
+        : [];
+      const crawlCoverageComplete = await crawlCoversWholeSite(db, site.id, latestCrawl?.id ?? null);
+      const coverageCache = new Map<string, CoverageAssessment[]>();
+      const coverageFor = (statement: string): CoverageAssessment[] => {
+        const cached = coverageCache.get(statement);
+        if (cached) return cached;
+        const assessed = assessCoverage({ statement }, coveragePages);
+        coverageCache.set(statement, assessed);
+        return assessed;
+      };
+
       synthesis = await synthesizeResearch({
         siteDomain: site.domain,
         title: run.title,
@@ -541,6 +592,12 @@ export async function runResearchRun(runId: string) {
         sources: savedSources,
         candidatePages: inventory?.sampled ?? [],
         pageTypes: inventory?.groups.map((group) => ({ type: group.type, pages: group.pages, sample: group.samples[0] })) ?? [],
+        // Absence is settled by content, and only when the crawl covered the site.
+        verifyClaim: (claim) => verifySiteClaim(claim, {
+          inventory: inventory?.groups.map((group) => ({ type: group.type, pages: group.pages, sample: group.samples[0] })) ?? [],
+          coverage: coverageFor(claim.statement),
+          coverageComplete: crawlCoverageComplete,
+        }),
         // The model can only avoid false absence claims if it can see what the
         // sampled pages actually say. Titles and headings are enough to tell
         // "this page answers it" from "nothing here addresses it".
@@ -569,7 +626,7 @@ export async function runResearchRun(runId: string) {
         const actionQuery = synthesis.actions.find((action) => action.findingIndex === index)?.primaryQuery;
         const savedFinding = await createResearchFinding(
           run.id,
-          { ...finding, primaryQuery: finding.primaryQuery ?? actionQuery },
+          { ...finding, primaryQuery: finding.primaryQuery ?? actionQuery, verification: finding.verification ?? null },
           sourceIds
         );
         findingIdByIndex.set(index, savedFinding.id);

@@ -27,6 +27,7 @@ type StoredFinding = {
   confidence: number;
   sentiment: string | null;
   urgency: string | null;
+  verification?: unknown;
   createdAt: Date;
 };
 
@@ -82,7 +83,41 @@ export function findingDimensions(finding: StoredFinding): Record<string, string
     gapSummary: isPositioning ? finding.summary : null,
     urgency: finding.urgency,
     sentiment: finding.sentiment,
+    // The claim's verification travels with the evidence. Without it a
+    // contradicted premise becomes an opportunity again the moment it is bridged.
+    verification: verificationStatus(finding.verification),
+    verificationReason: verificationReason(finding.verification),
+    coverageState: coverageField(finding.verification, "state"),
+    coveragePage: coverageField(finding.verification, "pageUrl"),
+    coverageComplete: coverageCompleteField(finding.verification),
   };
+}
+
+/** The strongest coverage state recorded with the verification, if any. */
+function coverageField(value: unknown, key: "state" | "pageUrl"): string | null {
+  const coverage = (value as { coverage?: unknown } | null)?.coverage;
+  if (!Array.isArray(coverage) || coverage.length === 0) return null;
+  const ranked = [...coverage] as Array<{ state?: string; pageUrl?: string }>;
+  const order = ["answers", "partially_answers", "unassessable", "does_not_answer"];
+  ranked.sort((a, b) => order.indexOf(a.state ?? "") - order.indexOf(b.state ?? ""));
+  const entry = ranked[0];
+  const field = key === "state" ? entry.state : entry.pageUrl;
+  return typeof field === "string" ? field : null;
+}
+
+function coverageCompleteField(value: unknown): string | null {
+  const complete = (value as { coverageComplete?: unknown } | null)?.coverageComplete;
+  return typeof complete === "boolean" ? (complete ? "true" : "false") : null;
+}
+
+function verificationStatus(value: unknown): string | null {
+  const status = (value as { status?: unknown } | null)?.status;
+  return typeof status === "string" ? status : null;
+}
+
+function verificationReason(value: unknown): string | null {
+  const reason = (value as { reason?: unknown } | null)?.reason;
+  return typeof reason === "string" ? reason : null;
 }
 
 export type FindingBridgeResult = {
@@ -108,6 +143,7 @@ export async function bridgeFindingsToEvidence(
       confidence: true,
       sentiment: true,
       urgency: true,
+      verification: true,
       createdAt: true,
     },
   })) as StoredFinding[];

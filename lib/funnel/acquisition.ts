@@ -37,6 +37,8 @@ export type ObservedCandidate = {
 export type HypothesisCandidate = {
   query: string;
   opportunityId: string;
+  /** How many independent observations support the need. */
+  observations?: number;
   title?: string;
 };
 
@@ -67,9 +69,20 @@ export function planAcquisition(input: {
   observed: ObservedCandidate[];
   hypotheses?: HypothesisCandidate[];
   measuredQueries?: Iterable<string>;
+  /** Queries already asked and answered with no data; not worth paying twice. */
+  noDataQueries?: Iterable<string>;
   limit?: number;
+  /**
+   * Share of the limit reserved for customer-need queries.
+   *
+   * Observed queries are ordered by impressions, so incidental traffic can consume
+   * the whole budget and starve the needs the site exists to answer. The reserve is
+   * released back to observed queries when the needs do not use it.
+   */
+  needReserve?: number;
 }): AcquisitionPlan {
   const measured = new Set([...(input.measuredQueries ?? [])].map(normalize));
+  const noData = new Set([...(input.noDataQueries ?? [])].map(normalize));
   const skipped: AcquisitionPlan["skipped"] = [];
   const requests: AcquisitionRequest[] = [];
   const seen = new Set<string>();
@@ -82,6 +95,10 @@ export function planAcquisition(input: {
     if (seen.has(key)) continue;
     if (measured.has(key)) {
       skipped.push({ query: row.query, reason: "already measured and still fresh" });
+      continue;
+    }
+    if (noData.has(key)) {
+      skipped.push({ query: row.query, reason: "already measured with no data; the result is cached" });
       continue;
     }
     if (row.impressions < MIN_OBSERVED_IMPRESSIONS) {
@@ -106,6 +123,10 @@ export function planAcquisition(input: {
       skipped.push({ query: hypothesis.query, reason: "already measured and still fresh" });
       continue;
     }
+    if (noData.has(key)) {
+      skipped.push({ query: hypothesis.query, reason: "already measured with no data; the result is cached" });
+      continue;
+    }
     const existing = byQuery.get(key);
     if (existing) {
       if (!existing.opportunityIds.includes(hypothesis.opportunityId)) existing.opportunityIds.push(hypothesis.opportunityId);
@@ -124,8 +145,35 @@ export function planAcquisition(input: {
   }
 
   const limit = input.limit ?? 40;
-  const bounded = requests.slice(0, limit);
-  for (const request of requests.slice(limit)) {
+  const observedRequests = requests.filter((row) => row.reason === "observed_performance");
+  const needRequests = requests.filter((row) => row.reason !== "observed_performance");
+
+  // Reserve part of the budget for customer needs. When there are no observed
+  // queries at all the reserve is irrelevant and the needs take the whole budget.
+  const reserve = observedRequests.length === 0
+    ? needRequests.length
+    : Math.max(0, Math.min(needRequests.length, Math.round(limit * (input.needReserve ?? 0.25))));
+  const needChosen = needRequests.slice(0, reserve);
+  const observedChosen = observedRequests.slice(0, Math.max(0, limit - needChosen.length));
+  // Observed queries run first within the plan; the reserve only guarantees the
+  // needs a slot, it does not make them the first batch.
+  const chosen = [...observedChosen, ...needChosen];
+
+  // Release an unused reserve back to the remaining requests.
+  if (chosen.length < limit) {
+    const chosenKeys = new Set(chosen.map((row) => normalize(row.query)));
+    for (const request of [...needRequests, ...observedRequests]) {
+      if (chosen.length >= limit) break;
+      if (chosenKeys.has(normalize(request.query))) continue;
+      chosen.push(request);
+      chosenKeys.add(normalize(request.query));
+    }
+  }
+
+  const bounded = chosen.slice(0, limit);
+  const boundedKeys = new Set(bounded.map((row) => normalize(row.query)));
+  for (const request of requests) {
+    if (boundedKeys.has(normalize(request.query))) continue;
     skipped.push({ query: request.query, reason: "budget: outside this month's acquisition limit" });
   }
   return { requests: bounded, skipped };
@@ -152,24 +200,33 @@ export type AcquisitionCollector = (input: {
   queries: string[];
 }) => Promise<{ evidence: Array<{ id: string }>; spentMicros: number }>;
 
-/** Queries already measured by the provider, with the age of the measurement. */
+/**
+ * Queries already asked about, split by outcome.
+ *
+ * A provider answering "no data" is a measurement too. Without caching it, every
+ * pass paid again for the same twenty phrases that have no volume.
+ */
 export async function measuredQueries(
   db: AcquisitionDb,
   projectId: string,
   now = new Date()
-): Promise<Set<string>> {
+): Promise<{ fresh: Set<string>; noData: Set<string> }> {
   const rows = await db.evidenceRecord.findMany({
     where: { projectId, kind: "keyword_metrics", supersededById: null },
     select: { dimensions: true, observedAt: true },
   });
   const fresh = new Set<string>();
+  const noData = new Set<string>();
   for (const row of rows) {
-    const query = (row.dimensions as { query?: unknown } | null)?.query;
+    const dimensions = row.dimensions as { query?: unknown; noData?: unknown } | null;
+    const query = dimensions?.query;
     if (typeof query !== "string" || !query) continue;
     const ageDays = (now.getTime() - row.observedAt.getTime()) / 86_400_000;
-    if (ageDays <= MEASUREMENT_TTL_DAYS) fresh.add(query);
+    if (ageDays > MEASUREMENT_TTL_DAYS) continue;
+    if (dimensions?.noData === "true") noData.add(query);
+    else fresh.add(query);
   }
-  return fresh;
+  return { fresh, noData };
 }
 
 /**
@@ -193,7 +250,7 @@ export async function runAcquisitionPlan(
     now?: Date;
   }
 ): Promise<AcquisitionReceipt> {
-  const alreadyMeasured = await measuredQueries(db, input.projectId, input.now);
+  const cache = await measuredQueries(db, input.projectId, input.now);
   const plan = planAcquisition({
     observed: input.performance.map((row) => ({
       query: row.query,
@@ -203,7 +260,8 @@ export async function runAcquisitionPlan(
       position: row.position,
     })),
     hypotheses: input.hypotheses,
-    measuredQueries: alreadyMeasured,
+    measuredQueries: cache.fresh,
+    noDataQueries: cache.noData,
   });
 
   const receipt: AcquisitionReceipt = {
@@ -246,7 +304,12 @@ export async function runAcquisitionPlan(
       for (const request of batch) {
         const state = measuredSet.has(normalize(request.query)) ? "measured" : "no_data";
         if (state === "measured") receipt.measured += 1;
-        else receipt.noData += 1;
+        else {
+          receipt.noData += 1;
+          // Cache the no-data answer with an expiry, so the next pass does not pay
+          // for the same phrase again.
+          await recordNoData(db, input.projectId, input.siteId, request.query, input.now ?? new Date());
+        }
         receipt.requests.push({ query: request.query, reason: request.reason, state });
       }
     } catch (error) {
@@ -262,6 +325,30 @@ export async function runAcquisitionPlan(
   }
 
   return receipt;
+}
+
+/** Persist a "provider has no volume for this" answer, with its observation time. */
+async function recordNoData(
+  db: AcquisitionDb,
+  projectId: string,
+  siteId: string | null,
+  query: string,
+  now: Date
+): Promise<void> {
+  try {
+    const { storeEvidenceRecord } = await import("@/lib/funnel/evidence");
+    await storeEvidenceRecord(db as never, {
+      projectId,
+      siteId,
+      kind: "keyword_metrics",
+      observedAt: now,
+      producer: "dataforseo",
+      dimensions: { query, noData: "true" },
+      metrics: {},
+    });
+  } catch {
+    // A cache write failure must not fail the acquisition pass.
+  }
 }
 
 /** The current window's performance, read for planning only. */

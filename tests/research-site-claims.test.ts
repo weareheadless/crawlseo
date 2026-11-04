@@ -44,9 +44,27 @@ describe("claim verification", () => {
     expect(result.reason).toContain("/cities/tulum");
   });
 
-  it("supports a missing page type the inventory does not have", () => {
-    const result = verifySiteClaim(claim({ pageType: "comparison" }), casamigo);
-    expect(result.status).toBe("supported");
+  it("supports a missing page type only when the crawl covered the whole site", () => {
+    // A sampled or capped crawl cannot prove a page type is absent.
+    expect(verifySiteClaim(claim({ pageType: "comparison" }), casamigo).status).toBe("unverified");
+    expect(verifySiteClaim(claim({ pageType: "comparison" }), { inventory: casamigo, coverageComplete: true }).status).toBe("supported");
+  });
+
+  it("contradicts an absence claim when a page already answers the subject", () => {
+    const result = verifySiteClaim(claim({ kind: "missing_answer", pageType: null, statement: "No foreign ownership content." }), {
+      inventory: casamigo,
+      coverage: [{
+        pageUrl: "https://www.casamigo.net/post/fideicomiso",
+        state: "answers",
+        method: "lexical",
+        matchedTerms: ["foreign", "ownership"],
+        excerpts: ["restricted zone trust deed"],
+        note: "4 of 5 need terms present",
+      }],
+      coverageComplete: true,
+    });
+    expect(result.status).toBe("contradicted");
+    expect(result.reason).toContain("already answers");
   });
 
   it("never treats an answer or offer claim as proven absence", () => {

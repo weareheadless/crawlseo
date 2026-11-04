@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { getOpportunityDetail, type EvidenceLine } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS, VERDICT_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
+import { MEASUREMENT_LABELS, READINESS_LABELS, TRACK_LABELS } from "@/lib/funnel/decision";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Chip,
@@ -83,19 +84,51 @@ export default async function OpportunityDetailPage({ params }: Props) {
         )}
       </div>
 
+      {/* The decision, stated before the evidence: a reader must not have to
+          infer whether this is work, a question or a rejected premise. */}
+      <div className="panel mb-6 space-y-3 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Decision</span>
+          {detail.decision.readiness && (
+            <Chip title={READINESS_LABELS[detail.decision.readiness as keyof typeof READINESS_LABELS]?.hint}>
+              {READINESS_LABELS[detail.decision.readiness as keyof typeof READINESS_LABELS]?.label ?? detail.decision.readiness}
+            </Chip>
+          )}
+          {detail.decision.measurement && (
+            <Chip title={MEASUREMENT_LABELS[detail.decision.measurement as keyof typeof MEASUREMENT_LABELS]?.hint}>
+              {MEASUREMENT_LABELS[detail.decision.measurement as keyof typeof MEASUREMENT_LABELS]?.label ?? detail.decision.measurement}
+            </Chip>
+          )}
+          {detail.decision.track && (
+            <Chip>{TRACK_LABELS[detail.decision.track as keyof typeof TRACK_LABELS] ?? detail.decision.track}</Chip>
+          )}
+          {detail.decision.intervention && <Chip>intervention · {detail.decision.intervention.replaceAll("_", " ")}</Chip>}
+          {detail.decision.benefit && <Chip>{detail.decision.benefit}</Chip>}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {detail.decision.readiness === "actionable"
+            ? "The need and the change are evidenced. A person still decides whether to do it."
+            : detail.decision.readiness === "needs_investigation"
+              ? "The need is real; what the site already answers, or the right change, is unresolved."
+              : detail.decision.readiness === "rejected"
+                ? "A contradicted premise or a research-quality failure. Kept for audit, not offered as work."
+                : "Readiness is recorded from the evidence, not from the score."}
+        </p>
+      </div>
+
       <Stage number={1} title="Why this exists" subtitle="The evidence that produced this opportunity. Both legs, always shown.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Leg
             title="Why it matters"
             hint="Business relevance: does this serve what the customer needs?"
             lines={detail.whyEvidence}
-            emptyReason="No business evidence yet. The opportunity is still valid — it scores lower until research or business knowledge is joined."
+            emptyReason="No business evidence yet, so business fit is not established."
           />
           <Leg
             title="How we win it"
             hint="Search and technical evidence: can we take it, and can we measure it?"
             lines={detail.howEvidence}
-            emptyReason="No search evidence yet. Waiting on rank, SERP or crawl evidence for this play."
+            emptyReason="No search evidence yet, so the organic side is unmeasured."
           />
         </div>
       </Stage>

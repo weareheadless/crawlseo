@@ -1119,6 +1119,10 @@ model ResearchFinding {
   urgency             String?
   evidenceSourceIds   Json?
   suggestedActionKind String?
+  /// Verification of any claim this finding makes about the site
+  /// ({ status, reason }), so an unverified or contradicted premise survives the
+  /// bridge instead of being lost with the run report.
+  verification        Json?
   createdAt           DateTime            @default(now())
 
   run     ResearchRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
@@ -1853,6 +1857,9 @@ model AuditPage {
 
   contentScore Int     @default(0) // 0-100
   contentHash  String? // SHA-256 of body text
+  /// Extracted body text, truncated. Stored so a claim about what a page answers
+  /// can be checked against the page instead of against its URL.
+  contentText  String?
 
   responseTimeMs Int     @default(0)
   byteSize       Int     @default(0)

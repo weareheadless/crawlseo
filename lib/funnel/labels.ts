@@ -84,16 +84,19 @@ export const OPPORTUNITY_LABELS: Record<OpportunityType, OpportunityTypeLabel> =
   },
   O10_cannibalization: {
     code: "O10",
-    label: "Cannibalization",
-    play: "Consolidate, redirect or canonicalise the competing URLs.",
-    successMetric: "One URL holding the query stably.",
+    label: "Query overlap",
+    // Overlap is not harm. The old text prescribed consolidation for every case,
+    // which is how a legitimate second URL gets deleted.
+    play: "Check the query's intent and both pages' content. Consolidate only if they demonstrably compete; otherwise leave them and record why.",
+    successMetric: "A recorded decision, and one URL holding the query only where consolidation was justified.",
     firesFrom: "search",
   },
   O11_freshness_decay: {
     code: "O11",
-    label: "Freshness decay",
-    play: "Refresh the page.",
-    successMetric: "Rank and impressions recover.",
+    label: "Position decline",
+    // A position that fell is an observation, not a diagnosis.
+    play: "Check the SERP, the competitors and the page before changing anything. Refresh only if the check finds a reason to.",
+    successMetric: "The cause is identified; rank and impressions recover if the fix addressed it.",
     firesFrom: "search",
   },
   O12_page_experience: {
@@ -105,16 +108,17 @@ export const OPPORTUNITY_LABELS: Record<OpportunityType, OpportunityTypeLabel> =
   },
   O13_user_pain_point: {
     code: "O13",
-    label: "User pain point",
-    play: "Create content for a real need nobody answers, validated by keyword data.",
-    successMetric: "Question coverage, then traffic to the new page.",
+    label: "Customer need",
+    // Keyword data is not permission to answer a customer's question.
+    play: "Answer the need where the site is weakest: update the page that should cover it, or add the missing answer.",
+    successMetric: "The page answers the question in an owner review; traffic if it becomes measurable.",
     firesFrom: "business",
   },
   O14_offer_positioning_gap: {
     code: "O14",
     label: "Positioning gap",
-    play: "Update content and positioning for an offer competitors own.",
-    successMetric: "Conversion-relevant metrics and visibility.",
+    play: "State the offer where customers compare alternatives, using the page that already covers the topic.",
+    successMetric: "The offer is explicit on the page; enquiry quality if it is trackable.",
     firesFrom: "business",
   },
 };
@@ -141,9 +145,9 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 export const COMPLETENESS_LABELS: Record<string, { label: string; hint: string }> = {
-  both: { label: "Both legs", hint: "Business reason and search evidence both hold." },
-  why: { label: "Why only", hint: "It matters, but we have not proven we can win it yet." },
-  how: { label: "How only", hint: "We can win it, but nothing says this business should chase it." },
+  both: { label: "Two evidence legs", hint: "Business evidence and search evidence both exist. Neither proves the other." },
+  why: { label: "Business evidence", hint: "The need is evidenced; the search side is not measured." },
+  how: { label: "Search evidence", hint: "The search side is measured; business fit is not established." },
   none: { label: "No evidence", hint: "Recorded without supporting evidence." },
 };
 

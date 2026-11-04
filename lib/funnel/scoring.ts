@@ -53,6 +53,14 @@ export type ScoreInputs = {
     observedImpressions?: number | null;
     /** Marks a page/site defect whose traffic impact is not quantifiable. */
     technical?: boolean;
+    /** Decision readiness from the recommendation contract, when it was decided. */
+    readiness?: "actionable" | "needs_investigation" | "research_backlog" | "rejected";
+    /** How the benefit is known. */
+    measurement?: "observed_baseline" | "forecast" | "unquantified";
+    /** Which value track the work belongs to. */
+    benefitTrack?: "customer_value" | "organic_growth" | "technical_health";
+    /** What the work does. */
+    intervention?: "maintain" | "update_page" | "improve_journey" | "create_asset" | "investigate" | "technical_fix";
   };
   /** win probability components (0–1 each) */
   winProbability: {
@@ -139,14 +147,21 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     observedImpressions: inputs.worth.observedImpressions ?? null,
   });
 
-  // Demand is never invented. A missing volume used to become 120 searches/month,
-  // which put one-legged ideas above measured ones and made every score look
-  // informed. Without demand evidence the item is a hypothesis: visible, ordered
-  // below anything measured, and labelled.
-  if (inputs.worth.unmeasured || assessment.kind === "hypothesis") {
-    // Visible, and clearly below anything measured: a hypothesis is a question to
-    // answer, not work to schedule ahead of evidence.
-    const ceiling = inputs.worth.unmeasured ? 5 : 10;
+  // Readiness comes from the decision contract, not from whether a demand number
+  // happens to exist. A supported customer need with unquantified traffic is work a
+  // person can accept; a research backlog item is not.
+  const readiness = inputs.worth.readiness;
+  if (readiness === "rejected") {
+    return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment };
+  }
+  const band = readiness === "research_backlog" ? 10
+    : readiness === "needs_investigation" ? 15
+    : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 30
+    // Legacy rows predate the contract: unknown demand is a question, not work.
+    : readiness == null && assessment.kind === "hypothesis" ? 15
+    : null;
+  if (band != null || inputs.worth.unmeasured) {
+    const ceiling = inputs.worth.unmeasured ? 5 : (band ?? 10);
     const strength =
       Math.max(inputs.freshness, 0) *
       Math.max(inputs.stability, 0) *

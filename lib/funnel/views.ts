@@ -63,6 +63,14 @@ export type OpportunityRow = {
 
 export type OpportunityDetail = OpportunityRow & {
   scoreInputs: unknown;
+  /** The decision the board and the detail page both render. */
+  decision: {
+    readiness: string | null;
+    measurement: string | null;
+    track: string | null;
+    intervention: string | null;
+    benefit: string | null;
+  };
   decidedBy: string | null;
   decidedAt: Date | null;
   parkReason: string | null;
@@ -189,6 +197,29 @@ export type OpportunityFilter = {
  * The board. Sorted by score desc, unknown scores last — the intersection
  * "worth doing and winnable" floats up, leaks stay visible.
  */
+/**
+ * Read the decision the opportunity was scored with.
+ *
+ * The board and the detail page must not each infer readiness from a different
+ * field: a hypothesis read as a recommendation is exactly the failure the contract
+ * exists to prevent.
+ */
+function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"] {
+  const worth = (inputs as { worth?: Record<string, unknown> } | null)?.worth ?? {};
+  const assessment = (inputs as { assessment?: { kind?: string; incrementalClicksPerMonth?: number | null } } | null)?.assessment;
+  const read = (key: string) => (typeof worth[key] === "string" ? (worth[key] as string) : null);
+  return {
+    readiness: read("readiness"),
+    measurement: read("measurement") ?? (assessment?.kind === "hypothesis" ? "unquantified" : null),
+    track: read("benefitTrack"),
+    intervention: read("intervention"),
+    benefit:
+      assessment?.incrementalClicksPerMonth != null
+        ? `about ${Math.round(assessment.incrementalClicksPerMonth)} additional clicks/month in the stated scenario`
+        : null,
+  };
+}
+
 export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter): Promise<OpportunityRow[]> {
   const opportunities = await db.opportunity.findMany({
     where: {
@@ -330,6 +361,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     summary: row.summary,
     score: row.scoreValue,
     scoreInputs: row.scoreInputs,
+    decision: decisionFromScoreInputs(row.scoreInputs),
     completeness: row.evidenceCompleteness,
     detectedBy: row.detectedBy,
     firstDetectedAt: row.firstDetectedAt,

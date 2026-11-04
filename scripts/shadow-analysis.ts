@@ -3,10 +3,12 @@
  *
  *   npx tsx scripts/shadow-analysis.ts [--site <siteId>] [--json <path>]
  *
- * Rebuilds evidence and runs the detectors in dry-run mode, then diffs the
- * candidate board against what is published. It writes evidence (additive and
- * idempotent) and **never** creates or updates an opportunity, a task or a
- * delivery, so a shadow run cannot leak work to a customer.
+ * Projects the board from the evidence that is already stored and diffs it against
+ * what is published. It **never** creates or updates an opportunity, a task or a
+ * delivery, and by default it does not write evidence either: rebuilding evidence
+ * changes what the next detection sees, which is an indirect write to the board.
+ *
+ * `--rebuild` opts into rebuilding evidence first, for a deliberate review.
  *
  * The diff is the review artefact: what the new model would add, drop, or reorder.
  */
@@ -46,6 +48,7 @@ async function main() {
   const db = new PrismaClient();
   const siteId = value("--site");
   const jsonPath = value("--json");
+  const rebuild = process.argv.includes("--rebuild");
 
   const sites = dedupeByProject(await db.site.findMany({
     where: { retiredAt: null, ...(siteId ? { id: siteId } : {}) },
@@ -56,7 +59,10 @@ async function main() {
   const report: Array<Record<string, unknown>> = [];
   for (const site of sites) {
     if (!site.projectId) continue;
-    await refreshEvidenceForSite(db, site.id, { projectId: site.projectId });
+    if (rebuild) {
+      process.stdout.write(`  ! rebuilding evidence for ${site.domain} (writes observations)\n`);
+      await refreshEvidenceForSite(db, site.id, { projectId: site.projectId });
+    }
     const dry = await runDetectors(db, site.projectId, {
       detectedBy: "shadow",
       dryRun: true,

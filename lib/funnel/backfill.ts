@@ -7,6 +7,7 @@ import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowl
 import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
 import { brandTermsFromDomain, runDetectors } from "@/lib/funnel/detectors";
 import { discoverClusters } from "@/lib/funnel/cluster-discovery";
+import { reassessLegacyFindings } from "@/lib/research/reassess-findings";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 
 /**
@@ -322,6 +323,13 @@ export async function refreshEvidenceForSite(
   const backfill = await backfillSiteEvidence(db, siteId, { projectId });
   const knowledge = await bridgeBusinessKnowledgeToEvidence(db as never, { projectId, siteId });
   const coverage = await bridgeQuestionCoverageToEvidence(db as never, { projectId, siteId });
+  // Findings stored before the claim contract carry no verification. Re-check them
+  // before detection so a contradicted premise cannot sit on the board for a month.
+  try {
+    await reassessLegacyFindings(db as never, { projectId, siteId });
+  } catch (error) {
+    console.error("[funnel] legacy finding reassessment failed", error);
+  }
   await discoverClusters(db, projectId, { siteId });
   return { backfill, knowledgeFacts: knowledge.stored, questionCoverage: coverage.stored };
 }
