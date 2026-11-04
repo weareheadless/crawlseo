@@ -56,6 +56,8 @@ export async function runMonthlyCycle(
   const sites = await db.site.findMany({
     where: {
       projectId: { not: null },
+      // A retired record is kept for audit, not analysed.
+      retiredAt: null,
       ...(opts.siteIds?.length ? { id: { in: opts.siteIds } } : {}),
     },
     select: {

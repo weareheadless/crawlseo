@@ -65,6 +65,7 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
       domain: true,
       projectId: true,
       userId: true,
+      retiredAt: true,
       siteProfile: { select: { topics: true, audience: true, language: true, constraints: true } },
       researchPolicy: { select: { enabled: true, cadence: true, providers: true, recencyDays: true } },
     },
@@ -73,10 +74,26 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
 
   const steps: TenantStep[] = [];
 
+  if (site.retiredAt) {
+    return {
+      siteId: site.id,
+      domain: site.domain,
+      projectId: site.projectId,
+      ready: true,
+      steps: [step({
+        step: "site-records",
+        status: "ok",
+        detail: `retired ${site.retiredAt.toISOString().slice(0, 10)}; kept for audit, not analysed`,
+      })],
+    };
+  }
+
   // 1. One site record per domain. Two rows split a tenant's history: the crawl
   //    lands on one, research on the other, and every report is half a tenant.
   const duplicates = await db.site.count({
-    where: { domain: site.domain, id: { not: site.id } },
+    // A retired tombstone is not a competing record: it is kept for audit and
+    // excluded from analysis, so it does not split this tenant's history.
+    where: { domain: site.domain, id: { not: site.id }, retiredAt: null },
   });
   steps.push(duplicates > 0
     ? step({ step: "site-records", status: "blocked", detail: `${duplicates} other site record(s) share ${site.domain}; history is split` })

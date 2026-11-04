@@ -34,7 +34,7 @@ async function main() {
 
   const ids = siteId
     ? [siteId]
-    : (await db.site.findMany({ where: { researchPolicy: { isNot: null } }, select: { id: true }, orderBy: { createdAt: "asc" } })).map((site) => site.id);
+    : (await db.site.findMany({ where: { researchPolicy: { isNot: null }, retiredAt: null }, select: { id: true }, orderBy: { createdAt: "asc" } })).map((site) => site.id);
 
   let incomplete = 0;
   for (const id of ids) {
