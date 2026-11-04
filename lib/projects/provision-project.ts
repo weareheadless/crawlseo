@@ -62,7 +62,10 @@ export type ProvisionProjectResult = {
   connectorCredentialToken: string | null;
   connectorCredentialReused: boolean;
   dataforseoGrantSource: "platform" | "operator" | null;
-  jobs: { gsc: string; ga4: string };
+  /** True when the site is retired: it is kept for audit and nothing was queued. */
+  retired: boolean;
+  /** Null when the site is retired: nothing was queued for it. */
+  jobs: { gsc: string | null; ga4: string | null };
 };
 
 function canonicalDomain(raw: string): string {
@@ -598,14 +601,20 @@ export async function provisionProject(
     reissueIfReused: input.reissueCredential === true,
   });
 
-  const gscJob = await enqueueJob({
+  // A retired site is kept for audit, not analysed. Provisioning is the platform's
+  // declared site list and runs repeatedly, so without this check a retired record
+  // is recreated on the next pass and starts collecting sync jobs again — deleting
+  // it cannot stick, which is what made the old entries keep coming back.
+  const retirement = await db.site.findUnique({ where: { id: records.siteId }, select: { retiredAt: true } });
+  const retired = Boolean(retirement?.retiredAt);
+  const gscJob = retired ? null : await enqueueJob({
     projectId: records.projectId,
     siteId: records.siteId,
     kind: JobKind.GSC_SYNC,
     payload: { daysBack: 28 },
     idempotencyKey: `provision:${input.serviceCredentialIdempotencyKey}:gsc`,
   });
-  const ga4Job = await enqueueJob({
+  const ga4Job = retired ? null : await enqueueJob({
     projectId: records.projectId,
     siteId: records.siteId,
     kind: JobKind.GA4_SYNC,
@@ -625,6 +634,7 @@ export async function provisionProject(
     connectorCredentialToken: connectorCredential.token,
     connectorCredentialReused: connectorCredential.reused,
     dataforseoGrantSource: records.dataforseoGrantSource,
-    jobs: { gsc: gscJob.id, ga4: ga4Job.id },
+    retired,
+    jobs: { gsc: gscJob?.id ?? null, ga4: ga4Job?.id ?? null },
   };
 }
