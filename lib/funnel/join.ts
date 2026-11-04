@@ -162,12 +162,19 @@ export function taskPlanFromOpportunity(opportunity: {
   const targetPages = Array.isArray(worth.targetPages)
     ? (worth.targetPages as unknown[]).filter((value): value is string => typeof value === "string")
     : [];
+  const list = (key: string) =>
+    Array.isArray(worth[key]) ? (worth[key] as unknown[]).filter((value): value is string => typeof value === "string") : [];
   return {
     readiness: read("readiness"),
     intervention: read("intervention"),
     benefitTrack: read("benefitTrack"),
     measurement: read("measurement"),
     need: opportunity.summary,
+    needRationale: read("needRationale"),
+    needEvidenceUrls: list("needEvidenceUrls"),
+    offerFitRationale: read("offerFitRationale"),
+    offerFitEvidenceUrls: list("offerFitEvidenceUrls"),
+    assessmentModel: read("assessmentModel"),
     existingCoverage: read("coverageSummary"),
     targetPages,
     change: read("change"),

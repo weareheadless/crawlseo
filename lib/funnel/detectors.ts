@@ -6,6 +6,7 @@ import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
 import { assessCustomerNeed } from "@/lib/funnel/assess-need";
+import { assertDecision } from "@/lib/funnel/decision";
 import { parsePersistedAssessment, type NeedAssessment } from "@/lib/research/need-assessment";
 
 /**
@@ -1010,6 +1011,7 @@ const DETECTORS: Detector[] = [
           assessment,
         });
         if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
+        assertDecision(decision);
         candidates.push({
           type: "O13_user_pain_point" as const,
           // Label from the theme; the prose belongs in the summary, where a reader
@@ -1081,6 +1083,7 @@ const DETECTORS: Detector[] = [
           assessment,
         });
         if (decision.readiness === "rejected" || decision.readiness === "no_action") continue;
+        assertDecision(decision);
         candidates.push({
           type: "O14_offer_positioning_gap" as const,
           title: dim(row, "title") ?? dim(row, "theme") ?? dim(row, "query") ?? "Positioning gap",

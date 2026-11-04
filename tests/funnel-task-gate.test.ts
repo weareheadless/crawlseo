@@ -270,6 +270,11 @@ describe("task brief", () => {
           successMeasure: "the page answers the question in an owner review",
           targetPages: ["https://site.test/services"],
           coverageSummary: "partially answers at https://site.test/services",
+          needRationale: "three homeowners asked before booking",
+          needEvidenceUrls: ["https://forum.test/wardrobe-cost"],
+          offerFitRationale: "the business makes fitted wardrobes",
+          offerFitEvidenceUrls: ["https://site.test/services"],
+          assessmentModel: "fixture-model",
         },
       },
     });
@@ -278,6 +283,9 @@ describe("task brief", () => {
     expect(plan.change).toContain("/services");
     expect(plan.successMeasure).toContain("owner review");
     expect(plan.measurement).toBe("unquantified");
+    expect(plan.needRationale).toContain("homeowners");
+    expect(plan.needEvidenceUrls).toEqual(["https://forum.test/wardrobe-cost"]);
+    expect(plan.assessmentModel).toBe("fixture-model");
   });
 
   it("still produces a brief for a legacy row without a decision", async () => {
