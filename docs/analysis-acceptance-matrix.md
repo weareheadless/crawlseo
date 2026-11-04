@@ -20,11 +20,34 @@ and the test that fails if it returns. Status is **implemented** or **open**.
 | 13 | Model asserted absence from a 30-URL sample | full page-type inventory + title/H1/description summaries in the prompt | `tests/page-inventory.test.ts` | implemented |
 | 14 | Office street used as a research market | `placeToken` rejects street addresses; topics fall back to observed queries | `tests/research-topics.test.ts` | implemented |
 | 15 | Empty/PARTIAL run reported as healthy | `inspectTenant` requires sources and findings, reports PARTIAL, adds crawl coverage | open test (readiness integration) | implemented |
-| 16 | Paid measurement attached but not used for prioritisation | join re-assesses; `impact` computed from stored inputs | `funnel-join-runner.test.ts` (existing) + `scoring-honesty.test.ts` | partial |
-| 17 | Acquisition follows hypotheses instead of observed queries | not implemented | — | **open (P4)** |
-| 18 | Cannibalisation/decay asserted as causes | not implemented | — | **open (P5)** |
-| 19 | Comparison window / decline detection | `previousWindow` exists; O11 not yet rebuilt on it | `performance-window.test.ts` (window only) | **open (P5)** |
-| 20 | Migration, shadow comparison, rollout | not started | — | **open (P9)** |
+| 16 | Paid measurement attached but not used for prioritisation | `runAcquisitionPlan` measures observed queries first; new volume re-runs detection | `tests/funnel-acquisition.test.ts` | implemented |
+| 17 | Acquisition follows hypotheses instead of observed queries | observed performance is planned first, by impressions, batched, cached 45 days | `funnel-acquisition.test.ts` | implemented |
+| 18 | Cannibalisation/decay asserted as causes | O10 needs observed overlap and asks for a check; O11 states the movement and says the cause is not established | `tests/funnel-decline-overlap.test.ts` | implemented |
+| 19 | Comparison window / decline detection | backfill stores the previous window; O11 compares it | `funnel-decline-overlap.test.ts` | implemented |
+| 20 | Migration, shadow comparison, rollout | `assessmentVersion` migration, `--dry-run`, `scripts/shadow-analysis.ts`, `scripts/reanalyse-all.ts` with snapshot/restore | manual (verified below) | implemented |
+
+Additional correctness added while reviewing the shadow diff:
+
+| # | Failure | Fix | Test |
+|---|---|---|---|
+| 21 | Provider volume claimed upside the site was never shown for | `assessImpact` bounds reach by observed impressions | `scoring-honesty.test.ts` ("reach bound") |
+| 22 | Off-offer traffic topped the board (hospital queries on a property site) | unknown business relevance dampens the index; per-query relevance tested against knowledge | `funnel-first-party-demand.test.ts` |
+| 23 | The site's own name offered as a winnable rank | `isBrandQuery` + domain-derived brand terms | `funnel-first-party-demand.test.ts` |
+| 24 | A top-ten page with 0% CTR was invisible | O2 covers the snippet band, not only 11–20 | `funnel-first-party-demand.test.ts` ("snippet opportunity") |
+
+## Published boards after the refresh (2026-11-03)
+
+| Site | Detected | measured | estimated | technical | hypothesis |
+|---|---:|---:|---:|---:|---:|
+| susimacdonald.com | 49 | 16 | 0 | 10 | 23 |
+| atelier-harmonie.com | 59 | 3 | 0 | 21 | 35 |
+| oceanicvibes.com | 26 | 0 | 0 | 16 | 10 |
+| casamigo.net | 29 | 0 | 0 | 20 | 9 |
+
+Susi's top row is now the measured "beachfront homes for sale under $100k"
+(269 impressions, 10 clicks, position 6.9), not a page-count defect. Atelier,
+Oceanic and Casamigo lead with technical work because they have no query with
+enough impressions to measure an upside — the honest result, not a ranking bug.
 
 ## Measured effect (read-only, live data, 2026-11-03)
 

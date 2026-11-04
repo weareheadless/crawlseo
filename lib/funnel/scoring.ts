@@ -144,7 +144,9 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // informed. Without demand evidence the item is a hypothesis: visible, ordered
   // below anything measured, and labelled.
   if (inputs.worth.unmeasured || assessment.kind === "hypothesis") {
-    const ceiling = inputs.worth.unmeasured ? 5 : 20;
+    // Visible, and clearly below anything measured: a hypothesis is a question to
+    // answer, not work to schedule ahead of evidence.
+    const ceiling = inputs.worth.unmeasured ? 5 : 10;
     const strength =
       Math.max(inputs.freshness, 0) *
       Math.max(inputs.stability, 0) *

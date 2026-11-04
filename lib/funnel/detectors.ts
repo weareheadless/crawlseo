@@ -513,6 +513,11 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O2_striking_distance",
+    // Two different plays shared one detector: a page ranking 11–20 that earns
+    // impressions but no clicks, and a page already in the top ten whose snippet
+    // still earns almost nothing. The second is the commoner one — 49 impressions
+    // at position 5.6 with a 0% CTR is a title problem, not a ranking problem —
+    // and it used to be invisible because the band started at 11.
     detect: (evidence, ctx) =>
       byKind(evidence, "keyword_rank")
         .filter((row) => {
@@ -520,22 +525,46 @@ const DETECTORS: Detector[] = [
           const position = num(row, "provider:position") ?? num(row, "first_party:position");
           const ctr = num(row, "first_party:ctr");
           const impressions = num(row, "first_party:impressions") ?? 0;
-          return position != null && position > 10 && position <= 20 && ctr != null && ctr <= DETECTOR_THRESHOLDS.lowCtr && impressions >= DETECTOR_THRESHOLDS.minImpressions;
+          if (position == null || ctr == null) return false;
+          if (impressions < DETECTOR_THRESHOLDS.minImpressions) return false;
+          const curve = ctrAtPosition(position);
+          const striking = position > 10 && position <= 20 && ctr <= DETECTOR_THRESHOLDS.lowCtr;
+          const snippet = position <= 10 && curve != null && ctr < curve * 0.5;
+          return striking || snippet;
         })
         .map((row) => {
           const position = num(row, "provider:position") ?? num(row, "first_party:position")!;
           const impressions = num(row, "first_party:impressions") ?? 0;
+          const clicks = num(row, "first_party:clicks") ?? 0;
+          const ctr = num(row, "first_party:ctr") ?? 0;
+          const snippet = position <= 10;
           return {
             type: "O2_striking_distance" as const,
-            title: `Striking distance: "${dim(row, "query")}" gets impressions, no clicks`,
-            summary: `Position ${Math.round(position)} with ${Math.round(impressions)} impressions and low CTR — the title/meta is not earning the click.`,
-            dedupKey: `O2:${dim(row, "query")}:${dim(row, "url") ?? ""}`,
+            title: snippet
+              ? `Snippet not earning the click: "${byQuery(row)}" at position ${Math.round(position)}`
+              : `Striking distance: "${byQuery(row)}" gets impressions, no clicks`,
+            summary: snippet
+              ? `Position ${Math.round(position)} with ${Math.round(impressions)} impressions but ${Math.round(clicks)} clicks (${(ctr * 100).toFixed(1)}%). The rank is there and the snippet is not earning the click; the cause may be the title, the description, or a SERP feature taking the click.`
+              : `Position ${Math.round(position)} with ${Math.round(impressions)} impressions and low CTR — the title/meta is not earning the click.`,
+            dedupKey: `O2:${byQuery(row)}:${dim(row, "url") ?? ""}`,
             clusterSlug: dim(row, "cluster"),
             whyEvidenceIds: [],
             howEvidenceIds: [row.id],
             scoreInputs: scoreDefaults({
-              worth: { volume: impressions, ctrAtPosition: ctrAtPosition(position), businessValue: 0.5 },
-              winProbability: { rankDistance: rankDistanceFactor(position) },
+              worth: {
+                volume: impressions,
+                ctrAtPosition: ctr,
+                businessValue: businessValueForQuery(evidence, byQuery(row)).value,
+                businessValueSource: businessValueForQuery(evidence, byQuery(row)).source,
+                volumeSource: "first_party",
+                currentPosition: position,
+                // The snippet play targets the CTR the position already deserves.
+                targetPosition: position,
+                windowDays: dimNum(row, "windowDays"),
+                observedCtr: ctr,
+                observedImpressions: impressions,
+              },
+              winProbability: { rankDistance: rankDistanceFactor(position), playTypeFactor: 0.8 },
               effort: { playTypeBase: 2, sizeFactor: 1 },
               freshness: freshnessFactor(row.observedAt, new Date()),
             }),

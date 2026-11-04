@@ -149,3 +149,22 @@ describe("brand and relevance", () => {
     expect(worth.businessValue).toBe(0.5);
   });
 });
+
+describe("snippet opportunity", () => {
+  it("flags a top-ten page that earns almost no clicks", async () => {
+    const row = rankRow("r1", { impressions: 49, clicks: 0, position: 5.6, windowEnd: "2026-10-31T00:00:00.000Z" });
+    row.dimensions = { ...row.dimensions, query: "kit lampe" };
+    const { db, created } = mockDb([row]);
+    await runDetectors(db as never, "p1", { now: NOW });
+    const o2 = created.find((o) => o.type === "O2_striking_distance");
+    expect(o2).toBeTruthy();
+    expect(String(o2!.title)).toContain("Snippet not earning the click");
+  });
+
+  it("does not flag a top-ten page with a healthy CTR", async () => {
+    const row = rankRow("r1", { impressions: 49, clicks: 7, position: 5.6, windowEnd: "2026-10-31T00:00:00.000Z" });
+    const { db, created } = mockDb([row]);
+    await runDetectors(db as never, "p1", { now: NOW });
+    expect(created.find((o) => o.type === "O2_striking_distance")).toBeUndefined();
+  });
+});
