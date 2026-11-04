@@ -190,9 +190,13 @@ async function executeJob(
           const analysis = await ensureTenantAnalysis(db as never, scheduled.siteId, {
             apply: true,
             maxJoinSpendMicros: 300_000,
+            maxAcquisitionSpendMicros: 300_000,
           });
           const joins = analysis.steps.find((step) => step.step === "joins");
-          console.log(`[CrawlSEO worker] tenant analysis after scheduled run: ${joins?.detail ?? "no join step"}`);
+          const acquisition = analysis.steps.find((step) => step.step === "acquisition");
+          console.log(
+            `[CrawlSEO worker] tenant analysis after scheduled run: acquisition ${acquisition?.detail ?? "not run"}; ${joins?.detail ?? "no join step"}`
+          );
         } catch (error) {
           console.error("[CrawlSEO worker] scheduled tenant analysis failed", error);
         }
