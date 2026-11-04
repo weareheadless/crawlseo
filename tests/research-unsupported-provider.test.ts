@@ -22,7 +22,7 @@ vi.mock("@/lib/db", () => ({ db: {
   auditPage: { findMany: vi.fn() },
   site: { findUnique: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
 } }));
-vi.mock("@/lib/research/providers/reddit-rss", () => ({ fetchRedditRssSearch: vi.fn() }));
+vi.mock("@/lib/research/providers/reddit-serp", () => ({ fetchRedditSerpSources: vi.fn() }));
 vi.mock("@/lib/research/providers/google-news-rss", () => ({ fetchGoogleNewsRssSearch: mocks.fetchGoogleNewsRssSearch }));
 vi.mock("@/lib/research/service", () => ({
   createResearchAction: vi.fn(),

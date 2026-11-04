@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ResearchProviderSource } from "@/lib/research/providers/reddit-rss";
+import type { ResearchProviderSource } from "@/lib/research/providers/types";
 
 const GOOGLE_NEWS_RSS = "https://news.google.com/rss/search";
 const DEFAULT_USER_AGENT = "CrawlSEO/0.1 read-only research";

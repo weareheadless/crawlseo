@@ -91,8 +91,11 @@ Consequences:
   and freshness rules, not another copy of the same research on every run.
 - Differentiators, concerns and trust evidence are allowed intake fields but are
   not all required core fields. Build readiness does not establish growth readiness.
-- The RSS runner implements Reddit and news; general web and competitor providers
-  are explicitly unsupported. Reddit RSS search is not a full comment-analysis system.
+- The RSS runner implements news; Reddit is read through the search index because
+  Reddit's robots.txt disallows crawlers and its Data API needs a commercial
+  licence. That yields thread URLs and snippets, not transcripts: it is evidence
+  that a discussion exists, not an analysis of the comments. General web search
+  remains explicitly unsupported.
 
 ## Recommended ownership
 

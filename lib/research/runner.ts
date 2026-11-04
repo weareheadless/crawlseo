@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { fetchRedditRssSearch } from "@/lib/research/providers/reddit-rss";
+import { fetchRedditSerpSources } from "@/lib/research/providers/reddit-serp";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import { fetchDataForSeoCompetitorSources } from "@/lib/research/providers/dataforseo-competitor";
 import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
@@ -298,8 +298,8 @@ export async function runResearchRun(runId: string) {
     const useNews = providers.includes("news");
     const useCompetitor = providers.includes("competitor");
     const unsupportedProviders = providers.filter((provider) => provider !== "reddit" && provider !== "news" && provider !== "competitor");
-    const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]>();
-    const addCollected = (source: Awaited<ReturnType<typeof fetchRedditRssSearch>>[number]) => {
+    const collected = new Map<string, Awaited<ReturnType<typeof fetchRedditSerpSources>>[number]>();
+    const addCollected = (source: Awaited<ReturnType<typeof fetchRedditSerpSources>>[number]) => {
       const previous = collected.get(source.contentHash);
       const oldMeta = previous?.metadata ?? {};
       const newMeta = source.metadata ?? {};
@@ -329,21 +329,23 @@ export async function runResearchRun(runId: string) {
     if (!queryPlan.length) throw new Error("Research policy exclusions removed all bounded query candidates");
     // `web` is explicitly reported unsupported above; never relabel news RSS
     // results as general web research.
-    const requestCount = queryPlan.length * ((useReddit ? 1 : 0) + (useNews ? 1 : 0) + (useCompetitor ? 1 : 0));
+    // Only the news feed is dispatched per topic; reddit and competitor are one
+    // paid collection each for the whole plan.
+    const requestCount = queryPlan.length * (useNews ? 1 : 0);
     // Competitor evidence is location-specific, so the locale is resolved once.
     const competitorLocale = useCompetitor && run.projectId
       ? await resolveDataForSeoLocale(run.projectId, language, country).catch(() => null)
       : null;
     const recencyDays = Math.max(1, Math.min(run.recencyDays, site.researchPolicy?.recencyDays ?? run.recencyDays, 730));
     const cached = run.projectId ? await Promise.all([
-      ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
+      ...(useReddit ? [reusableResearchSources({ projectId: run.projectId, provider: "reddit_serp", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
       ...(useNews ? [reusableResearchSources({ projectId: run.projectId, provider: "google_news_rss", queries: queryPlan.map((item) => item.query), recencyDays, excludedDomains })] : []),
     ]) : [];
     const reusable = cached.flat();
     const reusedQueries = new Set(reusable.map((source) => `${source.provider}:${String(source.metadata?.query ?? "").toLowerCase()}`));
     for (const source of reusable) addCollected(source);
     const heldClaims: Array<{ provider: string; query: string; owner: string }> = [];
-    const dispatchClaimed = async (provider: string, topic: string, fetchSources: () => Promise<Awaited<ReturnType<typeof fetchRedditRssSearch>>>) => {
+    const dispatchClaimed = async (provider: string, topic: string, fetchSources: () => Promise<Awaited<ReturnType<typeof fetchRedditSerpSources>>>) => {
       if (!run.projectId || reusedQueries.has(`${provider}:${topic.toLowerCase()}`)) return null;
       const deadline = Date.now() + 30_000;
       while (Date.now() < deadline) {
@@ -382,22 +384,6 @@ export async function runResearchRun(runId: string) {
 
     for (const plan of queryPlan) {
       const topic = plan.query;
-      if (useReddit && !unavailable.has("reddit") && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
-        try {
-          const sources = await dispatchClaimed("reddit_rss", topic, () => fetchRedditRssSearch({
-            query: topic,
-            sort: "relevance",
-            timeWindow: "year",
-            limit: 10,
-          }));
-          for (const source of sources ?? []) addCollected({ ...source,
-            metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
-        } catch (error) {
-          recordProviderError("reddit", error, "Reddit RSS failed");
-        }
-        requestIndex += 1;
-        if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
-      }
       if (providers.includes("news") && !unavailable.has("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
@@ -414,6 +400,31 @@ export async function runResearchRun(runId: string) {
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+
+    // Community evidence comes from the search index, not from Reddit: its
+    // robots.txt disallows every crawler and its Data API needs a commercial
+    // licence. What arrives is a URL and the engine's snippet — citable, not
+    // quotable — and the provider marks it as such.
+    if (useReddit) {
+      if (!competitorLocale) {
+        sourceErrors.push("reddit: DataForSEO locale could not be resolved; no community evidence was collected");
+      } else {
+        try {
+          const sources = await fetchRedditSerpSources({
+            projectId: run.projectId!,
+            queries: queryPlan
+              .filter((plan) => plan.basis === "configured_topic" || plan.basis === "audience_question")
+              .map((plan) => plan.query),
+            languageCode: competitorLocale.languageCode,
+            locationCode: competitorLocale.locationCode,
+            db: db as never,
+          });
+          for (const source of sources) addCollected(source);
+        } catch (error) {
+          recordProviderError("reddit", error, "Reddit search lookup failed");
+        }
       }
     }
 
@@ -455,7 +466,7 @@ export async function runResearchRun(runId: string) {
     const freshFiltered = qualityFiltered.filter((_, index) => recencyIssues[index] === null);
     // Competitor evidence is why the run asked DataForSEO: it must not be crowded
     // out of the source cap by social/news volume.
-    const PROVIDER_PRIORITY: Record<string, number> = { dataforseo_labs: 0, dataforseo_serp: 1, google_news_rss: 2, reddit_rss: 3 };
+    const PROVIDER_PRIORITY: Record<string, number> = { dataforseo_labs: 0, dataforseo_serp: 1, google_news_rss: 2, reddit_serp: 3 };
     const prioritised = freshFiltered
       .map((source, index) => ({ source, index }))
       .sort((a, b) => (PROVIDER_PRIORITY[a.source.provider] ?? 9) - (PROVIDER_PRIORITY[b.source.provider] ?? 9) || a.index - b.index)
@@ -606,7 +617,7 @@ export async function runResearchRun(runId: string) {
       schema_version: 1,
       generated_at: new Date().toISOString(),
       providers: [
-        ...(useReddit ? ["reddit_rss"] : []),
+        ...(useReddit ? ["reddit_serp"] : []),
         ...(providers.includes("news") ? ["google_news_rss"] : []),
       ],
       requested_providers: providers,

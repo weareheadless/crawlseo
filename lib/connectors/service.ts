@@ -315,9 +315,12 @@ export async function connectorCapabilities(principal: ServicePrincipalContext, 
       executionSupported: ["helloada", "crawlseo-agent"].includes(site.connectorBinding.executor),
     } : null,
     executionExecutors: ["helloada", "crawlseo-agent"],
-    capabilities: ["policy.read", "policy.write", "findings.read", "actions.read", "preparation.accept", "preparation.cancel", "execution.status.write", "context.write", "events.poll", "events.ack", "budget.read", "budget.policy.write", "budget.reserve", "budget.settle", "providers.reddit-rss", "providers.google-news-rss"],
+    capabilities: ["policy.read", "policy.write", "findings.read", "actions.read", "preparation.accept", "preparation.cancel", "execution.status.write", "context.write", "events.poll", "events.ack", "budget.read", "budget.policy.write", "budget.reserve", "budget.settle", "providers.reddit-serp", "providers.google-news-rss"],
     researchProviders: [
-      { id: "reddit", implementation: "reddit_rss", billable: false },
+      // Reddit closed direct access: robots.txt disallows crawlers and the Data API
+      // needs a commercial licence, so the provider reads search snippets and the
+      // call is billed to the DataForSEO allowance.
+      { id: "reddit", implementation: "reddit_serp", billable: true },
       { id: "news", implementation: "google_news_rss", billable: false },
       { id: "web", supported: false, reason: "General web search is not implemented; Google News RSS is available through the news provider" },
       { id: "competitor", supported: false, reason: "Competitor research requires a domain-specific, budget-reserved provider operation" },

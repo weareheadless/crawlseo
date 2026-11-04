@@ -5,7 +5,7 @@ const mockDb = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db", () => ({ db: mockDb }));
-vi.mock("@/lib/research/providers/reddit-rss", () => ({ fetchRedditRssSearch: vi.fn() }));
+vi.mock("@/lib/research/providers/reddit-serp", () => ({ fetchRedditSerpSources: vi.fn() }));
 vi.mock("@/lib/research/providers/google-news-rss", () => ({ fetchGoogleNewsRssSearch: vi.fn() }));
 vi.mock("@/lib/research/service", () => ({
   createResearchAction: vi.fn(), createResearchFinding: vi.fn(), researchMonthBounds: vi.fn(() => ({

@@ -107,6 +107,9 @@ export function sourcePublisher(source: {
 
 export function sourceProviderLabel(provider: string): string {
   if (provider === "google_news_rss") return "Google News RSS";
+  // The thread is read through the search index now; say so, because a snippet is
+  // not the discussion.
+  if (provider === "reddit_serp") return "Reddit (search snippet)";
   if (provider === "reddit_rss") return "Reddit RSS";
   return provider.replaceAll("_", " ");
 }

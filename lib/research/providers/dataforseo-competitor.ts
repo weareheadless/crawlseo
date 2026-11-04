@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { executeDataForSeoLabsSerpCompetitors, executeDataForSeoOrganicSerp } from "@/lib/dataforseo/client";
 import { withResearchBudget } from "@/lib/dataforseo/collection";
+import type { ResearchProviderSource } from "@/lib/research/providers/types";
 
 /**
  * Research provider: competitor and positioning evidence from DataForSEO.
@@ -18,18 +19,7 @@ import { withResearchBudget } from "@/lib/dataforseo/collection";
  * Both are paid, so each reserves against the project allowance first.
  */
 
-export type ResearchProviderSource = {
-  provider: string;
-  url: string;
-  title: string;
-  author?: string;
-  community?: string;
-  publishedAt?: string;
-  excerpt?: string;
-  contentHash: string;
-  language?: string;
-  metadata?: Record<string, unknown>;
-};
+export type { ResearchProviderSource } from "@/lib/research/providers/types";
 
 import type { PrismaClient } from "@prisma/client";
 
