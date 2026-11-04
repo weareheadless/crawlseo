@@ -253,3 +253,37 @@ describe("join measurement", () => {
     expect(assessmentOverridesFromEvidence({ id: "e2", observedAt: new Date(), dimensions: {}, metrics: {} })).toEqual({});
   });
 });
+
+describe("task brief", () => {
+  it("carries the decision into the accepted task", async () => {
+    const { taskPlanFromOpportunity } = await import("@/lib/funnel/join");
+    const plan = taskPlanFromOpportunity({
+      title: "Customers cannot tell what a fitted wardrobe costs",
+      summary: "Homeowners ask about cost before booking a survey.",
+      scoreInputs: {
+        worth: {
+          readiness: "actionable",
+          intervention: "update_page",
+          benefitTrack: "customer_value",
+          measurement: "unquantified",
+          change: "Update /services so it answers the cost question",
+          successMeasure: "the page answers the question in an owner review",
+          targetPages: ["https://site.test/services"],
+          coverageSummary: "partially answers at https://site.test/services",
+        },
+      },
+    });
+    expect(plan.readiness).toBe("actionable");
+    expect(plan.targetPages).toEqual(["https://site.test/services"]);
+    expect(plan.change).toContain("/services");
+    expect(plan.successMeasure).toContain("owner review");
+    expect(plan.measurement).toBe("unquantified");
+  });
+
+  it("still produces a brief for a legacy row without a decision", async () => {
+    const { taskPlanFromOpportunity } = await import("@/lib/funnel/join");
+    const plan = taskPlanFromOpportunity({ title: "t", summary: "s", scoreInputs: {} });
+    expect(plan.readiness).toBeNull();
+    expect(plan.targetPages).toEqual([]);
+  });
+});

@@ -1008,6 +1008,12 @@ const DETECTORS: Detector[] = [
               measurement: "unquantified",
               benefitTrack: decision.tracks[0],
               intervention: decision.intervention,
+              change: decision.change,
+              successMeasure: decision.successMeasure,
+              targetPages: decision.targetPages,
+              coverageSummary: decision.coverage[0]
+                ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
+                : "no page assessed",
             },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 16, sizeFactor: 1 },
@@ -1068,6 +1074,12 @@ const DETECTORS: Detector[] = [
               measurement: "unquantified",
               benefitTrack: decision.tracks[0],
               intervention: decision.intervention,
+              change: decision.change,
+              successMeasure: decision.successMeasure,
+              targetPages: decision.targetPages,
+              coverageSummary: decision.coverage[0]
+                ? `${decision.coverage[0].state.replaceAll("_", " ")} at ${decision.coverage[0].pageUrl}`
+                : "no page assessed",
             },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 12, sizeFactor: 1 },

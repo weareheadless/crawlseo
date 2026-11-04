@@ -74,6 +74,9 @@ Not done: joins still do not rebuild assessment inputs from newly arrived eviden
   other.
 - The opportunity detail page shows readiness, measurement basis, benefit track,
   intervention and the estimated benefit, before the evidence.
+- Accepting a recommendation now creates the task with its brief: need, existing
+  coverage, target page, the specific change and the success measure
+  (`taskPlanFromOpportunity`). Before, the task carried only the title.
 
 Not verified: no browser check on desktop/mobile was run in this pass.
 

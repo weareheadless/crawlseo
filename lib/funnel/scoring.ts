@@ -61,6 +61,14 @@ export type ScoreInputs = {
     benefitTrack?: "customer_value" | "organic_growth" | "technical_health";
     /** What the work does. */
     intervention?: "maintain" | "update_page" | "improve_journey" | "create_asset" | "investigate" | "technical_fix";
+    /** The specific change, so accepting the work produces a brief, not a title. */
+    change?: string;
+    /** How the owner will know it worked. */
+    successMeasure?: string;
+    /** Pages the work would change. */
+    targetPages?: string[];
+    /** What the site already does about the need, in one line. */
+    coverageSummary?: string;
   };
   /** win probability components (0–1 each) */
   winProbability: {

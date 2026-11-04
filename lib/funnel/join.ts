@@ -145,6 +145,36 @@ export async function applyJoin(
  */
 export type TaskDb = Pick<PrismaClient, "task" | "opportunity">;
 
+/**
+ * The brief a person receives when they accept a recommendation.
+ *
+ * Accepting used to create a task with the opportunity's title and nothing else, so
+ * the person had to reconstruct the reason, the target page and the check. The
+ * decision already holds those; this turns them into the task plan.
+ */
+export function taskPlanFromOpportunity(opportunity: {
+  title: string;
+  summary: string;
+  scoreInputs: unknown;
+}): Record<string, unknown> {
+  const worth = (opportunity.scoreInputs as { worth?: Record<string, unknown> } | null)?.worth ?? {};
+  const read = (key: string) => (typeof worth[key] === "string" ? (worth[key] as string) : null);
+  const targetPages = Array.isArray(worth.targetPages)
+    ? (worth.targetPages as unknown[]).filter((value): value is string => typeof value === "string")
+    : [];
+  return {
+    readiness: read("readiness"),
+    intervention: read("intervention"),
+    benefitTrack: read("benefitTrack"),
+    measurement: read("measurement"),
+    need: opportunity.summary,
+    existingCoverage: read("coverageSummary"),
+    targetPages,
+    change: read("change"),
+    successMeasure: read("successMeasure"),
+  };
+}
+
 export async function acceptOpportunityIntoTask(
   db: TaskDb,
   opportunityId: string,

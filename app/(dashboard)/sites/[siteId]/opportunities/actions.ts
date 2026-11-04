@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
-import { acceptOpportunityIntoTask, recordAgentPreparation, confirmHumanStep } from "@/lib/funnel/join";
+import { acceptOpportunityIntoTask, recordAgentPreparation, confirmHumanStep, taskPlanFromOpportunity } from "@/lib/funnel/join";
 import { decideOpportunity } from "@/lib/funnel/opportunity";
 
 /**
@@ -57,11 +57,16 @@ export async function acceptOpportunityAction(siteId: string, opportunityId: str
   await requireSiteAccess(siteId);
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   const executor = user?.name || user?.email || userId;
-  const opportunity = await db.opportunity.findUnique({ where: { id: opportunityId }, select: { title: true } });
+  const opportunity = await db.opportunity.findUnique({
+    where: { id: opportunityId },
+    select: { title: true, summary: true, scoreInputs: true },
+  });
   if (!opportunity) redirect(`/sites/${siteId}/opportunities`);
   const taskId = await acceptOpportunityIntoTask(db as never, opportunityId, {
     title: opportunity.title,
     assignedTo: executor,
+    // The task carries the decision it came from: target page, change and check.
+    plan: taskPlanFromOpportunity(opportunity),
   });
   revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
   revalidatePath(`/sites/${siteId}/work`);
