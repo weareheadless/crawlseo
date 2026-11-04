@@ -370,10 +370,19 @@ export async function runResearchRun(runId: string) {
       throw new Error("Timed out waiting for concurrent research dispatch");
     };
     let requestIndex = 0;
+    // A provider that refuses this host (403) or rate-limits it (429) refuses the
+    // next query too. Record it once and stop calling it, instead of filling the
+    // run report with five copies of the same failure.
+    const unavailable = new Set<string>();
+    const recordProviderError = (provider: string, error: unknown, fallback: string) => {
+      const message = error instanceof Error ? error.message : fallback;
+      sourceErrors.push(`${provider}: ${message}`);
+      if (/\b(403|429)\b/.test(message)) unavailable.add(provider);
+    };
 
     for (const plan of queryPlan) {
       const topic = plan.query;
-      if (useReddit && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
+      if (useReddit && !unavailable.has("reddit") && !reusedQueries.has(`reddit_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await dispatchClaimed("reddit_rss", topic, () => fetchRedditRssSearch({
             query: topic,
@@ -384,12 +393,12 @@ export async function runResearchRun(runId: string) {
           for (const source of sources ?? []) addCollected({ ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
-          sourceErrors.push(`reddit: ${error instanceof Error ? error.message : "Reddit RSS failed"}`);
+          recordProviderError("reddit", error, "Reddit RSS failed");
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (providers.includes("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
+      if (providers.includes("news") && !unavailable.has("news") && !reusedQueries.has(`google_news_rss:${topic.toLowerCase()}`)) {
         try {
           const sources = await dispatchClaimed("google_news_rss", topic, () => fetchGoogleNewsRssSearch({
             query: topic,
@@ -401,7 +410,7 @@ export async function runResearchRun(runId: string) {
           for (const source of sources ?? []) addCollected({ ...source,
             metadata: { ...source.metadata, query: topic, query_basis: plan.basis, retrieved_at: new Date().toISOString() } });
         } catch (error) {
-          sourceErrors.push(`news: ${error instanceof Error ? error.message : "Google News RSS failed"}`);
+          recordProviderError("news", error, "Google News RSS failed");
         }
         requestIndex += 1;
         if (requestIndex < requestCount) await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -636,7 +645,9 @@ export async function runResearchRun(runId: string) {
         status,
         report: json(report),
         completedAt: new Date(),
-        errorCode: status === "PARTIAL" ? "PARTIAL_SOURCE_FAILURES" : null,
+        // Name the providers: "PARTIAL_SOURCE_FAILURES" alone sent us reading the
+        // database to find out that Reddit had been returning 403 for weeks.
+        errorCode: status === "PARTIAL" ? `PARTIAL_SOURCE_FAILURES:${[...new Set(sourceErrors.map((error) => error.split(":")[0]))].join(",")}` : null,
       },
     });
   } catch (error) {
