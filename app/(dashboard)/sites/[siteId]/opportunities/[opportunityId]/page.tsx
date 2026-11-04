@@ -84,6 +84,14 @@ export default async function OpportunityDetailPage({ params }: Props) {
         )}
       </div>
 
+      {detail.decisionChanged && (
+        <div className="panel mb-4 border-[var(--a-warning-300)] bg-[var(--a-warning-300)] px-4 py-3 text-sm text-[var(--a-warning-700)]">
+          <strong>This recommendation changed after the task was accepted.</strong> Review the
+          new decision below before continuing; the accepted task keeps the version it was
+          created from.
+        </div>
+      )}
+
       <DecisionSummaryPanel decision={detail.decision} />
 
       <Stage number={1} title="Why this exists" subtitle="The evidence that produced this opportunity. Both legs, always shown.">

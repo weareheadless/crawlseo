@@ -70,6 +70,8 @@ export type OpportunityDetail = OpportunityRow & {
   scoreInputs: unknown;
   /** The complete canonical decision, when this row has one. */
   recommendation: RecommendationDecision | null;
+  /** True when the accepted task predates the current decision. */
+  decisionChanged: boolean;
   /** The decision the board and the detail page both render. */
   decision: {
     readiness: string | null;
@@ -408,6 +410,12 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     },
   });
 
+  const canonical = parsePersistedDecision(row.recommendationDecision);
+  const taskDecisionId = (task?.plan as { decisionId?: unknown } | null)?.decisionId;
+  const decisionChanged = Boolean(
+    task && canonical && typeof taskDecisionId === "string" && taskDecisionId !== canonical.decisionId
+  );
+
   const [baselines, outcomes] = task
     ? await Promise.all([
         db.baseline.findMany({ where: { taskId: task.id }, orderBy: { observedAt: "desc" } }),
@@ -415,7 +423,6 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       ])
     : [[], []];
 
-  const canonical = parsePersistedDecision(row.recommendationDecision);
   return {
     id: row.id,
     type: row.type,
@@ -430,6 +437,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     score: row.scoreValue,
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
+    decisionChanged,
     decision: canonical ? decisionFromCanonical(canonical) : decisionFromScoreInputs(row.scoreInputs),
     completeness: row.evidenceCompleteness,
     detectedBy: row.detectedBy,

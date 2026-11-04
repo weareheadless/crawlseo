@@ -542,6 +542,9 @@ const ENUM_ALIASES: Record<string, Record<string, string>> = {
     noaction: "no_action",
     maintain: "no_action",
     reject: "rejected",
+    insufficient_evidence: "research_backlog",
+    needs_more_evidence: "needs_investigation",
+    partial: "needs_investigation",
   },
   intervention: {
     update: "update_page",
@@ -561,6 +564,12 @@ const ENUM_ALIASES: Record<string, Record<string, string>> = {
     unsupported: "unverified",
     false: "contradicted",
     true: "supported",
+    not_applicable: "unverified",
+    "n/a": "unverified",
+    partial: "unverified",
+    mixed: "unverified",
+    supported_with_caveats: "supported",
+    contradicted_by_content: "contradicted",
   },
   coverageState: {
     answer: "answers",
@@ -570,6 +579,9 @@ const ENUM_ALIASES: Record<string, Record<string, string>> = {
     no_answer: "does_not_answer",
     unknown: "unassessable",
     not_assessed: "unassessable",
+    not_applicable: "unassessable",
+    "n/a": "unassessable",
+    mixed: "partially_answers",
   },
   targetRole: {
     update_page: "update",

@@ -361,6 +361,9 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
         dedupKey: "O13:rollback-fixture",
         scoreValue: 10,
         scoreInputs: { worth: { volume: null, ctrAtPosition: null, businessValue: 0.9 } },
+        recommendationDecision: { schemaVersion: "test-decision" },
+        recommendationVersion: "test-decision/1",
+        recommendationFingerprint: "fingerprint-before",
         detectedBy: "integration",
       },
     });
@@ -402,6 +405,8 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     const restored = await db.opportunity.findUniqueOrThrow({ where: { id: opportunity.id } });
     expect(restored.title).toBe("Before");
     expect(restored.status).toBe("detected");
+    expect(restored.recommendationFingerprint).toBe("fingerprint-before");
+    expect((restored.recommendationDecision as { schemaVersion?: string }).schemaVersion).toBe("test-decision");
 
     const preserved = await db.opportunity.findUniqueOrThrow({ where: { id: decided.id } });
     expect(preserved.title).toBe("Accepted later");

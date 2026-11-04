@@ -98,7 +98,7 @@ spend, no opportunity/task/knowledge write.
 
 | Site | Finding | Decision |
 |---|---|---|
-| Susi | Foreign land ownership / fideicomiso | **actionable / update_page** — premise contradicted (the scam guide already names restricted zones and fideicomiso), but the underlying buyer question is a low-risk inference; expand that section, legal review, unquantified benefit |
+| Susi | Foreign land ownership / fideicomiso | **needs_investigation** — premise contradicted (the scam guide already names restricted zones and fideicomiso), but a more relevant land-investment page was unassessable; bounded check before deciding between expanding the partial answer and leaving it |
 | Atelier | Corpus de sources hors sujet | **rejected** — the corpus is a research failure, not a customer question |
 | Atelier | Abat-jour sur mesure sans page dédiée | **needs_investigation** — existing category page text is unavailable; bounded check before creating a duplicate |
 | Casamigo | Mexico City not covered | **rejected** — Riviera Maya offer fit contradicted; one Realtor.com item is not customer demand |
@@ -111,10 +111,11 @@ the JSON files written by `scripts/evaluate-need-assessment.ts` (for example
 `structural-casamigo.json`, `structural-atelier-corpus.json`,
 `structural-unseen.json`).
 
-The Susi and Oceanic outputs demonstrate the intended distinction: a false finding
-premise does not automatically discard a real underlying customer question; the
-decision records the contradiction and still proposes a specific existing-page
-improvement with evidence, review and uncertainty.
+The Oceanic output demonstrates the intended positive case: an observed beginner
+question, an existing article that partially answers it, and a specific update with
+safety/legal review. Susi shows the restraint case: the false absence claim is
+recorded, but an unassessable more-relevant page keeps the work at a bounded
+investigation rather than a guess.
 
 ## Remaining work
 

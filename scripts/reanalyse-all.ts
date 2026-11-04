@@ -19,6 +19,7 @@ import { PrismaClient } from "@prisma/client";
 
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
+import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
 
 /** One site per project: a preview mirror must not be analysed as a second tenant. */
 function dedupeByProject<T extends { projectId: string | null; domain: string }>(sites: T[]): T[] {
@@ -77,13 +78,25 @@ async function main() {
   for (const site of sites) {
     if (dryRun) {
       const before = await db.opportunity.count({ where: { projectId: site.projectId!, status: "detected" } });
-      process.stdout.write(`${site.domain}: ${before} published (dry run, no writes)\n`);
+      const rec = await reassessProjectRecommendations(db, {
+        projectId: site.projectId!,
+        siteId: site.id,
+        dryRun: true,
+      });
+      process.stdout.write(
+        `${site.domain}: ${before} published (dry run, no writes); recommendations ${rec.current} current, ${rec.stale} stale, ${rec.missing} missing\n`
+      );
       continue;
     }
     const result = await refreshFunnelForSite(db, site.id, { detectedBy: "batch-reanalysis" });
+    const rec = await reassessProjectRecommendations(db, {
+      projectId: site.projectId!,
+      siteId: site.id,
+      maxAssessments: 6,
+    });
     const after = await db.opportunity.count({ where: { projectId: site.projectId!, status: "detected" } });
     process.stdout.write(
-      `${site.domain}: window ${result.window?.days ?? 0}d, rank ${result.rankEvidence}, crawl ${result.crawlEvidence}, detected ${after} (created ${result.created}, updated ${result.updated})\n`
+      `${site.domain}: window ${result.window?.days ?? 0}d, rank ${result.rankEvidence}, crawl ${result.crawlEvidence}, detected ${after} (created ${result.created}, updated ${result.updated}); recommendations ${rec.assessed} assessed, ${rec.reused} reused, ${rec.failed} failed, ${rec.skipped} skipped\n`
     );
     for (const skipped of result.skipped) process.stdout.write(`  ! ${skipped}\n`);
   }

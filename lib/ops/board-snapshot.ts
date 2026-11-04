@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 /**
  * Board snapshot and rollback (brief §6).
@@ -21,6 +21,10 @@ export type SnapshotRow = {
   summary: string;
   scoreValue: number | null;
   scoreInputs: unknown;
+  recommendationDecision: unknown;
+  recommendationVersion: string | null;
+  recommendationFingerprint: string | null;
+  recommendationEvidenceId: string | null;
   evidenceCompleteness: string;
   status: string;
   parkReason: string | null;
@@ -54,7 +58,9 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
       where: { projectId: site.projectId! },
       select: {
         id: true, dedupKey: true, type: true, title: true, summary: true, scoreValue: true,
-        scoreInputs: true, evidenceCompleteness: true, status: true, parkReason: true,
+        scoreInputs: true, recommendationDecision: true, recommendationVersion: true,
+        recommendationFingerprint: true, recommendationEvidenceId: true,
+        evidenceCompleteness: true, status: true, parkReason: true,
         assessmentVersion: true, decidedBy: true, decidedAt: true, updatedAt: true,
       },
     });
@@ -113,6 +119,10 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
           summary: row.summary,
           scoreValue: row.scoreValue,
           scoreInputs: row.scoreInputs as never,
+          recommendationDecision: row.recommendationDecision == null ? Prisma.DbNull : (row.recommendationDecision as never),
+          recommendationVersion: row.recommendationVersion,
+          recommendationFingerprint: row.recommendationFingerprint,
+          recommendationEvidenceId: row.recommendationEvidenceId,
           evidenceCompleteness: row.evidenceCompleteness as never,
           status: row.status as never,
           parkReason: row.parkReason,
