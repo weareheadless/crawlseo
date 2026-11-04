@@ -328,14 +328,21 @@ export async function ensureTenantAnalysis(
     const topics = Array.isArray(freshProfile?.topics)
       ? freshProfile.topics.filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
       : [];
-    const requestedBy = opts.requestedBy ?? site.userId;
-    if (!requestedBy) {
-      replace(step({ step: "research", status: "failed", detail: "no owner on the site: a research run needs a requester" }));
-    } else try {
+    // A site can be provisioned without an owner record (the connector creates
+    // some of them), and the scheduled pass already uses a system identity. Failing
+    // here made a tenant's research depend on a user row that has nothing to do
+    // with the analysis.
+    const requestedBy = opts.requestedBy ?? site.userId ?? "tenant-pipeline";
+    // One run per cadence window, keyed like the scheduler's, so repeated pipeline
+    // passes cannot queue a run each time. That also makes it a scheduled run for
+    // the count guard: it is bounded by construction, not by a run counter.
+    const cadence = normalizeResearchCadence((await db.researchPolicy.findUnique({ where: { siteId: site.id }, select: { cadence: true } }))?.cadence);
+    const windowKey = cadence === "manual" ? `manual:${site.id}` : researchCadenceWindow(cadence, opts.now ?? new Date(), "UTC").key;
+    try {
       const run = await createResearchRun(site.id, {
         title: `${site.domain} — ${context.audienceCountry ?? context.country ?? "market"} analysis`,
         kind: "MARKET",
-        trigger: "MANUAL",
+        trigger: "SCHEDULED",
         topics,
         audience: typeof freshProfile?.audience === "string" ? freshProfile.audience : undefined,
         market: context.market ?? undefined,
@@ -343,7 +350,7 @@ export async function ensureTenantAnalysis(
         questions: [],
         recencyDays: 180,
         providers: ["reddit", "news", "competitor"],
-      }, requestedBy);
+      }, requestedBy, windowKey);
       await enqueueJob({
         projectId: site.projectId,
         siteId: site.id,
@@ -352,7 +359,16 @@ export async function ensureTenantAnalysis(
         idempotencyKey: `research-run:${run.id}`,
         maxAttempts: 2,
       });
-      replace(step({ step: "research", status: "pending", detail: `queued run ${run.id}` }));
+      // An existing run for this window (including a failed one) is not re-queued:
+      // the window is the retry unit, so a failure waits for the next one instead
+      // of looping against the budget.
+      replace(step({
+        step: "research",
+        status: run.status === "FAILED" ? "failed" : "pending",
+        detail: run.status === "FAILED"
+          ? `run ${run.id} failed this window: ${run.errorCode ?? "unknown"}`
+          : `queued run ${run.id}`,
+      }));
     } catch (error) {
       replace(step({
         step: "research",

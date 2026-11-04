@@ -21,6 +21,21 @@ export type ScoreInputs = {
      * must stay visible (plan §2.3).
      */
     volumeSource?: "first_party" | "provider" | "impact_proxy" | "unknown";
+    /**
+     * The demand itself is invented, not measured: a question generated from
+     * business knowledge that nobody has been shown to search. Scoring it on the
+     * same curve as a measured query put 30–42 points on questions with no evidence
+     * anyone asks them.
+     */
+    unmeasured?: boolean;
+    /**
+     * The share of the traffic at stake that the fix can plausibly recover.
+     *
+     * A page defect does not put all of that page's traffic at risk; adding schema
+     * to 513 pages is hygiene, not the recovery of every impression on them. Without
+     * this, page count alone drove a structural fix to the top of the board.
+     */
+    uplift?: number;
     businessValueSource?: "knowledge" | "cluster" | "topic" | "unknown";
   };
   /** win probability components (0–1 each) */
@@ -46,6 +61,9 @@ export type ScoreResult = {
   scoreValue: number;
   inputs: ScoreInputs;
 };
+
+/** Declared recovery for a technical or structured-data fix. */
+export const TECHNICAL_UPLIFT = 0.1;
 
 export const LEG_COMPLETENESS_MULTIPLIER: Record<EvidenceLeg, number> = {
   none: 0.25,
@@ -85,7 +103,19 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // exactly the opportunities the join scheduler is supposed to lift.
   const volume = inputs.worth.volume ?? 120;
   const ctr = inputs.worth.ctrAtPosition ?? 0.03;
-  const rawWorth = volume * ctr * inputs.worth.businessValue;
+  const uplift = inputs.worth.uplift ?? 1;
+  const rawWorth = volume * ctr * inputs.worth.businessValue * uplift;
+
+  const effort = Math.max(inputs.effort.playTypeBase * inputs.effort.sizeFactor, 0.5);
+
+  // Unmeasured demand is not low demand, but it is not demand either. Score it as a
+  // cheap hygiene task, capped well below anything with evidence behind it, so it
+  // stays on the board as work to do without competing with real opportunities.
+  if (inputs.worth.unmeasured) {
+    // Capped below anything measured: this is a backlog item, not a bet.
+    const hygiene = (1 / (1 + effort)) * Math.max(inputs.freshness, 0) * 0.15;
+    return { scoreValue: Math.max(0, Math.min(5, Math.round(hygiene * 100))), inputs };
+  }
 
   const winProb = geometricMean([
     inputs.winProbability.rankDistance,
@@ -95,7 +125,6 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     inputs.winProbability.playTypeFactor,
   ]);
 
-  const effort = Math.max(inputs.effort.playTypeBase * inputs.effort.sizeFactor, 0.5);
   const base = rawWorth > 0 && winProb ? (rawWorth * winProb) / effort : 0;
 
   const score = base

@@ -135,3 +135,103 @@ export async function bridgeFindingsToEvidence(
 
   return { findings: findings.length, stored, actionable };
 }
+
+/**
+ * Group findings that describe the same insight.
+ *
+ * Dedup used to key on the summary text, so a re-run that phrased the same insight
+ * differently produced a second opportunity. One tenant's board carried three
+ * sargassum risks and two Tulum-oversupply rows — five insights, ten rows.
+ *
+ * Grouping is on the theme's distinctive words, not its wording. Every member keeps
+ * its evidence, so collapsing duplicates loses nothing, and the key is the set of
+ * words the whole cluster shares, which is stable across re-phrasings.
+ */
+const FINDING_STOPWORDS = new Set([
+  "the", "and", "for", "with", "without", "from", "this", "that", "into", "over",
+  "les", "des", "une", "aux", "pour", "avec", "sans", "dans", "sur", "est", "sont",
+  "risk", "risks", "gap", "gaps", "issue", "issues", "narrative",
+]);
+
+function findingTokenList(value: string): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const token of value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)) {
+    if (token.length < 4 || FINDING_STOPWORDS.has(token) || seen.has(token)) continue;
+    seen.add(token);
+    ordered.push(token);
+  }
+  return ordered;
+}
+
+function findingTokens(value: string): Set<string> {
+  return new Set(findingTokenList(value));
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const token of a) if (b.has(token)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
+/** The word a theme is about: "Sargassum and coastal property risk" → sargassum. */
+function subjectOf(value: string): string | null {
+  return findingTokenList(value)[0] ?? null;
+}
+
+export type FindingCluster<T> = {
+  representative: T;
+  members: T[];
+  /** Stable identity: the words every member shares, sorted. */
+  key: string;
+  tokens: Set<string>;
+};
+
+export function clusterFindings<T extends {
+  id: string;
+  theme?: string | null;
+  summary: string;
+  confidence?: number | null;
+  createdAt?: Date;
+}>(rows: T[], threshold = 0.5): FindingCluster<T>[] {
+  const ordered = [...rows].sort((a, b) => {
+    const confidence = (b.confidence ?? 0) - (a.confidence ?? 0);
+    if (confidence !== 0) return confidence;
+    return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
+  });
+
+  const clusters: Array<FindingCluster<T> & { tokens: Set<string>; subject: string | null }> = [];
+  for (const row of ordered) {
+    const label = row.theme ?? row.summary;
+    const themeTokens = findingTokens(label);
+    const subject = subjectOf(label);
+    // Two findings are the same insight when they are about the same subject
+    // ("sargassum", "tulum") or overlap heavily. Wording alone is not identity:
+    // three sargassum risks shared only that one word and stayed three rows.
+    const match = clusters.find((cluster) =>
+      (subject !== null && cluster.subject === subject) || jaccard(themeTokens, cluster.tokens) >= threshold
+    );
+    if (match) {
+      match.members.push(row);
+      match.tokens = new Set([...match.tokens].filter((token) => themeTokens.has(token)));
+      continue;
+    }
+    clusters.push({ representative: row, members: [row], key: "", tokens: themeTokens, subject });
+  }
+
+  return clusters.map((cluster) => {
+    const shared = [...cluster.tokens].sort();
+    const fallback = [...findingTokens(cluster.representative.theme ?? cluster.representative.summary)].sort();
+    return {
+      representative: cluster.representative,
+      members: cluster.members,
+      tokens: cluster.tokens,
+      key: (shared.length > 0 ? shared : fallback).join(" ") || cluster.representative.id,
+    };
+  });
+}

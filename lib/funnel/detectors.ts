@@ -3,7 +3,8 @@ import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, ty
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
-import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
+import { ctrAtPosition, rankDistanceFactor, freshnessFactor, TECHNICAL_UPLIFT } from "@/lib/funnel/scoring";
+import { clusterFindings } from "@/lib/research/finding-evidence";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -445,7 +446,8 @@ const DETECTORS: Detector[] = [
             whyEvidenceIds: why,
             howEvidenceIds: [row.id],
             scoreInputs: scoreDefaults({
-              worth: { volume: null, ctrAtPosition: null, businessValue: 0.5 },
+              // The question was generated from business knowledge, not searched.
+              worth: { volume: null, ctrAtPosition: null, businessValue: 0.5, unmeasured: true },
               winProbability: { playTypeFactor: 0.5 },
               effort: { playTypeBase: 1, sizeFactor: 1 },
               freshness: freshnessFactor(row.observedAt, new Date()),
@@ -520,6 +522,7 @@ const DETECTORS: Detector[] = [
                 ctrAtPosition: null,
                 businessValue: businessValueFromKnowledge(evidence).value,
                 volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
+                uplift: TECHNICAL_UPLIFT,
               },
               winProbability: { playTypeFactor: 0.9 },
               effort: { playTypeBase: 3, sizeFactor: 1 },
@@ -562,6 +565,7 @@ const DETECTORS: Detector[] = [
                   ctrAtPosition: null,
                   businessValue: businessValueFromKnowledge(evidence).value,
                   volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
+                  uplift: TECHNICAL_UPLIFT,
                 },
                 winProbability: { playTypeFactor: 1.0 },
                 effort: { playTypeBase: 2, sizeFactor: 1 },
@@ -684,45 +688,68 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O13_user_pain_point",
+    // Findings that describe the same need are one opportunity, not one per
+    // re-phrasing: a re-run used to add a second row for the same insight.
     detect: (evidence) =>
-      byKind(evidence, "research_finding")
-        .filter((row) => dim(row, "painPoint") === "true")
-        .map((row) => ({
+      clusterFindings(
+        byKind(evidence, "research_finding")
+          .filter((row) => dim(row, "painPoint") === "true")
+          .map((row) => ({
+            id: row.id,
+            theme: dim(row, "theme") ?? null,
+            summary: dim(row, "painPointSummary") ?? "",
+            confidence: 0,
+            createdAt: row.observedAt,
+            row,
+          }))
+      ).map((cluster) => ({
           type: "O13_user_pain_point" as const,
           // Label from the theme; the prose belongs in the summary, where a reader
           // can open it instead of scrolling past it on the board.
-          title: dim(row, "title") ?? dim(row, "query") ?? dim(row, "painPointSummary") ?? "Customer need",
-          summary: dim(row, "painPointSummary") ?? `Research surfaced a real customer need with no (or weak) on-site answer.`,
-          dedupKey: `O13:${dim(row, "painPointSummary") ?? dim(row, "question") ?? row.id}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: [row.id],
+          // `title` was added to the evidence dimensions after some findings were
+          // stored, so older rows fall back to the theme before the query: a query
+          // is a keyword, not a label.
+          title: dim(cluster.representative.row, "title") ?? dim(cluster.representative.row, "theme") ?? dim(cluster.representative.row, "query") ?? "Customer need",
+          summary: dim(cluster.representative.row, "painPointSummary") ?? `Research surfaced a real customer need with no (or weak) on-site answer.`,
+          dedupKey: `O13:${cluster.key}`,
+          clusterSlug: dim(cluster.representative.row, "cluster"),
+          whyEvidenceIds: cluster.members.map((member) => member.row.id),
           howEvidenceIds: [],
           scoreInputs: scoreDefaults({
             worth: { volume: null, ctrAtPosition: null, businessValue: 0.9 },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 16, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
+            freshness: freshnessFactor(cluster.representative.row.observedAt, new Date()),
           }),
         })),
   },
   {
     type: "O14_offer_positioning_gap",
     detect: (evidence) =>
-      byKind(evidence, "research_finding")
-        .filter((row) => dim(row, "positioningGap") === "true")
-        .map((row) => ({
+      clusterFindings(
+        byKind(evidence, "research_finding")
+          .filter((row) => dim(row, "positioningGap") === "true")
+          .map((row) => ({
+            id: row.id,
+            theme: dim(row, "theme") ?? null,
+            summary: dim(row, "gapSummary") ?? "",
+            confidence: 0,
+            createdAt: row.observedAt,
+            row,
+          }))
+      ).map((cluster) => ({
           type: "O14_offer_positioning_gap" as const,
-          title: dim(row, "title") ?? dim(row, "query") ?? "Positioning gap",
-          summary: dim(row, "gapSummary") ?? `Research + SERP show a positioning gap worth a content/positioning update.`,
-          dedupKey: `O14:${dim(row, "gapSummary") ?? row.id}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: [row.id],
+          title: dim(cluster.representative.row, "title") ?? dim(cluster.representative.row, "theme") ?? dim(cluster.representative.row, "query") ?? "Positioning gap",
+          summary: dim(cluster.representative.row, "gapSummary") ?? `Research + SERP show a positioning gap worth a content/positioning update.`,
+          dedupKey: `O14:${cluster.key}`,
+          clusterSlug: dim(cluster.representative.row, "cluster"),
+          whyEvidenceIds: cluster.members.map((member) => member.row.id),
           howEvidenceIds: [],
           scoreInputs: scoreDefaults({
             worth: { volume: null, ctrAtPosition: null, businessValue: 0.8 },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 12, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
+            freshness: freshnessFactor(cluster.representative.row.observedAt, new Date()),
           }),
         })),
   },
