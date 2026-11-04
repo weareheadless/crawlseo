@@ -517,7 +517,26 @@ export async function ensureTenantAnalysis(
             // The batch collector, not the single-seed derivation used by joins.
             collect: setup.collectors.keywordBatch!,
             maxSpendMicros: opts.maxAcquisitionSpendMicros ?? 300_000,
+            locale: `${setup.languageCode}:${setup.locationCode}`,
             now: opts.now,
+          });
+          // A receipt is a record, not a log line: spend has to be auditable
+          // against the decision it was made for.
+          await db.acquisitionReceipt.create({
+            data: {
+              projectId: site.projectId,
+              siteId: site.id,
+              windowStart: window.start,
+              windowEnd: window.end,
+              requested: receipt.requested,
+              measured: receipt.measured,
+              noData: receipt.noData,
+              failed: receipt.failed,
+              cached: receipt.cached,
+              spentMicros: receipt.spentMicros,
+              requests: receipt.requests as never,
+              skipped: receipt.skipped as never,
+            },
           });
           replace(step({
             step: "acquisition",

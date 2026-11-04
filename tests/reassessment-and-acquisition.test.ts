@@ -40,11 +40,14 @@ describe("legacy claim derivation", () => {
     expect(derived.sourcesUnusable).toBe(true);
   });
 
-  it("ignores a page type with too few pages to be a pattern", () => {
+  it("does not name a page type that is too rare to be a pattern", () => {
     const derived = deriveClaimFromFinding("There is no comparison page.", [
       { type: "comparison", pages: 1 },
     ]);
-    expect(derived.claim).toBeNull();
+    // The sentence still asserts absence, so it is verified against content — but
+    // it must not be turned into a claim about a specific page type.
+    expect(derived.claim?.kind).toBe("absent_offering");
+    expect(derived.claim?.pageType).toBeNull();
   });
 });
 
@@ -126,5 +129,45 @@ describe("acquisition fairness", () => {
     });
     expect(plan.requests).toHaveLength(0);
     expect(plan.skipped[0].reason).toContain("no data");
+  });
+});
+
+describe("measurement cache identity", () => {
+  const db = (rows: Array<{ dimensions: Record<string, unknown>; observedAt: Date }>) => ({
+    evidenceRecord: { findMany: async () => rows },
+  });
+
+  it("does not reuse a measurement bought for another market", async () => {
+    const { measuredQueries } = await import("@/lib/funnel/acquisition");
+    const cache = await measuredQueries(
+      db([{ dimensions: { query: "abat-jour sur mesure", locale: "fr:2250" }, observedAt: new Date() }]) as never,
+      "p1",
+      new Date(),
+      "en:2840"
+    );
+    expect(cache.fresh.size).toBe(0);
+  });
+
+  it("reuses a measurement bought for the same market", async () => {
+    const { measuredQueries } = await import("@/lib/funnel/acquisition");
+    const cache = await measuredQueries(
+      db([{ dimensions: { query: "abat-jour sur mesure", locale: "fr:2250" }, observedAt: new Date() }]) as never,
+      "p1",
+      new Date(),
+      "fr:2250"
+    );
+    expect(cache.fresh.has("abat-jour sur mesure")).toBe(true);
+  });
+
+  it("expires a measurement older than the TTL", async () => {
+    const { measuredQueries, MEASUREMENT_TTL_DAYS } = await import("@/lib/funnel/acquisition");
+    const old = new Date(Date.now() - (MEASUREMENT_TTL_DAYS + 1) * 86_400_000);
+    const cache = await measuredQueries(
+      db([{ dimensions: { query: "q", locale: "en:2840" }, observedAt: old }]) as never,
+      "p1",
+      new Date(),
+      "en:2840"
+    );
+    expect(cache.fresh.size).toBe(0);
   });
 });

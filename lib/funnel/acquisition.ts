@@ -209,7 +209,9 @@ export type AcquisitionCollector = (input: {
 export async function measuredQueries(
   db: AcquisitionDb,
   projectId: string,
-  now = new Date()
+  now = new Date(),
+  /** Only measurements bought for this locale are reusable for it. */
+  locale?: string
 ): Promise<{ fresh: Set<string>; noData: Set<string> }> {
   const rows = await db.evidenceRecord.findMany({
     where: { projectId, kind: "keyword_metrics", supersededById: null },
@@ -218,9 +220,13 @@ export async function measuredQueries(
   const fresh = new Set<string>();
   const noData = new Set<string>();
   for (const row of rows) {
-    const dimensions = row.dimensions as { query?: unknown; noData?: unknown } | null;
+    const dimensions = row.dimensions as { query?: unknown; noData?: unknown; locale?: unknown } | null;
     const query = dimensions?.query;
     if (typeof query !== "string" || !query) continue;
+    // A row with no locale predates scoped identity: reuse it only when the caller
+    // did not ask for a specific market, otherwise one market's volume could be
+    // silently applied to another.
+    if (locale && dimensions?.locale !== locale) continue;
     const ageDays = (now.getTime() - row.observedAt.getTime()) / 86_400_000;
     if (ageDays > MEASUREMENT_TTL_DAYS) continue;
     if (dimensions?.noData === "true") noData.add(query);
@@ -247,10 +253,12 @@ export async function runAcquisitionPlan(
     collect: AcquisitionCollector;
     /** Hard ceiling for this analysis pass. */
     maxSpendMicros: number;
+    /** Provider locale, part of the measurement cache identity. */
+    locale?: string;
     now?: Date;
   }
 ): Promise<AcquisitionReceipt> {
-  const cache = await measuredQueries(db, input.projectId, input.now);
+  const cache = await measuredQueries(db, input.projectId, input.now, input.locale);
   const plan = planAcquisition({
     observed: input.performance.map((row) => ({
       query: row.query,
@@ -308,7 +316,7 @@ export async function runAcquisitionPlan(
           receipt.noData += 1;
           // Cache the no-data answer with an expiry, so the next pass does not pay
           // for the same phrase again.
-          await recordNoData(db, input.projectId, input.siteId, request.query, input.now ?? new Date());
+          await recordNoData(db, input.projectId, input.siteId, request.query, input.now ?? new Date(), input.locale);
         }
         receipt.requests.push({ query: request.query, reason: request.reason, state });
       }
@@ -333,7 +341,8 @@ async function recordNoData(
   projectId: string,
   siteId: string | null,
   query: string,
-  now: Date
+  now: Date,
+  locale?: string
 ): Promise<void> {
   try {
     const { storeEvidenceRecord } = await import("@/lib/funnel/evidence");
@@ -343,7 +352,7 @@ async function recordNoData(
       kind: "keyword_metrics",
       observedAt: now,
       producer: "dataforseo",
-      dimensions: { query, noData: "true" },
+      dimensions: { query, noData: "true", ...(locale ? { locale } : {}) },
       metrics: {},
     });
   } catch {

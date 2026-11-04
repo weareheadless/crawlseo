@@ -150,10 +150,19 @@ export async function collectKeywordMetrics(db: CollectionDb, input: CollectionI
       observedAt: new Date(),
       producer: "dataforseo",
       rawResponseId: raw.id,
-      dimensions: { query: metric.keyword },
+      // Locale is part of the measurement's identity: the same phrase has a
+      // different volume in another market, so a cached result is only reusable
+      // for the scope it was bought in.
+      dimensions: { query: metric.keyword, locale: `${input.languageCode}:${input.locationCode}`, product: "keyword_overview" },
       metrics,
     });
-    evidence.push({ id: stored.id, kind: "keyword_metrics", observedAt: new Date(), dimensions: { query: metric.keyword }, metrics });
+    evidence.push({
+      id: stored.id,
+      kind: "keyword_metrics",
+      observedAt: new Date(),
+      dimensions: { query: metric.keyword, locale: `${input.languageCode}:${input.locationCode}`, product: "keyword_overview" },
+      metrics,
+    });
   }
   return { evidence, spentMicros: spent };
 }
@@ -560,6 +569,8 @@ export async function collectDerivedKeywordMetrics(
     derivedFrom: input.seed,
     sharedTokens: chosen.retained,
     specificity: chosen.specificity,
+    locale: `${input.languageCode}:${input.locationCode}`,
+    product: "keyword_suggestions",
   };
   const stored = await storeEvidenceRecord(db, {
     projectId: input.projectId,

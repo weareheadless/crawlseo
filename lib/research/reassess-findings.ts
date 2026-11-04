@@ -43,24 +43,28 @@ export function deriveClaimFromFinding(
   const sourcesUnusable = UNUSABLE_MARKER.test(text);
   if (!ABSENCE_MARKER.test(text)) return { claim: null, sourcesUnusable };
 
-  const lower = text.toLowerCase();
+  // Deliberately narrow. A finding must say "no <type>" (at most one word between)
+  // and the type must be lower-case, so "no Mexico City inventory" is not read as
+  // "no city pages". Anything looser turns a competitor quote or a parenthetical URL
+  // list into a claim about the site, and a wrong derivation here removes real work.
   for (const entry of inventory) {
     if (entry.pages < 3) continue;
-    // "cities" -> "city", "posts" -> "post": the same plural rule the inventory uses.
     const base = entry.type.replace(/ies$/i, "y").replace(/ses$/i, "s").replace(/s$/i, "").toLowerCase();
     if (base.length < 3) continue;
-    const pattern = new RegExp(`\\b${base.replace(/[^a-z0-9-]/g, "")}(?:s|es)?\\b`, "i");
-    if (!pattern.test(lower)) continue;
+    const type = base.replace(/[^a-z0-9-]/g, "");
+    const proximity = new RegExp(
+      `\\b(no|not|never|without|none|lacks?|missing|aucun|aucune|pas de|sans)\\s+(?:[a-zà-ÿ'-]+\\s+){0,2}${type}(?:s|es)?\\b`
+    );
+    if (!proximity.test(text)) continue;
     return {
-      claim: {
-        kind: "missing_page_type",
-        pageType: entry.type,
-        statement: text.slice(0, 300),
-      },
+      claim: { kind: "missing_page_type", pageType: entry.type, statement: text.slice(0, 300) },
       sourcesUnusable,
     };
   }
-  return { claim: null, sourcesUnusable };
+  return {
+    claim: { kind: "absent_offering", pageType: null, statement: text.slice(0, 300) },
+    sourcesUnusable,
+  };
 }
 
 export type ReassessDb = EvidenceDb & Pick<PrismaClient, "crawl" | "auditPage" | "researchFinding" | "evidenceRecord">;
@@ -72,6 +76,8 @@ export type ReassessResult = {
   rejectedQuality: number;
   coverageComplete: boolean;
   pagesWithText: number;
+  /** What each re-verified finding would become. */
+  outcomes: Array<{ theme: string; status: string; reason: string }>;
 };
 
 /**
@@ -82,7 +88,7 @@ export type ReassessResult = {
  */
 export async function reassessLegacyFindings(
   db: ReassessDb,
-  input: { projectId: string; siteId: string }
+  input: { projectId: string; siteId: string; dryRun?: boolean }
 ): Promise<ReassessResult> {
   const result: ReassessResult = {
     findings: 0,
@@ -91,6 +97,7 @@ export async function reassessLegacyFindings(
     rejectedQuality: 0,
     coverageComplete: false,
     pagesWithText: 0,
+    outcomes: [],
   };
 
   const crawl = await db.crawl.findFirst({
@@ -149,6 +156,12 @@ export async function reassessLegacyFindings(
 
     if (verification.status === "contradicted") result.contradicted += 1;
     if (derived.sourcesUnusable) result.rejectedQuality += 1;
+    result.outcomes.push({
+      theme: dimensions.theme ?? "(no theme)",
+      status: verification.status,
+      reason: verification.reason,
+    });
+    if (input.dryRun) continue;
 
     await supersedeEvidenceRecord(db, finding.id, {
       projectId: input.projectId,

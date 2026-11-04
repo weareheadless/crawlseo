@@ -78,6 +78,7 @@ model Project {
   connectorContexts          ConnectorContextSnapshot[]
   connectorEvents            ConnectorEvent[]
   connectorOperationReceipts ConnectorOperationReceipt[]
+  acquisitionReceipts        AcquisitionReceipt[]
   connectorExecutionStates   ConnectorExecutionState[]
   connectorEventCounter      ConnectorEventCounter?
   researchBudgetReservations ResearchBudgetReservation[]
@@ -1420,6 +1421,29 @@ enum AgentMessageRole {
 }
 
 // ============ RESEARCH POLICY / DELIVERY CONFIG ============
+
+/// One paid-acquisition pass, recorded so spend can be audited against a decision
+/// without reading CLI output or a worker log.
+model AcquisitionReceipt {
+  id           String   @id @default(cuid())
+  projectId    String
+  siteId       String?
+  windowStart  DateTime
+  windowEnd    DateTime
+  requested    Int      @default(0)
+  measured     Int      @default(0)
+  noData       Int      @default(0)
+  failed       Int      @default(0)
+  cached       Int      @default(0)
+  spentMicros  Int      @default(0)
+  requests     Json
+  skipped      Json
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
 
 model ResearchPolicy {
   id            String   @id @default(cuid())

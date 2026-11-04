@@ -94,6 +94,49 @@ Not verified: no browser check on desktop/mobile was run in this pass.
   it, refuses a snapshot whose checksum does not match, and refuses to overwrite a
   human decision made after the snapshot.
 
+## Database integration (work packages 6 and 7)
+
+`tests/customer-recommendations-postgres.integration.test.ts` runs against a
+disposable schema (`csv_validation`), never the application schema:
+
+```
+DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run \
+  tests/customer-recommendations-postgres.integration.test.ts
+# 3 passed
+```
+
+It proves, on real rows:
+
+- a legacy finding with no verification is re-verified on refresh;
+- a premise contradicted by stored page text produces no customer-need opportunity;
+- a supported need produces an `actionable` opportunity with `measurement:
+  unquantified` and a non-zero score, with no keyword volume anywhere;
+- a rollback restores the published state and refuses to overwrite a human decision
+  made after the snapshot;
+- a snapshot whose checksum does not match is refused.
+
+### Read-only dry run on production data
+
+`reassessLegacyFindings(..., { dryRun: true })` over the four live tenants:
+
+| Site | legacy findings | contradicted | unverified |
+|---|---:|---:|---:|
+| susimacdonald.com | 22 | 0 | 22 |
+| atelier-harmonie.com | 63 | 0 | 63 |
+| casamigo.net | 2 | 0 | 2 |
+| oceanicvibes.com | 5 | 0 | 5 |
+
+Every finding is `unverified`, because the crawls that produced them stored no page
+text. This is the honest result: without content, a legacy premise cannot be proven
+false mechanically, and none of them can become actionable work — they leave the
+actionable set and wait for a crawl that stores text.
+
+Two earlier attempts at deriving claims from prose were rejected during this work
+because they contradicted the wrong things: one matched a competitor's quoted
+"Property for Sale" page, the other read "no Mexico City inventory" as "no city
+pages". The rule is now deliberately narrow and still yields no contradictions on
+legacy prose, which is why the dry run shows none.
+
 ## Work package 7 — proof
 
 Verified in CI-style runs:
@@ -109,12 +152,13 @@ expected readiness and reason for each finding.
 
 Not verified, and therefore not claimed:
 
-- No end-to-end run against production data. Existing crawls have no stored
-  `contentText`, so a production reassessment today would mark legacy findings
-  `unverified` (needs investigation) rather than contradicted. They would leave the
-  actionable set but would not be proven false until the next crawl stores text.
+- No end-to-end run against production data. The read-only dry run above is the
+  closest evidence: legacy findings become `unverified` and leave the actionable
+  set, but are not proven false until a crawl stores page text.
 - No independent SEO review of the resulting board.
-- No browser/accessibility check of the detail page.
+- No browser/accessibility check of the detail page. The decision panel has a
+  server-render test (`tests/decision-summary-ui.test.tsx`), and the production
+  build compiles, but nobody looked at it in a browser.
 - Joins do not rebuild assessment inputs (see above).
 - No merge, deployment or paid evaluation.
 

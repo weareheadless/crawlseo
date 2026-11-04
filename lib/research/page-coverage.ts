@@ -45,13 +45,22 @@ export function contentTerms(value: string): string[] {
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
 }
 
-/** Crude singular so "closing costs" matches "closing cost". */
+/**
+ * Crude singular so "closing costs" matches "closing cost".
+ *
+ * "es" is only dropped after a sibilant (boxes, churches): treating every "es" as
+ * a plural ending turned "wardrobes" into "wardrob", so a page that plainly
+ * discussed wardrobes matched nothing.
+ */
 function stem(token: string): string {
   if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
-  if (token.length > 4 && token.endsWith("es")) return token.slice(0, -2);
-  if (token.length > 3 && token.endsWith("s")) return token.slice(0, -1);
+  if (/(ses|xes|zes|ches|shes)$/.test(token)) return token.slice(0, -2);
+  if (token.length > 3 && token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
   return token;
 }
+
+/** Beyond this many terms a sentence dilutes its own subject. */
+export const MAX_NEED_TERMS = 8;
 
 export function needTerms(statement: string, extra: string[] = []): string[] {
   const seen = new Set<string>();
@@ -62,7 +71,13 @@ export function needTerms(statement: string, extra: string[] = []): string[] {
     seen.add(key);
     terms.push(key);
   }
-  return terms;
+  // Keep the most specific words: a long sentence otherwise buries its subject and
+  // no page can ever reach the relevance threshold.
+  if (terms.length <= MAX_NEED_TERMS) return terms;
+  return [...terms]
+    .sort((a, b) => b.length - a.length || a.localeCompare(b))
+    .slice(0, MAX_NEED_TERMS)
+    .sort((a, b) => terms.indexOf(a) - terms.indexOf(b));
 }
 
 export type CoverageThresholds = {

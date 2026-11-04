@@ -167,9 +167,17 @@ export async function applyHysteresis(
 ): Promise<string[]> {
   const drifting = await db.opportunity.findMany({
     where: { projectId: opts.projectId, status: "detected", scoreValue: { lt: opts.threshold } },
-    select: { id: true },
+    select: { id: true, scoreInputs: true },
   });
-  for (const row of drifting) {
+  // Freshness decay must not quietly park a recommendation the evidence supports.
+  // A supported need whose organic impact is unquantified has a low index by
+  // design; letting the index remove it is the failure this contract exists to stop.
+  const actionable = drifting.filter((row) => {
+    const worth = (row.scoreInputs as { worth?: { readiness?: unknown } } | null)?.worth;
+    return worth?.readiness === "actionable";
+  });
+  const parked = drifting.filter((row) => !actionable.includes(row));
+  for (const row of parked) {
     await db.opportunity.update({
       where: { id: row.id },
       data: { status: "parked", parkReason: "score_below_threshold", decidedBy: opts.detectedBy, decidedAt: new Date() },
@@ -190,7 +198,7 @@ export async function applyHysteresis(
       data: { status: "detected", parkReason: null, decidedBy: null, decidedAt: null },
     });
   }
-  return [...drifting.map((row) => row.id), ...recovered.map((row) => row.id)];
+  return [...parked.map((row) => row.id), ...recovered.map((row) => row.id)];
 }
 
 export type HumanDecision = "accepted" | "parked" | "rejected" | "closed";
