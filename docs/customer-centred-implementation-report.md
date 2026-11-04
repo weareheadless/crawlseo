@@ -185,7 +185,8 @@ reasons well; the fixtures say so in their comments.
 `scripts/evaluate-need-assessment.ts` reads the tenant and its findings, retrieves
 candidate pages from the crawl inventory over public HTTP, reuses the real extraction
 core when knowledge is missing, and runs the real model assessment. It writes no
-knowledge revision, opportunity, task or paid search call.
+knowledge revision, opportunity, task or paid search call. The full record is
+`docs/need-assessment-evaluation-2026-11-04.md`.
 
 | Site | Finding | Result |
 |---|---|---|
