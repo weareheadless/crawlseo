@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { storeEvidenceRecord, type EvidenceDb, type MetricValue } from "@/lib/funnel/evidence";
+import { storeEvidenceRecord, type EvidenceDb } from "@/lib/funnel/evidence";
+import { currentPerformanceWindow, readPagePerformance, readQueryPagePerformance } from "@/lib/funnel/gsc-performance";
 import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
 import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
 import { runDetectors } from "@/lib/funnel/detectors";
@@ -20,7 +21,7 @@ import type { OpportunityDb } from "@/lib/funnel/opportunity";
  */
 
 export type BackfillDb = EvidenceDb &
-  Pick<PrismaClient, "site" | "crawl" | "crawlIssue" | "auditPage" | "keyword" | "page" | "evidenceRecord">;
+  Pick<PrismaClient, "site" | "crawl" | "crawlIssue" | "auditPage" | "keyword" | "page" | "evidenceRecord" | "$queryRaw">;
 
 export type BackfillResult = {
   projectId: string | null;
@@ -28,6 +29,8 @@ export type BackfillResult = {
   rankEvidence: number;
   /** Page-level Search Console observations (the honest page demand signal). */
   pageEvidence: number;
+  /** The window every performance observation covers, when there was data. */
+  window: { start: string; end: string; days: number } | null;
   skipped: string[];
 };
 
@@ -50,12 +53,48 @@ const CRAWLABILITY_ISSUES = new Set([
 /** Issue types that describe missing/mismatched structured data. */
 const SCHEMA_ISSUES = new Set(["MISSING_SCHEMA", "INVALID_SCHEMA"]);
 
+/**
+ * Whether a MISSING_SCHEMA issue is actually about missing markup.
+ *
+ * `MISSING_SCHEMA` is a catch-all in the crawler: business-consistency audits that
+ * could not run, sitemap coverage gaps, AI-crawler blocks and the crawl summary are
+ * all stored under it. Counting every one as "no structured data" inflated a board
+ * from 127 pages without schema to 513 — 500 of them being "business knowledge
+ * unavailable", which is a missing input, not a missing tag.
+ */
+export function isSchemaAbsence(issue: { type: string; details?: unknown }): boolean {
+  if (!SCHEMA_ISSUES.has(issue.type)) return false;
+  const kind = (issue.details as { kind?: unknown } | null)?.kind;
+  if (typeof kind !== "string") return true; // legacy rows without details
+  return kind === "identity_jsonld_absence" || kind === "schema_absence";
+}
+
+/**
+ * Issues that describe an HTTP response rather than page content. They stay valid
+ * even when the page itself could not be assessed.
+ */
+const RESPONSE_ISSUES = new Set(["BROKEN_LINK", "SERVER_ERROR", "REDIRECT_CHAIN", "SLOW_PAGE"]);
+
+const CHALLENGE_TITLE = /checking your (request|browser)|just a moment|access denied|attention required|captcha/i;
+
+/** Whether the crawler actually saw the page, rather than a challenge or an error. */
+export function isAssessedPage(page: { statusCode: number; title?: string | null }): boolean {
+  if (page.statusCode !== 200) return false;
+  return !(page.title && CHALLENGE_TITLE.test(page.title));
+}
+
+/** The structured-data type the page was expected to carry, when the crawl said. */
+function schemaTypeOf(issue: { details?: unknown }): string | null {
+  const value = (issue.details as { schemaType?: unknown } | null)?.schemaType;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 export async function backfillSiteEvidence(
   db: BackfillDb,
   siteId: string,
   opts: { projectId: string; maxKeywords?: number } = { projectId: "" }
 ): Promise<BackfillResult> {
-  const result: BackfillResult = { projectId: opts.projectId || null, crawlEvidence: 0, rankEvidence: 0, pageEvidence: 0, skipped: [] };
+  const result: BackfillResult = { projectId: opts.projectId || null, crawlEvidence: 0, rankEvidence: 0, pageEvidence: 0, window: null, skipped: [] };
 
   const crawl = await db.crawl.findFirst({
     where: { siteId, status: "COMPLETED" },
@@ -67,7 +106,7 @@ export async function backfillSiteEvidence(
   } else {
     const issues = await db.crawlIssue.findMany({
       where: { crawlId: crawl.id },
-      select: { url: true, type: true, severity: true, message: true },
+      select: { url: true, type: true, severity: true, message: true, details: true },
     });
     const issuesByUrl = new Map<string, typeof issues>();
     for (const issue of issues) {
@@ -75,15 +114,25 @@ export async function backfillSiteEvidence(
     }
     const pages = await db.auditPage.findMany({
       where: { crawlId: crawl.id },
-      select: { url: true, hasSchema: true, statusCode: true, responseTimeMs: true, h1Count: true },
+      select: { url: true, title: true, hasSchema: true, statusCode: true, responseTimeMs: true, h1Count: true },
     });
 
     // One evidence record per (page, issue): an opportunity must be able to
     // cite the exact observation that produced it, so a title can never say
     // "structured data" while its reason cites a duplicate title.
     for (const page of pages) {
+      // A blocked or failed fetch observed a response, not a page. Its missing H1,
+      // missing schema or thin content are unknown, and asserting them turns an
+      // anti-bot challenge into a list of website defects.
+      const assessed = isAssessedPage(page);
       const pageIssues = issuesByUrl.get(page.url) ?? [];
-      const reported = pageIssues.filter((issue) => CRAWLABILITY_ISSUES.has(issue.type) || SCHEMA_ISSUES.has(issue.type));
+      const reported = pageIssues.filter((issue) =>
+        RESPONSE_ISSUES.has(issue.type) ||
+        (assessed && (
+          CRAWLABILITY_ISSUES.has(issue.type) ||
+          (SCHEMA_ISSUES.has(issue.type) && isSchemaAbsence(issue))
+        ))
+      );
 
       for (const issue of reported) {
         const isSchema = SCHEMA_ISSUES.has(issue.type);
@@ -95,12 +144,16 @@ export async function backfillSiteEvidence(
           producer: "crawler",
           dimensions: {
             url: page.url,
+            crawlId: crawl.id,
             statusCode: page.statusCode,
             issueType: issue.type,
             severity: issue.severity,
             impact: isSchema ? "structured_data" : "crawlability",
             schemaMissing: isSchema ? "true" : null,
-            schemaType: isSchema ? "LocalBusiness" : null,
+            // The page's own declared type, when the crawl recorded one. Assuming
+            // LocalBusiness for every page turned a blog post into a business-schema
+            // defect.
+            schemaType: isSchema ? schemaTypeOf(issue) : null,
           },
           metrics: {
             "first_party:issueCount": { value: 1, unit: "count", source: "first_party" },
@@ -112,7 +165,7 @@ export async function backfillSiteEvidence(
 
       // A page with no schema and no reported schema issue is still a gap the
       // funnel should see: record it explicitly rather than inferring later.
-      if (!page.hasSchema && !reported.some((issue) => SCHEMA_ISSUES.has(issue.type))) {
+      if (assessed && !page.hasSchema && !reported.some((issue) => SCHEMA_ISSUES.has(issue.type))) {
         await storeEvidenceRecord(db, {
           projectId: opts.projectId,
           siteId,
@@ -121,11 +174,12 @@ export async function backfillSiteEvidence(
           producer: "crawler",
           dimensions: {
             url: page.url,
+            crawlId: crawl.id,
             statusCode: page.statusCode,
             issueType: "MISSING_SCHEMA",
             impact: "structured_data",
             schemaMissing: "true",
-            schemaType: "LocalBusiness",
+            schemaType: null,
           },
           metrics: {
             "first_party:issueCount": { value: 1, unit: "count", source: "first_party" },
@@ -136,75 +190,60 @@ export async function backfillSiteEvidence(
     }
   }
 
-  // Search Console page totals: the complete demand signal.
+  // Search Console performance, aggregated over an explicit window.
   //
-  // Query-level rows are sampled by Google (662 rows / 835 impressions for a site
-  // whose page-level total is 2,556), so a page-level defect scored on query rows
-  // undercounts its traffic by an order of magnitude. Pages are stored as their own
-  // evidence kind with declared units.
-  const pageSince = new Date(Date.now() - 28 * 864e5);
-  const pageRows = await db.page.findMany({
-    where: { siteId, date: { gte: pageSince } },
-    orderBy: { date: "desc" },
-    take: 20000,
-    select: { url: true, clicks: true, impressions: true, ctr: true, position: true, date: true },
-  });
-  // One observation per URL over the 28-day window. Taking the latest day instead
-  // reports a single day's traffic as the page's demand (8 impressions where the
-  // window holds 2,556).
-  const pageTotals = new Map<string, { clicks: number; impressions: number; weightedPosition: number; lastDate: Date }>();
-  for (const row of pageRows) {
-    if (!row.url) continue;
-    const current = pageTotals.get(row.url) ?? { clicks: 0, impressions: 0, weightedPosition: 0, lastDate: row.date };
-    current.clicks += row.clicks;
-    current.impressions += row.impressions;
-    current.weightedPosition += row.position * Math.max(row.impressions, 1);
-    if (row.date > current.lastDate) current.lastDate = row.date;
-    pageTotals.set(row.url, current);
+  // The previous projection read at most 400 raw rows and kept one per query/page.
+  // Those rows are split by day, device and country, so a query with 269
+  // impressions over 28 days was represented by a single one-impression row, and
+  // a site with 986 observed queries reached the board with 238. The window is
+  // anchored to the latest day that has data: a lagging export must not read as a
+  // complete window of zeroes.
+  const window = await currentPerformanceWindow(db, siteId);
+  if (!window) {
+    result.skipped.push("no search console rows");
+    return result;
   }
-  for (const [url, total] of pageTotals) {
+  result.window = { start: window.start.toISOString(), end: window.end.toISOString(), days: window.days };
+
+  const pagePerformance = await readPagePerformance(db, siteId, window);
+  for (const page of pagePerformance) {
     await storeEvidenceRecord(db, {
       projectId: opts.projectId,
       siteId,
       kind: "gsc_page",
-      observedAt: total.lastDate,
+      observedAt: window.end,
       producer: "search_console",
-      dimensions: { url, windowDays: 28 },
+      dimensions: { url: page.url, windowDays: window.days, windowEnd: window.end.toISOString(), scope: "all" },
       metrics: {
-        "first_party:clicks": { value: total.clicks, unit: "count", source: "first_party" },
-        "first_party:impressions": { value: total.impressions, unit: "count", source: "first_party" },
-        "first_party:ctr": { value: total.impressions > 0 ? total.clicks / total.impressions : 0, unit: "ratio", source: "first_party" },
-        "first_party:position": {
-          value: total.weightedPosition / Math.max(total.impressions, 1),
-          unit: "rank",
-          source: "first_party",
-        },
+        "first_party:clicks": { value: page.clicks, unit: "count", source: "first_party" },
+        "first_party:impressions": { value: page.impressions, unit: "count", source: "first_party" },
+        "first_party:ctr": { value: page.ctr, unit: "ratio", source: "first_party" },
+        "first_party:position": { value: page.position, unit: "rank", source: "first_party" },
       },
     });
     result.pageEvidence += 1;
   }
 
-  // Search Console ranks: latest observation per (query, page).
-  const keywords = await db.keyword.findMany({
-    where: { siteId },
-    orderBy: { date: "desc" },
-    take: opts.maxKeywords ?? 400,
-    select: { query: true, page: true, position: true, clicks: true, impressions: true, ctr: true, date: true },
-  });
-  const latest = new Map<string, (typeof keywords)[number]>();
-  for (const row of keywords) {
-    const key = `${row.query}|${row.page}`;
-    if (!latest.has(key)) latest.set(key, row);
-  }
-  for (const row of latest.values()) {
-    if (!row.query || row.position <= 0) continue;
+  // Query/page performance is a separate observation from the page total: Search
+  // Console query rows are privacy-limited and do not sum to the page total.
+  const queryPerformance = await readQueryPagePerformance(db, siteId, window);
+  for (const row of queryPerformance) {
+    if (row.impressions <= 0) continue;
     await storeEvidenceRecord(db, {
       projectId: opts.projectId,
       siteId,
       kind: "keyword_rank",
-      observedAt: row.date,
+      observedAt: window.end,
       producer: "search_console",
-      dimensions: { query: row.query, url: row.page || null },
+      dimensions: {
+        query: row.query,
+        url: row.url,
+        windowDays: window.days,
+        windowEnd: window.end.toISOString(),
+        scope: "all",
+        observations: row.observations,
+        segments: row.segments,
+      },
       metrics: {
         "first_party:position": { value: row.position, unit: "rank", source: "first_party" },
         "first_party:clicks": { value: row.clicks, unit: "count", source: "first_party" },
@@ -214,7 +253,7 @@ export async function backfillSiteEvidence(
     });
     result.rankEvidence += 1;
   }
-  if (latest.size === 0) result.skipped.push("no search console rows");
+  if (queryPerformance.length === 0) result.skipped.push("no search console query rows in the window");
 
   return result;
 }
@@ -238,6 +277,7 @@ export async function refreshFunnelForSite(
       crawlEvidence: 0,
       rankEvidence: 0,
       pageEvidence: 0,
+      window: null,
       skipped: ["site is not attached to a project"],
       created: 0,
       updated: 0,

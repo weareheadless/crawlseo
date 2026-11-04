@@ -1,5 +1,7 @@
 import type { EvidenceLeg } from "@prisma/client";
 
+import { assessImpact, type ImpactAssessment } from "@/lib/funnel/impact";
+
 /**
  * Scoring model (docs/seo-funnel-spine-plan.md §2.3).
  *
@@ -37,6 +39,18 @@ export type ScoreInputs = {
      */
     uplift?: number;
     businessValueSource?: "knowledge" | "cluster" | "topic" | "unknown";
+    /** Current average position, when it was observed rather than assumed. */
+    currentPosition?: number | null;
+    /** The position the play is expected to reach; defaults by play type. */
+    targetPosition?: number | null;
+    /** Days the demand figure covers, when it is a first-party window. */
+    windowDays?: number | null;
+    /** Observed CTR, so a page already earning clicks is not credited with them. */
+    observedCtr?: number | null;
+    /** A defect's severity, used to order technical work without inventing clicks. */
+    severity?: number | null;
+    /** Marks a page/site defect whose traffic impact is not quantifiable. */
+    technical?: boolean;
   };
   /** win probability components (0–1 each) */
   winProbability: {
@@ -58,8 +72,11 @@ export type ScoreInputs = {
 };
 
 export type ScoreResult = {
+  /** Compatibility priority index (0–100). Not a probability or a return. */
   scoreValue: number;
   inputs: ScoreInputs;
+  /** What the play is expected to change, and what that estimate rests on. */
+  impact: ImpactAssessment;
 };
 
 /** Declared recovery for a technical or structured-data fix. */
@@ -97,49 +114,73 @@ function geometricMean(values: Array<number | null>): number | null {
 }
 
 export function computeScore(inputs: ScoreInputs): ScoreResult {
-  // Declared defaults for unknown inputs (plan §2.3): missing demand data is
-  // "unknown", never zero — otherwise one-legged business opportunities
-  // (worth not yet measured) would always score 0 and hysteresis would park
-  // exactly the opportunities the join scheduler is supposed to lift.
-  const volume = inputs.worth.volume ?? 120;
-  const ctr = inputs.worth.ctrAtPosition ?? 0.03;
-  const uplift = inputs.worth.uplift ?? 1;
-  const rawWorth = volume * ctr * inputs.worth.businessValue * uplift;
+  const assessment = assessImpact({
+    volume: inputs.worth.volume,
+    volumeSource: inputs.worth.volumeSource,
+    observedCtr: inputs.worth.observedCtr ?? inputs.worth.ctrAtPosition,
+    currentPosition: inputs.worth.currentPosition ?? null,
+    targetPosition: inputs.worth.targetPosition ?? null,
+    windowDays: inputs.worth.windowDays ?? null,
+    severity: inputs.worth.severity ?? null,
+    technical: inputs.worth.technical,
+  });
 
-  const effort = Math.max(inputs.effort.playTypeBase * inputs.effort.sizeFactor, 0.5);
-
-  // Unmeasured demand is not low demand, but it is not demand either. Score it as a
-  // cheap hygiene task, capped well below anything with evidence behind it, so it
-  // stays on the board as work to do without competing with real opportunities.
-  if (inputs.worth.unmeasured) {
-    // Capped below anything measured: this is a backlog item, not a bet.
-    const hygiene = (1 / (1 + effort)) * Math.max(inputs.freshness, 0) * 0.15;
-    return { scoreValue: Math.max(0, Math.min(5, Math.round(hygiene * 100))), inputs };
+  // Demand is never invented. A missing volume used to become 120 searches/month,
+  // which put one-legged ideas above measured ones and made every score look
+  // informed. Without demand evidence the item is a hypothesis: visible, ordered
+  // below anything measured, and labelled.
+  if (inputs.worth.unmeasured || assessment.kind === "hypothesis") {
+    const ceiling = inputs.worth.unmeasured ? 5 : 20;
+    const strength =
+      Math.max(inputs.freshness, 0) *
+      Math.max(inputs.stability, 0) *
+      LEG_COMPLETENESS_MULTIPLIER[inputs.evidenceCompleteness] *
+      (0.5 + inputs.worth.businessValue / 2);
+    return {
+      scoreValue: Math.max(0, Math.min(ceiling, Math.round(strength * ceiling))),
+      inputs,
+      impact: assessment,
+    };
   }
 
+  // A defect is ordered by severity and reach, never by a fabricated click count.
+  if (assessment.kind === "technical") {
+    const severity = inputs.worth.severity ?? 0.5;
+    const reach = Math.min(1, (inputs.worth.volume ?? 0) / 300);
+    const index = 10 + 20 * severity + 10 * reach;
+    return {
+      scoreValue: Math.max(0, Math.min(40, Math.round(index))),
+      inputs,
+      impact: assessment,
+    };
+  }
+
+  const clicks = assessment.incrementalClicksPerMonth ?? 0;
   const winProb = geometricMean([
     inputs.winProbability.rankDistance,
     inputs.winProbability.authorityGap,
     inputs.winProbability.pageStrength,
     inputs.winProbability.serpCompetition,
     inputs.winProbability.playTypeFactor,
-  ]);
+  ]) ?? 0.5;
+  const effort = Math.max(inputs.effort.playTypeBase * inputs.effort.sizeFactor, 0.5);
 
-  const base = rawWorth > 0 && winProb ? (rawWorth * winProb) / effort : 0;
+  // Incremental clicks per month, weighted by the chance of winning and the work
+  // involved. The scale constant keeps small sites readable: 10 clicks/month of
+  // upside is half of 20, not a rounding error.
+  const PRIORITY_SCALE_CLICKS = 10;
+  const ratio = (clicks * winProb * inputs.worth.businessValue) / effort;
+  const scaled = ratio / (ratio + PRIORITY_SCALE_CLICKS);
+  const multiplier =
+    LEG_COMPLETENESS_MULTIPLIER[inputs.evidenceCompleteness] *
+    Math.max(inputs.freshness, 0) *
+    Math.max(inputs.stability, 0);
+  const value = scaled * multiplier;
 
-  const score = base
-    * LEG_COMPLETENESS_MULTIPLIER[inputs.evidenceCompleteness]
-    * Math.max(inputs.freshness, 0)
-    * Math.max(inputs.stability, 0);
-
-  // The raw ratio is unbounded (worth is linear in volume), so a site with real
-  // demand pinned every opportunity at the 0-100 ceiling and the ranking stopped
-  // meaning anything. A saturating curve keeps the order and the scale; the raw
-  // components stay stored, so the score is still recomputable.
-  const scaled = score > 0 ? score / (score + 1) : 0;
   return {
-    scoreValue: Math.max(0, Math.min(100, Math.round(scaled * 100))),
+    scoreValue: Math.max(0, Math.min(100, Math.round(value * 100))),
     inputs,
+    impact: assessment,
   };
 }
 

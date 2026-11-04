@@ -27,7 +27,7 @@ import { MissingSiteContextError, resolveSiteContext } from "@/lib/site/context"
 export type TenantStepStatus = "ok" | "missing" | "blocked" | "fixed" | "pending" | "failed";
 
 export type TenantStep = {
-  step: "site-records" | "site-context" | "topics" | "business-knowledge" | "research" | "joins" | "funnel";
+  step: "site-records" | "site-context" | "topics" | "business-knowledge" | "crawl" | "research" | "joins" | "funnel";
   status: TenantStepStatus;
   detail: string;
 };
@@ -48,6 +48,33 @@ export type TenantAnalysis = {
  * need that to be analysed. Services are the site's own words, so they are a
  * defensible starting query set, and the owner can replace them.
  */
+/**
+ * A place name worth putting in a search phrase.
+ *
+ * `location` can be a street address ("Calle Juan de la Barrera"), and appending
+ * it produced research topics like "property listings Calle Juan de la Barrera" —
+ * a phrase nobody searches, in a market the business does not serve. Only a
+ * locality, region or country is usable; a street is not.
+ */
+const STREET_PATTERN = /\b(calle|street|st\.|avenue|ave\.|av\.|road|rd\.|boulevard|blvd|rue|via|plaza|paseo|carretera|highway|suite|floor|unit)\b|\d/i;
+
+export function placeToken(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // "Playa del Carmen, Quintana Roo, Mexico" -> "Playa del Carmen".
+  const first = value.split(",")[0]?.trim() ?? "";
+  if (!first || first.length > 40) return null;
+  if (STREET_PATTERN.test(first)) return null;
+  return first;
+}
+
+/**
+ * Research topics from the site's own evidence.
+ *
+ * Services first (the offers a customer searches for), then the queries Search
+ * Console already shows people using, and only then differentiators. A tenant with
+ * no business knowledge is not blocked: its observed queries are the best
+ * available statement of what it is for.
+ */
 async function deriveTopics(
   db: PrismaClient,
   projectId: string | null,
@@ -65,14 +92,37 @@ async function deriveTopics(
     return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0) : [];
   };
   const services = list("services").slice(0, 5);
-  const candidates = services.length > 0 ? services : list("differentiators").slice(0, 3);
-  const place = context.location ?? context.market;
-  const topics = candidates
-    .map((service) => service.trim().replace(/\s+/g, " ").slice(0, 120))
-    // A local business is found by "service + place"; a national one is not, so the
-    // place is only added when it is not already part of the phrase.
-    .map((service) => (place && !service.toLowerCase().includes(place.toLowerCase().split(",")[0]) ? `${service} ${place.split(",")[0]}` : service))
-    .slice(0, 5);
+  const differentiators = list("differentiators").slice(0, 3);
+
+  const place = placeToken(context.location) ?? placeToken(context.market);
+  const withPlace = (phrase: string): string => {
+    const clean = phrase.trim().replace(/\s+/g, " ").slice(0, 120);
+    if (!place) return clean;
+    return clean.toLowerCase().includes(place.toLowerCase()) ? clean : `${clean} ${place}`;
+  };
+
+  let candidates = services.map(withPlace);
+  if (candidates.length === 0) {
+    // No declared services: use what people already search for, which is the
+    // only evidence of the site's subject that does not depend on configuration.
+    const observed = await db.keyword.findMany({
+      where: { siteId, query: { not: "" } },
+      orderBy: { impressions: "desc" },
+      take: 40,
+      select: { query: true, impressions: true },
+    });
+    const seen = new Set<string>();
+    for (const row of observed) {
+      const phrase = row.query.trim();
+      if (phrase.length < 4 || seen.has(phrase.toLowerCase())) continue;
+      seen.add(phrase.toLowerCase());
+      candidates.push(phrase);
+      if (candidates.length >= 5) break;
+    }
+  }
+  if (candidates.length === 0) candidates = differentiators.map(withPlace);
+
+  const topics = candidates.slice(0, 5);
   if (topics.length === 0) return [];
   await db.siteProfile.upsert({
     where: { siteId },
@@ -188,12 +238,32 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
     ? step({ step: "business-knowledge", status: "ok", detail: `revision ${knowledge.acceptedRevision ?? knowledge.revision}${knowledge.acceptedRevision ? " (accepted)" : " (unverified)"}` })
     : step({ step: "business-knowledge", status: "missing", detail: "no knowledge document: the why-leg has no business facts" }));
 
-  // 5. A research run inside the cadence window.
+  // 5. A crawl that actually covered the site. "COMPLETED" only means the job
+  //    stopped; a cap or a challenge can leave most of the site unobserved.
+  const crawl = await db.crawl.findFirst({
+    where: { siteId: site.id, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { id: true, finishedAt: true, pagesFound: true, maxPages: true },
+  });
+  if (!crawl) {
+    steps.push(step({ step: "crawl", status: "missing", detail: "no completed crawl" }));
+  } else {
+    const capped = crawl.maxPages > 0 && crawl.pagesFound >= crawl.maxPages;
+    steps.push(step({
+      step: "crawl",
+      status: capped ? "missing" : "ok",
+      detail: capped
+        ? `${crawl.pagesFound} pages reached the ${crawl.maxPages}-page cap: coverage is incomplete`
+        : `${crawl.pagesFound} pages crawled ${crawl.finishedAt?.toISOString().slice(0, 10) ?? ""}`,
+    }));
+  }
+
+  // 6. A research run inside the cadence window.
   const cadence = normalizeResearchCadence(site.researchPolicy?.cadence);
   const lastRun = await db.researchRun.findFirst({
     where: { siteId: site.id },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, createdAt: true, findingCount: true, errorCode: true },
+    select: { id: true, status: true, createdAt: true, findingCount: true, sourceCount: true, errorCode: true },
   });
   const fresh = (() => {
     // A failed run is not research. Treating it as fresh let a tenant report READY
@@ -203,15 +273,23 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
     const { start } = researchCadenceWindow(cadence, new Date(), "UTC");
     return lastRun.createdAt.getTime() >= start.getTime();
   })();
+  // A run that collected nothing and produced nothing is not research. Reporting
+  // it as OK let a tenant show READY with an empty board and a PARTIAL run whose
+  // paid collection had been refused.
+  const runIsEmpty = lastRun ? lastRun.sourceCount === 0 && lastRun.findingCount === 0 : false;
   steps.push(!lastRun
     ? step({ step: "research", status: "missing", detail: "no research run has ever completed" })
     : lastRun.status === "FAILED"
       ? step({ step: "research", status: "missing", detail: `last run failed: ${lastRun.errorCode ?? "unknown"}` })
+    : runIsEmpty
+      ? step({ step: "research", status: "missing", detail: `last run ${lastRun.status} with no sources and no findings: ${lastRun.errorCode ?? "no reason recorded"}` })
+      : lastRun.status === "PARTIAL"
+        ? step({ step: "research", status: "missing", detail: `last run PARTIAL (${lastRun.sourceCount} source(s), ${lastRun.findingCount} finding(s)): ${lastRun.errorCode ?? "incomplete"}` })
     : fresh
       ? step({ step: "research", status: "ok", detail: `${lastRun.status}, ${lastRun.findingCount} finding(s), ${lastRun.createdAt.toISOString().slice(0, 10)}` })
       : step({ step: "research", status: "missing", detail: `last run ${lastRun.createdAt.toISOString().slice(0, 10)} is outside the ${cadence} window` }));
 
-  // 6. Opportunities that have a why but no how are waiting for the join.
+  // 7. Opportunities that have a why but no how are waiting for the join.
   const unjoined = site.projectId
     ? await db.opportunity.count({
         where: { projectId: site.projectId, status: "detected", evidenceCompleteness: { in: ["why", "none"] } },
@@ -221,7 +299,7 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
     ? step({ step: "joins", status: "ok", detail: "no opportunity is waiting for a how leg" })
     : step({ step: "joins", status: "missing", detail: `${unjoined} opportunity(ies) have a why leg and no how leg` }));
 
-  // 7. The board itself.
+  // 8. The board itself.
   const detected = site.projectId
     ? await db.opportunity.count({ where: { projectId: site.projectId, status: "detected" } })
     : 0;

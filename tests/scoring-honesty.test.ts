@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { computeScore, TECHNICAL_UPLIFT, type ScoreInputs } from "@/lib/funnel/scoring";
+import { assessImpact, ctrCurve } from "@/lib/funnel/impact";
+import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
 
 const base = (worth: Partial<ScoreInputs["worth"]> = {}): ScoreInputs => ({
   worth: { volume: 1_000, ctrAtPosition: 0.03, businessValue: 0.8, ...worth },
@@ -11,38 +12,87 @@ const base = (worth: Partial<ScoreInputs["worth"]> = {}): ScoreInputs => ({
   stability: 0.9,
 });
 
-describe("scoring honesty", () => {
-  /**
-   * A question generated from business knowledge is not a searched query. Scored on
-   * the same curve it carried 30–42 points on demand nobody had shown existed.
-   */
-  it("caps a question with unmeasured demand below any measured opportunity", () => {
+describe("impact assessment", () => {
+  it("counts only the clicks a play adds, not the ones the page already gets", () => {
+    const assessment = assessImpact({
+      volume: 1_000,
+      volumeSource: "first_party",
+      observedCtr: 0.04,
+      currentPosition: 7,
+      targetPosition: 3,
+      windowDays: 28,
+    });
+    expect(assessment.kind).toBe("measured");
+    // 1000 impressions × (0.15 − 0.04) × 30/28, not 1000 × 0.15.
+    expect(assessment.incrementalClicksPerMonth).toBeCloseTo(1_000 * 0.11 * (30 / 28), 4);
+    expect(assessment.limitations.length).toBeGreaterThan(0);
+  });
+
+  it("never reports a negative upside when the target is worse than now", () => {
+    const assessment = assessImpact({ volume: 500, volumeSource: "first_party", observedCtr: 0.2, targetPosition: 3, windowDays: 28 });
+    expect(assessment.incrementalClicksPerMonth).toBe(0);
+  });
+
+  it("labels a provider estimate as estimated and says what it assumes", () => {
+    const assessment = assessImpact({ volume: 3_600, volumeSource: "provider", currentPosition: 7, targetPosition: 3 });
+    expect(assessment.kind).toBe("estimated");
+    expect(assessment.basis).toBe("provider_volume");
+    expect(assessment.limitations.join(" ")).toContain("whole volume");
+  });
+
+  it("returns a hypothesis when there is no demand evidence", () => {
+    const assessment = assessImpact({ volume: null, volumeSource: "unknown" });
+    expect(assessment.kind).toBe("hypothesis");
+    expect(assessment.incrementalClicksPerMonth).toBeNull();
+  });
+
+  it("treats a declared proxy as a hypothesis, not a measurement", () => {
+    const assessment = assessImpact({ volume: 10, volumeSource: "impact_proxy" });
+    expect(assessment.kind).toBe("hypothesis");
+  });
+
+  it("does not quantify a technical defect's traffic", () => {
+    const assessment = assessImpact({ volume: 300, volumeSource: "first_party", technical: true, severity: 0.6 });
+    expect(assessment.kind).toBe("technical");
+    expect(assessment.incrementalClicksPerMonth).toBeNull();
+  });
+
+  it("uses a declared CTR curve for a position", () => {
+    expect(ctrCurve(1)).toBe(0.28);
+    expect(ctrCurve(7)).toBe(0.04);
+    expect(ctrCurve(null)).toBeNull();
+  });
+});
+
+describe("priority index", () => {
+  it("no longer invents demand for a query with no volume", () => {
+    const unknown = computeScore(base({ volume: null, volumeSource: "unknown" }));
+    expect(unknown.impact.kind).toBe("hypothesis");
+    expect(unknown.scoreValue).toBeLessThanOrEqual(20);
+  });
+
+  it("orders measured incremental upside above a hypothesis", () => {
+    const measured = computeScore(base({ volume: 1_000, volumeSource: "first_party", observedCtr: 0.01, targetPosition: 3, windowDays: 28 }));
+    const hypothesis = computeScore(base({ volume: null, volumeSource: "unknown" }));
+    expect(measured.scoreValue).toBeGreaterThan(hypothesis.scoreValue);
+  });
+
+  it("does not rank a technical fix by page count alone", () => {
+    const technical = computeScore(base({ volume: 300, volumeSource: "first_party", technical: true, severity: 0.6 }));
+    const measured = computeScore(base({ volume: 1_000, volumeSource: "first_party", observedCtr: 0.01, targetPosition: 3, windowDays: 28 }));
+    expect(technical.scoreValue).toBeLessThanOrEqual(40);
+    expect(technical.impact.incrementalClicksPerMonth).toBeNull();
+    expect(measured.scoreValue).toBeGreaterThan(technical.scoreValue);
+  });
+
+  it("caps a generated question below anything measured", () => {
     const unmeasured = computeScore(base({ volume: null, unmeasured: true }));
-    const measured = computeScore(base({ volume: 1_000 }));
     expect(unmeasured.scoreValue).toBeLessThanOrEqual(5);
-    expect(unmeasured.scoreValue).toBeLessThan(measured.scoreValue);
   });
 
-  it("does not let an unmeasured opportunity outrank a small measured one", () => {
-    const unmeasured = computeScore(base({ volume: null, unmeasured: true }));
-    const modest = computeScore({ ...base({ volume: 50 }), effort: { playTypeBase: 12, sizeFactor: 1 } });
-    expect(unmeasured.scoreValue).toBeLessThanOrEqual(modest.scoreValue);
-  });
-
-  /**
-   * A page defect does not put all of that page's traffic at stake. Without an
-   * uplift, page count alone pushed "missing schema on 513 pages" to the top of the
-   * board, above a query already sitting at position 7.
-   */
-  it("discounts a technical fix to the traffic it can actually recover", () => {
-    const full = computeScore(base({ volume: 5_000 }));
-    const technical = computeScore(base({ volume: 5_000, uplift: TECHNICAL_UPLIFT }));
-    expect(technical.scoreValue).toBeLessThan(full.scoreValue);
-    expect(technical.inputs.worth.uplift).toBe(TECHNICAL_UPLIFT);
-  });
-
-  it("stores the uplift so the score stays recomputable", () => {
-    const result = computeScore(base({ volume: 5_000, uplift: TECHNICAL_UPLIFT }));
-    expect(result.inputs.worth.uplift).toBe(TECHNICAL_UPLIFT);
+  it("stores the impact assessment so the board can show its basis", () => {
+    const result = computeScore(base({ volume: 500, volumeSource: "provider", currentPosition: 8, targetPosition: 3 }));
+    expect(result.impact.kind).toBe("estimated");
+    expect(result.impact.assumptions.targetPosition).toBe(3);
   });
 });

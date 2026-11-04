@@ -19,6 +19,7 @@ import { generateDraftForAction } from "@/lib/research/content";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
+import { buildPageInventory } from "@/lib/research/page-inventory";
 import { countryFromText, resolveSiteContext } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
@@ -517,14 +518,17 @@ export async function runResearchRun(runId: string) {
         orderBy: { finishedAt: "desc" },
         select: { id: true },
       });
-      const candidatePages = latestCrawl
-        ? (await db.auditPage.findMany({
-            where: { crawlId: latestCrawl.id },
-            orderBy: { contentScore: "desc" },
-            take: 30,
-            select: { url: true },
-          })).map((page) => page.url)
-        : [];
+      // Sample by page type, not by content score: a detail-page template always
+      // outscores the hub that links to it, so the top-30 by score showed the model
+      // one page type and it reported the site's other types as missing.
+      const inventory = latestCrawl
+        ? buildPageInventory(
+            await db.auditPage.findMany({
+              where: { crawlId: latestCrawl.id },
+              select: { url: true, contentScore: true },
+            })
+          )
+        : null;
 
       synthesis = await synthesizeResearch({
         siteDomain: site.domain,
@@ -535,7 +539,23 @@ export async function runResearchRun(runId: string) {
         market: typeof brief.market === "string" ? brief.market : null,
         questions: stringList(brief.questions),
         sources: savedSources,
-        candidatePages,
+        candidatePages: inventory?.sampled ?? [],
+        pageTypes: inventory?.groups.map((group) => ({ type: group.type, pages: group.pages, sample: group.samples[0] })) ?? [],
+        // The model can only avoid false absence claims if it can see what the
+        // sampled pages actually say. Titles and headings are enough to tell
+        // "this page answers it" from "nothing here addresses it".
+        pageSummaries: inventory
+          ? (await db.auditPage.findMany({
+              where: { crawlId: latestCrawl!.id, url: { in: inventory.sampled.slice(0, 20) } },
+              select: { url: true, title: true, h1s: true, description: true },
+            })).map((page) => ({
+              url: page.url,
+              type: inventory.groups.find((group) => group.samples.includes(page.url))?.type ?? "other",
+              title: page.title,
+              h1s: Array.isArray(page.h1s) ? page.h1s.filter((value): value is string => typeof value === "string").slice(0, 3) : [],
+              description: page.description,
+            }))
+          : [],
       });
 
       const findingIdByIndex = new Map<number, string>();
@@ -654,6 +674,9 @@ export async function runResearchRun(runId: string) {
             provider: synthesis.provider,
             findings: synthesis.findings,
             actions: synthesis.actions,
+            // Claims the crawl contradicted, kept so the overreach is visible in
+            // the run rather than disappearing silently.
+            rejected_findings: synthesis.rejected,
           }
         : null,
       action_ids: actionIds,

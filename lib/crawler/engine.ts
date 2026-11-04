@@ -174,6 +174,27 @@ function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/**
+ * HTML with executable and template regions removed.
+ *
+ * `<script>` bodies are JavaScript, not markup: they contain string literals such
+ * as `` `<a href="${esc(url)}">` ``. Scanning raw HTML for anchors read those
+ * templates as real links and reported a 404 on `/cities/${esc(url)}` — a page the
+ * site never links to. Templates and `<noscript>` are excluded for the same
+ * reason: their content is not the page's navigation.
+ */
+export function documentMarkup(html: string): string {
+  let markup = html.replace(/<!--[\s\S]*?-->/g, " ");
+  for (const tag of ["script", "style", "template", "noscript"]) {
+    // A terminated region is removed whole; an unterminated one would otherwise
+    // leave its body in the markup and reintroduce the same false links.
+    markup = markup
+      .replace(new RegExp("<" + tag + "\\b[^>]*>[\\s\\S]*?<\\/" + tag + "\\s*>", "gi"), " ")
+      .replace(new RegExp("<" + tag + "\\b[^>]*>[\\s\\S]*$", "gi"), " ");
+  }
+  return markup;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Parse a fetched HTML page into a snapshot                         */
 /* ------------------------------------------------------------------ */
@@ -251,14 +272,14 @@ function parseHtml(
   });
 
   // Images
-  const imgTags = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
+  const imgTags = [...documentMarkup(html).matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
   const imageCount = imgTags.length;
   const imagesMissingAlt = imgTags.filter(
     (tag) => !/\balt\s*=\s*["'][^"']+["']/i.test(tag)
   ).length;
 
   // Body text and word count
-  const bodyText = stripTags(html);
+  const bodyText = stripTags(documentMarkup(html));
   const words = bodyText ? bodyText.split(/\s+/).filter(Boolean) : [];
   const wordCount = words.length;
 
@@ -271,7 +292,7 @@ function parseHtml(
   const links: LinkInfo[] = [];
 
   const anchorMatches = [
-    ...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi),
+    ...documentMarkup(html).matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi),
   ];
   for (const m of anchorMatches) {
     const attrs = m[1];

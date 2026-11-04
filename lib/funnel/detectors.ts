@@ -3,7 +3,7 @@ import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, ty
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
-import { ctrAtPosition, rankDistanceFactor, freshnessFactor, TECHNICAL_UPLIFT } from "@/lib/funnel/scoring";
+import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
 
 /**
@@ -219,6 +219,11 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+function dimNum(evidence: Evidence, key: string): number | null {
+  const value = (evidence.dimensions as Record<string, unknown>)?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function dim(evidence: Evidence, key: string): string | undefined {
   const value = (evidence.dimensions as Record<string, unknown>)?.[key];
   return typeof value === "string" ? value : undefined;
@@ -263,6 +268,44 @@ function byKind(evidence: Evidence[], kind: string): Evidence[] {
 }
 
 /**
+ * Keep only the current performance window.
+ *
+ * Every monthly projection writes a new `keyword_rank` observation per
+ * query/page, so a project accumulates one set per month. Detecting over all of
+ * them would count the same query once per month and let a superseded ranking
+ * compete with today's. Rows written before windows existed are kept when no
+ * window is present, so an un-migrated project still analyses.
+ */
+function latestValue(evidence: Evidence[], kind: string, key: string): string | null {
+  const values = byKind(evidence, kind)
+    .map((row) => dim(row, key))
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .sort();
+  return values.length > 0 ? values[values.length - 1] : null;
+}
+
+/**
+ * Keep only the current observation set for kinds that accumulate by run.
+ *
+ * Two kinds do: `keyword_rank` (one projection per month) and `onpage_crawl` (one
+ * set of issues per crawl). Detecting over every historical run counted the same
+ * query once per month and kept defects that a later crawl had already fixed —
+ * a page whose missing H1 was repaired stayed on the board forever.
+ */
+export function selectCurrentEvidence(evidence: Evidence[]): Evidence[] {
+  const window = latestValue(evidence, "keyword_rank", "windowEnd");
+  const crawl = latestValue(evidence, "onpage_crawl", "crawlId");
+  return evidence.filter((row) => {
+    if (row.kind === "keyword_rank" && window) return dim(row, "windowEnd") === window;
+    if (row.kind === "onpage_crawl" && crawl) return dim(row, "crawlId") === crawl;
+    return true;
+  });
+}
+
+/** @deprecated use selectCurrentEvidence; kept for callers that only rank evidence. */
+export const selectCurrentPerformanceWindow = selectCurrentEvidence;
+
+/**
  * One crawl row per (url, issue, schema): repeated crawls otherwise stack and
  * a 60-page site reports "missing schema on 120 pages".
  */
@@ -293,38 +336,63 @@ const DETECTORS: Detector[] = [
     type: "O1_winnable_rank",
     detect: (evidence) => {
       // Volume arrives as its own evidence kind from the provider (Wave 0.5), not
-      // on the rank row. A rank without a volume is a position, not an opportunity.
+      // on the rank row. A rank without any demand evidence is a position, not an
+      // opportunity — but demand can be first-party: a site whose Search Console
+      // shows impressions has measured demand even when nobody bought keyword
+      // volume, and refusing to analyse it left connected sites with no
+      // query-level opportunities at all.
       const volumeByQuery = new Map<string, number>();
       for (const row of byKind(evidence, "keyword_metrics")) {
         const query = dim(row, "query");
         const volume = num(row, "provider:volume");
         if (query && volume != null) volumeByQuery.set(query, volume);
       }
-      return byKind(evidence, "keyword_rank")
-        .filter((row) => {
-          const position = num(row, "provider:position") ?? num(row, "first_party:position");
-          const volume = num(row, "provider:volume") ?? volumeByQuery.get(byQuery(row)) ?? 0;
-          return position != null && position >= 4 && position <= 10 && volume >= DETECTOR_THRESHOLDS.minVolume;
-        })
-        .map((row) => {
-          const position = num(row, "provider:position") ?? num(row, "first_party:position")!;
-          const volume = num(row, "provider:volume") ?? volumeByQuery.get(byQuery(row)) ?? 0;
-          return {
-            type: "O1_winnable_rank" as const,
-            title: `Winnable rank: "${dim(row, "query")}" at position ${Math.round(position)}`,
-            summary: `Our page ranks ${Math.round(position)} for a keyword with ${Math.round(volume)} searches/month — a few ranks to win.`,
-            dedupKey: `O1:${dim(row, "query")}:${dim(row, "url") ?? ""}`,
-            clusterSlug: dim(row, "cluster"),
-            whyEvidenceIds: [],
-            howEvidenceIds: [row.id],
-            scoreInputs: scoreDefaults({
-              worth: { volume, ctrAtPosition: ctrAtPosition(position), businessValue: 0.7 },
-              winProbability: { rankDistance: rankDistanceFactor(position) },
-              effort: { playTypeBase: 6, sizeFactor: 1 },
-              freshness: freshnessFactor(row.observedAt, new Date()),
-            }),
-          };
+      const knowledge = businessValueFromKnowledge(evidence);
+      const candidates: DetectorCandidate[] = [];
+      for (const row of byKind(evidence, "keyword_rank")) {
+        const position = num(row, "provider:position") ?? num(row, "first_party:position");
+        if (position == null || position < 4 || position > 10) continue;
+        const query = byQuery(row);
+        const providerVolume = num(row, "provider:volume") ?? volumeByQuery.get(query) ?? null;
+        const impressions = num(row, "first_party:impressions") ?? 0;
+        const clicks = num(row, "first_party:clicks") ?? 0;
+        const measuredVolume = providerVolume != null && providerVolume >= DETECTOR_THRESHOLDS.minVolume;
+        const measuredImpressions = impressions >= DETECTOR_THRESHOLDS.minImpressions;
+        if (!measuredVolume && !measuredImpressions) continue;
+
+        const windowDays = dimNum(row, "windowDays");
+        const volume = measuredVolume ? (providerVolume as number) : impressions;
+        const observedCtr = num(row, "first_party:ctr");
+        const ctr = observedCtr != null && impressions > 0 ? observedCtr : ctrAtPosition(position);
+        candidates.push({
+          type: "O1_winnable_rank" as const,
+          title: `Winnable rank: "${query}" at position ${Math.round(position)}`,
+          summary: measuredVolume
+            ? `Our page ranks ${Math.round(position)} for a keyword with ${Math.round(volume)} searches/month — a few ranks to win.`
+            : `Our page ranks ${Math.round(position)} for "${query}" over the last ${windowDays ?? 28} days (${Math.round(impressions)} impressions, ${Math.round(clicks)} clicks) — a few ranks to win.`,
+          dedupKey: `O1:${query}:${dim(row, "url") ?? ""}`,
+          clusterSlug: dim(row, "cluster"),
+          whyEvidenceIds: [],
+          howEvidenceIds: [row.id],
+          scoreInputs: scoreDefaults({
+            worth: {
+              volume,
+              ctrAtPosition: ctr,
+              businessValue: knowledge.value,
+              volumeSource: measuredVolume ? "provider" : "first_party",
+              businessValueSource: knowledge.source === "knowledge" ? "knowledge" : "unknown",
+              currentPosition: position,
+              targetPosition: 3,
+              windowDays: windowDays ?? null,
+              observedCtr: observedCtr ?? null,
+            },
+            winProbability: { rankDistance: rankDistanceFactor(position) },
+            effort: { playTypeBase: 6, sizeFactor: 1 },
+            freshness: freshnessFactor(row.observedAt, new Date()),
+          }),
         });
+      }
+      return candidates;
     },
   },
   {
@@ -522,7 +590,8 @@ const DETECTORS: Detector[] = [
                 ctrAtPosition: null,
                 businessValue: businessValueFromKnowledge(evidence).value,
                 volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
-                uplift: TECHNICAL_UPLIFT,
+                technical: true,
+                severity: dim(row, "severity") === "CRITICAL" ? 1 : dim(row, "severity") === "WARNING" ? 0.6 : 0.3,
               },
               winProbability: { playTypeFactor: 0.9 },
               effort: { playTypeBase: 3, sizeFactor: 1 },
@@ -565,7 +634,8 @@ const DETECTORS: Detector[] = [
                   ctrAtPosition: null,
                   businessValue: businessValueFromKnowledge(evidence).value,
                   volumeSource: pageImpressions > 0 ? "first_party" : "impact_proxy",
-                  uplift: TECHNICAL_UPLIFT,
+                  technical: true,
+                  severity: dim(row, "severity") === "CRITICAL" ? 1 : dim(row, "severity") === "WARNING" ? 0.6 : 0.3,
                 },
                 winProbability: { playTypeFactor: 1.0 },
                 effort: { playTypeBase: 2, sizeFactor: 1 },
@@ -825,9 +895,9 @@ export async function runDetectors(
 ): Promise<DetectorRunResult> {
   const detectedBy = opts.detectedBy ?? "funnel-detectors";
   const now = opts.now ?? new Date();
-  const evidence = (await db.evidenceRecord.findMany({
+  const evidence = selectCurrentEvidence((await db.evidenceRecord.findMany({
     where: { projectId, supersededById: null },
-  })) as Evidence[];
+  })) as Evidence[]);
 
   const available = new Set(evidence.map((row) => row.kind));
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
