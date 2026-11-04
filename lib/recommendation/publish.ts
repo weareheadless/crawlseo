@@ -141,6 +141,27 @@ export async function publishDecision(
     return { published: false, opportunityId: existing?.id ?? null };
   }
 
+  // A legacy row for this finding may have a different dedup key. Once the finding
+  // has a canonical actionable decision, the unassessed legacy placeholder must not
+  // remain as a second recommendation.
+  const linked = await db.evidenceEdge.findMany({
+    where: { fromType: "evidence_record", fromId: input.evidenceId, toType: "opportunity" },
+    select: { toId: true },
+  });
+  for (const edge of linked) {
+    const row = await db.opportunity.findUnique({ where: { id: edge.toId }, select: { id: true, dedupKey: true, status: true } });
+    if (!row || row.status !== "detected" || row.dedupKey === decision.dedupKey) continue;
+    await db.opportunity.update({
+      where: { id: row.id },
+      data: {
+        status: "parked",
+        parkReason: "superseded_by_decision",
+        decidedBy: "recommendation-producer",
+        decidedAt: new Date(),
+      },
+    });
+  }
+
   const result = await upsertOpportunity(db, {
     projectId: input.projectId,
     type: decisionOpportunityType(input.findingType),

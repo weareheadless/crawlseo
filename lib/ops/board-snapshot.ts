@@ -140,7 +140,12 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
     }
 
     // A row created after the snapshot was not part of the reviewed state. Park it
-    // unless a human has already accepted or progressed it.
+    // unless a human has already accepted or progressed it. Older snapshots have no
+    // projectId; refuse to guess rather than park another project's rows.
+    if (!site.projectId) {
+      conflicts.push(`${site.domain}: snapshot has no project id, so new rows were not reconciled`);
+      continue;
+    }
     const snapshotIds = new Set(site.opportunities.map((row) => row.id));
     const createdAfter = await db.opportunity.findMany({
       where: { projectId: site.projectId, status: "detected" },
