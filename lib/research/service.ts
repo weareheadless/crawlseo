@@ -159,7 +159,11 @@ export async function createResearchRun(
         if (existing) return existing;
       }
       const used = await tx.researchRun.count({ where: { siteId, createdAt: { gte: monthStart, lt: monthEnd } } });
-      if (used >= budget) throw new ResearchServiceError("Monthly research task budget is exhausted", 429);
+      // The count is a runaway guard for manual runs, not a cap on the analysis.
+      // A scheduled run is one per month by construction (its schedule key), so a
+      // month of manual test runs must not be able to lock the tenant out of it.
+      const isScheduled = Boolean(scheduleKey) && input.trigger === "SCHEDULED";
+      if (!isScheduled && used >= budget) throw new ResearchServiceError("Monthly research task budget is exhausted", 429);
       return tx.researchRun.create({
         data: {
           siteId,
