@@ -89,3 +89,13 @@ describe("connector context snapshot compare-and-set", () => {
     expect(mocks.$transaction).not.toHaveBeenCalled();
   });
 });
+
+describe("audience market vs business country", () => {
+  it("accepts an ISO country code as a stated market", async () => {
+    const { countryFromText } = await import("@/lib/site/context");
+    expect(countryFromText("US")).toBe("US");
+    expect(countryFromText("us")).toBe("US");
+    expect(countryFromText("United States")).toBe("US");
+    expect(countryFromText("zz")).toBeNull();
+  });
+});

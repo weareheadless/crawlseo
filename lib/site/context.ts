@@ -96,9 +96,26 @@ const COUNTRY_WORDS: Array<[RegExp, string]> = [
   [/united states|\busa\b|\bu\.s\.|\bamerica\b/, "US"],
 ];
 
+/**
+ * ISO-3166 alpha-2 codes we accept verbatim. Owners write "US", not
+ * "United States", and a market stated as "US" was being ignored — which is how a
+ * US-audience site ended up measured against Mexico.
+ */
+const ISO_COUNTRY_CODES = new Set([
+  "US", "GB", "CA", "MX", "FR", "ES", "IT", "DE", "PT", "NL", "BE", "CH", "AT",
+  "IE", "SE", "NO", "DK", "FI", "PL", "CZ", "GR", "TR", "RU", "UA", "RO", "HU",
+  "AU", "NZ", "JP", "KR", "CN", "HK", "TW", "SG", "MY", "TH", "VN", "PH", "ID",
+  "IN", "PK", "AE", "SA", "IL", "ZA", "NG", "KE", "EG", "MA", "BR", "AR", "CL",
+  "CO", "PE", "UY", "EC", "VE", "CR", "PA", "GT", "DO", "PR",
+]);
+
 /** Country named by free text, or null. It never guesses. */
 export function countryFromText(text: string | null | undefined): string | null {
   if (!text) return null;
+  const trimmed = text.trim();
+  if (/^[a-z]{2}$/i.test(trimmed) && ISO_COUNTRY_CODES.has(trimmed.toUpperCase())) {
+    return trimmed.toUpperCase();
+  }
   const value = text.toLowerCase();
   for (const [pattern, code] of COUNTRY_WORDS) if (pattern.test(value)) return code;
   return null;
@@ -227,21 +244,28 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
   }
 
   // Audience market: stated by the owner, else named in the audience description.
+  // A market the owner stated outranks a country inferred from the audience text.
+  // Oceanic's audience reads "people considering training in Playa del Carmen",
+  // which resolves to Mexico, while the owner had stated the market as US — the
+  // audience's market is where they buy from, not where the course happens.
+  const statedMarket = firstString(constraints.market) ?? firstString(factValue(fields, "market"));
   const audienceMarket = firstString(factValue(fields, "audienceMarket"))
     ?? firstString(factValue(fields, "targetMarket"))
     ?? firstString(constraints.audienceMarket)
     ?? firstString(constraints.targetMarket)
+    ?? (statedMarket && countryFromText(statedMarket) ? statedMarket : null)
     ?? null;
   const audienceText = typeof profile?.audience === "string" ? profile.audience : null;
   let audienceCountry = countryFromText(audienceMarket) ?? countryFromText(audienceText);
   let audienceSource: ContextSource = audienceCountry ? "site_profile" : "unknown";
   if (audienceCountry && firstString(factValue(fields, "audienceMarket"))) audienceSource = "business_knowledge";
 
-  // Country: explicit market text, then the domain, then an unambiguous language.
-  // Null stays null: the DataForSEO catalog decides its own default, once.
-  let country = countryFromText(market)
-    ?? countryFromText(location)
-    ?? countryFromText(firstString(factValue(fields, "serviceArea")));
+  // Business country: where the business is, which is not the audience's market.
+  // A site can sell into the US from Mexico; taking `market` (an audience signal)
+  // as the business country made Oceanic report "business in US".
+  let country = countryFromText(location)
+    ?? countryFromText(firstString(factValue(fields, "serviceArea")))
+    ?? countryFromText(firstString(factValue(fields, "market")));
   let countrySource: ContextSource = country ? "business_knowledge" : "unknown";
   if (!country && tld.country) {
     country = tld.country;
