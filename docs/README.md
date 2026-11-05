@@ -20,6 +20,7 @@ requirements.
 
 ## Active contracts
 
+- [Atelier monthly bundle pilot](pilot-atelier-bundle.md)
 - [Pipeline stage contract](pipeline-stage-contract.md)
 - [Pipeline lineage contract](pipeline-lineage-contract.md)
 - [Pipeline configuration contract](pipeline-configuration-contract.md)
