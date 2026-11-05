@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 import { backfillSiteEvidence, type BackfillResult } from "@/lib/funnel/backfill";
+import { parseOpportunityProposal } from "@/lib/funnel/proposal";
 import {
   bridgeBusinessKnowledgeToEvidence,
   type BusinessKnowledgeBridgeResult,
@@ -64,6 +65,7 @@ export type WeeklyRefreshResult = {
     proposals: WeeklyTimelyProposal[];
     stored: number;
     dropped: Array<{ title: string; reason: string }>;
+    expired: number;
     reason: string | null;
   };
 };
@@ -244,7 +246,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence: report?.evidence ?? { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: report?.news ?? { fetched: 0, stored: 0, items: [] },
-      timely: report?.timely ?? { proposals: [], stored: 0, dropped: [], reason: "existing run" },
+      timely: report?.timely ?? { proposals: [], stored: 0, dropped: [], expired: 0, reason: "existing run" },
     };
   }
 
@@ -256,7 +258,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence: { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: { fetched: 0, stored: 0, items: [] },
-      timely: { proposals: [], stored: 0, dropped: [], reason: "dry run" },
+      timely: { proposals: [], stored: 0, dropped: [], expired: 0, reason: "dry run" },
     };
   }
 
@@ -350,6 +352,29 @@ export async function runWeeklyRefresh(
       take: 6,
     });
 
+    // Expire timely items that were detected but never accepted. Expiry is a
+    // park, not a delete: the row and its evidence stay for audit.
+    const expiring = await db.opportunity.findMany({
+      where: {
+        projectId: site.projectId,
+        status: "detected",
+        detectedBy: { in: ["phase3:topic-map", "phase5:weekly"] },
+      },
+      select: { id: true, recommendationDecision: true },
+    });
+    const expiredIds = expiring
+      .filter((row) => {
+        const proposal = parseOpportunityProposal(row.recommendationDecision);
+        return Boolean(proposal?.expiresAt && Date.parse(proposal.expiresAt) <= now.getTime());
+      })
+      .map((row) => row.id);
+    if (expiredIds.length > 0) {
+      await db.opportunity.updateMany({
+        where: { id: { in: expiredIds } },
+        data: { status: "parked", parkReason: "timely item expired" },
+      });
+    }
+
     const timely = buildTimelyProposals({
       news: newsItems,
       now,
@@ -398,6 +423,7 @@ export async function runWeeklyRefresh(
         proposals: timely.proposals,
         stored,
         dropped,
+        expired: expiredIds.length,
         reason: timely.reason,
       },
       approvalReference: input.approval ?? null,
@@ -429,7 +455,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence,
       news: { fetched: fetched.length, stored: saved.length, items: newsItems },
-      timely: { proposals: timely.proposals, stored, dropped, reason: timely.reason },
+      timely: { proposals: timely.proposals, stored, dropped, expired: expiredIds.length, reason: timely.reason },
     };
   } catch (error) {
     await db.researchRun.update({
@@ -473,6 +499,7 @@ export function renderWeeklyReport(result: WeeklyRefreshResult, domain: string):
   }
   lines.push("## Timely proposals");
   lines.push("");
+  if (result.timely.expired > 0) lines.push(`- Expired timely items parked: ${result.timely.expired}`);
   if (result.timely.proposals.length === 0) {
     lines.push(`No timely proposal. ${result.timely.reason ?? ""}`);
   } else {

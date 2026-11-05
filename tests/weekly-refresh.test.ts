@@ -55,7 +55,13 @@ function mapReport() {
 }
 
 function makeDb() {
-  const state = { created: 0, updated: 0, runs: [] as Array<Record<string, unknown>> };
+  const state = {
+    created: 0,
+    updated: 0,
+    runs: [] as Array<Record<string, unknown>>,
+    expired: [] as Array<Record<string, unknown>>,
+    parked: [] as string[],
+  };
   const db = {
     site: {
       findUnique: async () => ({ id: "site-1", domain: "atelier-harmonie.example", projectId: "proj-1", retiredAt: null }),
@@ -99,6 +105,13 @@ function makeDb() {
     },
     demandMapCluster: {
       findMany: async () => [{ id: "cluster-1", slug: "local-normandie" }],
+    },
+    opportunity: {
+      findMany: async () => state.expired,
+      updateMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+        state.parked.push(...where.id.in);
+        return { count: where.id.in.length };
+      },
     },
     evidenceRecord: {
       findMany: async ({ where }: { where: { kind?: string } }) => {
@@ -218,6 +231,36 @@ describe("weekly refresh", () => {
     expect(result.timely.proposals).toHaveLength(0);
     expect(result.timely.stored).toBe(0);
     expect(result.timely.reason).toMatch(/14 days/);
+  });
+
+  it("parks an expired timely item instead of leaving it on the board", async () => {
+    const { db, state } = makeDb();
+    state.expired.push({
+      id: "opp-old",
+      recommendationDecision: {
+        schemaVersion: "phase3-v1",
+        source: "phase3-topic-map",
+        readiness: "actionable",
+        lane: "timely",
+        kind: "article",
+        title: "Old timely item",
+        summary: "",
+        whyNow: "",
+        evidenceRefs: [],
+        target: { url: "/blog", newAsset: true, section: null },
+        action: "",
+        expectedOutcome: "",
+        effort: "small",
+        confidence: "low",
+        expiresAt: "2020-01-01T00:00:00.000Z",
+        topicSlug: "local-normandie",
+        sources: [],
+        critique: null,
+      },
+    });
+    const result = await runWeeklyRefresh(db as never, { siteId: "site-1", mode: "execute", now }, makeDeps());
+    expect(result.timely.expired).toBe(1);
+    expect(state.parked).toContain("opp-old");
   });
 
   it("returns an existing weekly run without redoing the work", async () => {
