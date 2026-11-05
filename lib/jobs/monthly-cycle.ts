@@ -1,4 +1,4 @@
-import { JobKind, JobStatus, type PrismaClient } from "@prisma/client";
+import { JobKind, type PrismaClient } from "@prisma/client";
 
 import { enqueueJob } from "@/lib/jobs/queue";
 import { createResearchRun } from "@/lib/research/service";

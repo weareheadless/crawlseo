@@ -1,154 +1,178 @@
-# Structural recommendation handoff — 2026-11-04
+# Structural recommendation handoff — corrected 2026-11-04
 
-> **Correction (2026-11-04): this handoff is stale and is not acceptance evidence.**
-> It predates the R7/R8 repair (`36e7e46`), the safety repairs (`dfefa00`,
-> `828ed5c`) and the residual repair. Its `982 passed / 16 skipped` total is
-> superseded by the current `1,054 passed / 21 skipped`; its rollback description
-> predates the transactional, scoped repair. The G1–G10 residuals are repaired in
-> `docs/recommendation-migration-residual-repair-2026-11-04.md`. Package 6 live
-> evaluation, independent review and package 7 rollout remain gated. A corrected
-> handoff is package 7 work.
+> This replaces the stale 2026-11-04 draft. The earlier text is preserved in git
+> history. It reported `982 passed / 16 skipped`, predated the safety/R7/R8 repairs
+> and described the old rollback behaviour. Do not use it as acceptance evidence.
 
 ## Release identity
 
 - Branch: `main`, local commits only. **Not pushed, merged or deployed.**
+- Head commit: `4f1f70b` (residual repair), on top of `36e7e46` (R7/R8),
+  `828ed5c` and `dfefa00` (safety).
 - Migration: `20261104180000_opportunity_recommendation_decision` (additive).
-- Applied to: disposable `csv_validation` only. **Not applied to the application database.**
+- Applied to: disposable `csv_validation` only. **Not applied to the application
+  database.**
 - Production publication/deployment: **none**.
-- Real evaluation: read-only (`persist: false`, extraction dry run, no provider spend, no
-  opportunity/task/knowledge write).
+- Live model/provider calls: **none** in this pass.
+- Real evaluation: read-only historical runs only; the fresh monthly evaluation is
+  gated by an approved manifest.
 
-## Corrective implementation (this pass)
+## What this pass repaired
 
-The review at `docs/structural-recommendation-review-2026-11-04.md` found the earlier
-implementation was a one-shot reviewer with predetermined retrieval. This pass adds the
-missing analysis loop and removes the remaining semantic overrides.
+The safety review is closed by `dfefa00`/`828ed5c`; R7 lifecycle/acceptance and R8
+shadow/rollback are closed by `36e7e46`. This pass closes the ten residuals in
+`docs/recommendation-migration-completion-review-2026-11-04.md`:
 
-### One bounded analysis loop
+| Gap | Repair |
+|---|---|
+| G1 inventory | Reads every crawl page in cursor batches; searches URL, title and body; bounded model projection is explicit |
+| G2 rendered pages | Bounded Chromium render for shells; records method/status/hash/truncation; failure stays unknown |
+| G3 monthly bootstrap | Knowledge/language/topics bootstrap before the research stage; derived topics used in the same cycle |
+| G4 empty knowledge | Empty/unusable revisions are treated as missing and trigger the bootstrap |
+| G5 evaluation parity | Evaluation calls `ensureTenantAnalysis` in dry-run mode |
+| G6 browser/accessibility | Seeded desktop/mobile check with axe-core; shell labels and source-link underline fixed |
+| G7 complete shadow | `not_assessed` distinct from `failed`; completeness/budget fields; all mode; preserved task identity |
+| G8 shadow destinations | Output path and disposable database URL validated before any work; CLI opens the validated URL |
+| G9 scoped rollback | Snapshots/restores carry project/site/run scope; out-of-scope sites are skipped |
+| G10 shadow/apply | Projection computes the same score inputs and evidence completeness that publish stores; equivalence test |
 
-`candidate → packet → AI decides or requests evidence → scoped retrieval → new packet →
-final decision → validation → persistence`
-
-- `lib/recommendation/contracts.ts` defines a discriminated model result:
-  `request_evidence`, `final_decision` or failure. Requests carry the unresolved question
-  and why it could change the decision; they are not customer recommendations.
-- `lib/recommendation/ledger.ts` charges every model call, repair, evidence round,
-  retrieval and live fetch before dispatch. Limits are execution policy, not SEO truth.
-- `lib/recommendation/run.ts` runs the loop, validates requests against site scope and
-  known identities, expands the packet, and refuses to publish an invalid decision.
-- `lib/recommendation/packet.ts` supplies requested pages **whole** (up to 20k chars),
-  fixes section offsets with an index map, strips builder-site comment/template payloads
-  before text extraction, and records retrieval method/failure per page.
-
-### Retrieval repairs
-
-- Inventory pagination is consistent (500 known pages), not a hidden 200-row slice.
-- Selection is relevance-first; the homepage no longer consumes the page budget.
-- Initial live fetches are limited to two, leaving budget for model requests.
-- Wix-style base64/comment payloads are removed via `documentMarkup` before text
-  extraction; full HTML is read, then text is capped.
-- A requested page is supplied whole, so the model stops re-requesting truncated text.
-- Journey requests may inspect a known inventory URL and record observed anchors.
-- Per-fact attribution: a business fact is attributed only to a page containing its
-  value; otherwise its source is absent, not the first page.
-
-### Semantic overrides removed
-
-- No readiness/coverage/target-role synonym coercion. Only case/hyphen transport
-  normalisation is allowed; ambiguous values are validation errors and a bounded repair.
-- Duplicate coverage is rejected, not silently merged in favour of an answering row.
-- A `does_not_answer` claim requires inspected text; an unread page is unassessable.
-- An investigation that asks a person to inspect already-supplied content is rejected.
-- `create_asset` alongside an answering page requires an explicit `assetJustification`
-  (distinct intent and why the existing answer is insufficient).
-- The legacy lexical verdict no longer suppresses O13/O14 assessment; contradicted
-  legacy rows remain visible as unassessed backlog. The diagnostic pass cannot mark
-  coverage complete with zero readable pages.
-
-### Lifecycle, acceptance and presentation
-
-- Reuse compares the sealed packet hash with the **current** model, prompt, policy and
-  schema versions. A changed dependency invalidates the old decision.
-- Reassessment checks reuse before consuming the budget and processes oldest-first, so
-  cached rows cannot starve later stale rows. New findings and reassessment share one
-  ledger per run.
-- Rejection reconciliation searches evidence edges from both the superseded and new
-  evidence IDs, so a legacy row with a changed dedup key can still be parked.
-- Task acceptance loads the authoritative decision from the opportunity, requires a
-  migrated O13/O14 row to be `actionable` or a bounded `needs_investigation`, refuses
-  legacy-unassessed rows, checks the decision ID supplied by the page, and writes the
-  task plus opportunity transition in one transaction with a fingerprint precondition.
-- The task plan carries the full decision; investigations get `kind: "investigation"`.
-- Detail/API render every coverage assessment, excerpts, premise, investigation, all
-  benefits, risks, contradictions and resolved packet references (real URLs, not
-  `source:<id>` as an href).
-
-### Shadow and rollback
-
-- `lib/recommendation/shadow.ts` runs the real packet/model/validation loop with
-  `persist: false` and writes a proposed diff (added/changed/removed/unchanged/failed)
-  to an explicit artifact. It is not a hash-only dry run.
-- Board snapshots now include research evidence selection. Restore rewinds active/
-  superseded evidence observed before the snapshot, leaves newer evidence untouched,
-  parks rows created after the snapshot, and uses compare-and-swap on `updatedAt`.
-
-## Real read-only results (final code)
-
-| Site | Finding | Decision |
-|---|---|---|
-| Susi | Foreign land ownership / fideicomiso | **no_action** — requested the dedicated fideicomiso and foreign-buyer pages, read them, contradicted the absence premise, found no inadequacy |
-| Susi (fresh synthesis) | Foreign-buyer legal mechanics | **no_action** — existing article answers the question thoroughly |
-| Susi (fresh synthesis) | Tulum downturn / buyer risk | **no_action** — three supplied Tulum articles already answer it; listing pages surface them |
-| Atelier | Off-topic corpus | **rejected** — research failure, not customer work |
-| Atelier | Lampshade service page | **actionable / update_page** — targeted section on the readable article; unread category pages acknowledged; no duplicate asset |
-| Casamigo | Mexico City | **rejected** — outside the stated service area; one portal listing is not demand |
-| Oceanic | Beginner depth safety / lanyard | **actionable / update_page** — specific section on the existing article, subject-matter review retained |
-| Astrid (held out) | Fresh monthly discovery | **blocked** — automatic extraction succeeds (9 fields), but no research run/source observations exist, so fresh candidate discovery awaits authorised research collection. This is an acquisition gap, not a manufactured recommendation. |
-
-Artifacts: `/tmp/opencode/v2-susi.json`, `v2-susi-fresh.json`,
-`v2-atelier-corpus.json`, `v2-atelier-abatjour.json`, `v2-casamigo.json`,
-`v2-oceanic.json`, `v2-unseen-fresh.json`.
-
-The key behavioural change: Susi previously returned an investigation asking a person to
-read a page the system had skipped. It now reads that page and returns no-action. Atelier
-previously stalled on an unread service page; it now updates a readable article without
-creating a duplicate.
+Full detail: `docs/recommendation-migration-residual-repair-2026-11-04.md`.
 
 ## Verification
 
-```
-npx tsc --noEmit                                   # clean
-npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'
-# 982 passed, 16 skipped
-DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run \
-  tests/customer-recommendations-postgres.integration.test.ts
-# 4 passed (one transient failure on a first run, green on rerun)
-npm run build                                      # exit 0, compiled successfully
-```
+Commands and results from the current tree:
 
-New regression coverage in `tests/recommendation-regressions.test.ts`:
+| Command | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'` | 1,058 passed / 21 skipped, exit 0 |
+| `DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run tests/customer-recommendations-postgres.integration.test.ts` | 9 passed, exit 0 |
+| `npm run build` | exit 0, compiled successfully |
+| `npx tsx scripts/browser-review.ts --database-url=... --out-dir=/tmp/opencode/browser-review-3` | exit 0, zero axe violations, no horizontal overflow |
 
-- unread page cannot support `does_not_answer` or an update;
-- ambiguous readiness is refused, not coerced;
-- missing target role is refused;
-- duplicate coverage is refused;
-- distinct-intent asset requires justification;
-- investigation of already-supplied content is refused;
-- section offsets survive repeated whitespace;
-- evidence requests outside the site or for already-supplied text are refused;
-- a real request → retrieval → final decision loop runs through the shared service.
+Browser artifacts: `/tmp/opencode/browser-review-3/report.json` plus
+`investigation-desktop.png`, `investigation-mobile.png`,
+`actionable-desktop.png`, `actionable-mobile.png`.
+
+The full suite initially OOM'd because a legacy fixture ignored the new inventory
+cursor. `loadInventory` now stops on a missing or repeated cursor; the targeted
+test and the full suite then passed. No assertion was weakened.
+
+## Package status
+
+| Package | Status | Evidence |
+|---|---|---|
+| 1 — contract and failures | Accepted | `docs/recommendation-analysis-safety-252df72-repair.md`, offline probes |
+| 2 — evidence retrieval | Accepted | G1–G5 tests; inventory, rendered, monthly bootstrap, empty knowledge, evaluation parity |
+| 3 — semantic integrity | Accepted | Safety repair tests; exact packet/decision round trips |
+| 4 — lifecycle and UI | Accepted | R7 tests; seeded browser/accessibility check |
+| 5 — shadow and rollback | Accepted | R8 tests; complete shadow diff, destination validation, scoped rollback, shadow/apply equivalence |
+| 6 — fresh evaluation | Open, gated | Manifest/plan gate in `lib/recommendation/evaluation-manifest.ts`; live calls need owner approval |
+| 7 — reviewed handoff | This document | Independent review and rollout approval still pending |
+
+“Accepted” here means the engineering exit checks for that package pass. It does
+not mean the SEO output is useful or independently approved.
+
+## Original 13 defects
+
+The dispositions are recorded in `docs/recommendation-analysis-safety-252df72-repair.md`
+and the review. The categories are:
+
+1. unread-page negative coverage;
+2. semantic enum/alias coercion;
+3. guessed target roles;
+4. duplicate/conflicting coverage selection;
+5. fixed-prefix extraction hiding later sections;
+6. homepage-first fetch starvation;
+7. client-rendered content treated as absent;
+8. prompt/model invalidation;
+9. later candidates starved by cached first items;
+10. old-evidence rejection not reconciled;
+11. stale acceptance race;
+12. hidden structured investigation;
+13. budget/replay/archival fidelity.
+
+## Call-site map and unmigrated work
+
+Migrated entry points: new research, reassessment, shadow, publish, acceptance,
+evaluation and the monthly tenant bootstrap. They share the canonical packet,
+decision, validation and projection code.
+
+Unmigrated: the legacy O1–O12 detectors, their lexical verdicts and their scores.
+They remain readable and explicitly labelled unmigrated; they cannot qualify
+migrated work. No claim is made that the whole product is AI-qualified.
+
+## Schema, API and compatibility
+
+- Packet/decision contracts are versioned (`evidence-packet/2`,
+  `recommendation-decision/2`). The `rendered` retrieval value and
+  `not_assessed` shadow status are additive.
+- `recommendationDecision`, version, fingerprint and evidence id are nullable
+  legacy-compatible columns. Legacy rows are never presented as freshly validated.
+- The migration is additive and was exercised only on the disposable schema.
+- No API shape was removed. Shadow reports add fields; existing readers ignore them.
+
+## Privacy and cost
+
+- No live provider spend. Shadow writes one JSON artifact and reads the explicitly
+  supplied disposable database.
+- Browser review seeds and deletes an isolated workspace; it never points at the
+  application schema.
+- Evaluation manifest limits are mandatory: candidates, requests, rounds and spend.
+- Full logs are under `/tmp/opencode/`; no credential was printed.
+
+## Package 6 — evaluation status
+
+Track A (historical regression assessment) has real read-only results for Susi,
+Atelier, Casamigo and Oceanic, but the exact packets, attempts, failures and
+proposed diff are not yet packaged as one reviewer artifact.
+
+Track B (fresh monthly discovery) remains blocked for the held-out tenant: its
+extraction succeeds, but it has no authorised research run/source observations.
+Do not substitute `--finding`, `--need` or a handcrafted candidate.
+
+The manifest/plan gate exists. To run a live evaluation:
+
+1. write a manifest naming sites, model, output directory, request/round/spend
+   limits and an owner approval reference;
+2. run the planner without `--execute`;
+3. obtain the owner's matching approval;
+4. run with `--execute --approval=<reference>` and save every attempt, packet,
+   decision and failure.
+
+A qualified SEO/business reviewer must then judge the exact packets and outcomes.
+A second AI is not independent approval.
+
+## Package 7 — rollout and rollback runbook (not authorised)
+
+Stop until the owner authorises each step separately.
+
+1. **Preflight:** confirm the target commit, migration, backup and maintenance
+   window; run the full suite, build and browser check on the release candidate.
+2. **Migration:** apply the additive migration to a copy of the application
+   database; verify schema and legacy reads.
+3. **Snapshot:** take a scoped board snapshot for the target project/site and
+   record the snapshot path, checksum and run id.
+4. **Shadow:** run the shadow against the same scoped data; review every
+   added/changed/removed/not-assessed/failed entry and preserved task.
+5. **Apply:** publish the reviewed decisions for the scoped project only; verify
+   opportunities, accepted task snapshots and evidence selection.
+6. **Rollback:** restore the same scope with `restoreBoardSnapshot(db, path,
+   { projectId, siteId, runId })`; confirm conflicts are reported, out-of-scope
+   sites are skipped and no accepted task was rewritten.
+7. **Stop conditions:** any checksum mismatch, destination mismatch, unexpected
+   accepted-work change, unassessed candidate or failed validation stops the run.
+
+Production migration, content-populating crawl, shadow/apply reassessment,
+publication, merge and deployment remain unauthorised.
 
 ## Remaining gates
 
-- **Independent SEO/business review** of the exact saved packets and decisions. The
-  outputs above are single real runs, not expert approval.
-- **Held-out fresh monthly discovery** requires authorised research/source collection
-  for a tenant with no existing run; the current held-out result proves extraction only.
-- **Package 5 shadow/rollback proof** is implemented and unit/integration tested, but no
-  full all-tenant shadow diff has been run against production data.
-- Browser/accessibility review of the updated detail panel on seeded data.
-- Production migration, content-populating crawl, shadow/apply reassessment, deployment.
-- The legacy O1–O12 detectors and their scores remain unmigrated and are not claimed as
-  AI-qualified.
+- package 6 Track A reviewer artifact;
+- package 6 Track B authorised research acquisition and fresh run;
+- independent SEO/business review;
+- production migration, apply and deployment approval;
+- latest-diff manager review.
 
-No approval is implied by this document or by the green test totals.
+No green engineering total is evidence of SEO usefulness, independent approval or
+production readiness.

@@ -229,7 +229,7 @@ the file.
 | Command | Result |
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
-| `npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'` | 1,054 passed / 21 skipped, exit 0 |
+| `npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'` | 1,058 passed / 21 skipped, exit 0 |
 | `DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 npx vitest run tests/customer-recommendations-postgres.integration.test.ts` | 9 passed, exit 0 |
 | `npm run build` | exit 0, compiled successfully |
 | `npx tsx scripts/browser-review.ts ...` | exit 0, 0 axe violations, no overflow |
