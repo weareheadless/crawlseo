@@ -25,6 +25,7 @@ import {
   type ProposalInputs,
 } from "@/lib/research/opportunity-generation";
 import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
+import { buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
 
 loadEnvConfig(process.cwd());
 
@@ -117,14 +118,19 @@ async function main(): Promise<void> {
     const map = topicReport?.map;
     if (!map) throw new CliError(`topic map run ${topicRun.id} has no map report`, 4);
 
-    const [clusters, memberships, knowledge, aeoRows, bundleRun] = await Promise.all([
+    const [clusters, evidenceRows, knowledge, aeoRows, bundleRun] = await Promise.all([
       db.demandMapCluster.findMany({
         where: { projectId: site.projectId, slug: { in: map.clusters.map((cluster) => cluster.slug) }, supersededAt: null },
         select: { id: true, slug: true },
       }),
       db.evidenceRecord.findMany({
-        where: { projectId: site.projectId, siteId: site.id, kind: "keyword_universe_membership", supersededById: null, producer: "topic-map-v1" },
-        select: { id: true, dimensions: true },
+        where: {
+          projectId: site.projectId,
+          siteId: site.id,
+          kind: { in: ["keyword_rank", "keyword_metrics", "serp_snapshot", "keyword_universe_membership"] },
+          supersededById: null,
+        },
+        select: { id: true, kind: true, dimensions: true, metrics: true, observedAt: true },
       }),
       db.evidenceRecord.findMany({
         where: { projectId: site.projectId, siteId: site.id, kind: "knowledge_fact", supersededById: null },
@@ -148,12 +154,7 @@ async function main(): Promise<void> {
       }),
     ]);
 
-    const evidenceByCluster = new Map<string, string[]>();
-    for (const row of memberships) {
-      const dimensions = row.dimensions as { cluster?: string } | null;
-      if (!dimensions?.cluster) continue;
-      evidenceByCluster.set(dimensions.cluster, [...(evidenceByCluster.get(dimensions.cluster) ?? []), row.id].slice(0, 8));
-    }
+    const evidenceByCluster = buildClusterEvidenceIds(map.clusters, evidenceRows);
     const aeoEvidence = aeoRows.flatMap((row) => {
       const dimensions = row.dimensions as { question?: string } | null;
       const metrics = row.metrics as Record<string, { value?: number }> | null;
@@ -246,25 +247,21 @@ async function main(): Promise<void> {
 
     const kept: Proposal[] = [];
     const dropped: Array<{ title: string; reason: string }> = [];
-    const droppedKeys: string[] = [];
     for (const proposal of proposals) {
       const decision = critique.decisions.get(proposal.dedupKey);
-      if (decision?.verdict === "drop") {
-        dropped.push({ title: proposal.title, reason: decision.reason });
-        droppedKeys.push(proposal.dedupKey);
-        continue;
-      }
+      // A critique drop is advice, not an automatic removal. The proposal stays
+      // on the board with the drop reason so the owner can decide.
       kept.push({
         ...proposal,
         critique: decision ? { verdict: decision.verdict, reason: decision.reason } : null,
       });
     }
 
-    const evidenceRows = await db.evidenceRecord.findMany({
+    const allEvidenceRows = await db.evidenceRecord.findMany({
       where: { projectId: site.projectId, siteId: site.id },
       select: { id: true },
     });
-    const evidenceIds = new Set(evidenceRows.map((row) => row.id));
+    const evidenceIds = new Set(allEvidenceRows.map((row) => row.id));
     const stored = await storeProposals(db, {
       projectId: site.projectId,
       siteId: site.id,
@@ -277,14 +274,18 @@ async function main(): Promise<void> {
       clusters,
     });
     dropped.push(...stored.dropped);
-    if (droppedKeys.length > 0) {
+    const keptKeys = kept.map((proposal) => proposal.dedupKey);
+    if (keptKeys.length > 0) {
+      // A proposal that the AI previously recommended dropping but now keeps
+      // comes back; a human rejection or an expired item does not.
       await db.opportunity.updateMany({
         where: {
           projectId: site.projectId,
-          dedupKey: { in: droppedKeys },
-          status: { in: ["detected", "parked"] },
+          dedupKey: { in: keptKeys },
+          status: "closed",
+          parkReason: "dropped by critique",
         },
-        data: { status: "closed", parkReason: "dropped by critique" },
+        data: { status: "detected", parkReason: null },
       });
     }
 

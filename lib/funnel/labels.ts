@@ -178,6 +178,28 @@ export function sourceBadge(producer: string): string {
   }
 }
 
+const EVIDENCE_KIND_LABELS: Record<string, string> = {
+  keyword_rank: "Search Console query",
+  keyword_metrics: "Keyword metrics",
+  serp_snapshot: "SERP snapshot",
+  serp_features: "SERP features",
+  intent_label: "Intent label",
+  competitor_rank: "Competitor rank",
+  backlink_profile: "Backlink profile",
+  share_of_voice: "Share of voice",
+  keyword_universe_membership: "Cluster membership",
+  onpage_crawl: "Crawl observation",
+  internal_link_graph: "Internal link graph",
+  ai_visibility_observation: "AI visibility",
+  gsc_query: "Search Console query",
+  gsc_page: "Search Console page",
+  vitals: "Core Web Vitals",
+  analytics: "Analytics",
+  knowledge_fact: "Business knowledge",
+  question_coverage: "Question coverage",
+  research_finding: "Research finding",
+};
+
 export function evidenceKindLabel(kind: string): string {
-  return kind.replaceAll("_", " ");
+  return EVIDENCE_KIND_LABELS[kind] ?? kind.replaceAll("_", " ");
 }

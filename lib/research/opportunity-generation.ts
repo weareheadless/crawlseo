@@ -639,9 +639,25 @@ export async function storeProposals(
       continue;
     }
     const cluster = input.map.clusters.find((entry) => entry.slug === proposal.topicSlug) ?? null;
-    const howEvidenceIds = proposal.evidenceRefs.filter((id) => !input.knowledgeEvidenceIds.includes(id)).slice(0, 6);
+    const howEvidenceIds = proposal.evidenceRefs.filter((id) => !input.knowledgeEvidenceIds.includes(id)).slice(0, 8);
     const whyEvidenceIds = input.knowledgeEvidenceIds.slice(0, 2);
     try {
+      // A refresh replaces the evidence this generated proposal rests on. Old
+      // membership-only edges must not linger next to the new query/SERP edges.
+      const existing = await db.opportunity.findUnique({
+        where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: proposal.dedupKey } },
+        select: { id: true },
+      });
+      if (existing) {
+        await db.evidenceEdge.deleteMany({
+          where: {
+            toType: "opportunity",
+            toId: existing.id,
+            relation: "supporting",
+            createdBy: { in: ["phase3:topic-map", "phase5:weekly"] },
+          },
+        });
+      }
       const record = await upsertOpportunity(db, {
         projectId: input.projectId,
         type,

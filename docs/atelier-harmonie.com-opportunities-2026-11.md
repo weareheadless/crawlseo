@@ -1,6 +1,6 @@
 # Opportunity board — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-05T14:52:38.184Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-05T15:20:53.810Z. Proposals only; no task is created until a human accepts one.
 
 ## Lanes
 
@@ -19,7 +19,7 @@ No proposal in this lane.
 - Action: Create a dedicated service page covering repair, re-covering, lining and contrecollé work, with before/after examples, process, lead time, a quote CTA and links to the blog post and the abat-jour category.
 - Expected outcome: Capture the commercial restoration queries on a service page instead of a blog post and increase quote requests from abat-jour restoration.
 - Evidence: 8 reference(s)
-- Critique: keep — New service page targets existing restoration queries and blog-only coverage; target and local scope are correct.
+- Critique: keep — Service-page target fits restoration intent and is distinct from the blog post; evidence supports a dedicated page.
 
 #### Enrichir la page catégorie Abat-jours
 
@@ -30,7 +30,7 @@ No proposal in this lane.
 - Action: Expand the category page with a shape guide (pagode, tambour, empire, cone), size and fabric guidance, a collection comparison, FAQ and links to the product pages. Keep the existing products and add no new range.
 - Expected outcome: Improve relevance and internal linking for the abat-jour head term and the pagode/tambour long tail.
 - Evidence: 8 reference(s)
-- Critique: keep — Valid category enrichment; action stays within existing products and does not add a range.
+- Critique: keep — Thin category page with relevant product intent; expand existing products only. Treat 51k volume as directional until verified.
 
 #### Renforcer le hub luminaires et les sous-catégories
 
@@ -41,7 +41,7 @@ No proposal in this lane.
 - Action: Expand /lampes and the thin subcategory pages with buying guidance, format comparisons, room use, materials and internal links; add product schema where it is missing. If the owner wants to add formats, plan the range and pages.
 - Expected outcome: Improve rankings for luminaire artisanal and the subcategory queries, and send clearer traffic to the product pages.
 - Evidence: 8 reference(s)
-- Critique: keep — Hub/subcategory update is distinct from the range opportunity and AEO; international scope is appropriate.
+- Critique: revise — Overlaps the separate product-range opportunity and AEO /lampes; limit hub/subcategory work to existing formats and coordinate answer blocks.
 
 #### Opportunité gamme plafonniers / lustres / lampadaires
 
@@ -52,7 +52,7 @@ No proposal in this lane.
 - Action: Evaluate adding plafonniers, lustres or lampadaires, or a curated selection. If the owner accepts, plan the product pages, collection copy and internal links. The owner decides; the system does not assume the range exists or does not exist.
 - Expected outcome: Give the owner a clear, demand-backed product opportunity without inventing a range or blocking the idea before they decide.
 - Evidence: 8 reference(s)
-- Critique: keep — Range opportunity is framed as owner decision, not an assumed product range; international scope fits.
+- Critique: keep — Product-range decision is explicitly left to the owner and the international scope permits it; no range is assumed.
 
 #### Renforcer la page restauration de sièges
 
@@ -63,7 +63,7 @@ No proposal in this lane.
 - Action: Add sections for tapissier, tapisserie traditionnelle, chaises and fauteuils, the restoration process, before/after proof, Normandy locations served and a clear quote CTA. Link the local workshop page.
 - Expected outcome: Capture more tapissier/chaise queries on the existing service page and improve local relevance.
 - Evidence: 8 reference(s)
-- Critique: keep — Strengthens existing restoration service page; local proof and service sections are appropriate.
+- Critique: keep — Relevant service-page update for upholstery/restoration; local proof fits the local scope. Avoid duplicating a separate local section.
 
 #### Ajouter une preuve locale à la page restauration
 
@@ -74,7 +74,7 @@ No proposal in this lane.
 - Action: Add a local section naming Saint-Pierre-en-Port, France, the places served, workshop visits and nearby towns. Do not chase off-area queries unless the business decides to serve that market.
 - Expected outcome: Test local intent without creating a thin local page; measure whether local queries and quote requests move.
 - Evidence: 8 reference(s)
-- Critique: keep — Local proof section is scoped to Saint-Pierre-en-Port and avoids off-area queries.
+- Critique: drop — Duplicates the local-proof element in the restauration-siege update and the small-test option in the Normandie landing-page proposal.
 
 #### Créer une page locale « Tapissier en Normandie »
 
@@ -85,7 +85,7 @@ No proposal in this lane.
 - Action: Create a local landing page for the upholstery/restoration service in the configured local market: services, places served, workshop visits, local proof, map and quote CTA; link it from the service page and the home page. If the owner prefers a smaller test, add a local proof section to /tapisserie-restauration first.
 - Expected outcome: A dedicated local page for tapissier-en-Normandie and autour-de-moi intent; measure impressions, quote requests and whether the local page earns links.
 - Evidence: 8 reference(s)
-- Critique: keep — Low-demand local landing page is a reasonable small test; action includes a smaller-proof alternative.
+- Critique: keep — Low-demand but local and business-relevant; reasonable small test or expansion. Sequence after existing local proof to avoid duplication.
 
 #### Compléter la page ateliers DIY
 
@@ -96,7 +96,7 @@ No proposal in this lane.
 - Action: Add upcoming sessions, level, duration, materials, what is included, booking steps and a link to the DIY kit product. Add FAQ for the common questions.
 - Expected outcome: Turn workshop demand into bookings and connect the workshop page to the kit product.
 - Evidence: 8 reference(s)
-- Critique: keep — Workshop page update connects sessions and kit without unsupported claims.
+- Critique: keep — Relevant workshop-page update connecting sessions and kit product; no new range assumed.
 
 ### AEO/GEO
 
@@ -109,7 +109,7 @@ No proposal in this lane.
 - Action: Add concise, source-backed answer blocks to https://www.atelier-harmonie.com/lampes for: luminaires artisanaux; lampadaire artisanal; lampe à poser artisanale; lampes artisanales; lampe coquelicot. Use definitions, process, materials, lead time and local proof, with headings and FAQ schema where appropriate. If a question targets a format the atelier does not currently sell, treat it as a range decision for the owner; do not publish a product claim before that decision.
 - Expected outcome: Increase the chance of being cited in Google AI Overviews for the lampes & luminaires artisanaux questions and improve the supporting organic answer.
 - Evidence: 7 reference(s)
-- Critique: revise — Action text is truncated; complete it and treat unsold formats as an owner range decision, not assumed content.
+- Critique: revise — Overlaps /lampes hub update and includes lampadaire, which may not be in range; merge answer blocks and limit to existing formats.
 
 #### Ajouter des réponses citables — Restauration d'abat-jour
 
@@ -120,7 +120,7 @@ No proposal in this lane.
 - Action: Add concise, source-backed answer blocks to /restauration-abat-jour for: comment réparer un abat jour; comment restaurer un abat jour; restaurer un abat jour; renover un abat jour. Use definitions, process, materials, lead time and local proof, with headings and FAQ schema where appropriate. Add them to the new restoration service page; keep the blog post as the how-to.
 - Expected outcome: Increase the chance of being cited in Google AI Overviews for the restauration d'abat-jour questions and improve the supporting organic answer.
 - Evidence: 6 reference(s)
-- Critique: keep — AEO blocks complement the new service page; keep dependency on proposal 1 and preserve blog as how-to.
+- Critique: revise — Same new /restauration-abat-jour asset as the service-page proposal; merge AEO answer blocks into that page as a follow-up.
 
 ### Technical
 
@@ -134,7 +134,7 @@ No proposal in this lane.
 
 Model: deepseek/deepseek-v4.1-flash-1017.
 
-Most proposals are valid and within scope: local restoration stays local, product/lamp range decisions are left to the owner. Revise the truncated AEO /lampes action; coordinate local landing/proof overlap and AEO dependency on the new abat-jour page.
+Most proposals are relevant. Revise /lampes and AEO luminaires to avoid overlap and unsold formats; merge abat-jour AEO into the new service page. Drop duplicate local-proof proposal; keep low-demand local landing page as a test. Product range remains owner decision.
 
 ## Limits
 

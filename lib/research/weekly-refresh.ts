@@ -14,6 +14,7 @@ import {
 } from "@/lib/research/question-coverage-evidence";
 import { buildNewsQueries } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
+import { buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
@@ -171,7 +172,9 @@ export function buildTimelyProposals(input: {
   }
   const evidence = [...new Set([...input.knowledgeEvidenceIds, ...input.localEvidenceIds])].slice(0, 8);
   const proposals = current.map((item) => {
-    const hash = createHash("sha256").update(item.url).digest("hex").slice(0, 16);
+    // Google News redirect URLs carry a per-fetch token. Key on the story
+    // title and publication date so a refresh updates the same board row.
+    const hash = createHash("sha256").update(`${item.title}|${item.publishedAt ?? ""}`).digest("hex").slice(0, 16);
     return {
       dedupKey: `phase5:timely:article:local-normandie:${hash}`,
       lane: "timely" as const,
@@ -339,18 +342,18 @@ export async function runWeeklyRefresh(
       select: { id: true },
       take: 4,
     });
-    const localEvidence = await db.evidenceRecord.findMany({
-      where: {
-        projectId: site.projectId,
-        siteId: site.id,
-        kind: "keyword_universe_membership",
-        supersededById: null,
-        producer: "topic-map-v1",
-        dimensions: { path: ["cluster"], equals: "local-normandie" },
-      },
-      select: { id: true },
-      take: 6,
-    });
+    const clusterEvidenceRows = map
+      ? await db.evidenceRecord.findMany({
+          where: {
+            projectId: site.projectId,
+            siteId: site.id,
+            kind: { in: ["keyword_rank", "keyword_metrics", "serp_snapshot", "keyword_universe_membership"] },
+            supersededById: null,
+          },
+          select: { id: true, kind: true, dimensions: true, metrics: true, observedAt: true },
+        })
+      : [];
+    const clusterEvidence = map ? buildClusterEvidenceIds(map.clusters, clusterEvidenceRows) : new Map<string, string[]>();
 
     // Expire timely items that were detected but never accepted. Expiry is a
     // park, not a delete: the row and its evidence stay for audit.
@@ -380,7 +383,7 @@ export async function runWeeklyRefresh(
       now,
       domain: site.domain,
       knowledgeEvidenceIds: knowledgeEvidence.map((row) => row.id),
-      localEvidenceIds: localEvidence.map((row) => row.id),
+      localEvidenceIds: clusterEvidence.get("local-normandie") ?? [],
     });
 
     let stored = 0;
@@ -403,6 +406,18 @@ export async function runWeeklyRefresh(
       });
       stored = result.stored.length;
       dropped = result.dropped;
+      const currentKeys = new Set(timely.proposals.map((proposal) => proposal.dedupKey));
+      const existingTimely = await db.opportunity.findMany({
+        where: { projectId: site.projectId, dedupKey: { startsWith: "phase5:timely" }, status: "detected" },
+        select: { id: true, dedupKey: true },
+      });
+      const stale = existingTimely.filter((row) => !currentKeys.has(row.dedupKey));
+      if (stale.length > 0) {
+        await db.opportunity.updateMany({
+          where: { id: { in: stale.map((row) => row.id) } },
+          data: { status: "closed", parkReason: "superseded by refreshed timely sweep" },
+        });
+      }
     } else if (!map) {
       dropped = [{ title: "timely proposals", reason: "no topic map for this month; proposals were not stored" }];
     }
