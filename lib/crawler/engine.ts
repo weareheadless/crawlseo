@@ -86,6 +86,29 @@ function normalizeUrl(raw: string, base: string): string | null {
   }
 }
 
+/**
+ * Canonical form used to compare a crawled URL with a sitemap entry. Two URLs
+ * that address the same page must produce the same key even when one side is
+ * `www`, has a trailing slash, or is percent-encoded differently.
+ */
+export function sitemapKey(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.hash = "";
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const pathname = u.pathname.length > 1 && u.pathname.endsWith("/") ? u.pathname.slice(0, -1) : u.pathname;
+    let decoded = pathname;
+    try {
+      decoded = decodeURIComponent(pathname);
+    } catch {
+      // Malformed escape: keep the raw pathname.
+    }
+    return `${host}${decoded}${u.search}`;
+  } catch {
+    return raw;
+  }
+}
+
 function sameHost(a: string, b: string): boolean {
   try {
     return (
@@ -860,6 +883,55 @@ function parseSitemapUrls(xml: string, base: string): string[] {
   return out;
 }
 
+/**
+ * Resource bounds, not site rules. A sitemap index can nest arbitrarily deep
+ * (index -> index -> urlset) and can list thousands of documents; the crawl
+ * only needs enough URLs to seed a crawl, so it stops on volume rather than on
+ * a fixed number of children.
+ */
+const SITEMAP_DOCUMENT_BUDGET = 50;
+const SITEMAP_URL_BUDGET = 10_000;
+
+/**
+ * Read every sitemap the site advertises, following sitemap indexes to their
+ * children. `robots.txt` may name several sitemaps, so all `Sitemap:` lines are
+ * used, not just the first. No CMS is assumed: Wix, Shopify, WordPress and a
+ * hand-written sitemap all look the same to this reader.
+ */
+export async function collectSitemapUrls(
+  fetchText: (url: string) => Promise<string | null>,
+  origin: string,
+  robotsText: string | null
+): Promise<string[]> {
+  const queue: string[] = [];
+  if (robotsText) {
+    for (const match of robotsText.matchAll(/^\s*Sitemap:\s*(\S+)\s*$/gim)) {
+      const url = normalizeUrl(match[1], origin);
+      if (url) queue.push(url);
+    }
+  }
+  queue.push(`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`);
+
+  const visited = new Set<string>();
+  const urls: string[] = [];
+  while (queue.length > 0 && visited.size < SITEMAP_DOCUMENT_BUDGET && urls.length < SITEMAP_URL_BUDGET) {
+    const document = queue.shift() as string;
+    if (visited.has(document)) continue;
+    visited.add(document);
+    const xml = await fetchText(document);
+    if (!xml) continue;
+    if (/<sitemapindex[\s>]/i.test(xml)) {
+      for (const child of parseSitemapUrls(xml, origin)) {
+        if (!visited.has(child)) queue.push(child);
+      }
+      continue;
+    }
+    urls.push(...parseSitemapUrls(xml, origin));
+    if (urls.length >= SITEMAP_URL_BUDGET) break;
+  }
+  return urls.slice(0, SITEMAP_URL_BUDGET);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Issue detection per page                                          */
 /* ------------------------------------------------------------------ */
@@ -1107,32 +1179,9 @@ async function executeCrawl(
   }
 
   /* ---- Sitemap discovery ---- */
-  let sitemapUrls: string[] = [];
-  const sitemapCandidates = [
-    `${origin}/sitemap.xml`,
-    `${origin}/sitemap_index.xml`,
+  const sitemapUrls = [
+    ...new Set((await collectSitemapUrls(fetchText, origin, robotsText)).filter((u) => sameHost(u, seedUrl))),
   ];
-  if (robotsText) {
-    const sm = robotsText.match(/Sitemap:\s*(\S+)/i);
-    if (sm?.[1]) sitemapCandidates.unshift(sm[1]);
-  }
-
-  for (const smUrl of sitemapCandidates) {
-    const xml = await fetchText(smUrl);
-    if (!xml) continue;
-    if (xml.includes("<sitemapindex")) {
-      const childSitemaps = parseSitemapUrls(xml, origin).slice(0, 5);
-      for (const child of childSitemaps) {
-        const childXml = await fetchText(child);
-        if (childXml) sitemapUrls.push(...parseSitemapUrls(childXml, origin));
-      }
-    } else {
-      sitemapUrls.push(...parseSitemapUrls(xml, origin));
-    }
-    if (sitemapUrls.length) break;
-  }
-
-  sitemapUrls = [...new Set(sitemapUrls.filter((u) => sameHost(u, seedUrl)))];
   if (sitemapUrls.length === 0) {
     issues.push({
       url: `${origin}/sitemap.xml`,
@@ -1354,11 +1403,14 @@ async function executeCrawl(
   }
 
   /* ---- Sitemap coverage & orphan detection ---- */
-  const crawledSet = new Set(successfulPages.map((p) => p.url));
-  const sitemapSet = new Set(sitemapUrls);
-  const missingFromSitemap = [...crawledSet].filter(
-    (u) => sitemapSet.size > 0 && !sitemapSet.has(u)
-  );
+  // Compare canonical forms: the same page can appear as `www`/apex, with a
+  // trailing slash, or percent-encoded on one side only. An exact string match
+  // turns those differences into a false "not in sitemap" finding.
+  const crawledSet = new Map(successfulPages.map((p) => [sitemapKey(p.url), p.url]));
+  const sitemapSet = new Set(sitemapUrls.map(sitemapKey));
+  const missingFromSitemap = [...crawledSet.entries()]
+    .filter(([key]) => sitemapSet.size > 0 && !sitemapSet.has(key))
+    .map(([, url]) => url);
 
   const inlinkCount = new Map<string, number>();
   for (const p of successfulPages) {
@@ -1371,7 +1423,7 @@ async function executeCrawl(
     return !isHome && (inlinkCount.get(p.url) || 0) === 0;
   });
 
-  for (const url of missingFromSitemap.slice(0, 50)) {
+  for (const url of missingFromSitemap) {
     issues.push({
       url,
       type: "MISSING_SITEMAP",
