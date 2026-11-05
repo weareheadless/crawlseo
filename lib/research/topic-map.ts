@@ -455,7 +455,13 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
       select: { id: true },
     }),
     db.evidenceRecord.findMany({
-      where: { projectId, siteId, kind: "ai_visibility_observation", supersededById: null },
+      where: {
+        projectId,
+        siteId,
+        kind: "ai_visibility_observation",
+        supersededById: null,
+        dimensions: { path: ["surface"], equals: "google_ai_overview" },
+      },
       select: { dimensions: true, metrics: true, observedAt: true },
     }),
   ]);

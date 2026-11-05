@@ -8,6 +8,7 @@ import type {
   TaskStatus,
 } from "@prisma/client";
 
+import { fallbackLane, parseOpportunityProposal, type OpportunityLane, type OpportunityProposal } from "@/lib/funnel/proposal";
 import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 
 /**
@@ -64,6 +65,10 @@ export type OpportunityRow = {
   /** Readiness from the decision contract, so the board can separate work from questions. */
   readiness: string | null;
   measurement: string | null;
+  /** The Phase 3 lane, explicit when the row carries the proposal contract. */
+  lane: OpportunityLane;
+  /** The minimal Phase 3 proposal, when this row has one. */
+  proposal: OpportunityProposal | null;
 };
 
 export type OpportunityDetail = OpportunityRow & {
@@ -219,6 +224,7 @@ export type OpportunityFilter = {
   /** "why" | "how" | "both" | "none" */
   completeness?: string[];
   search?: string;
+  lane?: OpportunityLane;
 };
 
 /**
@@ -428,6 +434,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
     const first = rowEdges.map((edge) => evidenceById.get(edge.fromId)).find((value): value is RawEvidence => Boolean(value));
     const canonical = parsePersistedDecision(row.recommendationDecision);
     const legacy = decisionFromScoreInputs(row.scoreInputs);
+    const proposal = parseOpportunityProposal(row.recommendationDecision);
     return {
       id: row.id,
       type: row.type,
@@ -444,8 +451,10 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       evidenceCount: rowEdges.length,
       readiness: canonical?.readiness ?? legacy.readiness,
       measurement: canonical ? canonical.benefits[0]?.measurement ?? "unquantified" : legacy.measurement,
+      lane: proposal?.lane ?? fallbackLane(row.dimension),
+      proposal,
     };
-  });
+  }).filter((row) => !filter.lane || row.lane === filter.lane);
 }
 
 /** One page per opportunity: the whole chain, both legs, task, delivery, outcome. */
@@ -547,6 +556,8 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     score: row.scoreValue,
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
+    lane: parseOpportunityProposal(row.recommendationDecision)?.lane ?? fallbackLane(row.dimension),
+    proposal: parseOpportunityProposal(row.recommendationDecision),
     decisionChanged,
     decision: canonical ? decisionFromCanonical(canonical, references) : decisionFromScoreInputs(row.scoreInputs),
     completeness: row.evidenceCompleteness,
@@ -587,6 +598,7 @@ export type FunnelCounts = {
   closed: number;
   total: number;
   byDimension: Record<string, number>;
+  byLane: Record<string, number>;
   byType: Array<{ type: OpportunityType; count: number }>;
   missingWhy: number;
   missingHow: number;
@@ -599,7 +611,7 @@ export type FunnelCounts = {
 export async function getFunnelCounts(db: FunnelDb, projectId: string): Promise<FunnelCounts> {
   const rows = await db.opportunity.findMany({
     where: { projectId },
-    select: { status: true, dimension: true, type: true, evidenceCompleteness: true, scoreValue: true },
+    select: { status: true, dimension: true, type: true, evidenceCompleteness: true, scoreValue: true, recommendationDecision: true },
   });
   const counts: FunnelCounts = {
     detected: 0,
@@ -610,6 +622,7 @@ export async function getFunnelCounts(db: FunnelDb, projectId: string): Promise<
     closed: 0,
     total: rows.length,
     byDimension: {},
+    byLane: {},
     byType: [],
     missingWhy: 0,
     missingHow: 0,
@@ -627,6 +640,8 @@ export async function getFunnelCounts(db: FunnelDb, projectId: string): Promise<
     else if (row.status === "rejected") counts.rejected += 1;
     else if (row.status === "closed") counts.closed += 1;
     counts.byDimension[row.dimension] = (counts.byDimension[row.dimension] ?? 0) + 1;
+    const lane = parseOpportunityProposal(row.recommendationDecision)?.lane ?? fallbackLane(row.dimension);
+    counts.byLane[lane] = (counts.byLane[lane] ?? 0) + 1;
     typeCounts.set(row.type, (typeCounts.get(row.type) ?? 0) + 1);
     if (row.evidenceCompleteness === "both") counts.bothLegs += 1;
     else if (row.evidenceCompleteness === "why") counts.missingHow += 1;

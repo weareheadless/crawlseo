@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { listOpportunities, getFunnelCounts, type OpportunityRow } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
+import { OPPORTUNITY_LANES, laneLabel } from "@/lib/funnel/proposal";
 import { READINESS_LABELS } from "@/lib/funnel/decision";
 import { DETECTOR_REQUIRES } from "@/lib/funnel/detectors";
 import { PageHeader } from "@/components/ui/page-header";
@@ -22,7 +23,7 @@ import type { OpportunityStatus } from "@prisma/client";
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ status?: string; leg?: string; type?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; leg?: string; type?: string; q?: string; lane?: string }>;
 }
 
 const STATUS_TABS: Array<{ key: string; label: string; statuses?: OpportunityStatus[] }> = [
@@ -60,6 +61,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
 
   const query = await searchParams;
   const tab = STATUS_TABS.find((entry) => entry.key === (query.status ?? "open")) ?? STATUS_TABS[0];
+  const laneQuery = query.lane ? `&lane=${query.lane}` : "";
   // Type chips count the current status/leg view, not the whole project: after
   // the §3 rules most rows are parked, and a chip reading 170 when 5 are open is
   // a lie about the board.
@@ -108,6 +110,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       completeness: query.leg && query.leg !== "all" ? [query.leg] : undefined,
       types: query.type && query.type !== "all" ? [query.type as never] : undefined,
       search: query.q,
+      lane: query.lane as never,
     }),
     getFunnelCounts(db, site.projectId),
   ]);
@@ -140,13 +143,43 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
         ))}
       </div>
 
+      {/* Lanes first: a technical score must not bury the other lanes. */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <nav aria-label="Opportunity lane" className="flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
+          <Link
+            href={`/sites/${siteId}/opportunities?status=${tab.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+            aria-current={!query.lane ? "page" : undefined}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+              !query.lane ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All lanes · {counts.total}
+          </Link>
+          {OPPORTUNITY_LANES.map((lane) => (
+            <Link
+              key={lane.key}
+              href={`/sites/${siteId}/opportunities?status=${tab.key}&lane=${lane.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+              aria-current={query.lane === lane.key ? "page" : undefined}
+              title={lane.description}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                query.lane === lane.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {lane.label} · {counts.byLane[lane.key] ?? 0}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
       {/* One filter row. Not two, not a tab pile. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <nav aria-label="Opportunity status" className="flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
           {STATUS_TABS.map((entry) => (
             <Link
               key={entry.key}
-              href={`/sites/${siteId}/opportunities?status=${entry.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+              href={`/sites/${siteId}/opportunities?status=${entry.key}${query.leg ? `&leg=${query.leg}` : ""}${laneQuery}`}
               aria-current={entry.key === tab.key ? "page" : undefined}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition",
@@ -166,7 +199,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           ].map((entry) => (
             <Link
               key={entry.key}
-              href={`/sites/${siteId}/opportunities?status=${tab.key}${entry.key === "all" ? "" : `&leg=${entry.key}`}`}
+              href={`/sites/${siteId}/opportunities?status=${tab.key}${entry.key === "all" ? "" : `&leg=${entry.key}`}${laneQuery}`}
               aria-current={(query.leg ?? "all") === entry.key ? "page" : undefined}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition",
@@ -186,7 +219,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           type fills the page and the rest are unreachable. */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <Link
-          href={`/sites/${siteId}/opportunities?status=${tab.key}${query.leg ? `&leg=${query.leg}` : ""}`}
+          href={`/sites/${siteId}/opportunities?status=${tab.key}${query.leg ? `&leg=${query.leg}` : ""}${laneQuery}`}
           aria-current={!query.type || query.type === "all" ? "page" : undefined}
           className={cn(
             "rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium transition",
@@ -201,7 +234,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           .map((entry) => (
           <Link
             key={entry.type}
-            href={`/sites/${siteId}/opportunities?status=${tab.key}&type=${entry.type}${query.leg ? `&leg=${query.leg}` : ""}`}
+            href={`/sites/${siteId}/opportunities?status=${tab.key}&type=${entry.type}${query.leg ? `&leg=${query.leg}` : ""}${laneQuery}`}
             aria-current={query.type === entry.type ? "page" : undefined}
             className={cn(
               "rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium transition",
@@ -266,6 +299,9 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
             <span className="font-mono text-[11px] font-semibold text-primary">{label.code}</span>
             <h3 className="font-heading text-base font-semibold text-foreground group-hover:text-primary">{row.title}</h3>
             <StatusChip status={row.status} />
+            <span className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-foreground">
+              {laneLabel(row.lane)}
+            </span>
             {row.readiness && (
               <span
                 className={cn(
@@ -285,6 +321,13 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
               <span className="text-[11px] text-muted-foreground">impact not quantified</span>
             )}
           </div>
+
+          {row.proposal && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Target: {row.proposal.target.url ?? (row.proposal.target.newAsset ? "new asset" : "no page")}
+              {row.proposal.target.section ? ` · ${row.proposal.target.section}` : ""}
+            </p>
+          )}
 
           {/* The reason. Always visible, never behind a click. */}
           <p className="mt-1.5 text-sm text-foreground/85">

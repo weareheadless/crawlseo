@@ -4,8 +4,9 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { getOpportunityDetail, type EvidenceLine } from "@/lib/funnel/views";
-import { OPPORTUNITY_LABELS, VERDICT_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
+import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
+import { ProposalPanel } from "@/components/funnel/proposal-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   Chip,
@@ -21,7 +22,6 @@ import {
 } from "@/components/funnel/badges";
 import { OpportunityDecisionBar } from "@/components/funnel/decision-bar";
 import { TaskStepControls } from "@/components/funnel/task-step-controls";
-import { cn } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ siteId: string; opportunityId: string }>;
@@ -91,6 +91,8 @@ export default async function OpportunityDetailPage({ params }: Props) {
           created from.
         </div>
       )}
+
+      <ProposalPanel proposal={detail.proposal} />
 
       <DecisionSummaryPanel decision={detail.decision} />
 

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { addEdge, type EdgeDb } from "@/lib/funnel/edges";
 import { completenessLeg } from "@/lib/funnel/opportunity";
 import { computeScore, freshnessFactor, type ScoreInputs } from "@/lib/funnel/scoring";
+import { parseOpportunityProposal } from "@/lib/funnel/proposal";
 import { parsePersistedDecision } from "@/lib/recommendation/contracts";
 
 /**
@@ -163,6 +164,28 @@ export function taskPlanFromOpportunity(opportunity: {
   scoreInputs: unknown;
   recommendationDecision?: unknown;
 }): Record<string, unknown> {
+  const proposal = parseOpportunityProposal(opportunity.recommendationDecision);
+  if (proposal) {
+    return {
+      kind: proposal.kind === "business" ? "investigation" : "implementation",
+      lane: proposal.lane,
+      proposalKind: proposal.kind,
+      readiness: proposal.readiness,
+      whyNow: proposal.whyNow,
+      target: proposal.target,
+      action: proposal.action,
+      expectedOutcome: proposal.expectedOutcome,
+      effort: proposal.effort,
+      confidence: proposal.confidence,
+      expiresAt: proposal.expiresAt,
+      sources: proposal.sources,
+      critique: proposal.critique,
+      change: proposal.action,
+      targetPages: proposal.target.url ? [proposal.target.url] : [],
+      successMeasure: proposal.expectedOutcome,
+      need: opportunity.summary,
+    };
+  }
   const decision = parsePersistedDecision(opportunity.recommendationDecision);
   if (decision) {
     return {
@@ -265,7 +288,18 @@ export async function acceptOpportunityIntoTask(
   }
 
   const decision = parsePersistedDecision(opportunity.recommendationDecision);
-  if (MIGRATED_TYPES.has(opportunity.type)) {
+  const phase3 = parseOpportunityProposal(opportunity.recommendationDecision);
+  if (phase3) {
+    if (input.expectedProjectId && opportunity.projectId !== input.expectedProjectId) {
+      throw new Error("this opportunity does not belong to the site's project");
+    }
+    if (!input.expectedProjectId) {
+      throw new Error("accepting a proposal requires its project scope");
+    }
+    if (phase3.readiness !== "actionable" && phase3.readiness !== "needs_investigation") {
+      throw new Error(`opportunity readiness "${phase3.readiness}" cannot be accepted into work`);
+    }
+  } else if (MIGRATED_TYPES.has(opportunity.type)) {
     if (!decision) {
       throw new Error("this recommendation has not been assessed under the current contract and cannot become work");
     }
@@ -305,7 +339,7 @@ export async function acceptOpportunityIntoTask(
     }
   }
 
-  const plan = decision
+  const plan = decision || phase3
     ? taskPlanFromOpportunity(opportunity)
     : ((input.plan ?? undefined) as Record<string, unknown> | undefined);
   const expectedFingerprint = opportunity.recommendationFingerprint ?? null;
