@@ -112,7 +112,7 @@ export function MarketScopeEditor({
 
       <div className="space-y-3">
         {values.offers.map((offer, index) => (
-          <div key={`${offer.offer}-${index}`} className="grid gap-2 rounded-lg border border-border/60 bg-background/40 p-3 sm:grid-cols-[1.2fr_0.8fr_1.2fr_auto]">
+          <div key={index} className="grid gap-2 rounded-lg border border-border/60 bg-background/40 p-3 sm:grid-cols-[1.2fr_0.8fr_1.2fr_auto]">
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted-foreground">Offer</span>
               <input
