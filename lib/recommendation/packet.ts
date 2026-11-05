@@ -216,6 +216,8 @@ type RetrievedPage = {
   totalChars: number;
   /** True when the transport or extraction limit made the text incomplete. */
   truncated: boolean;
+  /** Which retrieval limit caused the incompleteness. */
+  truncation: "none" | "byte_limit" | "text_limit";
 };
 
 const SHELL_MARKERS = /enable javascript|javascript is required|access denied|just a moment|attention required|captcha|cf-challenge|please verify you are human/i;
@@ -251,6 +253,7 @@ export async function retrievePage(
     bytes,
     totalChars: 0,
     truncated: false,
+    truncation: "none",
   });
   let target: URL;
   try {
@@ -293,19 +296,20 @@ export async function retrievePage(
     const textLimited = extracted.length > MAX_LIVE_CHARS;
     const text = extracted.slice(0, MAX_LIVE_CHARS);
     const truncated = doc.truncated || textLimited;
+    const truncation = doc.truncated ? "byte_limit" : textLimited ? "text_limit" : "none";
     const note = doc.truncated
       ? "document exceeded the byte limit; text may be incomplete"
       : textLimited
         ? "extracted text exceeded the live-text limit; text may be incomplete"
         : null;
     if (doc.statusCode !== 200) {
-      return { ...unavailable(`HTTP ${doc.statusCode}`, doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
+      return { ...unavailable(`HTTP ${doc.statusCode}`, doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
     }
     if (SHELL_MARKERS.test(html) && text.length < 1_500) {
-      return { ...unavailable("page is a bot challenge or client-rendered shell", doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
+      return { ...unavailable("page is a bot challenge or client-rendered shell", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
     }
     if (text.length < 80) {
-      return { ...unavailable("no usable body text was extracted", doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
+      return { ...unavailable("no usable body text was extracted", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
     }
     return {
       url,
@@ -319,6 +323,7 @@ export async function retrievePage(
       bytes: doc.bytes,
       totalChars: extracted.length,
       truncated,
+      truncation,
     };
   } catch (error) {
     return unavailable(error instanceof Error ? error.message.slice(0, 300) : "retrieval failed");
@@ -358,6 +363,7 @@ function buildPage(
     language: string | null;
     retrieval: "stored" | "live" | "unavailable";
     retrievalNote: string | null;
+    truncation?: "none" | "sectioned" | "byte_limit" | "text_limit" | "offset";
   },
   terms: string[],
   maxChars: number
@@ -366,13 +372,15 @@ function buildPage(
   const selected = relevantSections(text, terms, maxChars);
   const supplied = selected.map((section) => section.text).join("\n\n");
   const sectioned = supplied.length < text.length;
-  const truncation = sectioned
-    ? "sectioned"
-    : row.retrievalNote && /byte limit/i.test(row.retrievalNote)
-      ? "byte_limit"
-      : row.retrievalNote && /live-text limit/i.test(row.retrievalNote)
-        ? "text_limit"
-        : "none";
+  const truncation = row.truncation && row.truncation !== "none"
+    ? row.truncation
+    : sectioned
+      ? "sectioned"
+      : row.retrievalNote && /byte limit/i.test(row.retrievalNote)
+        ? "byte_limit"
+        : row.retrievalNote && /live-text limit/i.test(row.retrievalNote)
+          ? "text_limit"
+          : "none";
   const id = pageId(row.url);
   return {
     id,
@@ -417,6 +425,7 @@ function buildFullPage(
     /** Known total body length, when `contentText` is only the requested slice. */
     totalChars?: number;
     transportTruncated?: boolean;
+    truncationHint?: "byte_limit" | "text_limit";
     previous?: PacketPage;
   } = {}
 ): PacketPage {
@@ -428,13 +437,15 @@ function buildFullPage(
   const transportTruncated = opts.transportTruncated === true;
   const reachesEnd = startOffset + text.length >= totalChars;
   const truncated = transportTruncated || !reachesEnd;
-  const truncation = transportTruncated
+  const truncation = opts.truncationHint === "byte_limit"
     ? "byte_limit"
-    : !reachesEnd
-      ? startOffset > 0
-        ? "offset"
-        : "text_limit"
-      : "none";
+    : opts.truncationHint === "text_limit"
+      ? "text_limit"
+      : !reachesEnd
+        ? startOffset > 0
+          ? "offset"
+          : "text_limit"
+        : "none";
   const id = pageId(row.url);
   const append = Boolean(opts.previous && opts.previous.truncation !== "sectioned" && startOffset > 0);
   const newSection = text
@@ -629,6 +640,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     let note: string | null = contentText ? null : "no stored page text";
     let title = row.title;
     let statusCode = row.statusCode;
+    let retrievalTruncation: "none" | "byte_limit" | "text_limit" = "none";
     if (!contentText && row.statusCode === 200 && liveFetches < maxLiveFetches) {
       const remaining = opts.remainingBytes?.() ?? 2 * 1024 * 1024;
       if (remaining <= 0) {
@@ -657,6 +669,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
             note = live.note;
             title = live.title ?? title;
             statusCode = live.status;
+            retrievalTruncation = live.truncation;
             limitations.push(`page text for ${row.url} came from a bounded live fetch, not the stored crawl`);
           } else {
             note = live.note;
@@ -667,7 +680,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     }
     pages.push(
       buildPage(
-        { url: row.url, title, contentText, contentHash: row.contentHash, statusCode, language: context?.language ?? null, retrieval, retrievalNote: note },
+        { url: row.url, title, contentText, contentHash: row.contentHash, statusCode, language: context?.language ?? null, retrieval, retrievalNote: note, truncation: retrievalTruncation },
         terms,
         maxChars
       )
@@ -713,6 +726,18 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     at: new Date().toISOString(),
   });
 
+  let cappedLimitations = limitations;
+  if (limitations.length > 20) {
+    const overflow = limitations.slice(19);
+    trace.push({
+      round: 0,
+      action: "packet",
+      detail: `additional limitations: ${overflow.join("; ").slice(0, 600)}`,
+      at: new Date().toISOString(),
+    });
+    cappedLimitations = [...limitations.slice(0, 19), `+${overflow.length} further limitations were recorded in the trace`];
+  }
+
   return sealPacket(
     {
       projectId: opts.projectId,
@@ -756,7 +781,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
         retrieval: row.contentText ? "stored" : "unavailable",
       })),
       search,
-      limitations: limitations.slice(0, 20),
+      limitations: cappedLimitations,
     },
     opts.now ?? new Date()
   );
@@ -965,6 +990,7 @@ export async function expandEvidencePacket(
         offset: start,
         totalChars: live.totalChars,
         transportTruncated: live.truncated,
+        truncationHint: live.truncation === "none" ? undefined : live.truncation,
         previous: canContinue ? existing ?? undefined : undefined,
       }
     );
@@ -1007,7 +1033,7 @@ export async function expandEvidencePacket(
           type: request.type,
           target: request.target,
           key: request.key,
-          offset: request.offset ?? undefined,
+          ...(request.offset != null ? { offset: request.offset } : {}),
           status: outcome.status === "fulfilled" || outcome.status === "partial" ? "unavailable" : outcome.status,
           detail: outcome.detail.slice(0, 500),
         });
@@ -1021,7 +1047,7 @@ export async function expandEvidencePacket(
         type: request.type,
         target: request.target,
         key: request.key,
-        offset: request.offset ?? undefined,
+        ...(request.offset != null ? { offset: request.offset } : {}),
         status: outcome.status,
         detail: outcome.detail.slice(0, 500),
       });
@@ -1129,10 +1155,17 @@ export async function expandEvidencePacket(
     at: new Date().toISOString(),
   });
 
-  const cappedLimitations =
-    limitations.length > 20
-      ? [...limitations.slice(0, 19), `+${limitations.length - 19} further retrieval limitations were recorded in request outcomes`]
-      : limitations;
+  let cappedLimitations = limitations;
+  if (limitations.length > 20) {
+    const overflow = limitations.slice(19);
+    trace.push({
+      round,
+      action: "retrieval",
+      detail: `additional limitations: ${overflow.join("; ").slice(0, 600)}`,
+      at: new Date().toISOString(),
+    });
+    cappedLimitations = [...limitations.slice(0, 19), `+${overflow.length} further limitations were recorded in the trace`];
+  }
 
   const expanded = sealPacket(
     {

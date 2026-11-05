@@ -443,7 +443,11 @@ export function sealPacket(
     packetId: `packet-${randomUUID()}`,
     generatedAt: now.toISOString(),
   };
-  return EvidencePacketSchema.parse({ ...base, packetHash: hashPacket(base) });
+  // Hash exactly the JSON form that will be persisted. An in-memory optional
+  // property set to `undefined` is dropped by JSON.stringify; hashing the
+  // unnormalised object would make the stored packet fail its own hash check.
+  const normalised = JSON.parse(JSON.stringify(base)) as typeof base;
+  return EvidencePacketSchema.parse({ ...normalised, packetHash: hashPacket(normalised) });
 }
 
 export function normaliseExcerpt(value: string): string {
@@ -1026,12 +1030,9 @@ export function validateEvidenceRequest(
           errors.push(`request for ${page.url} asks for text that was already supplied in full`);
           continue;
         }
-        const targetIsUrl = target.startsWith("http");
-        const key = canonicalRequestKey(
-          "page_text",
-          entry.target,
-          targetIsUrl ? { url: page.url, offset } : { pageId: page.id, offset }
-        );
+        // Canonicalise by URL so a page named by id and the same page named by
+        // URL are one request, both before and after the page enters the packet.
+        const key = canonicalRequestKey("page_text", entry.target, { url: page.url, offset });
         if (rejectRepeat(key, `${entry.type} ${page.url}`)) continue;
         resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url, offset, key });
         continue;

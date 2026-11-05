@@ -27,6 +27,9 @@ export type ReassessOutcome = {
   reason?: string;
 };
 
+/** Failed candidates are retried after a short persistent backoff, not twice in one run. */
+const FAILURE_BACKOFF_MS = 30 * 60_000;
+
 export type ReassessResult = {
   findings: number;
   current: number;
@@ -111,13 +114,21 @@ export async function reassessProjectRecommendations(
     take: 500,
   });
   const lastAttempt = new Map<string, number>();
+  const lastOutcome = new Map<string, string>();
   for (const row of progressRows) {
-    const payload = row.payload as { findingId?: unknown; attemptedAt?: unknown; projectId?: unknown; siteId?: unknown } | null;
+    const payload = row.payload as {
+      findingId?: unknown;
+      attemptedAt?: unknown;
+      projectId?: unknown;
+      siteId?: unknown;
+      outcome?: unknown;
+    } | null;
     if (typeof payload?.findingId !== "string" || typeof payload?.attemptedAt !== "string") continue;
     if (payload.projectId !== opts.projectId || payload.siteId !== opts.siteId) continue;
     const at = Date.parse(payload.attemptedAt);
     if (!Number.isFinite(at) || lastAttempt.has(payload.findingId)) continue;
     lastAttempt.set(payload.findingId, at);
+    if (typeof payload.outcome === "string") lastOutcome.set(payload.findingId, payload.outcome);
   }
   rows.sort((a, b) => {
     const aId = (a.dimensions as { findingId?: unknown } | null)?.findingId;
@@ -248,6 +259,19 @@ export async function reassessProjectRecommendations(
         theme: candidate.theme,
         status: "reused",
         readiness: reusable.decision.readiness,
+      });
+      continue;
+    }
+
+    const last = lastAttempt.get(candidate.id);
+    if (last != null && lastOutcome.get(candidate.id) === "failed" && Date.now() - last < FAILURE_BACKOFF_MS) {
+      result.skipped += 1;
+      result.outcomes.push({
+        findingId: candidate.id,
+        theme: candidate.theme,
+        status: "skipped",
+        readiness: null,
+        reason: "recent failed attempt; retry after backoff",
       });
       continue;
     }

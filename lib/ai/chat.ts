@@ -81,6 +81,11 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
 
   const deadlineAt = input.deadlineAt;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let attemptRecorded = false;
+    const record = (entry: ChatAttemptRecord): void => {
+      attemptRecorded = true;
+      input.onAttempt?.(entry);
+    };
     try {
       return await serialise(async () => {
         if (deadlineAt != null && Date.now() >= deadlineAt) {
@@ -108,7 +113,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
         if (response.status === 429 || response.status >= 500) {
           const retryAfter = Number(response.headers.get("retry-after"));
           const body = (await response.text().catch(() => "")).slice(0, 200);
-          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: body });
+          record({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: body });
           throw new ChatError(
             `The model is ${response.status === 429 ? "rate-limited" : "unavailable"} (HTTP ${response.status})${body ? `: ${body}` : ""}`,
             response.status,
@@ -117,22 +122,22 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
         }
         if (!response.ok) {
           const text = (await response.text().catch(() => "")).slice(0, 2_000);
-          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: text });
+          record({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: text });
           throw new ChatError(`The model returned HTTP ${response.status}`, response.status);
         }
 
         const body = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
         const content = body.choices?.[0]?.message?.content;
         if (typeof content !== "string" || !content.trim()) {
-          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: "empty response", responseText: null });
+          record({ attempt: attempt + 1, status: "error", error: "empty response", responseText: null });
           throw new ChatError("The model returned an empty response");
         }
         try {
           const parsed = parseJson(content);
-          input.onAttempt?.({ attempt: attempt + 1, status: "ok" });
+          record({ attempt: attempt + 1, status: "ok" });
           return parsed;
         } catch (error) {
-          input.onAttempt?.({
+          record({
             attempt: attempt + 1,
             status: "error",
             error: error instanceof Error ? error.message : "non-JSON content",
@@ -143,6 +148,9 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       }, deadlineAt);
     } catch (error) {
       const failure = error instanceof Error ? error : new ChatError(String(error));
+      if (!attemptRecorded) {
+        record({ attempt: attempt + 1, status: "error", error: failure.message });
+      }
       lastError = failure;
       // A timeout is transient like a 5xx: the upstream was slow, not wrong.
       const timedOut = failure.name === "TimeoutError" || /aborted|timeout/i.test(failure.message);

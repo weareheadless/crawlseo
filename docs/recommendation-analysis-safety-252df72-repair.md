@@ -10,8 +10,8 @@ deployment were performed.
 
 ## Failing baseline
 
-The reviewer recorded nine counterexamples at `252df72` in
-`/tmp/opencode/review-252df72-probes.json`:
+The reviewer recorded nine counterexamples at `252df72`; the durable copy is
+`docs/recommendation-analysis-review-252df72-baseline.json`:
 
 - off-origin redirect dispatched before rejection;
 - `100.64.1.2` accepted by the address policy;
@@ -24,8 +24,8 @@ The reviewer recorded nine counterexamples at `252df72` in
 - 24 remaining bytes admitting a response that reached 2,500 bytes.
 
 Those cases are now repository regressions in
-`tests/recommendation-safety-252df72.test.ts` (21 tests). The original probe file
-is preserved as the failing-before record.
+`tests/recommendation-safety-252df72.test.ts` (33 tests). The baseline JSON is the
+failing-before record.
 
 ## Repairs
 
@@ -54,14 +54,16 @@ is preserved as the failing-before record.
 
 `lib/recommendation/packet.ts`, `lib/crawler/engine.ts`
 
-- `fetchPublicDocument` returns transport truncation; `retrievePage` also reports
-  the 120k extracted-text cap.
+- `fetchPublicDocument` returns transport truncation; `retrievePage` distinguishes
+  the 120k extracted-text cap from a transport byte cap.
 - `PacketPage` now carries `offset` and `truncation` (`sectioned`, `byte_limit`,
   `text_limit`, `offset`, `none`).
 - Requested pages preserve transport truncation and retrieval notes; a byte-capped
   document is never marked complete.
 - A truncated page cannot support a whole-page absence claim; section-scoped
   coverage is required.
+- `sealPacket` hashes the JSON form that will be persisted, so optional in-memory
+  `undefined` properties cannot make a stored packet fail its own hash check.
 
 ### 3. Requests converge on real evidence
 
@@ -77,8 +79,8 @@ is preserved as the failing-before record.
   automatically continues after the supplied text; the next request can name an
   explicit offset.
 - Journey-link progress counts newly added anchors, not anchors already present.
-- Limitations are de-duplicated; overflow is summarised rather than silently
-  dropped.
+- Limitations are de-duplicated; overflow is recorded in the trace and
+  summarised rather than silently dropped.
 
 ### 4. Bytes and time are enforced, not admitted
 
@@ -147,25 +149,36 @@ is preserved as the failing-before record.
   moves behind candidates that have not had a turn.
 - Progress is recorded after assessed and failed attempts; dry-run status now
   uses the same verified reuse check rather than comparing only the initial hash.
+- A recently failed candidate is skipped for 30 minutes instead of being retried
+  twice in the same reassessment lane.
 
 ## Verification
 
 ```
 npx tsc --noEmit                                      # exit 0
 npx vitest run --exclude '**/.agent-worktrees/**' --exclude '**/.agent-tools/**'
-# 1,013 passed, 17 skipped
+# 1,025 passed, 18 skipped
 DATABASE_URL=...?schema=csv_validation RUN_CUSTOMER_REC_DB_TESTS=1 \
   npx vitest run tests/customer-recommendations-postgres.integration.test.ts
-# 5 passed (includes real persistence, unchanged replay and changed-dependency invalidation)
+# 6 passed (includes a >200k packet round trip, expanded replay and changed-dependency invalidation)
 npm run build                                         # exit 0, compiled successfully
 ```
 
-New regressions cover: off-origin redirect, reserved address ranges, archived
-hash tampering, missing identity, changed page/source dependencies, transport
-truncation, packet capacity, long-page continuation, byte accounting, zero-byte
-and expired retrieval, target-section scope, external investigation prose,
-transport-failure history, failed-reassessment archival, stored-text-first
-retrieval, journey-link no-progress and fair reassessment order.
+The 33 offline regressions cover: off-origin redirect, reserved address ranges
+and pinned-address delivery, archived hash tampering, missing identity, changed
+page/source/business-knowledge/search dependencies, live-page and freshness
+invalidity, missing dependency metadata, transport truncation and the 120k
+extracted-text cap, packet capacity, long-page continuation, URL/id request
+equivalence, byte accounting and partial reads on failure, zero-byte and expired
+retrieval, retries, malformed JSON, timeouts, invalid output, target-section
+scope, scoped positive changes, external investigation prose, transport-failure
+history, failed-reassessment archival and archive-write failure, stored-text-first
+retrieval, journey-link no-progress, fair reassessment order and failure backoff.
+
+The disposable-schema integration suite covers a real expanded replay (an
+evidence request followed by a final decision), invalidation after a stored page
+changes, and a packet above 200k characters persisted and reused through the
+actual orchestration.
 
 ## Remaining blockers
 

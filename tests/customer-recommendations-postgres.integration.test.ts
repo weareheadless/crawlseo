@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
-import { finaliseDecision } from "@/lib/recommendation/contracts";
+import { finaliseDecision, hashPacket } from "@/lib/recommendation/contracts";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
 import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
 import { assessFinding } from "@/lib/recommendation/run";
@@ -481,6 +481,15 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
   it("replays an unchanged decision and invalidates it when a stored dependency changes", async () => {
     const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
     const { project, site } = await seedTenant(suffix);
+    // Make the service page long enough that the initial packet supplies a
+    // section, so an evidence request genuinely expands the packet.
+    const servicesPage = await db.auditPage.findFirstOrThrow({
+      where: { crawl: { siteId: site.id }, url: { endsWith: "/services" } },
+    });
+    await db.auditPage.update({
+      where: { id: servicesPage.id },
+      data: { contentText: `${servicesPage.contentText ?? ""} ${"More fitted wardrobe detail. ".repeat(800)}` },
+    });
     const run = await db.researchRun.create({
       data: { siteId: site.id, projectId: project.id, title: "Replay fixture", brief: { topics: ["wardrobes"] }, status: "COMPLETED" },
     });
@@ -540,8 +549,42 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
       reasons: ["No evidenced improvement."],
     };
     let calls = 0;
+    let requestUsed = false;
     const assessor = async (packet: Parameters<typeof finaliseDecision>[0]["packet"]) => {
       calls += 1;
+      const page = packet.pages[0];
+      if (!requestUsed && page) {
+        requestUsed = true;
+        return {
+          kind: "request" as const,
+          attempts: 1,
+          raw: { kind: "request_evidence" },
+          history: [
+            {
+              round: 0,
+              attempt: 1,
+              inputPacketHash: packet.packetHash,
+              feedback: null,
+              kind: "request_evidence" as const,
+              raw: { kind: "request_evidence" },
+              responseText: null,
+              errors: [],
+            },
+          ],
+          request: {
+            kind: "request_evidence" as const,
+            requests: [
+              {
+                type: "page_text" as const,
+                target: page.id,
+                question: "Read the full service page.",
+                whyItMatters: "The price detail may be beyond the supplied section.",
+              },
+            ],
+            rationale: "The initial packet supplied only a section.",
+          },
+        };
+      }
       return {
         kind: "final" as const,
         attempts: 1,
@@ -588,7 +631,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
       ledger: new AnalysisLedger(),
     });
     expect(second.status).toBe("reused");
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     expect(second.packet?.packetHash).toBe(first.decision?.packetHash);
 
     const page = await db.auditPage.findFirstOrThrow({ where: { crawl: { siteId: site.id } } });
@@ -605,7 +648,120 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
       ledger: new AnalysisLedger(),
     });
     expect(third.status).toBe("assessed");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
+  });
+
+  it("persists and reuses a packet above 200k characters", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site, crawl } = await seedTenant(suffix);
+    await db.auditPage.createMany({
+      data: Array.from({ length: 500 }, (_, index) => ({
+        crawlId: crawl.id,
+        url: `https://customer-rec-${suffix}.example/inventory/${index}-${"a".repeat(420)}`,
+        title: `Inventory ${index}`,
+        statusCode: 200,
+        contentText: `Inventory page ${index} describes fitted wardrobes and cost.`,
+        hasSchema: true,
+      })),
+    });
+    const run = await db.researchRun.create({
+      data: { siteId: site.id, projectId: project.id, title: "Large packet fixture", brief: { topics: ["wardrobes"] }, status: "COMPLETED" },
+    });
+    const finding = await db.researchFinding.create({
+      data: {
+        runId: run.id,
+        type: "CONCERN",
+        theme: "Fitted wardrobe cost",
+        summary: "Homeowners ask what a fitted wardrobe costs.",
+        evidenceSourceIds: [],
+      },
+    });
+    await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-11-04T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: { findingId: finding.id, findingType: "CONCERN", theme: finding.theme, painPoint: "true" },
+        metrics: {},
+        observationHash: `large-${suffix}`,
+      },
+    });
+    const decisionModel = {
+      question: {
+        text: "What does a fitted wardrobe cost?",
+        audience: null,
+        journeyStage: null,
+        bases: [{ basis: "inferred_need" as const, references: [], note: "A plausible buying question from the service page." }],
+        state: "unverified" as const,
+        rationale: "The finding and page support a low-risk inferred question.",
+      },
+      premise: { state: "unverified" as const, rationale: "Not established here.", references: [] },
+      offerFit: { state: "unverified" as const, rationale: "No business fact was supplied.", references: [] },
+      coverage: [],
+      readiness: "no_action" as const,
+      intervention: "maintain" as const,
+      change: null,
+      assetJustification: null,
+      investigation: null,
+      targets: [],
+      benefits: [],
+      effort: { size: "unknown" as const, rationale: "No work proposed.", uncertainty: [] },
+      risks: [],
+      reviews: [],
+      success: { measure: "No work proposed.", instrumentation: "unknown" as const, rationale: "No work proposed." },
+      uncertainty: [],
+      contradictions: [],
+      reasons: ["No evidenced improvement."],
+    };
+    const assessor = async (packet: Parameters<typeof finaliseDecision>[0]["packet"]) => ({
+      kind: "final" as const,
+      attempts: 1,
+      raw: { kind: "final_decision" },
+      decision: finaliseDecision({ model: decisionModel, packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/2" }),
+    });
+    const candidate = {
+      id: finding.id,
+      runId: run.id,
+      type: finding.type,
+      theme: finding.theme,
+      summary: finding.summary,
+      premise: finding.summary,
+      observedAt: finding.createdAt,
+      sourceIds: [],
+      dedupKey: `O13:${finding.id}`,
+      dimensions: { findingId: finding.id, painPoint: "true", theme: finding.theme },
+    };
+
+    const first = await assessFinding(db, {
+      projectId: project.id,
+      siteId: site.id,
+      finding: candidate,
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(first.status).toBe("assessed");
+    const stored = await db.evidenceRecord.findFirstOrThrow({
+      where: { projectId: project.id, kind: "research_finding", supersededById: null },
+      select: { dimensions: true },
+    });
+    const dimensions = stored.dimensions as Record<string, unknown>;
+    const packetJson = dimensions.recommendationFinalPacketJson as string;
+    expect(packetJson.length).toBeGreaterThan(200_000);
+    const parsed = JSON.parse(packetJson) as { packetHash: string; schemaVersion: string };
+    expect(parsed.schemaVersion).toBe("evidence-packet/2");
+    expect(hashPacket(parsed as never)).toBe(parsed.packetHash);
+
+    const second = await assessFinding(db, {
+      projectId: project.id,
+      siteId: site.id,
+      finding: candidate,
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(second.status).toBe("reused");
+    expect(second.packet?.packetHash).toBe(first.decision?.packetHash);
   });
 
 });

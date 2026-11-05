@@ -1,0 +1,48 @@
+{
+  "offOriginRedirect": {
+    "dispatched": [
+      "https://site.test/start",
+      "https://outside.test/page"
+    ],
+    "finalStatus": "unavailable",
+    "note": "redirect left the site domain"
+  },
+  "sharedAddressRange": {
+    "address": "100.64.1.2",
+    "dispatched": true
+  },
+  "archiveIntegrity": {
+    "contentsHashMatches": false,
+    "reused": true
+  },
+  "missingInitialIdentity": {
+    "reused": true
+  },
+  "bodyLimitLost": {
+    "pageTruncated": false,
+    "retrievalNote": null,
+    "requestStatus": "fulfilled"
+  },
+  "packetCapacity": {
+    "requestedPageSupplied": false,
+    "requestStatus": "fulfilled",
+    "progress": true
+  },
+  "longPageNoProgress": {
+    "repeatedRequestAccepted": true,
+    "firstChars": 20000,
+    "secondChars": 20000,
+    "sameText": true,
+    "progress": true,
+    "requestStatus": "fulfilled"
+  },
+  "scopeLinkage": {
+    "ok": true,
+    "errors": []
+  },
+  "byteAllowance": {
+    "mayDispatchWith24BytesLeft": true,
+    "bytesAfterOneResponse": 2500,
+    "limit": 1024
+  }
+}
