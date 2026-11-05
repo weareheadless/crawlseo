@@ -225,6 +225,7 @@ export type OpportunityFilter = {
   completeness?: string[];
   search?: string;
   lane?: OpportunityLane;
+  detectedBy?: string;
 };
 
 /**
@@ -387,6 +388,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       status: filter.statuses?.length ? { in: filter.statuses } : undefined,
       type: filter.types?.length ? { in: filter.types } : undefined,
       dimension: filter.dimensions?.length ? { in: filter.dimensions } : undefined,
+      detectedBy: filter.detectedBy,
       evidenceCompleteness: filter.completeness?.length ? { in: filter.completeness as never } : undefined,
       OR: filter.search
         ? [{ title: { contains: filter.search, mode: "insensitive" } }, { summary: { contains: filter.search, mode: "insensitive" } }]

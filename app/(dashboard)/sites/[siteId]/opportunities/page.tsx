@@ -23,7 +23,7 @@ import type { OpportunityStatus } from "@prisma/client";
 
 interface Props {
   params: Promise<{ siteId: string }>;
-  searchParams: Promise<{ status?: string; leg?: string; type?: string; q?: string; lane?: string }>;
+  searchParams: Promise<{ status?: string; leg?: string; type?: string; q?: string; lane?: string; source?: string }>;
 }
 
 const STATUS_TABS: Array<{ key: string; label: string; statuses?: OpportunityStatus[] }> = [
@@ -103,6 +103,9 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     disabledDetectors.push({ type: "O14_offer_positioning_gap", missing: ["gap-typed research_finding"] });
   }
 
+  const phase3Count = await db.opportunity.count({
+    where: { projectId: site.projectId, detectedBy: "phase3:topic-map" },
+  });
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {
       projectId: site.projectId,
@@ -111,6 +114,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       types: query.type && query.type !== "all" ? [query.type as never] : undefined,
       search: query.q,
       lane: query.lane as never,
+      detectedBy: query.source === "phase3" ? "phase3:topic-map" : undefined,
     }),
     getFunnelCounts(db, site.projectId),
   ]);
@@ -155,6 +159,16 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             )}
           >
             All lanes · {counts.total}
+          </Link>
+          <Link
+            href={`/sites/${siteId}/opportunities?status=${tab.key}&source=phase3${query.leg ? `&leg=${query.leg}` : ""}`}
+            aria-current={query.source === "phase3" ? "page" : undefined}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+              query.source === "phase3" ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            New proposals · {phase3Count}
           </Link>
           {OPPORTUNITY_LANES.map((lane) => (
             <Link
@@ -302,6 +316,11 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
             <span className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-foreground">
               {laneLabel(row.lane)}
             </span>
+            {row.detectedBy === "phase3:topic-map" && (
+              <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                new proposal
+              </span>
+            )}
             {row.readiness && (
               <span
                 className={cn(
