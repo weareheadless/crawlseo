@@ -1,0 +1,236 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildTimelyProposals,
+  buildWeeklyNewsQueries,
+  isoWeekKey,
+  runWeeklyRefresh,
+  type WeeklyDeps,
+} from "@/lib/research/weekly-refresh";
+
+const now = new Date("2026-11-05T12:00:00Z");
+
+function recentNews(daysAgo = 5) {
+  return {
+    provider: "google_news_rss",
+    title: "Un atelier de tapisserie ouvre en Normandie",
+    url: "https://news.example/atelier",
+    publishedAt: new Date(now.getTime() - daysAgo * 86_400_000).toISOString(),
+    excerpt: "Une nouvelle exposition.",
+    contentHash: "hash-1",
+  };
+}
+
+function mapReport() {
+  return {
+    map: {
+      siteId: "site-1",
+      projectId: "proj-1",
+      domain: "atelier-harmonie.example",
+      month: "2026-11",
+      generatedAt: now.toISOString(),
+      locale: { language: "fr", country: "FR" },
+      business: { name: "Atelier", services: [], location: null, serviceArea: [], audience: null, differentiators: [] },
+      clusters: [{
+        slug: "local-normandie",
+        name: "Local",
+        topicSummary: "",
+        intent: "local",
+        relevance: "high",
+        rationale: "",
+        actionHint: "",
+        confidence: 0.8,
+        metrics: { queries: 1, impressions: 1, clicks: 0, volume: 0, difficulty: null, position: null, aeoQuestions: 0, aeoCited: 0 },
+        queries: [],
+        pages: [],
+        coverage: "strong",
+        gaps: [],
+      }],
+      unmapped: [],
+      news: [],
+      ai: { available: false, model: null, summary: null, review: null, priorityTopics: [], weakTopics: [], error: null },
+      counts: { queries: 0, clusteredQueries: 0, unmappedQueries: 0, pages: 0, news: 0 },
+    },
+  };
+}
+
+function makeDb() {
+  const state = { created: 0, updated: 0, runs: [] as Array<Record<string, unknown>> };
+  const db = {
+    site: {
+      findUnique: async () => ({ id: "site-1", domain: "atelier-harmonie.example", projectId: "proj-1", retiredAt: null }),
+    },
+    siteProfile: {
+      findUnique: async () => ({ language: "fr", topics: [], audience: null, constraints: { market: "France" } }),
+    },
+    businessKnowledgeDocument: {
+      findUnique: async () => ({
+        revision: 1,
+        acceptedRevision: 1,
+        revisions: [{
+          revision: 1,
+          fields: {
+            businessName: { value: "Atelier de l'harmonie" },
+            services: { value: ["Restauration de siège", "Restauration d'abat-jour"] },
+            location: { value: "Saint-Pierre-en-Port, France" },
+            serviceArea: { value: ["Normandie"] },
+          },
+        }],
+      }),
+    },
+    researchRun: {
+      findFirst: async ({ where }: { where: { idempotencyKey?: string } }) => {
+        if (where.idempotencyKey?.startsWith("topic-map:")) return { id: "topic-run", report: mapReport() };
+        if (where.idempotencyKey?.startsWith("weekly:")) return state.runs[0] ?? null;
+        return null;
+      },
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        state.created += 1;
+        const run = { id: "weekly-run-1", ...data };
+        state.runs.push(run);
+        return run;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        state.updated += 1;
+        const run = state.runs.find((entry) => entry.id === where.id);
+        if (run) Object.assign(run, data);
+        return run ?? { id: where.id, ...data };
+      },
+    },
+    demandMapCluster: {
+      findMany: async () => [{ id: "cluster-1", slug: "local-normandie" }],
+    },
+    evidenceRecord: {
+      findMany: async ({ where }: { where: { kind?: string } }) => {
+        if (where.kind === "knowledge_fact") return [{ id: "knowledge-1" }, { id: "knowledge-2" }];
+        if (where.kind === "keyword_universe_membership") return [{ id: "local-1" }];
+        return [{ id: "knowledge-1" }, { id: "knowledge-2" }, { id: "local-1" }];
+      },
+    },
+  };
+  return { db, state };
+}
+
+function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
+  return {
+    backfill: async () => ({
+      projectId: "proj-1",
+      crawlEvidence: 10,
+      rankEvidence: 20,
+      pageEvidence: 5,
+      window: { start: "2026-10-01", end: "2026-10-28", days: 28 },
+      skipped: [],
+    }),
+    bridgeKnowledge: async () => ({ document: true, revision: 1, stored: 2, skipped: [] }),
+    bridgeCoverage: async () => ({ document: true, questions: 3, stored: 3 }),
+    fetchNews: async () => [recentNews()],
+    saveNews: async () => [{ id: "source-1" }],
+    storeProposals: async () => ({ stored: [{ id: "opp-1", dedupKey: "phase5:timely" }], dropped: [] }),
+    ...overrides,
+  };
+}
+
+describe("weekly refresh", () => {
+  it("computes the ISO week key", () => {
+    expect(isoWeekKey(now)).toBe("2026-W45");
+  });
+
+  it("builds business and event news queries", () => {
+    const queries = buildWeeklyNewsQueries({
+      businessName: "Atelier de l'harmonie",
+      services: ["Restauration de siège", "Restauration d'abat-jour"],
+      location: "Saint-Pierre-en-Port, France",
+      serviceArea: ["Normandie"],
+      domain: "atelier-harmonie.example",
+      year: 2026,
+    });
+    expect(queries[0]).toContain("Atelier de l'harmonie");
+    expect(queries.join(" ")).toContain("salon artisanat 2026");
+    expect(queries.join(" ")).toContain("portes ouvertes atelier 2026");
+    expect(new Set(queries).size).toBe(queries.length);
+  });
+
+  it("raises a timely proposal only for a source within 14 days", () => {
+    const recent = buildTimelyProposals({
+      news: [recentNews(5)],
+      now,
+      domain: "atelier-harmonie.example",
+      knowledgeEvidenceIds: ["knowledge-1"],
+      localEvidenceIds: ["local-1"],
+    });
+    expect(recent.proposals).toHaveLength(1);
+    expect(recent.proposals[0]).toMatchObject({ lane: "timely", kind: "article", topicSlug: "local-normandie" });
+    expect(recent.proposals[0].whyNow).toContain("2026-10-31");
+    expect(Date.parse(recent.proposals[0].expiresAt!)).toBeGreaterThan(now.getTime());
+
+    const old = buildTimelyProposals({
+      news: [recentNews(45)],
+      now,
+      domain: "atelier-harmonie.example",
+      knowledgeEvidenceIds: ["knowledge-1"],
+      localEvidenceIds: ["local-1"],
+    });
+    expect(old.proposals).toHaveLength(0);
+    expect(old.reason).toMatch(/14 days/);
+  });
+
+  it("dry run makes no writes", async () => {
+    const { db, state } = makeDb();
+    const result = await runWeeklyRefresh(db as never, { siteId: "site-1", mode: "dry-run", now }, makeDeps());
+    expect(result.status).toBe("planned");
+    expect(state.created).toBe(0);
+    expect(state.updated).toBe(0);
+    expect(result.queries.length).toBeGreaterThan(0);
+  });
+
+  it("refreshes evidence, stores news and a current timely proposal", async () => {
+    const { db, state } = makeDb();
+    let storedProposals = 0;
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", approval: "weekly-test", now },
+      makeDeps({
+        storeProposals: async (_db, input) => {
+          storedProposals = input.proposals.length;
+          return { stored: input.proposals.map((proposal) => ({ id: "opp-1", dedupKey: proposal.dedupKey })), dropped: [] };
+        },
+      })
+    );
+    expect(result.status).toBe("completed");
+    expect(result.runId).toBe("weekly-run-1");
+    expect(result.evidence.crawl).toBe(10);
+    expect(result.news.stored).toBe(1);
+    expect(result.timely.proposals).toHaveLength(1);
+    expect(result.timely.stored).toBe(1);
+    expect(storedProposals).toBe(1);
+    expect(state.created).toBe(1);
+    expect(state.runs[0]).toMatchObject({ status: "COMPLETED" });
+  });
+
+  it("records an empty timely lane when the news is old", async () => {
+    const { db } = makeDb();
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", now },
+      makeDeps({ fetchNews: async () => [recentNews(45)] })
+    );
+    expect(result.status).toBe("completed");
+    expect(result.timely.proposals).toHaveLength(0);
+    expect(result.timely.stored).toBe(0);
+    expect(result.timely.reason).toMatch(/14 days/);
+  });
+
+  it("returns an existing weekly run without redoing the work", async () => {
+    const { db, state } = makeDb();
+    state.runs.push({ id: "weekly-run-1", status: "COMPLETED", report: { evidence: { crawl: 1, gsc: 2, knowledge: 3, questionCoverage: 4 }, news: { fetched: 1, stored: 1, items: [] }, timely: { proposals: [], stored: 0, dropped: [], reason: "old" } } });
+    let backfills = 0;
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", now },
+      makeDeps({ backfill: async () => { backfills += 1; return { projectId: "proj-1", crawlEvidence: 0, rankEvidence: 0, pageEvidence: 0, window: null, skipped: [] }; } })
+    );
+    expect(result.status).toBe("existing");
+    expect(backfills).toBe(0);
+    expect(result.evidence.crawl).toBe(1);
+  });
+});
