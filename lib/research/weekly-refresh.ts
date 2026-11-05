@@ -67,6 +67,7 @@ export type WeeklyRefreshResult = {
     proposals: WeeklyTimelyProposal[];
     stored: number;
     dropped: Array<{ title: string; reason: string }>;
+    rejected: Array<{ title: string; reason: string }>;
     expired: number;
     reason: string | null;
   };
@@ -201,7 +202,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence: report?.evidence ?? { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: report?.news ?? { fetched: 0, stored: 0, items: [] },
-      timely: report?.timely ?? { proposals: [], stored: 0, dropped: [], expired: 0, reason: "existing run" },
+      timely: report?.timely ?? { proposals: [], stored: 0, dropped: [], rejected: [], expired: 0, reason: "existing run" },
     };
   }
 
@@ -213,7 +214,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence: { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: { fetched: 0, stored: 0, items: [] },
-      timely: { proposals: [], stored: 0, dropped: [], expired: 0, reason: "dry run" },
+      timely: { proposals: [], stored: 0, dropped: [], rejected: [], expired: 0, reason: "dry run" },
     };
   }
 
@@ -346,7 +347,7 @@ export async function runWeeklyRefresh(
           knowledgeEvidenceIds: knowledgeEvidence.map((row) => row.id),
           now,
         })
-      : { proposals: [], errors: ["no topic map for this month"], model: null };
+      : { proposals: [], errors: ["no topic map for this month"], rejected: [], summary: null, model: null };
 
     let stored = 0;
     let dropped: Array<{ title: string; reason: string }> = [];
@@ -362,6 +363,7 @@ export async function runWeeklyRefresh(
         map,
         topicMapRunId: topicRun?.id ?? "",
         proposals: timely.proposals,
+        detectedBy: "phase5:weekly",
         evidenceIds: new Set(evidenceRows.map((row) => row.id)),
         knowledgeEvidenceIds: knowledgeEvidence.map((row) => row.id),
         clusters,
@@ -370,7 +372,7 @@ export async function runWeeklyRefresh(
       dropped = result.dropped;
       const currentKeys = new Set(timely.proposals.map((proposal) => proposal.dedupKey));
       const existingTimely = await db.opportunity.findMany({
-        where: { projectId: site.projectId, dedupKey: { startsWith: "phase5:timely" }, status: "detected" },
+        where: { projectId: site.projectId, detectedBy: "phase5:weekly", status: "detected" },
         select: { id: true, dedupKey: true },
       });
       const stale = existingTimely.filter((row) => !currentKeys.has(row.dedupKey));
@@ -400,8 +402,9 @@ export async function runWeeklyRefresh(
         proposals: timely.proposals,
         stored,
         dropped,
+        rejected: timely.rejected,
         expired: expiredIds.length,
-        reason: timely.errors.length > 0 ? timely.errors.join("; ") : null,
+        reason: timely.errors.length > 0 ? timely.errors.join("; ") : timely.summary,
       },
       approvalReference: input.approval ?? null,
       generatedAt: new Date().toISOString(),
@@ -432,7 +435,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence,
       news: { fetched: fetched.length, stored: saved.length, items: newsItems },
-      timely: { proposals: timely.proposals, stored, dropped, expired: expiredIds.length, reason: timely.errors.length > 0 ? timely.errors.join("; ") : null },
+      timely: { proposals: timely.proposals, stored, dropped, rejected: timely.rejected, expired: expiredIds.length, reason: timely.errors.length > 0 ? timely.errors.join("; ") : timely.summary },
     };
   } catch (error) {
     await db.researchRun.update({

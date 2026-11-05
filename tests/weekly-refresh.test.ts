@@ -145,7 +145,7 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
         (item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= 21 * 86_400_000
       );
       if (fresh.length === 0) {
-        return { proposals: [], errors: ["no news source within 21 days"], model: "test-model" };
+        return { proposals: [], errors: ["no news source within 21 days"], rejected: [], summary: null, model: "test-model" };
       }
       return {
         proposals: [
@@ -170,6 +170,8 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
           },
         ],
         errors: [],
+        rejected: [],
+        summary: "One current local story.",
         model: "test-model",
       };
     },
@@ -222,6 +224,8 @@ describe("weekly refresh", () => {
         },
       ],
       errors: [],
+      rejected: [],
+      summary: "One current local story.",
       model: "test-model",
     };
     const result = await runWeeklyRefresh(
@@ -238,7 +242,7 @@ describe("weekly refresh", () => {
     const result = await runWeeklyRefresh(
       db as never,
       { siteId: "site-1", mode: "execute", now, approval: "test" },
-      makeDeps({ draftTimely: async () => ({ proposals: [], errors: ["no news source within 21 days"], model: "test-model" }) })
+      makeDeps({ draftTimely: async () => ({ proposals: [], errors: ["no news source within 21 days"], rejected: [], summary: null, model: "test-model" }) })
     );
     expect(result.timely.proposals).toHaveLength(0);
     expect(result.timely.reason).toMatch(/21 days/);

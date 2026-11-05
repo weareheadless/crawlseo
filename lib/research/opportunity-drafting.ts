@@ -62,6 +62,10 @@ export type DraftInput = {
 export type DraftResult = {
   proposals: Proposal[];
   errors: string[];
+  /** Proposals the model returned that could not be stored, and why. */
+  rejected: Array<{ title: string; reason: string }>;
+  /** The model's own note on the batch, including why it proposed nothing. */
+  summary: string | null;
   model: string | null;
 };
 
@@ -95,6 +99,34 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Accept the words a model actually uses for the same ordinal. Rejecting a
+ * proposal because it said "moyen" instead of "medium" is a vocabulary test,
+ * not an editorial one.
+ */
+const EFFORT_WORDS: Record<string, ProposalEffort> = {
+  small: "small", s: "small", low: "small", petit: "small", petite: "small", faible: "small", quick: "small", light: "small",
+  medium: "medium", m: "medium", moderate: "medium", moyen: "medium", moyenne: "medium", normal: "medium",
+  large: "large", l: "large", big: "large", grand: "large", grande: "large", eleve: "large", "élevé": "large", heavy: "large",
+  unknown: "unknown", "?": "unknown",
+};
+
+const CONFIDENCE_WORDS: Record<string, ProposalConfidence> = {
+  high: "high", haute: "high", fort: "high", forte: "high", strong: "high",
+  medium: "medium", moyenne: "medium", moyen: "medium", moderate: "medium",
+  low: "low", basse: "low", faible: "low", weak: "low",
+};
+
+function normalizeEffort(value: string | null): ProposalEffort | null {
+  if (!value) return null;
+  return EFFORT_WORDS[value.trim().toLowerCase()] ?? null;
+}
+
+function normalizeConfidence(value: string | null): ProposalConfidence | null {
+  if (!value) return null;
+  return CONFIDENCE_WORDS[value.trim().toLowerCase()] ?? null;
 }
 
 function bool(value: unknown): boolean | null {
@@ -168,36 +200,52 @@ function parseProposals(
   input: DraftInput,
   allowedEvidence: Map<string, DraftEvidence>,
   batchClusters: TopicCluster[]
-): Proposal[] {
+): { proposals: Proposal[]; rejected: Array<{ title: string; reason: string }> } {
   const record = asRecord(parsed);
-  const rows = Array.isArray(record.proposals) ? record.proposals.slice(0, MAX_PROPOSALS_PER_BATCH) : [];
+  // Accept a list or a single object: a model that returns one proposal often
+  // uses the singular key, and losing the proposal over a key name is not a
+  // judgement the owner should pay for.
+  const rawRows = Array.isArray(record.proposals)
+    ? record.proposals
+    : Array.isArray(record.proposal)
+      ? record.proposal
+      : record.proposal && typeof record.proposal === "object"
+        ? [record.proposal]
+        : [];
+  const rows = rawRows.slice(0, MAX_PROPOSALS_PER_BATCH);
   const slugs = new Set(batchClusters.map((cluster) => cluster.slug));
   const proposals: Proposal[] = [];
+  const rejected: Array<{ title: string; reason: string }> = [];
+  const reject = (title: string | null, reason: string) => {
+    rejected.push({ title: title?.slice(0, 120) ?? "untitled", reason });
+  };
   for (const raw of rows) {
     const row = asRecord(raw);
     let lane = text(row.lane) as ProposalLane | null;
     let kind = text(row.kind) as ProposalKind | null;
-    const effort = (text(row.effort) as ProposalEffort | null) ?? "unknown";
-    const confidenceRaw = text(row.confidence);
-    const confidence = confidenceRaw && CONFIDENCES.includes(confidenceRaw as ProposalConfidence)
-      ? (confidenceRaw as ProposalConfidence)
-      : null;
+    const effort = normalizeEffort(text(row.effort)) ?? "unknown";
+    const confidence = normalizeConfidence(text(row.confidence));
     const title = text(row.title);
     const summary = text(row.summary);
     const action = text(row.action);
     const expectedOutcome = text(row.expectedOutcome);
     const topicSlug = text(row.topicSlug);
     const target = asRecord(row.target);
+    // Evidence ids identify stored evidence records. A URL is a source, not an
+    // evidence id; it is kept in `sources` and never used as a reference.
     const evidenceIds = Array.isArray(row.evidenceIds)
-      ? row.evidenceIds.filter((id): id is string => typeof id === "string")
+      ? row.evidenceIds.filter((id): id is string => typeof id === "string" && !id.includes("://"))
       : [];
-    if (!lane || !LANES.includes(lane)) continue;
-    if (!kind || !KINDS.includes(kind)) continue;
-    if (!EFFORTS.includes(effort)) continue;
-    if (!title || !summary || !action || !expectedOutcome) continue;
-    if (!topicSlug || !slugs.has(topicSlug)) continue;
+    if (!lane || !LANES.includes(lane)) { reject(title, "invalid lane"); continue; }
+    if (!kind || !KINDS.includes(kind)) { reject(title, "invalid kind"); continue; }
+    if (!EFFORTS.includes(effort)) { reject(title, "invalid effort"); continue; }
+    if (!title || !summary || !action || !expectedOutcome) { reject(title, "missing required field"); continue; }
+    if (!topicSlug || !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
     const known = evidenceIds.filter((id) => allowedEvidence.has(id));
-    if (known.length === 0) continue;
+    if (known.length === 0) {
+      reject(title, evidenceIds.length === 0 ? "no evidence ids" : "evidence ids not in the supplied catalogue");
+      continue;
+    }
     // A proposal that rests only on measured AI Overview observations is an
     // AEO proposal, whatever lane the model labelled it with. The lane then
     // reflects the evidence rather than a naming choice.
@@ -211,7 +259,7 @@ function parseProposals(
     // Expiry is a timely concept. A content proposal is not "expired" because
     // a date passed, so a stray date from the model is dropped.
     const expiresAt = lane === "timely" ? text(row.expiresAt) : null;
-    proposals.push({
+    const proposal: Proposal = {
       dedupKey: "",
       lane,
       kind,
@@ -229,14 +277,18 @@ function parseProposals(
       topicSlug,
       sources: [],
       critique: null,
-    });
+    };
+    proposal.dedupKey = proposalIdentity(proposal);
+    proposals.push(proposal);
   }
-  return proposals;
+  return { proposals, rejected };
 }
 
 export async function draftClusterProposals(input: DraftInput): Promise<DraftResult> {
   const config = contentWriterConfig();
-  if (!config) return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], model: null };
+  if (!config) {
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+  }
 
   const clusters = input.map.clusters
     .filter((cluster) => cluster.queries.length > 0 || cluster.coverage !== "none")
@@ -248,6 +300,8 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
 
   const proposals: Proposal[] = [];
   const errors: string[] = [];
+  const rejected: Array<{ title: string; reason: string }> = [];
+  const summaries: string[] = [];
   for (let index = 0; index < clusters.length; index += CLUSTER_BATCH) {
     const batch = clusters.slice(index, index + CLUSTER_BATCH);
     const payload = {
@@ -268,7 +322,11 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
         timeoutMs: 180_000,
         jsonMode: false,
       });
-      proposals.push(...parseProposals(parsed, input, allowedEvidence, batch));
+      const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch);
+      proposals.push(...parsedBatch.proposals);
+      rejected.push(...parsedBatch.rejected);
+      const note = text(asRecord(parsed).summary);
+      if (note) summaries.push(note.slice(0, 300));
     } catch (error) {
       errors.push(
         `clusters ${batch.map((cluster) => cluster.slug).join(", ")}: ${
@@ -277,12 +335,20 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       );
     }
   }
-  return { proposals, errors, model: config.model };
+  return {
+    proposals,
+    errors,
+    rejected,
+    summary: summaries.length > 0 ? summaries.join(" ") : null,
+    model: config.model,
+  };
 }
 
 export async function draftTimelyProposals(input: DraftInput): Promise<DraftResult> {
   const config = contentWriterConfig();
-  if (!config) return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], model: null };
+  if (!config) {
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+  }
   const current = input.news.filter(
     (item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= TIMELY_WINDOW_DAYS * 86_400_000
   );
@@ -290,6 +356,8 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
     return {
       proposals: [],
       errors: input.news.length > 0 ? [`no news source within ${TIMELY_WINDOW_DAYS} days`] : [],
+      rejected: [],
+      summary: null,
       model: config.model,
     };
   }
@@ -306,9 +374,16 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
   for (const cluster of evidenceClusters.slice(0, 2)) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) evidence.set(row.id, row);
   }
+  // The business's own facts are citable too: a timely note usually links the
+  // story to what the business actually does. The news item is itself evidence.
+  for (const id of input.knowledgeEvidenceIds) {
+    evidence.set(id, { id, kind: "knowledge_fact", query: null, position: null, impressions: null, volume: null, url: null });
+  }
+
   const payload = {
     ...businessPayload(input),
     news: current.slice(0, 8),
+    knowledgeEvidence: input.knowledgeEvidenceIds,
     localClusters: evidenceClusters.slice(0, 3).map((cluster) => ({
       slug: cluster.slug,
       name: cluster.name,
@@ -319,10 +394,11 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
   };
   const system = [
     "You are an SEO strategist reviewing this week's news for one business.",
+    "If your summary says there is an opportunity, you must return it as a proposal. If you return no proposals, the summary must say why there is no opportunity.",
     "Decide whether any item is a real, current opportunity for this business. A local news item that does not concern the business's market, trade or customers is not an opportunity: propose nothing.",
     "Use the business location and service area to judge whether the story is in the business's market. Judge the place the story names; do not use a fixed list of cities.",
     "A story older than 21 days is not current: do not propose it. A timely proposal must expire; set expiresAt to the date the story stops being current, at most 30 days from today.",
-    "Use only the supplied evidence ids. Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, topicSlug, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[], expiresAt, sourceUrl }] }.",
+    "Use only the supplied evidence ids in evidenceIds; never put a URL there. The story goes in sourceUrl. Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, topicSlug, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[], expiresAt, sourceUrl }] }.",
     "lane must be timely. kind is article, update or business. Every proposal needs at least one evidenceId and one sourceUrl from the supplied news.",
   ].join("\n");
 
@@ -339,9 +415,9 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
     });
     // The evidence is restricted to the local clusters, but a timely proposal
     // may attach to any real cluster in the map.
-    const proposals = parseProposals(parsed, input, evidence, input.map.clusters);
+    const parsedBatch = parseProposals(parsed, input, evidence, input.map.clusters);
     const byUrl = new Map(current.map((item) => [item.url, item]));
-    const timely = proposals
+    const timely = parsedBatch.proposals
       .filter((proposal) => proposal.lane === "timely")
       .map((proposal) => {
         const record = asRecord(parsed);
@@ -355,13 +431,21 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
           expiresAt: proposal.expiresAt ?? new Date(input.now.getTime() + 21 * 86_400_000).toISOString(),
         };
       });
-    return { proposals: timely, errors: [], model: config.model };
+    return {
+      proposals: timely,
+      errors: [],
+      rejected: parsedBatch.rejected,
+      summary: text(asRecord(parsed).summary)?.slice(0, 400) ?? null,
+      model: config.model,
+    };
   } catch (error) {
     return {
       proposals: [],
       errors: [
         `timely: ${error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)}`,
       ],
+      rejected: [],
+      summary: null,
       model: config.model,
     };
   }
@@ -373,6 +457,8 @@ export async function draftProposals(input: DraftInput): Promise<DraftResult> {
   return {
     proposals: [...clusters.proposals, ...timely.proposals],
     errors: [...clusters.errors, ...timely.errors],
+    rejected: [...clusters.rejected, ...timely.rejected],
+    summary: [clusters.summary, timely.summary].filter(Boolean).join(" ") || null,
     model: clusters.model ?? timely.model,
   };
 }

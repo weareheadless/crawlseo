@@ -418,6 +418,9 @@ export async function storeProposals(
     proposals: Proposal[];
     evidenceIds: Set<string>;
     firstPartyEvidenceIds?: Set<string>;
+    /** Which phase owns these proposals; the weekly sweep and the monthly pass
+     * must not supersede each other's rows. */
+    detectedBy?: "phase3:topic-map" | "phase5:weekly";
     knowledgeEvidenceIds: string[];
     clusters: Array<{ id: string; slug: string }>;
   }
@@ -468,7 +471,7 @@ export async function storeProposals(
         title: proposal.title,
         summary: proposal.summary,
         dedupKey: proposal.dedupKey,
-        detectedBy: "phase3:topic-map",
+        detectedBy: input.detectedBy ?? "phase3:topic-map",
         clusterId: proposal.topicSlug ? clusterIdBySlug.get(proposal.topicSlug) ?? null : null,
         scoreInputs: proposalScoreInputs(proposal, cluster) as never,
         whyEvidenceIds,

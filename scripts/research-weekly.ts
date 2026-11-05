@@ -86,6 +86,7 @@ function printResult(result: WeeklyRefreshResult): void {
   } else {
     process.stdout.write(`timely: ${result.timely.proposals.length} proposal(s), ${result.timely.stored} stored\n`);
     for (const proposal of result.timely.proposals) process.stdout.write(`- ${proposal.title} · expires ${proposal.expiresAt?.slice(0, 10) ?? "?"}\n`);
+    for (const row of result.timely.rejected ?? []) process.stdout.write(`  not stored: ${row.title} — ${row.reason}\n`);
   }
   for (const query of result.queries) process.stdout.write(`query: ${query}\n`);
 }

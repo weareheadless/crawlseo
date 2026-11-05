@@ -17,7 +17,6 @@ Run cmw3k8awi0001oy3ze94e5esp. Free weekly work: first-party evidence and news, 
 | Published | Source |
 |---|---|
 | 2026-10-20 | Salons, artisans d’art, activités automnales... notre sélection de sorties dans l’Eure et en Seine-Maritime - Paris Normandie |
-| 2026-10-03 | À Vernon, le Salon de l’imaginaire et du jeu célèbre ses 10 ans - Paris Normandie |
 | 2026-09-18 | Collection d’Art à Rouen : la 10e édition met à l’honneur les artisans d’art de Seine-Maritime - ici.fr |
 | 2026-09-08 | A Hossegor, elle transforme les vieux luminaires en pièces uniques - ici.fr |
 | 2026-07-05 | Collection d’Art – nos Artisans se mettent en scène - Avenir - Guide du CRED76 - Département de la Seine-Maritime |
@@ -29,15 +28,16 @@ Run cmw3k8awi0001oy3ze94e5esp. Free weekly work: first-party evidence and news, 
 | 2026-05-08 | Gaillon : la photographe Sabrina Esteves décroche le prestigieux titre de maître artisan d’art - Paris Normandie |
 | 2026-04-23 | À Eu, le salon du savoir-faire local réunit une trentaine d'exposants les 25 et 26 avril - Actu.fr |
 | 2026-03-06 | Ce week-end à Pont-l’Évêque, 24e Salon de l’artisanat et des métiers d’art - Ouest-France |
+| 2026-02-04 | Conférence, ateliers, tatouage au programme du salon de l’artisanat et du bien-être à Bosc-le-Hard - Paris Normandie |
 | 2025-10-02 | Abat-jouriste passionnée, Isabelle Reboul redonne vie à vos luminaires à Hossegor - ici.fr |
 | 2025-03-21 | Ateliers d’Art de France : la Normandie au Carré St-Cyr - Agglo Seine-Eure |
 
 ## Timely proposals
 
-- **Réagir à « Salons, artisans d’art, activités automnales... notre sélection de sorties dans l’Eure et en Seine-Maritime - Paris Normandie »** — Published 2026-10-20; the atelier can respond while the local story is current.
-  - Action: Write a short dated atelier note that responds to the source, links it, names the atelier and the Normandy location, and links the relevant restoration or workshop page. Keep it factual and quote only what the source supports.
-  - Target: /blog
-  - Expires: 2026-12-05
+- **Salons et marchés d'artisans d'art en Normandie : notre sélection d'octobre-novembre 2026** — La sélection de sorties automnales de Paris Normandie (20/10/2026) met en avant les salons et artisans d'art de l'Eure et de la Seine-Maritime : c'est le moment où le public normand cherche activement où voir et rencontrer des artisans d'art, et où l'atelier peut capter cette recherche saisonnière avant qu'elle ne retombe.
+  - Action: Rédiger l'article en 3 parties : 1) la liste datée des salons/marchés d'artisans d'art cités en Normandie, 2) « ce que vous y trouverez » côté luminaire et assise, 3) encart atelier avec dates d'ateliers DIY et liens vers les pages kits et restauration d'abat-jour. Ajouter le lien dans la navigation Blog et un post sur les réseaux sociaux locaux.
+  - Target: /blog/salons-artisans-art-normandie-automne-2026
+  - Expires: 2026-11-10
   - Stored: yes
 
 ## Limits
