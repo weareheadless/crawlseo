@@ -36,6 +36,19 @@ export type DemandQuery = {
   volume: number | null;
   difficulty: number | null;
   observedAt: Date;
+  /**
+   * Set by the AI review when the query's geography is judged against the
+   * business location and the cluster's market scope. Undefined means "not
+   * judged", which is treated as in market.
+   */
+  inMarket?: boolean;
+  marketReason?: string;
+};
+
+export type ExcludedQuery = {
+  query: string;
+  impressions: number;
+  reason: string;
 };
 
 export type TopicPage = {
@@ -78,6 +91,8 @@ export type TopicCluster = {
     aeoCited: number;
   };
   queries: DemandQuery[];
+  /** Queries the review placed outside the configured market, kept for audit. */
+  excludedQueries: ExcludedQuery[];
   pages: TopicCoveragePage[];
   coverage: "strong" | "partial" | "none";
   gaps: string[];
@@ -97,9 +112,18 @@ export type TopicMapAi = {
   review: string | null;
   priorityTopics: string[];
   weakTopics: string[];
+  /** Queries the review placed outside their cluster's market. */
+  marketExclusions: number;
   error: string | null;
   /** Operational note, e.g. a successful earlier call followed by a failed retry. */
   note?: string | null;
+};
+
+export type MarketVerdict = {
+  cluster: string;
+  query: string;
+  inMarket: boolean;
+  reason: string;
 };
 
 export type TopicMap = {
@@ -158,8 +182,6 @@ const GENERIC_QUERY_TOKENS = new Set([
   "cree", "unique", "uniques", "original", "originale", "originales", "francais", "francaise",
   "prix", "devis", "achat", "acheter", "vente", "boutique", "magasin", "fait", "main", "sur", "mesure",
   "modele", "collection", "couleur", "style", "idee", "inspiration", "conseil", "guide", "blog",
-  "mans", "sarthe", "normandie", "saint", "pierre", "germain", "laye", "adresse", "fecamp",
-  "caen", "rouen", "honfleur", "caux",
 ]);
 
 const PAGE_EXCLUDE = [
@@ -317,6 +339,22 @@ function average(values: number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+export function clusterMetrics(
+  queries: DemandQuery[],
+  aeo: { questions: number; cited: number } = { questions: 0, cited: 0 }
+): TopicCluster["metrics"] {
+  return {
+    queries: queries.length,
+    impressions: queries.reduce((sum, query) => sum + query.impressions, 0),
+    clicks: queries.reduce((sum, query) => sum + query.clicks, 0),
+    volume: queries.reduce((sum, query) => sum + (query.volume ?? 0), 0),
+    difficulty: average(queries.flatMap((query) => (query.difficulty == null ? [] : [query.difficulty]))),
+    position: weightedPosition(queries),
+    aeoQuestions: aeo.questions,
+    aeoCited: aeo.cited,
+  };
+}
+
 function weightedPosition(queries: DemandQuery[]): number | null {
   const withPosition = queries.filter((query) => query.position != null);
   if (withPosition.length === 0) return null;
@@ -383,30 +421,12 @@ function buildGaps(input: {
   if (thin) {
     gaps.push(`Thin coverage: ${thin.url} has ${thin.wordCount} words.`);
   }
-  if (topic.slug === "local-normandie") {
-    const dedicatedLocal = allPages.some(
-      (page) =>
-        (page.type === "service" || page.type === "category") &&
-        containsTerm(normalizeTopicText(page.title + " " + page.url), "tapissier") &&
-        (containsTerm(normalizeTopicText(page.title + " " + page.url), "normandie") ||
-          containsTerm(normalizeTopicText(page.title + " " + page.url), "saint pierre"))
-    );
-    if (!dedicatedLocal) {
-      gaps.push("No dedicated local landing page combining the trade and the place; the home and workshop pages carry the local signal.");
-    }
-    const offArea = queries.filter((query) => /\b(le mans|sarthe|saint germain en laye|sainte adresse)\b/i.test(query.query));
-    if (offArea.length > 0) {
-      gaps.push(
-        `Off-area demand: ${offArea.map((query) => `“${query.query}”`).slice(0, 4).join(", ")}. Do not chase it without a business reason.`
-      );
-    }
-  }
   // Missing terms are checked against every page that matched the topic, not
   // only the four shown in the report. A product page for a pagode shade counts
   // as coverage even when the category page is the one displayed.
   const missing = missingQueryTerms(queries, allPages);
   for (const entry of missing.slice(0, 4)) {
-    gaps.push(`Queries mention “${entry.term}” (${entry.count} query${entry.count === 1 ? "" : "s"}, ${entry.impressions} impressions) but no matched page does.`);
+    gaps.push(`Queries mention “${entry.term}” (${entry.count} ${entry.count === 1 ? "query" : "queries"}, ${entry.impressions} impressions) but no matched page does.`);
   }
   if (topic.relevance === "low" && coverage !== "none") {
     gaps.push("Low commercial relevance; treat as supporting content rather than a revenue topic.");
@@ -641,16 +661,10 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     const pages = allPages.slice(0, 4);
     const coverage = coverageLevel(allPages, topic);
     const aeo = data.aeo.filter((row) => assignQuery(row.question, taxonomy).some((entry) => entry.topic.slug === topic.slug));
-    const metrics = {
-      queries: queries.length,
-      impressions: queries.reduce((sum, query) => sum + query.impressions, 0),
-      clicks: queries.reduce((sum, query) => sum + query.clicks, 0),
-      volume: queries.reduce((sum, query) => sum + (query.volume ?? 0), 0),
-      difficulty: average(queries.flatMap((query) => (query.difficulty == null ? [] : [query.difficulty]))),
-      position: weightedPosition(queries),
-      aeoQuestions: aeo.length,
-      aeoCited: aeo.reduce((sum, row) => sum + row.cited, 0),
-    };
+    const metrics = clusterMetrics(queries, {
+      questions: aeo.length,
+      cited: aeo.reduce((sum, row) => sum + row.cited, 0),
+    });
     const gaps = buildGaps({ topic, queries, pages, allPages, coverage });
     const scope = marketScopeForTopic(data.marketScope, topic.offerKey);
     const demandScore = Math.log10(metrics.impressions + metrics.volume + 1) / 4;
@@ -667,6 +681,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       confidence,
       metrics,
       queries: queries.sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0)),
+      excludedQueries: [],
       pages,
       coverage,
       gaps,
@@ -710,6 +725,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       review: null,
       priorityTopics: [],
       weakTopics: [],
+      marketExclusions: 0,
       error: null,
     },
     counts: {
@@ -731,14 +747,49 @@ function relevanceRank(relevance: TopicRelevance): number {
 }
 
 function offBusinessReason(query: string): string {
-  const text = normalizeTopicText(query);
-  if (/\b(tenue|sexie|definition|customer need|corpus|ambiguite|mot fleche)\b/.test(text)) {
-    return "Off-business or research-noise query; ignore for the SEO map.";
+  // The taxonomy is the only matching rule. Whether an unmatched query is
+  // adjacent demand or research noise is a judgement the review call makes;
+  // code does not carry a list of a tenant's products to decide it.
+  return `No taxonomy topic matched “${query}”; review for a missing topic or an off-business query.`;
+}
+
+/**
+ * Apply the review's geography verdicts to the map.
+ *
+ * A verdict is scoped to a cluster, because the same query can belong to a
+ * local offer and to a national one: "restauration fauteuil <distant town>"
+ * is out of market for the local cluster and still valid demand for the
+ * restoration cluster. Excluded queries stay on the cluster for audit and are
+ * removed from `queries`, so demand totals and evidence selection use only the
+ * market the owner configured.
+ */
+export function applyMarketVerdicts(map: TopicMap, verdicts: MarketVerdict[]): number {
+  const byKey = new Map(
+    verdicts.map((verdict) => [`${verdict.cluster}|${normalizeTopicText(verdict.query)}`, verdict])
+  );
+  let excluded = 0;
+  for (const cluster of map.clusters) {
+    const kept: DemandQuery[] = [];
+    const dropped: ExcludedQuery[] = [];
+    for (const query of cluster.queries) {
+      const verdict = byKey.get(`${cluster.slug}|${normalizeTopicText(query.query)}`);
+      if (verdict && !verdict.inMarket) {
+        dropped.push({ query: query.query, impressions: query.impressions, reason: verdict.reason });
+        excluded += 1;
+        continue;
+      }
+      kept.push(verdict ? { ...query, inMarket: true, marketReason: verdict.reason } : query);
+    }
+    if (dropped.length === 0) continue;
+    cluster.queries = kept;
+    cluster.excludedQueries = [...cluster.excludedQueries, ...dropped];
+    cluster.metrics = clusterMetrics(kept, {
+      questions: cluster.metrics.aeoQuestions,
+      cited: cluster.metrics.aeoCited,
+    });
+    cluster.topicSummary = `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions; coverage ${cluster.coverage}; ${cluster.gaps.length} gap${cluster.gaps.length === 1 ? "" : "s"}; ${cluster.excludedQueries.length} out-of-market ${cluster.excludedQueries.length === 1 ? "query" : "queries"}.`;
   }
-  if (/\b(meuble|meubles)\b/.test(text) && !/\b(fauteuil|chaise|siege|tapisserie|tapissier)\b/.test(text)) {
-    return "Adjacent furniture restoration demand; the business sells seating and lighting, not general furniture.";
-  }
-  return "No taxonomy topic matched; review for a missing topic or an off-business query.";
+  return excluded;
 }
 
 export async function synthesizeTopicMap(
@@ -754,6 +805,7 @@ export async function synthesizeTopicMap(
       review: null,
       priorityTopics: [],
       weakTopics: [],
+      marketExclusions: 0,
       error: "CONTENT_LLM_API_KEY is not configured",
     };
   }
@@ -765,6 +817,13 @@ export async function synthesizeTopicMap(
         b.metrics.impressions + b.metrics.volume - (a.metrics.impressions + a.metrics.volume)
     )
     .slice(0, 8);
+  // The local cluster is often the weakest by volume, so it would never reach a
+  // top-8 cut. Every cluster with a bounded market is sent, with its queries,
+  // because geography is judged from the query text, not from demand size.
+  const marketClusters = map.clusters.filter(
+    (cluster) => cluster.marketScope.scope !== "international" && cluster.queries.length > 0
+  );
+  const reviewClusters = [...new Map([...priorityClusters, ...marketClusters].map((cluster) => [cluster.slug, cluster])).values()];
   const payload = {
     site: map.domain,
     business: {
@@ -773,7 +832,7 @@ export async function synthesizeTopicMap(
       location: business.location,
       serviceArea: business.serviceArea,
     },
-    clusters: priorityClusters.map((cluster) => ({
+    clusters: reviewClusters.map((cluster) => ({
       slug: cluster.slug,
       name: cluster.name,
       intent: cluster.intent,
@@ -782,6 +841,11 @@ export async function synthesizeTopicMap(
       marketScope: cluster.marketScope,
       demand: `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.volume} monthly volume`,
       gaps: cluster.gaps.slice(0, 2),
+      queries: cluster.queries.slice(0, 10).map((query) => ({
+        query: query.query,
+        impressions: query.impressions,
+        position: query.position == null ? null : Number(query.position.toFixed(1)),
+      })),
     })),
     unmapped: map.unmapped.slice(0, 5).map((query) => query.query),
   };
@@ -789,11 +853,14 @@ export async function synthesizeTopicMap(
   const system = [
     "You are an SEO reviewer for a small craft business.",
     "Review the supplied topic map. Use only the supplied clusters, slugs and facts; do not invent queries, pages or metrics.",
-    "Respect each cluster's marketScope. A local offer is local; a national or international offer is not limited to Normandy. Do not assume every offer is local.",
+    "Respect each cluster's marketScope. A local offer is local; a national or international offer is not limited to the business location. Do not assume every offer is local.",
+    "For every query in a cluster whose marketScope is local or national, decide whether the place it names is inside the business's market. Use business.location and business.serviceArea as the business's real geography: a place outside them is out of market, however large its demand. A query that names no place is in market.",
+    "Do not use a radius or a fixed list of cities; judge the place the query names against the business's location and service area.",
     "Say which topics are worth doing first and which are weak or off-area.",
     "A weak topic has low measured demand, not no opportunity. If a weak topic is business-relevant, say what expansion or small test would validate it.",
-    "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[] }.",
+    "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[], market_verdicts: [{ cluster: string, query: string, in_market: boolean, reason: string }] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",
+    "market_verdicts must use only the supplied cluster slugs and query strings. Omit a query you cannot place. Keep each reason under 140 characters.",
     "Keep map_summary under 400 characters and seo_review under 600 characters.",
   ].join("\n");
 
@@ -845,6 +912,20 @@ export async function synthesizeTopicMap(
         if (gaps.length > 0) cluster.gaps = gaps;
       }
     }
+    const verdicts: MarketVerdict[] = [];
+    for (const raw of Array.isArray(record.market_verdicts) ? record.market_verdicts : []) {
+      const row = asRecord(raw);
+      const cluster = textValue(row.cluster);
+      const query = textValue(row.query);
+      const reason = textValue(row.reason);
+      const flag = row.in_market;
+      const inMarket =
+        typeof flag === "boolean" ? flag : flag === "true" ? true : flag === "false" ? false : null;
+      if (!cluster || !query || inMarket == null || !reason) continue;
+      verdicts.push({ cluster, query, inMarket, reason: reason.slice(0, 200) });
+    }
+    const marketExclusions = applyMarketVerdicts(map, verdicts);
+
     const priorityTopics = stringList(record.priority_topics).filter((slug) => bySlug.has(slug)).slice(0, 5);
     const weakTopics = stringList(record.weak_topics).filter((slug) => bySlug.has(slug)).slice(0, 4);
     return {
@@ -854,6 +935,7 @@ export async function synthesizeTopicMap(
       review: textValue(record.seo_review)?.slice(0, 2_000) ?? null,
       priorityTopics,
       weakTopics,
+      marketExclusions,
       error: null,
     };
   } catch (error) {
@@ -864,6 +946,7 @@ export async function synthesizeTopicMap(
       review: null,
       priorityTopics: [],
       weakTopics: [],
+      marketExclusions: 0,
       error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
     };
   }
@@ -902,6 +985,7 @@ export async function storeTopicMap(
         coverage: cluster.coverage,
         pages: cluster.pages,
         gaps: cluster.gaps,
+        excludedQueries: cluster.excludedQueries,
         metrics: cluster.metrics,
         actionHint: cluster.actionHint,
         ai: map.ai,
@@ -1047,6 +1131,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     if (map.ai.review) lines.push(`\n${map.ai.review}`);
     if (map.ai.priorityTopics.length > 0) lines.push(`\nPriority topics: ${map.ai.priorityTopics.join(", ")}.`);
     if (map.ai.weakTopics.length > 0) lines.push(`Weak topics: ${map.ai.weakTopics.join(", ")}.`);
+    if (map.ai.marketExclusions > 0) lines.push(`Out-of-market queries excluded from demand and evidence: ${map.ai.marketExclusions}.`);
     if (map.ai.note) lines.push(`\nNote: ${map.ai.note}`);
   } else {
     lines.push(`AI review: not available${map.ai.error ? ` (${map.ai.error})` : ""}. The deterministic map is shown as-is.`);
@@ -1086,6 +1171,16 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
         );
       }
       if (cluster.queries.length > 15) lines.push(`| … ${cluster.queries.length - 15} more | | | | | |`);
+      lines.push("");
+    }
+    if (cluster.excludedQueries.length > 0) {
+      lines.push("Out-of-market queries (excluded from demand and evidence):");
+      lines.push("");
+      lines.push("| Query | Impressions | Reason |");
+      lines.push("|---|---:|---|");
+      for (const query of cluster.excludedQueries) {
+        lines.push(`| ${escapePipe(query.query)} | ${query.impressions} | ${escapePipe(query.reason)} |`);
+      }
       lines.push("");
     }
     if (cluster.pages.length > 0) {

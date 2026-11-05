@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildTimelyProposals,
   buildWeeklyNewsQueries,
   isoWeekKey,
   runWeeklyRefresh,
@@ -139,6 +138,41 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
     fetchNews: async () => [recentNews()],
     saveNews: async () => [{ id: "source-1" }],
     storeProposals: async () => ({ stored: [{ id: "opp-1", dedupKey: "phase5:timely" }], dropped: [] }),
+    // Test double for the drafting call: it keeps the 21-day rule the real
+    // call is given, so the weekly flow is exercised without a model.
+    draftTimely: async (input) => {
+      const fresh = input.news.filter(
+        (item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= 21 * 86_400_000
+      );
+      if (fresh.length === 0) {
+        return { proposals: [], errors: ["no news source within 21 days"], model: "test-model" };
+      }
+      return {
+        proposals: [
+          {
+            dedupKey: "phase3:timely:abc",
+            lane: "timely" as const,
+            kind: "article" as const,
+            title: "Réagir à la presse locale",
+            summary: "Local press is current.",
+            whyNow: `Published ${fresh[0].publishedAt?.slice(0, 10)}.`,
+            evidenceRefs: ["knowledge-1"],
+            target: { url: "/blog", newAsset: true, section: "news" },
+            action: "Write a dated note.",
+            expectedOutcome: "A dated, linkable story.",
+            effort: "small" as const,
+            confidence: "low" as const,
+            confidenceReason: "Local query demand is thin.",
+            expiresAt: new Date(input.now.getTime() + 20 * 86_400_000).toISOString(),
+            topicSlug: "local-normandie",
+            sources: [{ title: fresh[0].title, url: fresh[0].url, publishedAt: fresh[0].publishedAt }],
+            critique: null,
+          },
+        ],
+        errors: [],
+        model: "test-model",
+      };
+    },
     ...overrides,
   };
 }
@@ -163,37 +197,51 @@ describe("weekly refresh", () => {
     expect(new Set(queries).size).toBe(queries.length);
   });
 
-  it("raises a timely proposal only for a source within 21 days", () => {
-    const recent = buildTimelyProposals({
-      news: [recentNews(5)],
-      now,
-      domain: "atelier-harmonie.example",
-      knowledgeEvidenceIds: ["knowledge-1"],
-      localEvidenceIds: ["local-1"],
-    });
-    expect(recent.proposals).toHaveLength(1);
-    expect(recent.proposals[0]).toMatchObject({ lane: "timely", kind: "article", topicSlug: "local-normandie" });
-    expect(recent.proposals[0].whyNow).toContain("2026-10-31");
-    expect(Date.parse(recent.proposals[0].expiresAt!)).toBeGreaterThan(now.getTime());
+  it("stores the timely proposal the drafting call returns", async () => {
+    const { db } = makeDb();
+    const drafted = {
+      proposals: [
+        {
+          dedupKey: "phase3:timely:abc",
+          lane: "timely" as const,
+          kind: "article" as const,
+          title: "Réagir à la presse locale",
+          summary: "Local press is current.",
+          whyNow: "Published 2026-10-31.",
+          evidenceRefs: ["knowledge-1"],
+          target: { url: "/blog", newAsset: true, section: "news" },
+          action: "Write a dated note.",
+          expectedOutcome: "A dated, linkable story.",
+          effort: "small" as const,
+          confidence: "low" as const,
+          confidenceReason: "Local query demand is thin.",
+          expiresAt: new Date(now.getTime() + 20 * 86_400_000).toISOString(),
+          topicSlug: "local-normandie",
+          sources: [{ title: recentNews().title, url: recentNews().url, publishedAt: recentNews().publishedAt }],
+          critique: null,
+        },
+      ],
+      errors: [],
+      model: "test-model",
+    };
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", now, approval: "test" },
+      makeDeps({ draftTimely: async () => drafted })
+    );
+    expect(result.timely.proposals).toHaveLength(1);
+    expect(result.timely.stored).toBe(1);
+  });
 
-    const sixteenDays = buildTimelyProposals({
-      news: [recentNews(16)],
-      now,
-      domain: "atelier-harmonie.example",
-      knowledgeEvidenceIds: ["knowledge-1"],
-      localEvidenceIds: ["local-1"],
-    });
-    expect(sixteenDays.proposals).toHaveLength(1);
-
-    const old = buildTimelyProposals({
-      news: [recentNews(25)],
-      now,
-      domain: "atelier-harmonie.example",
-      knowledgeEvidenceIds: ["knowledge-1"],
-      localEvidenceIds: ["local-1"],
-    });
-    expect(old.proposals).toHaveLength(0);
-    expect(old.reason).toMatch(/21 days/);
+  it("records why no timely proposal was drafted", async () => {
+    const { db } = makeDb();
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", now, approval: "test" },
+      makeDeps({ draftTimely: async () => ({ proposals: [], errors: ["no news source within 21 days"], model: "test-model" }) })
+    );
+    expect(result.timely.proposals).toHaveLength(0);
+    expect(result.timely.reason).toMatch(/21 days/);
   });
 
   it("dry run makes no writes", async () => {

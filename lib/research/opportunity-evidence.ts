@@ -1,4 +1,5 @@
 import type { TopicCluster } from "@/lib/research/topic-map";
+import type { DraftEvidence } from "@/lib/research/opportunity-drafting";
 
 /**
  * Select the evidence a proposal actually rests on.
@@ -89,4 +90,42 @@ export function buildClusterEvidenceIds(
     result.set(cluster.slug, unique.length > 0 ? unique : (memberships.get(cluster.slug) ?? []).slice(0, 6));
   }
   return result;
+}
+
+/**
+ * Build the evidence catalogue the drafting call sees: one compact row per
+ * selected evidence record, grouped by cluster. The model can only cite ids
+ * from this catalogue, which is how a proposal's claim stays checkable.
+ */
+export function buildClusterEvidenceCatalogue(
+  clusters: TopicCluster[],
+  rows: ClusterEvidenceRow[],
+  idsByCluster: Map<string, string[]>
+): Map<string, DraftEvidence[]> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const catalogue = new Map<string, DraftEvidence[]>();
+  for (const cluster of clusters) {
+    const entries: DraftEvidence[] = [];
+    for (const id of idsByCluster.get(cluster.slug) ?? []) {
+      const row = byId.get(id);
+      if (!row) continue;
+      const dimensions = asRecord(row.dimensions);
+      const metrics = asRecord(row.metrics);
+      const metric = (key: string): number | null => {
+        const value = asRecord(metrics[key]).value;
+        return typeof value === "number" ? value : null;
+      };
+      entries.push({
+        id: row.id,
+        kind: row.kind,
+        query: typeof dimensions.query === "string" ? dimensions.query : null,
+        position: metric("first_party:position"),
+        impressions: metric("first_party:impressions"),
+        volume: metric("provider:volume"),
+        url: typeof dimensions.url === "string" ? dimensions.url : null,
+      });
+    }
+    catalogue.set(cluster.slug, entries);
+  }
+  return catalogue;
 }

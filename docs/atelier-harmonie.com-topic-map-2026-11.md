@@ -1,6 +1,6 @@
 # Topic map — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-05T14:53:27.731Z. Locale fr/FR.
+Generated 2026-11-05T21:23:06.393Z. Locale fr/FR.
 
 ## Business
 
@@ -18,12 +18,13 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-9 clusters: high relevance for creation-abat-jour, restauration-siege, marque, luminaires, restauration-abat-jour, kits-ateliers, local-normandie; medium for objets-deco. Local Normandie scope: restauration-siege, restauration-abat-jour, kits-ateliers, local-normandie. International scope: creation-abat-jour, marque, luminaires, objets-deco.
+Nine clusters: four international offers (création d'abat-jours, luminaires, marque, objets déco), four Normandie-local services (sièges, restauration d'abat-jour, kits/ateliers, local), one national fabrics topic. Measured demand spans 51,140 monthly volume on abat-jour pagode terms down to 0 on local and fabric queries; luminaires carries the most impressions (996), restauration-abat-jour the best positions.
 
-Start with restauration-siege and restauration-abat-jour: local Normandie gaps (tapissier/chaises; no service page, reparer). Then luminaires (996 impressions; plafonnier, thin suspensions) and creation-abat-jour (51,140 volume; thin abat-jours), both international, not local. marque needs brand cleanup (harmony). Weak: local-normandie (0 volume) is business-relevant—test a dedicated local landing page; ignore off-area Le Mans/Sarthe/Sainte-Adresse. objets-deco (50) and kits-ateliers (140) are low-demand; validate via small tests for déco/coussins and fabrication/luminaire terms.
+Start with the Normandie services already ranking: restauration-abat-jour (284 impressions, positions 5–10, but no service page) and restauration-siege, which needs 'tapissier' and 'chaises' wording. Luminaires holds the most impressions (996) yet ranks 40–60, so it is a content build; création d'abat-jours has large volume on a 150-word page; kits' 'kit lampe' (pos 5) is a quick win. Weak: objets déco, tissus and local-normandie (0 volume, and Le Mans, Sarthe, Saint-Germain-en-Laye sit outside Normandie). Test one Normandie 'autour de moi'/Fécamp page and one fabric-plus-cushion page.
 
-Priority topics: restauration-siege, restauration-abat-jour, luminaires, creation-abat-jour, marque.
-Weak topics: local-normandie, objets-deco, kits-ateliers.
+Priority topics: restauration-abat-jour, restauration-siege, luminaires, creation-abat-jour, kits-ateliers.
+Weak topics: objets-deco, tissus-matieres, local-normandie.
+Out-of-market queries excluded from demand and evidence: 3.
 
 ## Topic table
 
@@ -35,7 +36,7 @@ Weak topics: local-normandie, objets-deco, kits-ateliers.
 | Restauration de sièges & tapisserie d'ameublement | commercial | high | local (Normandie, Saint-Pierre-en-Port) | 26 | 186 | 2360 | strong | /tapisserie-restauration | Queries mention “tapissier” (7 querys, 34 impressions) but no matched page does. |
 | Marque Atelier de l'harmonie | mixed | high | international (France, International) | 13 | 179 | 1940 | strong | / | Queries mention “harmony” (2 querys, 23 impressions) but no matched page does. |
 | Création d'abat-jours artisanaux & sur mesure | commercial | high | international (France, Europe, International) | 16 | 123 | 51140 | strong | /lampes/abat-jours | Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words. |
-| Tapissier & atelier en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 9 | 52 | 0 | strong | / | No dedicated local landing page combining the trade and the place; the home and workshop pages carry the local signal. |
+| Tapissier & atelier en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 6 | 26 | 0 | strong | / | Queries mention “tapissier” (3 querys, 18 impressions) but no matched page does. |
 | Objets déco & coussins | transactional | medium | international (France, Europe, International) | 7 | 36 | 50 | strong | /objets-deco | — |
 | Cartes cadeaux | transactional | medium | international (France, International) | 5 | 35 | 0 | strong | /gift-card | Queries mention “decoration” (2 querys, 16 impressions) but no matched page does. |
 | Tissus & matières | informational | medium | national (France) | 7 | 22 | 0 | strong | /les-tissus | Thin coverage: https://www.atelier-harmonie.com/les-tissus has 146 words. |
@@ -298,21 +299,26 @@ Gaps:
 - Intent: local; relevance: high; confidence: 0.93
 - Market scope: local (Normandie, Saint-Pierre-en-Port)
 - Rationale: Local intent: people searching for an upholsterer, workshop or fabric shop around Saint-Pierre-en-Port and Normandy.
-- Demand: 9 queries, 52 impressions, 6 clicks, 0 measured monthly volume; average position 26.9.
+- Demand: 6 queries, 26 impressions, 6 clicks, 0 measured monthly volume; average position 3.2.
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Check whether a dedicated local landing page exists; the home page naming the village is not the same as a local service page.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| carte cadeau décoration le mans | 12 | 0 | 26.1 | — | — |
-| restauration fauteuil saint-germain-en-laye | 10 | 0 | 90.9 | — | — |
 | tapissier autour de moi | 9 | 0 | 1.0 | — | — |
 | artisan tapissier autour de moi | 7 | 4 | 1.0 | — | — |
-| carte cadeau décoration sarthe | 4 | 0 | 23.3 | — | — |
 | atelier saint pierre | 3 | 0 | 8.0 | — | — |
 | atelier sainte adresse | 3 | 0 | 2.0 | — | — |
 | restauration meuble bois fécamp | 2 | 0 | 17.0 | — | — |
 | tapissier fauteuil autour de moi | 2 | 2 | 1.0 | — | — |
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| carte cadeau décoration le mans | 12 | Le Mans is in Sarthe, outside the Normandie service area. |
+| restauration fauteuil saint-germain-en-laye | 10 | Saint-Germain-en-Laye is in Yvelines/Île-de-France, outside Normandie. |
+| carte cadeau décoration sarthe | 4 | Sarthe is outside the Normandie service area. |
 
 Coverage pages:
 
@@ -325,8 +331,6 @@ Coverage pages:
 
 Gaps:
 
-- No dedicated local landing page combining the trade and the place; the home and workshop pages carry the local signal.
-- Off-area demand: “carte cadeau décoration le mans”, “carte cadeau décoration sarthe”, “atelier sainte adresse”. Do not chase it without a business reason.
 - Queries mention “tapissier” (3 querys, 18 impressions) but no matched page does.
 - Queries mention “autour” (3 querys, 18 impressions) but no matched page does.
 - Queries mention “carte” (2 querys, 16 impressions) but no matched page does.
@@ -385,6 +389,7 @@ Coverage pages:
 Gaps:
 
 - Queries mention “decoration” (2 querys, 16 impressions) but no matched page does.
+- Queries mention “mans” (1 query, 12 impressions) but no matched page does.
 
 ### Tissus & matières
 
@@ -473,17 +478,17 @@ Gaps:
 
 | Query | Impressions | Volume | Why it is unmapped |
 |---|---:|---:|---|
-| rectangulaire | 3 | — | No taxonomy topic matched; review for a missing topic or an off-business query. |
-| atelier phare | 3 | — | No taxonomy topic matched; review for a missing topic or an off-business query. |
-| chambré bebe | 3 | — | No taxonomy topic matched; review for a missing topic or an off-business query. |
-| atelier | 1 | — | No taxonomy topic matched; review for a missing topic or an off-business query. |
-| tenue | 0 | 22200 | Off-business or research-noise query; ignore for the SEO map. |
-| tenue sexie | 0 | 18100 | Off-business or research-noise query; ignore for the SEO map. |
-| restauration meuble ancien | 0 | 720 | Adjacent furniture restoration demand; the business sells seating and lighting, not general furniture. |
-| rénovation appartement ancien | 0 | 90 | No taxonomy topic matched; review for a missing topic or an off-business query. |
-| sans ambiguite mot fleche | 0 | 70 | Off-business or research-noise query; ignore for the SEO map. |
-| customer need definition | 0 | 10 | Off-business or research-noise query; ignore for the SEO map. |
-| corpus de sources | 0 | 10 | Off-business or research-noise query; ignore for the SEO map. |
+| rectangulaire | 3 | — | No taxonomy topic matched “rectangulaire”; review for a missing topic or an off-business query. |
+| atelier phare | 3 | — | No taxonomy topic matched “atelier phare”; review for a missing topic or an off-business query. |
+| chambré bebe | 3 | — | No taxonomy topic matched “chambré bebe”; review for a missing topic or an off-business query. |
+| atelier | 1 | — | No taxonomy topic matched “atelier”; review for a missing topic or an off-business query. |
+| tenue | 0 | 22200 | No taxonomy topic matched “tenue”; review for a missing topic or an off-business query. |
+| tenue sexie | 0 | 18100 | No taxonomy topic matched “tenue sexie”; review for a missing topic or an off-business query. |
+| restauration meuble ancien | 0 | 720 | No taxonomy topic matched “restauration meuble ancien”; review for a missing topic or an off-business query. |
+| rénovation appartement ancien | 0 | 90 | No taxonomy topic matched “rénovation appartement ancien”; review for a missing topic or an off-business query. |
+| sans ambiguite mot fleche | 0 | 70 | No taxonomy topic matched “sans ambiguite mot fleche”; review for a missing topic or an off-business query. |
+| customer need definition | 0 | 10 | No taxonomy topic matched “customer need definition”; review for a missing topic or an off-business query. |
+| corpus de sources | 0 | 10 | No taxonomy topic matched “corpus de sources”; review for a missing topic or an off-business query. |
 
 ## Timely signals from the bundle
 

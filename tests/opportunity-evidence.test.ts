@@ -16,6 +16,7 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
     marketScope: { scope: "international", markets: ["France"], source: "offer" },
     confidence: 0.8,
     metrics: { queries: 2, impressions: 100, clicks: 1, volume: 200, difficulty: null, position: 10, aeoQuestions: 0, aeoCited: 0 },
+    excludedQueries: [],
     queries: [
       { query: "luminaire artisanal", impressions: 60, clicks: 0, position: 40, volume: 120, difficulty: null, observedAt: new Date() },
       { query: "plafonnier artisanal", impressions: 40, clicks: 0, position: 30, volume: 80, difficulty: null, observedAt: new Date() },

@@ -43,11 +43,19 @@ export type Proposal = {
   action: string;
   expectedOutcome: string;
   effort: ProposalEffort;
-  confidence: ProposalConfidence;
+  /** null until the drafting call judges it; never a template default. */
+  confidence: ProposalConfidence | null;
+  confidenceReason: string | null;
   expiresAt: string | null;
   topicSlug: string | null;
   sources: Array<{ title: string; url: string; publishedAt: string | null }>;
   critique?: { verdict: "keep" | "revise" | "drop"; reason: string } | null;
+};
+
+export type ProposalGroup = {
+  members: string[];
+  title: string;
+  action: string;
 };
 
 export type ProposalGenerationDb = OpportunityDb &
@@ -122,254 +130,6 @@ export function proposalHash(proposal: Omit<Proposal, "dedupKey">): string {
     .slice(0, 16);
 }
 
-export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] {
-  const proposals: Proposal[] = [];
-  const clusterOf = (slug: string): TopicCluster | null =>
-    inputs.map.clusters.find((cluster) => cluster.slug === slug) ?? null;
-  const evidenceOf = (slug: string): string[] => inputs.evidenceByCluster.get(slug) ?? [];
-  const knowledge = inputs.knowledgeEvidenceIds.slice(0, 2);
-
-  const add = (proposal: Omit<Proposal, "dedupKey" | "evidenceRefs" | "sources"> & {
-    evidenceRefs: string[];
-    sources?: Proposal["sources"];
-  }) => {
-    // Stable identity: a wording change must update the same board row, not
-    // create a second one. The fingerprint still records the exact version.
-    const identity = JSON.stringify({
-      lane: proposal.lane,
-      kind: proposal.kind,
-      topicSlug: proposal.topicSlug ?? null,
-      target: proposal.target,
-    });
-    const dedupKey = `phase3:${proposal.lane}:${proposal.kind}:${proposal.topicSlug ?? "site"}:${createHash("sha256").update(identity).digest("hex").slice(0, 16)}`;
-    proposals.push({
-      ...proposal,
-      dedupKey,
-      evidenceRefs: [...new Set([...knowledge, ...proposal.evidenceRefs])].slice(0, 8),
-      sources: proposal.sources ?? [],
-    });
-  };
-
-  // 1. The clearest service gap: a blog post ranks, but there is no service page.
-  const restoration = clusterOf("restauration-abat-jour");
-  if (restoration) {
-    add({
-      lane: "content_business",
-      kind: "article",
-      title: "Créer une page service « Restauration d'abat-jour »",
-      summary: `${restoration.metrics.queries} queries and ${restoration.metrics.impressions} impressions, with the site already around position ${restoration.metrics.position?.toFixed(1) ?? "?"}, but the only coverage is a blog post.`,
-      whyNow: "The commercial queries already rank near page one; the missing service page is the gap between a blog visit and a quote request.",
-      evidenceRefs: evidenceOf("restauration-abat-jour"),
-      target: { url: "/restauration-abat-jour", newAsset: true, section: "service page" },
-      action: "Create a dedicated service page covering repair, re-covering, lining and contrecollé work, with before/after examples, process, lead time, a quote CTA and links to the blog post and the abat-jour category.",
-      expectedOutcome: "Capture the commercial restoration queries on a service page instead of a blog post and increase quote requests from abat-jour restoration.",
-      effort: "medium",
-      confidence: "high",
-      expiresAt: null,
-      topicSlug: "restauration-abat-jour",
-    });
-  }
-
-  // 2. Thin category page against the head term.
-  const creation = clusterOf("creation-abat-jour");
-  if (creation) {
-    add({
-      lane: "content_business",
-      kind: "update",
-      title: "Enrichir la page catégorie Abat-jours",
-      summary: `${creation.metrics.queries} queries and ${creation.metrics.volume} measured monthly volume, led by the head term, but /lampes/abat-jours is only 150 words.`,
-      whyNow: "The category page is the natural landing page for the head term and the pagode/tambour queries; at 150 words it cannot answer shape, size or fabric questions.",
-      evidenceRefs: evidenceOf("creation-abat-jour"),
-      target: { url: "/lampes/abat-jours", newAsset: false, section: "category page" },
-      action: "Expand the category page with a shape guide (pagode, tambour, empire, cone), size and fabric guidance, a collection comparison, FAQ and links to the product pages. Keep the existing products and add no new range.",
-      expectedOutcome: "Improve relevance and internal linking for the abat-jour head term and the pagode/tambour long tail.",
-      effort: "medium",
-      confidence: "medium",
-      expiresAt: null,
-      topicSlug: "creation-abat-jour",
-    });
-  }
-
-  // 3. Lighting hub and thin subcategories.
-  const lighting = clusterOf("luminaires");
-  if (lighting) {
-    add({
-      lane: "content_business",
-      kind: "update",
-      title: "Renforcer le hub luminaires et les sous-catégories",
-      summary: `${lighting.metrics.queries} queries, ${lighting.metrics.impressions} impressions and ${lighting.metrics.volume} measured volume; the hub ranks, but the thin subcategory pages are not supporting the format queries. Market scope: ${lighting.marketScope.scope}${lighting.marketScope.markets.length ? ` (${lighting.marketScope.markets.join(", ")})` : ""}.`,
-      whyNow: "The lighting range has the most first-party demand, and the thin subcategory pages cannot support the head and format queries.",
-      evidenceRefs: evidenceOf("luminaires"),
-      target: { url: "/lampes", newAsset: false, section: "hub and subcategories" },
-      action: "Expand /lampes and the thin subcategory pages with buying guidance, format comparisons, room use, materials and internal links; add product schema where it is missing. If the owner wants to add formats, plan the range and pages.",
-      expectedOutcome: "Improve rankings for luminaire artisanal and the subcategory queries, and send clearer traffic to the product pages.",
-      effort: "medium",
-      confidence: "medium",
-      expiresAt: null,
-      topicSlug: "luminaires",
-    });
-
-    add({
-      lane: "content_business",
-      kind: "business",
-      title: "Opportunité gamme plafonniers / lustres / lampadaires",
-      summary: `Queries for plafonnier, lustre and lampadaire have demand; no matching product page is visible in the current crawl. The configured market scope for this offer is ${lighting.marketScope.scope}${lighting.marketScope.markets.length ? ` (${lighting.marketScope.markets.join(", ")})` : ""}.`,
-      whyNow: "The demand is already visible in Search Console; the owner can decide whether to add the formats, source a curated selection or leave the queries unserved.",
-      evidenceRefs: evidenceOf("luminaires"),
-      target: { url: null, newAsset: false, section: "product range opportunity" },
-      action: "Evaluate adding plafonniers, lustres or lampadaires, or a curated selection. If the owner accepts, plan the product pages, collection copy and internal links. The owner decides; the system does not assume the range exists or does not exist.",
-      expectedOutcome: "Give the owner a clear, demand-backed product opportunity without inventing a range or blocking the idea before they decide.",
-      effort: "small",
-      confidence: "high",
-      expiresAt: null,
-      topicSlug: "luminaires",
-    });
-  }
-
-  // 4. Seating service page language and local proof.
-  const seating = clusterOf("restauration-siege");
-  if (seating) {
-    add({
-      lane: "content_business",
-      kind: "update",
-      title: "Renforcer la page restauration de sièges",
-      summary: `${seating.metrics.queries} queries and ${seating.metrics.volume} measured volume; /tapisserie-restauration is strong, but the query language for tapissier and chaises is missing.`,
-      whyNow: "The service page already ranks; adding the words customers use and local proof is a cheaper win than a new page.",
-      evidenceRefs: evidenceOf("restauration-siege"),
-      target: { url: "/tapisserie-restauration", newAsset: false, section: "service page" },
-      action: "Add sections for tapissier, tapisserie traditionnelle, chaises and fauteuils, the restoration process, before/after proof, Normandy locations served and a clear quote CTA. Link the local workshop page.",
-      expectedOutcome: "Capture more tapissier/chaise queries on the existing service page and improve local relevance.",
-      effort: "medium",
-      confidence: "high",
-      expiresAt: null,
-      topicSlug: "restauration-siege",
-    });
-
-    add({
-      lane: "content_business",
-      kind: "update",
-      title: "Ajouter une preuve locale à la page restauration",
-      summary: `Local queries exist around ${inputs.map.business.location ?? inputs.map.business.serviceArea[0] ?? "the service area"}, but no dedicated local landing page combines the trade and the place.`,
-      whyNow: "A local landing page is a larger commitment; a local proof section on the service page tests the demand first.",
-      evidenceRefs: evidenceOf("local-normandie"),
-      target: { url: "/tapisserie-restauration", newAsset: false, section: "local proof" },
-      action: `Add a local section naming ${inputs.map.business.location ?? inputs.map.business.serviceArea[0] ?? "the service area"}, the places served, workshop visits and nearby towns. Do not chase off-area queries unless the business decides to serve that market.`,
-      expectedOutcome: "Test local intent without creating a thin local page; measure whether local queries and quote requests move.",
-      effort: "small",
-      confidence: "medium",
-      expiresAt: null,
-      topicSlug: "local-normandie",
-    });
-  }
-
-  // 4b. Local expansion: low measured demand is not the same as no opportunity.
-  const local = clusterOf("local-normandie");
-  if (local) {
-    add({
-      lane: "content_business",
-      kind: "cluster_hub",
-      title: "Créer une page locale « Tapissier en Normandie »",
-      summary: `${local.metrics.queries} local queries and ${local.metrics.impressions} impressions; measured demand is low, but local intent is business-relevant and there is no dedicated local page.`,
-      whyNow: "Low measured volume is not the same as no opportunity: a local page gives the atelier a page to rank, link and cite for local intent.",
-      evidenceRefs: evidenceOf("local-normandie"),
-      target: { url: "/tapissier-normandie", newAsset: true, section: "local landing page" },
-      action: "Create a local landing page for the upholstery/restoration service in the configured local market: services, places served, workshop visits, local proof, map and quote CTA; link it from the service page and the home page. If the owner prefers a smaller test, add a local proof section to /tapisserie-restauration first.",
-      expectedOutcome: "A dedicated local page for tapissier-en-Normandie and autour-de-moi intent; measure impressions, quote requests and whether the local page earns links.",
-      effort: "medium",
-      confidence: "low",
-      expiresAt: null,
-      topicSlug: "local-normandie",
-    });
-  }
-
-  // 5. Workshop page.
-  const kits = clusterOf("kits-ateliers");
-  if (kits) {
-    add({
-      lane: "content_business",
-      kind: "update",
-      title: "Compléter la page ateliers DIY",
-      summary: `${kits.metrics.queries} queries and ${kits.metrics.impressions} impressions; the workshop page is strong but the kit product and the sessions are not fully connected.`,
-      whyNow: "The query set is transactional and close to booking; the page should answer dates, level, materials and what participants take home.",
-      evidenceRefs: evidenceOf("kits-ateliers"),
-      target: { url: "/les-ateliers", newAsset: false, section: "workshop page" },
-      action: "Add upcoming sessions, level, duration, materials, what is included, booking steps and a link to the DIY kit product. Add FAQ for the common questions.",
-      expectedOutcome: "Turn workshop demand into bookings and connect the workshop page to the kit product.",
-      effort: "small",
-      confidence: "medium",
-      expiresAt: null,
-      topicSlug: "kits-ateliers",
-    });
-  }
-
-  // 6. Measured AEO gap, split by the topic that owns the question.
-  const taxonomy = taxonomyForDomain(inputs.site.domain);
-  const aeoByTopic = new Map<string, typeof inputs.aeoEvidence>();
-  for (const row of inputs.aeoEvidence) {
-    const slug = assignQuery(row.question, taxonomy)[0]?.topic.slug;
-    if (!slug || !clusterOf(slug)) continue;
-    aeoByTopic.set(slug, [...(aeoByTopic.get(slug) ?? []), row]);
-  }
-  const aeoGroups = [...aeoByTopic.entries()]
-    .filter(([slug, rows]) => {
-      const cluster = clusterOf(slug);
-      return Boolean(cluster && cluster.relevance !== "low" && rows.length >= 2);
-    })
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 3);
-  for (const [slug, rows] of aeoGroups) {
-    const cluster = clusterOf(slug);
-    if (!cluster) continue;
-    const cited = rows.reduce((sum, row) => sum + row.cited, 0);
-    const newAsset = slug === "restauration-abat-jour";
-    const target = newAsset ? "/restauration-abat-jour" : cluster.pages[0]?.url ?? "/";
-    const formatDecision = rows.some((row) => /\b(plafonnier|lustre|lampadaire)\b/i.test(row.question));
-    add({
-      lane: "aeo_geo",
-      kind: "aeo",
-      title: `Ajouter des réponses citables — ${cluster.name}`,
-      summary: `${rows.length} measured Google AI Overview question${rows.length === 1 ? "" : "s"}, ${cited} citation${cited === 1 ? "" : "s"} of the site; competitors are cited on the rest.`,
-      whyNow: "These are measured answers, not question coverage: the site was asked and not cited.",
-      evidenceRefs: rows.map((row) => row.id),
-      target: { url: target, newAsset, section: "answer blocks and FAQ" },
-      action: `Add concise, source-backed answer blocks to ${target} for: ${rows.slice(0, 5).map((row) => row.question).join("; ")}. Use definitions, process, materials, lead time and local proof, with headings and FAQ schema where appropriate.${newAsset ? " Add them to the new restoration service page; keep the blog post as the how-to." : ""}${formatDecision ? " If a question targets a format the atelier does not currently sell, treat it as a range decision for the owner; do not publish a product claim before that decision." : ""}`,
-      expectedOutcome: `Increase the chance of being cited in Google AI Overviews for the ${cluster.name.toLowerCase()} questions and improve the supporting organic answer.`,
-      effort: "medium",
-      confidence: "medium",
-      expiresAt: null,
-      topicSlug: slug,
-    });
-  }
-
-  // 7. Timely: only when the bundle has dated news.
-  const timelyCutoff = Date.now() - 45 * 24 * 60 * 60 * 1000;
-  const datedNews = inputs.news
-    .filter((item) => item.publishedAt && Date.parse(item.publishedAt) >= timelyCutoff)
-    .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
-    .slice(0, 5);
-  if (datedNews.length > 0) {
-    const newest = datedNews[0];
-    add({
-      lane: "timely",
-      kind: "article",
-      title: "Capitaliser sur la presse locale autour de l'atelier",
-      summary: `The bundle contains ${inputs.news.length} news/event sources, including “${newest.title}”.`,
-      whyNow: `Local press is live${newest.publishedAt ? ` since ${newest.publishedAt.slice(0, 10)}` : ""}; a dated atelier story can be linked from the home page and the about page.`,
-      evidenceRefs: evidenceOf("local-normandie"),
-      target: { url: "/blog", newAsset: true, section: "news / press note" },
-      action: "Write a short dated atelier note that responds to the local press coverage, links the original source, names the atelier and the Normandy location, and links to the restoration and workshop pages. Keep it factual and quote only what the source supports.",
-      expectedOutcome: "Turn local press into a dated, linkable atelier story and a fresh signal for the local pages.",
-      effort: "small",
-      confidence: "low",
-      expiresAt: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
-      topicSlug: "local-normandie",
-      sources: datedNews.map((item) => ({ title: item.title, url: item.url, publishedAt: item.publishedAt })),
-    });
-  }
-
-  return dedupeProposals(proposals);
-}
-
 export function dedupeProposals(proposals: Proposal[]): Proposal[] {
   const seen = new Set<string>();
   return proposals.filter((proposal) => {
@@ -381,7 +141,7 @@ export function dedupeProposals(proposals: Proposal[]): Proposal[] {
 
 export function validateProposal(
   proposal: Proposal,
-  input: { domain: string; evidenceIds: Set<string> }
+  input: { domain: string; evidenceIds: Set<string>; firstPartyEvidenceIds?: Set<string> }
 ): string | null {
   if (!proposal.title.trim()) return "missing title";
   if (!proposal.summary.trim()) return "missing summary";
@@ -390,7 +150,22 @@ export function validateProposal(
   if (!["timely", "content_business", "aeo_geo", "technical"].includes(proposal.lane)) return "invalid lane";
   if (!["article", "update", "cluster_hub", "business", "aeo", "technical"].includes(proposal.kind)) return "invalid kind";
   if (!["small", "medium", "large", "unknown"].includes(proposal.effort)) return "invalid effort";
-  if (!["high", "medium", "low"].includes(proposal.confidence)) return "invalid confidence";
+  if (proposal.confidence != null && !["high", "medium", "low"].includes(proposal.confidence)) {
+    return "invalid confidence";
+  }
+  // Confidence is a claim about evidence, so it has to name the evidence. A
+  // high claim needs first-party search data behind it; provider volume alone
+  // is a market estimate, not proof the site can win the query.
+  if (proposal.confidence != null && !proposal.confidenceReason?.trim()) {
+    return "confidence needs a reason";
+  }
+  if (
+    proposal.confidence === "high" &&
+    input.firstPartyEvidenceIds &&
+    !proposal.evidenceRefs.some((id) => input.firstPartyEvidenceIds?.has(id))
+  ) {
+    return "high confidence needs first-party evidence";
+  }
   if (proposal.evidenceRefs.length === 0) return "no evidence references";
   const missingEvidence = proposal.evidenceRefs.filter((id) => !input.evidenceIds.has(id));
   if (missingEvidence.length > 0) return `unknown evidence: ${missingEvidence.slice(0, 3).join(", ")}`;
@@ -474,8 +249,10 @@ function deterministicCritique(proposals: Proposal[]): {
   summary: string | null;
   error: string | null;
   decisions: Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>;
+  groups: ProposalGroup[];
 } {
   const decisions = new Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>();
+  const groups: ProposalGroup[] = [];
   const byTarget = new Map<string, Proposal[]>();
   for (const proposal of proposals) {
     if (!proposal.target.url) continue;
@@ -491,6 +268,11 @@ function deterministicCritique(proposals: Proposal[]): {
         reason: `Same target (${url}) as “${group[0].title}”; sequence or merge before accepting.`,
       });
     }
+    groups.push({
+      members: group.map((proposal) => proposal.dedupKey),
+      title: group[0].title,
+      action: group.map((proposal) => proposal.action).join(" "),
+    });
   }
   let dependencies = 0;
   for (const proposal of proposals) {
@@ -526,6 +308,7 @@ function deterministicCritique(proposals: Proposal[]): {
     summary: `Deterministic critique: ${proposals.length} proposals checked; ${overlaps} target overlap(s), ${dependencies} new-asset dependency, ${thin} thin-evidence item(s).`,
     error: null,
     decisions,
+    groups,
   };
 }
 
@@ -538,13 +321,14 @@ export async function critiqueProposals(
   summary: string | null;
   error: string | null;
   decisions: Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>;
+  groups: ProposalGroup[];
 }> {
   const config = contentWriterConfig();
   if (!config) {
-    return { available: false, model: null, summary: null, error: "CONTENT_LLM_API_KEY is not configured", decisions: new Map() };
+    return { available: false, model: null, summary: null, error: "CONTENT_LLM_API_KEY is not configured", decisions: new Map(), groups: [] };
   }
   if (proposals.length === 0) {
-    return { available: false, model: config.model, summary: null, error: "no proposals to critique", decisions: new Map() };
+    return { available: false, model: config.model, summary: null, error: "no proposals to critique", decisions: new Map(), groups: [] };
   }
   const payload = {
     site: map.domain,
@@ -564,8 +348,9 @@ export async function critiqueProposals(
     "Check each proposal for unsupported claims, duplicates and wrong target pages.",
     "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
     "A low-demand but business-relevant local proposal is valid; do not drop it only because volume is low. Check whether it is a reasonable expansion or small test.",
-    "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }] }.",
-    "Use only the supplied dedupKeys. Keep the summary under 300 characters and each reason under 200 characters.",
+    "Group proposals that are the same job on the same asset, or that overlap so closely that the owner should see one row: a page update and its answer blocks, a hub update and a product-range question about the same formats. A group is advice on presentation; it does not delete the members.",
+    "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }], groups: [{ members: string[], title: string, action: string }] }.",
+    "Use only the supplied dedupKeys. A group needs at least two members. Keep the summary under 300 characters, each reason under 200, each group title under 120 and each group action under 600.",
   ].join("\n");
 
   try {
@@ -591,12 +376,25 @@ export async function critiqueProposals(
       if (!dedupKey || !verdict || !["keep", "revise", "drop"].includes(verdict)) continue;
       decisions.set(dedupKey, { verdict: verdict as "keep" | "revise" | "drop", reason: reason?.slice(0, 400) ?? "" });
     }
+    const known = new Set(proposals.map((proposal) => proposal.dedupKey));
+    const groups: ProposalGroup[] = [];
+    for (const raw of Array.isArray(record.groups) ? record.groups : []) {
+      const row = asRecord(raw);
+      const members = Array.isArray(row.members)
+        ? row.members.filter((key): key is string => typeof key === "string" && known.has(key))
+        : [];
+      const title = textValue(row.title);
+      const action = textValue(row.action);
+      if (members.length < 2 || !title || !action) continue;
+      groups.push({ members: [...new Set(members)], title: title.slice(0, 160), action: action.slice(0, 900) });
+    }
     return {
       available: true,
       model: config.model,
       summary: textValue(record.summary)?.slice(0, 800) ?? null,
       error: null,
       decisions,
+      groups,
     };
   } catch (error) {
     const fallback = deterministicCritique(proposals);
@@ -619,6 +417,7 @@ export async function storeProposals(
     topicMapRunId: string;
     proposals: Proposal[];
     evidenceIds: Set<string>;
+    firstPartyEvidenceIds?: Set<string>;
     knowledgeEvidenceIds: string[];
     clusters: Array<{ id: string; slug: string }>;
   }
@@ -628,7 +427,11 @@ export async function storeProposals(
   const clusterIdBySlug = new Map(input.clusters.map((cluster) => [cluster.slug, cluster.id]));
 
   for (const proposal of input.proposals) {
-    const invalid = validateProposal(proposal, { domain: input.domain, evidenceIds: input.evidenceIds });
+    const invalid = validateProposal(proposal, {
+      domain: input.domain,
+      evidenceIds: input.evidenceIds,
+      firstPartyEvidenceIds: input.firstPartyEvidenceIds,
+    });
     if (invalid) {
       dropped.push({ title: proposal.title, reason: invalid });
       continue;
@@ -685,6 +488,7 @@ export async function storeProposals(
           expectedOutcome: proposal.expectedOutcome,
           effort: proposal.effort,
           confidence: proposal.confidence,
+          confidenceReason: proposal.confidenceReason,
           expiresAt: proposal.expiresAt,
           topicSlug: proposal.topicSlug,
           sources: proposal.sources,
@@ -747,7 +551,7 @@ export function renderProposalBoard(input: {
     for (const proposal of laneProposals) {
       lines.push(`#### ${proposal.title}`);
       lines.push("");
-      lines.push(`- Kind: ${proposal.kind}; effort: ${proposal.effort}; confidence: ${proposal.confidence}`);
+      lines.push(`- Kind: ${proposal.kind}; effort: ${proposal.effort}; confidence: ${proposal.confidence ?? "not assessed"}${proposal.confidenceReason ? ` (${proposal.confidenceReason})` : ""}`);
       lines.push(`- Summary: ${proposal.summary}`);
       if (proposal.whyNow) lines.push(`- Why now: ${proposal.whyNow}`);
       lines.push(`- Target: ${proposal.target.url ?? (proposal.target.newAsset ? "new asset" : "no page")}${proposal.target.section ? ` (${proposal.target.section})` : ""}`);
@@ -773,7 +577,7 @@ export function renderProposalBoard(input: {
   }
   lines.push("");
   if (input.dropped.length > 0) {
-    lines.push("Dropped:");
+    lines.push("Merged or not stored:");
     lines.push("");
     for (const row of input.dropped) lines.push(`- ${row.title} — ${row.reason}`);
     lines.push("");
@@ -781,7 +585,7 @@ export function renderProposalBoard(input: {
   lines.push("## Limits");
   lines.push("");
   lines.push("- This board is a proposal set, not accepted work. No task, delivery or publication is created.");
-  lines.push("- The deterministic proposals come from the reviewed topic map; the critique can drop or challenge them but cannot add queries, pages or evidence.");
+  lines.push("- Proposals are drafted from the reviewed topic map and its cited evidence; the critique can challenge or group them but cannot add queries, pages or evidence.");
   lines.push("- A business proposal with no target page is an investigation, not an article.");
   lines.push("- Technical items are the existing board opportunities; this phase does not re-score or replace them.");
   lines.push("");

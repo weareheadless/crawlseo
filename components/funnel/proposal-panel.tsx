@@ -24,7 +24,7 @@ export function ProposalPanel({ proposal }: { proposal: OpportunityProposal | nu
           effort · {proposal.effort}
         </span>
         <span className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-foreground">
-          confidence · {proposal.confidence}
+          confidence · {proposal.confidence ?? "not assessed"}
         </span>
         {proposal.expiresAt && (
           <span className="rounded-full border border-[var(--a-warning-300)] bg-[var(--a-warning-50)] px-2 py-0.5 text-[11px] text-[var(--a-warning-800)]">
@@ -37,6 +37,13 @@ export function ProposalPanel({ proposal }: { proposal: OpportunityProposal | nu
         <p className="text-xs text-foreground/85">
           <span className="text-muted-foreground">Why now: </span>
           {proposal.whyNow}
+        </p>
+      )}
+
+      {proposal.confidenceReason && (
+        <p className="text-xs text-foreground/85">
+          <span className="text-muted-foreground">Confidence: </span>
+          {proposal.confidenceReason}
         </p>
       )}
       <p className="text-xs text-foreground/85">

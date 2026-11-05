@@ -14,7 +14,8 @@ import {
 } from "@/lib/research/question-coverage-evidence";
 import { buildNewsQueries } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
-import { buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
+import { buildClusterEvidenceCatalogue, buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
+import { draftTimelyProposals } from "@/lib/research/opportunity-drafting";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
@@ -89,6 +90,7 @@ export type WeeklyDeps = {
   }) => Promise<ResearchProviderSource[]>;
   saveNews: (runId: string, sources: ResearchProviderSource[]) => Promise<Array<{ id: string }>>;
   storeProposals: typeof storeProposals;
+  draftTimely: typeof draftTimelyProposals;
 };
 
 export const defaultWeeklyDeps: WeeklyDeps = {
@@ -98,6 +100,7 @@ export const defaultWeeklyDeps: WeeklyDeps = {
   fetchNews: fetchGoogleNewsRssSearch,
   saveNews: saveResearchSources,
   storeProposals,
+  draftTimely: draftTimelyProposals,
 };
 
 export function isoWeekKey(now: Date): string {
@@ -145,57 +148,6 @@ export function buildWeeklyNewsQueries(input: {
     seen.add(key);
     return true;
   }).slice(0, 10);
-}
-
-export function buildTimelyProposals(input: {
-  news: WeeklyNewsItem[];
-  now: Date;
-  domain: string;
-  knowledgeEvidenceIds: string[];
-  localEvidenceIds: string[];
-}): { proposals: WeeklyTimelyProposal[]; reason: string | null } {
-  const freshnessMs = 21 * 86_400_000;
-  const current = input.news
-    .filter((item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= freshnessMs)
-    .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
-    .slice(0, 3);
-  if (current.length === 0) {
-    const newest = input.news
-      .filter((item) => item.publishedAt)
-      .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))[0];
-    return {
-      proposals: [],
-      reason: newest
-        ? `No news source published within 21 days; the newest source is ${newest.publishedAt?.slice(0, 10)} (${Math.floor((input.now.getTime() - Date.parse(newest.publishedAt ?? "")) / 86_400_000)} days old).`
-        : "No dated news source in the weekly sweep.",
-    };
-  }
-  const evidence = [...new Set([...input.knowledgeEvidenceIds, ...input.localEvidenceIds])].slice(0, 8);
-  const proposals = current.map((item) => {
-    // Google News redirect URLs carry a per-fetch token. Key on the story
-    // title and publication date so a refresh updates the same board row.
-    const hash = createHash("sha256").update(`${item.title}|${item.publishedAt ?? ""}`).digest("hex").slice(0, 16);
-    return {
-      dedupKey: `phase5:timely:article:local-normandie:${hash}`,
-      lane: "timely" as const,
-      kind: "article" as const,
-      title: `Réagir à « ${item.title} »`,
-      summary: `Local news published ${item.publishedAt?.slice(0, 10)}: ${item.title}.`,
-      whyNow: `Published ${item.publishedAt?.slice(0, 10)}; the atelier can respond while the local story is current.`,
-      evidenceRefs: evidence,
-      target: { url: "/blog", newAsset: true, section: "news / press note" },
-      action:
-        "Write a short dated atelier note that responds to the source, links it, names the atelier and the Normandy location, and links the relevant restoration or workshop page. Keep it factual and quote only what the source supports.",
-      expectedOutcome: "A dated, linkable atelier story while the local story is current.",
-      effort: "small" as const,
-      confidence: "low" as const,
-      expiresAt: new Date(input.now.getTime() + 30 * 86_400_000).toISOString(),
-      topicSlug: "local-normandie",
-      sources: [{ title: item.title, url: item.url, publishedAt: item.publishedAt }],
-      critique: null,
-    };
-  });
-  return { proposals, reason: null };
 }
 
 export async function runWeeklyRefresh(
@@ -378,13 +330,23 @@ export async function runWeeklyRefresh(
       });
     }
 
-    const timely = buildTimelyProposals({
-      news: newsItems,
-      now,
-      domain: site.domain,
-      knowledgeEvidenceIds: knowledgeEvidence.map((row) => row.id),
-      localEvidenceIds: clusterEvidence.get("local-normandie") ?? [],
-    });
+    const timely = map
+      ? await deps.draftTimely({
+          map,
+          marketScope: map.marketScope,
+          evidenceByCluster: buildClusterEvidenceCatalogue(map.clusters, clusterEvidenceRows, clusterEvidence),
+          aeoQuestions: [],
+          news: newsItems.map((item) => ({
+            id: item.url,
+            title: item.title,
+            url: item.url,
+            publishedAt: item.publishedAt,
+            excerpt: item.excerpt,
+          })),
+          knowledgeEvidenceIds: knowledgeEvidence.map((row) => row.id),
+          now,
+        })
+      : { proposals: [], errors: ["no topic map for this month"], model: null };
 
     let stored = 0;
     let dropped: Array<{ title: string; reason: string }> = [];
@@ -439,7 +401,7 @@ export async function runWeeklyRefresh(
         stored,
         dropped,
         expired: expiredIds.length,
-        reason: timely.reason,
+        reason: timely.errors.length > 0 ? timely.errors.join("; ") : null,
       },
       approvalReference: input.approval ?? null,
       generatedAt: new Date().toISOString(),
@@ -470,7 +432,7 @@ export async function runWeeklyRefresh(
       queries,
       evidence,
       news: { fetched: fetched.length, stored: saved.length, items: newsItems },
-      timely: { proposals: timely.proposals, stored, dropped, expired: expiredIds.length, reason: timely.reason },
+      timely: { proposals: timely.proposals, stored, dropped, expired: expiredIds.length, reason: timely.errors.length > 0 ? timely.errors.join("; ") : null },
     };
   } catch (error) {
     await db.researchRun.update({

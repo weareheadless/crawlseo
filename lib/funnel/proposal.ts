@@ -28,7 +28,9 @@ export type OpportunityProposal = {
   action: string;
   expectedOutcome: string;
   effort: OpportunityProposalEffort;
-  confidence: OpportunityProposalConfidence;
+  /** null when the drafting call did not judge it; never a default. */
+  confidence: OpportunityProposalConfidence | null;
+  confidenceReason: string | null;
   expiresAt: string | null;
   topicSlug: string | null;
   sources: Array<{ title: string; url: string; publishedAt: string | null }>;
@@ -93,9 +95,10 @@ export function parseOpportunityProposal(value: unknown): OpportunityProposal | 
     effort: (["small", "medium", "large", "unknown"].includes(String(row.effort))
       ? row.effort
       : "unknown") as OpportunityProposalEffort,
-    confidence: (["high", "medium", "low"].includes(String(row.confidence))
-      ? row.confidence
-      : "medium") as OpportunityProposalConfidence,
+    confidence: ["high", "medium", "low"].includes(String(row.confidence))
+      ? (row.confidence as OpportunityProposalConfidence)
+      : null,
+    confidenceReason: text("confidenceReason"),
     expiresAt: typeof row.expiresAt === "string" ? row.expiresAt : null,
     topicSlug: typeof row.topicSlug === "string" ? row.topicSlug : null,
     sources: Array.isArray(row.sources)

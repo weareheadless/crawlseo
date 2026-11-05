@@ -1,197 +1,178 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/ai-seo/writer", () => ({
+  contentWriterConfig: () => ({ model: "test-model", apiKey: "test", baseUrl: "https://example.invalid" }),
+}));
+vi.mock("@/lib/ai/chat", () => ({
+  chatJson: async () => {
+    throw new Error("offline");
+  },
+}));
 
 import {
-  buildDeterministicProposals,
+  critiqueProposals,
   dedupeProposals,
   proposalScoreInputs,
+  renderProposalBoard,
   storeProposals,
   validateProposal,
   type Proposal,
-  type ProposalInputs,
 } from "@/lib/research/opportunity-generation";
-import { buildTopicMap, normalizeTopicText, type TopicMapData } from "@/lib/research/topic-map";
-import { ATELIER_TOPIC_TAXONOMY } from "@/lib/research/topic-taxonomy";
+import { proposalIdentity } from "@/lib/research/opportunity-drafting";
+import type { TopicMap } from "@/lib/research/topic-map";
 
-function page(path: string, title: string, type: TopicMapData["pages"][number]["type"], wordCount = 400) {
-  return {
-    url: `https://atelier-harmonie.example${path}`,
-    path,
-    title,
-    description: "",
-    h1: "",
-    wordCount,
-    type,
-    text: normalizeTopicText(`${path} ${title}`),
-  };
-}
+const domain = "atelier-harmonie.example";
 
-function query(value: string, impressions: number, volume: number | null = null) {
+function makeProposal(overrides: Partial<Proposal> = {}): Proposal {
   return {
-    query: value,
-    impressions,
-    clicks: 0,
-    position: 10,
-    volume,
-    difficulty: null,
-    observedAt: new Date("2026-11-04T00:00:00Z"),
-  };
-}
-
-function makeInputs(overrides: Partial<ProposalInputs> = {}): ProposalInputs {
-  const data: TopicMapData = {
-    site: { id: "site-1", domain: "atelier-harmonie.example", projectId: "proj-1" },
-    marketScope: { default: "local", offers: [] },
-    context: { language: "fr", country: "FR" } as never,
-    fields: {
-      businessName: { value: "Atelier Test" },
-      services: { value: ["Restauration de siège", "Restauration d'abat-jour"] },
-      location: { value: "Saint-Pierre-en-Port, France" },
-      serviceArea: { value: ["Normandie"] },
-    },
-    queries: [
-      query("réparation abat jour", 60, 30),
-      query("comment réparer un abat jour", 30),
-      query("comment restaurer un abat jour", 20),
-      query("abat jour pagode", 50, 390),
-      query("luminaire artisanal", 100),
-      query("plafonnier artisanal", 90),
-      query("fauteuil restauration", 40, 480),
-      query("kit lampe", 80, 110),
-    ],
-    pages: [
-      page("/tapisserie-restauration", "Restauration de Sièges & Création sur mesure", "service", 712),
-      page("/lampes", "Créations Lumineuses Artisanales & Uniques", "category", 342),
-      page("/lampes/abat-jours", "Abat-jour artisanaux uniques et faits main", "category", 150),
-      page("/les-ateliers", "Ateliers DIY en Normandie", "service", 721),
-      page("/gift-card", "Carte Cadeau Artisanat & Déco", "product", 334),
-      page("/post/restauration-abat-jour", "L'art de la restauration : abat-jour en contrecollé", "blog", 854),
-      page("/", "Atelier de l'harmonie | restauration de siege | Saint-Pierre-en-Port", "home", 698),
-    ],
-    aeo: [],
-    news: [],
-    month: "2026-11",
-  };
-  const map = buildTopicMap(data, ATELIER_TOPIC_TAXONOMY);
-  const clusters = map.clusters.map((cluster, index) => ({ id: `cluster-${index}`, slug: cluster.slug }));
-  const evidenceByCluster = new Map<string, string[]>(
-    map.clusters.map((cluster) => [cluster.slug, [`ev-${cluster.slug}-1`, `ev-${cluster.slug}-2`]])
-  );
-  const now = Date.now();
-  return {
-    site: { id: "site-1", domain: "atelier-harmonie.example", projectId: "proj-1" },
-    map,
-    topicMapRunId: "topic-run-1",
-    clusters,
-    evidenceByCluster,
-    knowledgeEvidenceIds: ["k1", "k2"],
-    aeoEvidence: [
-      { id: "aeo-1", question: "luminaire artisanal", cited: 0, competitorCited: 3 },
-      { id: "aeo-2", question: "plafonnier artisanal", cited: 0, competitorCited: 3 },
-      { id: "aeo-3", question: "comment réparer un abat jour", cited: 0, competitorCited: 2 },
-      { id: "aeo-4", question: "comment restaurer un abat jour", cited: 0, competitorCited: 2 },
-      { id: "aeo-5", question: "blogging artisanat", cited: 0, competitorCited: 1 },
-    ],
-    news: [
-      { id: "news-1", title: "Recent local press", url: "https://news.example/recent", publishedAt: new Date(now - 10 * 86_400_000).toISOString(), excerpt: null },
-      { id: "news-2", title: "Old local press", url: "https://news.example/old", publishedAt: new Date(now - 60 * 86_400_000).toISOString(), excerpt: null },
-    ],
-    technical: [],
+    dedupKey: "",
+    lane: "content_business",
+    kind: "update",
+    title: "Enrichir la page luminaires",
+    summary: "The hub ranks but the subcategory pages are thin.",
+    whyNow: null,
+    evidenceRefs: ["ev-1", "ev-2"],
+    target: { url: "/lampes", newAsset: false, section: "hub" },
+    action: "Expand the hub with buying guidance.",
+    expectedOutcome: "More impressions on the format queries.",
+    effort: "medium",
+    confidence: null,
+    confidenceReason: null,
+    expiresAt: null,
+    topicSlug: "luminaires",
+    sources: [],
+    critique: null,
     ...overrides,
   };
 }
 
-function evidenceSet(inputs: ProposalInputs, proposals: Proposal[]): Set<string> {
-  const ids = new Set<string>([...inputs.knowledgeEvidenceIds]);
-  for (const proposal of proposals) for (const id of proposal.evidenceRefs) ids.add(id);
-  return ids;
-}
+const map = {
+  domain,
+  month: "2026-11",
+  business: { name: null, services: [], location: null, serviceArea: [], audience: null, differentiators: [] },
+  clusters: [],
+  ai: { available: false },
+} as unknown as TopicMap;
 
-describe("proposal generation", () => {
-  it("turns the topic gaps into specific content and business proposals", () => {
-    const inputs = makeInputs();
-    const proposals = buildDeterministicProposals(inputs);
-    const restoration = proposals.find((proposal) => proposal.title.includes("Restauration d'abat-jour"));
-    expect(restoration).toMatchObject({
-      lane: "content_business",
-      kind: "article",
-      target: { url: "/restauration-abat-jour", newAsset: true },
-    });
-    expect(proposals.some((proposal) => proposal.title.includes("catégorie Abat-jours"))).toBe(true);
-    expect(proposals.some((proposal) => proposal.kind === "business" && proposal.title.includes("plafonnier"))).toBe(true);
-    expect(proposals.some((proposal) => proposal.lane === "content_business" && proposal.title.includes("sièges"))).toBe(true);
+describe("proposal identity", () => {
+  it("is the asset, so a re-worded proposal updates the same row", () => {
+    const first = makeProposal({ title: "Enrichir le hub", action: "Add guidance." });
+    const second = makeProposal({ title: "Réécrire le hub luminaires", action: "Rewrite with a buying guide." });
+    expect(proposalIdentity(first)).toBe(proposalIdentity(second));
   });
 
-  it("proposes a local expansion even when measured demand is low", () => {
-    const proposals = buildDeterministicProposals(makeInputs());
-    const local = proposals.find((proposal) => proposal.topicSlug === "local-normandie" && proposal.kind === "cluster_hub");
-    expect(local).toMatchObject({
-      lane: "content_business",
-      confidence: "low",
-      target: { url: "/tapissier-normandie", newAsset: true },
-    });
-    expect(local?.whyNow).toMatch(/low measured volume/i);
+  it("separates different assets, lanes and no-page topics", () => {
+    expect(proposalIdentity(makeProposal())).not.toBe(
+      proposalIdentity(makeProposal({ target: { url: "/lampes/abat-jours", newAsset: false, section: null } }))
+    );
+    expect(proposalIdentity(makeProposal())).not.toBe(
+      proposalIdentity(makeProposal({ lane: "aeo_geo", kind: "aeo" }))
+    );
+    expect(proposalIdentity(makeProposal({ target: { url: null, newAsset: true, section: null } }))).toBe(
+      proposalIdentity(makeProposal({ target: { url: null, newAsset: true, section: null } }))
+    );
   });
 
-  it("creates AEO proposals only for measured, relevant topics", () => {
-    const inputs = makeInputs();
-    const proposals = buildDeterministicProposals(inputs);
-    const aeo = proposals.filter((proposal) => proposal.lane === "aeo_geo");
-    expect(aeo.map((proposal) => proposal.topicSlug)).toEqual(["luminaires", "restauration-abat-jour"]);
-    expect(aeo.find((proposal) => proposal.topicSlug === "restauration-abat-jour")?.target).toMatchObject({
-      url: "/restauration-abat-jour",
-      newAsset: true,
-    });
-    expect(aeo.some((proposal) => proposal.topicSlug === "blog-artisanat")).toBe(false);
-  });
-
-  it("creates a timely proposal only from recent news", () => {
-    const inputs = makeInputs();
-    const proposals = buildDeterministicProposals(inputs);
-    const timely = proposals.find((proposal) => proposal.lane === "timely");
-    expect(timely).toBeDefined();
-    expect(timely?.sources[0].url).toBe("https://news.example/recent");
-    expect(timely?.expiresAt).toBeTruthy();
-    expect(Date.parse(timely!.expiresAt!)).toBeGreaterThan(Date.now());
-
-    const oldOnly = makeInputs({ news: [{ id: "news-old", title: "Old", url: "https://news.example/old", publishedAt: new Date(Date.now() - 60 * 86_400_000).toISOString(), excerpt: null }] });
-    expect(buildDeterministicProposals(oldOnly).some((proposal) => proposal.lane === "timely")).toBe(false);
-  });
-
-  it("deduplicates identical proposals", () => {
-    const proposals = buildDeterministicProposals(makeInputs());
-    expect(dedupeProposals([...proposals, ...proposals])).toHaveLength(proposals.length);
+  it("deduplicates on the identity", () => {
+    const proposals = [makeProposal({ dedupKey: "a" }), makeProposal({ dedupKey: "a" }), makeProposal({ dedupKey: "b" })];
+    expect(dedupeProposals(proposals)).toHaveLength(2);
   });
 });
 
 describe("proposal validation", () => {
-  it("rejects missing evidence, off-site targets and invalid timely items", () => {
-    const inputs = makeInputs();
-    const proposals = buildDeterministicProposals(inputs);
-    const evidenceIds = evidenceSet(inputs, proposals);
-    const valid = proposals[0];
-    expect(validateProposal(valid, { domain: "atelier-harmonie.example", evidenceIds })).toBeNull();
-    expect(validateProposal({ ...valid, evidenceRefs: ["missing"] }, { domain: "atelier-harmonie.example", evidenceIds })).toMatch(/unknown evidence/);
-    expect(validateProposal({ ...valid, target: { url: "https://other.example/page", newAsset: false, section: null } }, { domain: "atelier-harmonie.example", evidenceIds })).toMatch(/not on the site/);
-    expect(validateProposal({ ...valid, lane: "timely", whyNow: null, expiresAt: null }, { domain: "atelier-harmonie.example", evidenceIds })).toMatch(/whyNow/);
-    expect(validateProposal({ ...valid, target: { url: null, newAsset: false, section: null } }, { domain: "atelier-harmonie.example", evidenceIds })).toMatch(/needs a target/);
+  it("accepts an unrated proposal and rejects a claim without a reason", () => {
+    const evidenceIds = new Set(["ev-1", "ev-2"]);
+    expect(validateProposal(makeProposal(), { domain, evidenceIds })).toBeNull();
+    expect(
+      validateProposal(makeProposal({ confidence: "high", confidenceReason: null }), { domain, evidenceIds })
+    ).toMatch(/confidence needs a reason/);
   });
 
-  it("declares the score inputs instead of hiding them", () => {
-    const inputs = makeInputs();
-    const proposal = buildDeterministicProposals(inputs)[0];
-    const cluster = inputs.map.clusters.find((entry) => entry.slug === proposal.topicSlug) ?? null;
-    const score = proposalScoreInputs(proposal, cluster);
-    expect(score.worth.change).toBe(proposal.action);
-    expect(score.worth.successMeasure).toBe(proposal.expectedOutcome);
-    expect(score.effort.playTypeBase).toBe(8);
+  it("requires first-party evidence for a high claim", () => {
+    const evidenceIds = new Set(["ev-1", "ev-2", "provider-1"]);
+    const firstParty = new Set(["ev-1"]);
+    expect(
+      validateProposal(
+        makeProposal({ confidence: "high", confidenceReason: "GSC rows" }),
+        { domain, evidenceIds, firstPartyEvidenceIds: firstParty }
+      )
+    ).toBeNull();
+    expect(
+      validateProposal(
+        makeProposal({
+          confidence: "high",
+          confidenceReason: "provider volume",
+          evidenceRefs: ["provider-1"],
+        }),
+        { domain, evidenceIds, firstPartyEvidenceIds: firstParty }
+      )
+    ).toMatch(/first-party evidence/);
+  });
+
+  it("rejects missing evidence, off-site targets and invalid timely items", () => {
+    const evidenceIds = new Set(["ev-1", "ev-2"]);
+    expect(
+      validateProposal(makeProposal({ evidenceRefs: ["missing"] }), { domain, evidenceIds })
+    ).toMatch(/unknown evidence/);
+    expect(
+      validateProposal(
+        makeProposal({ target: { url: "https://other.example/page", newAsset: false, section: null } }),
+        { domain, evidenceIds }
+      )
+    ).toMatch(/not on the site/);
+    expect(
+      validateProposal(
+        makeProposal({ lane: "timely", whyNow: null, expiresAt: null }),
+        { domain, evidenceIds }
+      )
+    ).toMatch(/whyNow/);
+    expect(
+      validateProposal(
+        makeProposal({ target: { url: null, newAsset: false, section: null } }),
+        { domain, evidenceIds }
+      )
+    ).toMatch(/needs a target/);
+  });
+});
+
+describe("proposal critique", () => {
+  it("groups proposals that touch the same asset when the model is unavailable", async () => {
+    const hub = makeProposal({ dedupKey: "hub" });
+    const range = makeProposal({
+      dedupKey: "range",
+      kind: "business",
+      title: "Opportunité gamme plafonniers",
+      action: "Owner decision on the range.",
+    });
+    const result = await critiqueProposals([hub, range], map);
+    expect(result.available).toBe(true);
+    expect(result.model).toBe("deterministic");
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].members).toEqual(["hub", "range"]);
+    expect(result.groups[0].title).toBe(hub.title);
+  });
+
+  it("does not group proposals on different assets", async () => {
+    const result = await critiqueProposals(
+      [
+        makeProposal({ dedupKey: "hub" }),
+        makeProposal({
+          dedupKey: "aeo",
+          lane: "aeo_geo",
+          kind: "aeo",
+          target: { url: "/lampes/abat-jours", newAsset: false, section: null },
+        }),
+      ],
+      map
+    );
+    expect(result.groups).toHaveLength(0);
   });
 });
 
 describe("proposal storage", () => {
-  it("stores proposals in the existing Opportunity table and records evidence edges", async () => {
-    const inputs = makeInputs();
-    const proposals = buildDeterministicProposals(inputs);
-    const evidenceIds = evidenceSet(inputs, proposals);
+  it("stores proposals and records evidence edges", async () => {
+    const proposals = [makeProposal({ dedupKey: "hub" }), makeProposal({ dedupKey: "hub-2", target: { url: "/les-ateliers", newAsset: false, section: null } })];
+    const evidenceIds = new Set(["ev-1", "ev-2"]);
     let created = 0;
     let edges = 0;
     const db = {
@@ -213,17 +194,40 @@ describe("proposal storage", () => {
     const result = await storeProposals(db as never, {
       projectId: "proj-1",
       siteId: "site-1",
-      domain: "atelier-harmonie.example",
-      map: inputs.map,
+      domain,
+      map,
       topicMapRunId: "topic-run-1",
       proposals,
       evidenceIds,
-      knowledgeEvidenceIds: inputs.knowledgeEvidenceIds,
-      clusters: inputs.clusters,
+      firstPartyEvidenceIds: evidenceIds,
+      knowledgeEvidenceIds: [],
+      clusters: [],
     });
     expect(result.dropped).toHaveLength(0);
-    expect(result.stored).toHaveLength(proposals.length);
-    expect(created).toBe(proposals.length);
+    expect(result.stored).toHaveLength(2);
+    expect(created).toBe(2);
     expect(edges).toBeGreaterThan(0);
+  });
+});
+
+describe("proposal rendering", () => {
+  it("shows an unrated confidence as not assessed instead of inventing one", () => {
+    const board = renderProposalBoard({
+      map,
+      proposals: [makeProposal({ confidence: null })],
+      dropped: [],
+      critique: { available: false, model: null, summary: null, error: "none" },
+      technical: [],
+      generatedAt: "2026-11-05T00:00:00Z",
+    });
+    expect(board).toContain("confidence: not assessed");
+  });
+
+  it("declares the score inputs instead of hiding them", () => {
+    const proposal = makeProposal();
+    const score = proposalScoreInputs(proposal, null);
+    expect(score.worth.change).toBe(proposal.action);
+    expect(score.worth.successMeasure).toBe(proposal.expectedOutcome);
+    expect(score.effort.playTypeBase).toBe(8);
   });
 });

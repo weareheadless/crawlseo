@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyMarketVerdicts,
   assignQuery,
   buildTopicMap,
   normalizeTopicText,
@@ -128,9 +129,58 @@ describe("topic map build", () => {
     expect(lighting.gaps.join(" ")).toMatch(/plafonnier/);
     expect(lighting.pages[0].url).toContain("/lampes");
 
+    // Geography is a review judgement, not a rule in the builder: the cluster
+    // reports its measured demand and leaves off-area exclusion to the AI.
     const local = map.clusters.find((cluster) => cluster.slug === "local-normandie")!;
-    expect(local.gaps.join(" ")).toMatch(/dedicated local landing page/i);
-    expect(local.gaps.join(" ")).toMatch(/le mans|off-area/i);
+    expect(local.metrics.queries).toBeGreaterThan(0);
+    expect(local.gaps.join(" ")).not.toMatch(/le mans|sarthe|off-area/i);
+  });
+
+  it("removes out-of-market queries from demand and keeps them for audit", () => {
+    const map = buildTopicMap(
+      data({
+        queries: [query("tapissier autour de moi", 20), query("restauration fauteuil saint-germain-en-laye", 5)],
+      }),
+      taxonomy
+    );
+    const local = map.clusters.find((cluster) => cluster.slug === "local-normandie")!;
+    const before = local.metrics.impressions;
+    const excluded = applyMarketVerdicts(map, [
+      {
+        cluster: "local-normandie",
+        query: "restauration fauteuil saint-germain-en-laye",
+        inMarket: false,
+        reason: "Outside the configured local market.",
+      },
+    ]);
+    expect(excluded).toBe(1);
+    expect(local.queries.some((entry) => entry.query.includes("saint-germain"))).toBe(false);
+    expect(local.excludedQueries[0]).toMatchObject({
+      query: "restauration fauteuil saint-germain-en-laye",
+      reason: "Outside the configured local market.",
+    });
+    expect(local.metrics.impressions).toBe(before - 5);
+    expect(local.topicSummary).toContain("out-of-market");
+  });
+
+  it("scopes a verdict to its cluster so another topic keeps the query", () => {
+    const map = buildTopicMap(
+      data({ queries: [query("restauration fauteuil saint-germain-en-laye", 5)] }),
+      taxonomy
+    );
+    const seat = map.clusters.find((cluster) => cluster.slug === "restauration-siege")!;
+    const local = map.clusters.find((cluster) => cluster.slug === "local-normandie")!;
+    const seatBefore = seat.metrics.impressions;
+    applyMarketVerdicts(map, [
+      {
+        cluster: "local-normandie",
+        query: "restauration fauteuil saint-germain-en-laye",
+        inMarket: false,
+        reason: "Outside the local market.",
+      },
+    ]);
+    expect(local.queries).toHaveLength(0);
+    expect(seat.metrics.impressions).toBe(seatBefore);
   });
 
   it("uses the tenant offer scope for local and international topics", () => {
@@ -174,7 +224,7 @@ describe("topic map build", () => {
     expect(markdown).toContain("## Topic table");
     expect(markdown).toContain("Restauration de sièges");
     expect(markdown).toContain("tenue sexie");
-    expect(markdown).toContain("Off-business");
+    expect(markdown).toContain("off-business query");
   });
 });
 
