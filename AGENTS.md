@@ -6,6 +6,9 @@
   monthly DataForSEO bundle, system proposes and human accepts, board lanes, AEO/GEO
   from measured DataForSEO observations. If another plan conflicts on cadence or
   priority, the product operating model wins.
+- **Then read `docs/crawlseo-simplified-execution-plan.md`.** It is the active
+  implementation plan: data layers, multiple AI calls, minimal validation, pilot
+  phases. Do not rebuild the old packet/decision/shadow machinery.
 - **Do not use archived docs as requirements.** `docs/README.md` lists the active
   set. Everything in `docs/archive/` is historical; read it only for audit or
   provenance.

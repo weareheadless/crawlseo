@@ -9,6 +9,8 @@ requirements.
 - **[CrawlSEO product operating model](crawlseo-product-operating-model.md)** —
   authoritative product requirements, cadence, proposal model and definition of
   done.
+- **[CrawlSEO simplified execution plan](crawlseo-simplified-execution-plan.md)** —
+  how to build it: data layers, AI calls, phases and pilot acceptance.
 
 ## Active operating docs
 
