@@ -133,11 +133,15 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
     evidenceRefs: string[];
     sources?: Proposal["sources"];
   }) => {
-    const dedupKey = `phase3:${proposal.lane}:${proposal.kind}:${proposal.topicSlug ?? "site"}:${proposalHash({
-      ...proposal,
-      sources: proposal.sources ?? [],
-      critique: null,
-    })}`;
+    // Stable identity: a wording change must update the same board row, not
+    // create a second one. The fingerprint still records the exact version.
+    const identity = JSON.stringify({
+      lane: proposal.lane,
+      kind: proposal.kind,
+      topicSlug: proposal.topicSlug ?? null,
+      target: proposal.target,
+    });
+    const dedupKey = `phase3:${proposal.lane}:${proposal.kind}:${proposal.topicSlug ?? "site"}:${createHash("sha256").update(identity).digest("hex").slice(0, 16)}`;
     proposals.push({
       ...proposal,
       dedupKey,
@@ -253,6 +257,26 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
       expectedOutcome: "Test local intent without creating a thin local page; measure whether local queries and quote requests move.",
       effort: "small",
       confidence: "medium",
+      expiresAt: null,
+      topicSlug: "local-normandie",
+    });
+  }
+
+  // 4b. Local expansion: low measured demand is not the same as no opportunity.
+  const local = clusterOf("local-normandie");
+  if (local) {
+    add({
+      lane: "content_business",
+      kind: "cluster_hub",
+      title: "Créer une page locale « Tapissier en Normandie »",
+      summary: `${local.metrics.queries} local queries and ${local.metrics.impressions} impressions; measured demand is low, but local intent is business-relevant and there is no dedicated local page.`,
+      whyNow: "Low measured volume is not the same as no opportunity: a local page gives the atelier a page to rank, link and cite for local intent.",
+      evidenceRefs: evidenceOf("local-normandie"),
+      target: { url: "/tapissier-normandie", newAsset: true, section: "local landing page" },
+      action: "Create a local landing page for the upholstery/restoration service in the configured local market: services, places served, workshop visits, local proof, map and quote CTA; link it from the service page and the home page. If the owner prefers a smaller test, add a local proof section to /tapisserie-restauration first.",
+      expectedOutcome: "A dedicated local page for tapissier-en-Normandie and autour-de-moi intent; measure impressions, quote requests and whether the local page earns links.",
+      effort: "medium",
+      confidence: "low",
       expiresAt: null,
       topicSlug: "local-normandie",
     });
@@ -539,6 +563,7 @@ export async function critiqueProposals(
     "You are an SEO critic for a small craft business.",
     "Check each proposal for unsupported claims, duplicates and wrong target pages.",
     "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
+    "A low-demand but business-relevant local proposal is valid; do not drop it only because volume is low. Check whether it is a reasonable expansion or small test.",
     "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }] }.",
     "Use only the supplied dedupKeys. Keep the summary under 300 characters and each reason under 200 characters.",
   ].join("\n");

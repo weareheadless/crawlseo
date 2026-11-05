@@ -104,7 +104,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   }
 
   const phase3Count = await db.opportunity.count({
-    where: { projectId: site.projectId, detectedBy: "phase3:topic-map" },
+    where: { projectId: site.projectId, detectedBy: "phase3:topic-map", status: "detected" },
   });
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {

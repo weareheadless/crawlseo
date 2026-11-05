@@ -153,7 +153,7 @@ export function buildTimelyProposals(input: {
   knowledgeEvidenceIds: string[];
   localEvidenceIds: string[];
 }): { proposals: WeeklyTimelyProposal[]; reason: string | null } {
-  const freshnessMs = 14 * 86_400_000;
+  const freshnessMs = 21 * 86_400_000;
   const current = input.news
     .filter((item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= freshnessMs)
     .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
@@ -165,13 +165,13 @@ export function buildTimelyProposals(input: {
     return {
       proposals: [],
       reason: newest
-        ? `No news source published within 14 days; the newest source is ${newest.publishedAt?.slice(0, 10)} (${Math.floor((input.now.getTime() - Date.parse(newest.publishedAt ?? "")) / 86_400_000)} days old).`
+        ? `No news source published within 21 days; the newest source is ${newest.publishedAt?.slice(0, 10)} (${Math.floor((input.now.getTime() - Date.parse(newest.publishedAt ?? "")) / 86_400_000)} days old).`
         : "No dated news source in the weekly sweep.",
     };
   }
   const evidence = [...new Set([...input.knowledgeEvidenceIds, ...input.localEvidenceIds])].slice(0, 8);
   const proposals = current.map((item) => {
-    const hash = createHash("sha256").update(`${item.url}|${item.title}`).digest("hex").slice(0, 16);
+    const hash = createHash("sha256").update(item.url).digest("hex").slice(0, 16);
     return {
       dedupKey: `phase5:timely:article:local-normandie:${hash}`,
       lane: "timely" as const,

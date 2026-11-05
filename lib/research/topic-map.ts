@@ -791,6 +791,7 @@ export async function synthesizeTopicMap(
     "Review the supplied topic map. Use only the supplied clusters, slugs and facts; do not invent queries, pages or metrics.",
     "Respect each cluster's marketScope. A local offer is local; a national or international offer is not limited to Normandy. Do not assume every offer is local.",
     "Say which topics are worth doing first and which are weak or off-area.",
+    "A weak topic has low measured demand, not no opportunity. If a weak topic is business-relevant, say what expansion or small test would validate it.",
     "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",
     "Keep map_summary under 400 characters and seo_review under 600 characters.",

@@ -34,7 +34,11 @@ Run cmw3k8awi0001oy3ze94e5esp. Free weekly work: first-party evidence and news, 
 
 ## Timely proposals
 
-No timely proposal. No news source published within 14 days; the newest source is 2026-10-20 (16 days old).
+- **Réagir à « Salons, artisans d’art, activités automnales... notre sélection de sorties dans l’Eure et en Seine-Maritime - Paris Normandie »** — Published 2026-10-20; the atelier can respond while the local story is current.
+  - Action: Write a short dated atelier note that responds to the source, links it, names the atelier and the Normandy location, and links the relevant restoration or workshop page. Keep it factual and quote only what the source supports.
+  - Target: /blog
+  - Expires: 2026-12-05
+  - Stored: yes
 
 ## Limits
 

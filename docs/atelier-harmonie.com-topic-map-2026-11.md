@@ -1,6 +1,6 @@
 # Topic map — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-05T14:29:47.407Z. Locale fr/FR.
+Generated 2026-11-05T14:53:27.731Z. Locale fr/FR.
 
 ## Business
 
@@ -18,12 +18,12 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-8 clusters: 7 high relevance, 1 medium (objets-deco). Local scope: restauration-siege, restauration-abat-jour, kits-ateliers, local-normandie. International: creation-abat-jour, marque, luminaires, objets-deco. Coverage strong except restauration-abat-jour partial; gaps: thin abat-jour/suspensions pages and missing tapissier, chaises, plafonnier, réparer terms.
+9 clusters: high relevance for creation-abat-jour, restauration-siege, marque, luminaires, restauration-abat-jour, kits-ateliers, local-normandie; medium for objets-deco. Local Normandie scope: restauration-siege, restauration-abat-jour, kits-ateliers, local-normandie. International scope: creation-abat-jour, marque, luminaires, objets-deco.
 
-Start with creation-abat-jour (international; 51,140 monthly volume; thin page), luminaires (996 impressions; thin page; plafonnier gap), restauration-siege (local Normandie; tapissier/chaises gaps), restauration-abat-jour (local; no service/category page; réparer gap), kits-ateliers (local transactional; fabrication/luminaire gaps). Treat marque as brand support, not first. Objets-deco is weak (medium relevance, 50 volume). local-normandie has off-area demand and 0 volume; do not chase Le Mans/Sarthe/Sainte-Adresse without business reason.
+Start with restauration-siege and restauration-abat-jour: local Normandie gaps (tapissier/chaises; no service page, reparer). Then luminaires (996 impressions; plafonnier, thin suspensions) and creation-abat-jour (51,140 volume; thin abat-jours), both international, not local. marque needs brand cleanup (harmony). Weak: local-normandie (0 volume) is business-relevant—test a dedicated local landing page; ignore off-area Le Mans/Sarthe/Sainte-Adresse. objets-deco (50) and kits-ateliers (140) are low-demand; validate via small tests for déco/coussins and fabrication/luminaire terms.
 
-Priority topics: creation-abat-jour, luminaires, restauration-siege, restauration-abat-jour, kits-ateliers.
-Weak topics: objets-deco, local-normandie.
+Priority topics: restauration-siege, restauration-abat-jour, luminaires, creation-abat-jour, marque.
+Weak topics: local-normandie, objets-deco, kits-ateliers.
 
 ## Topic table
 

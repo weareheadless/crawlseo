@@ -121,6 +121,17 @@ describe("proposal generation", () => {
     expect(proposals.some((proposal) => proposal.lane === "content_business" && proposal.title.includes("sièges"))).toBe(true);
   });
 
+  it("proposes a local expansion even when measured demand is low", () => {
+    const proposals = buildDeterministicProposals(makeInputs());
+    const local = proposals.find((proposal) => proposal.topicSlug === "local-normandie" && proposal.kind === "cluster_hub");
+    expect(local).toMatchObject({
+      lane: "content_business",
+      confidence: "low",
+      target: { url: "/tapissier-normandie", newAsset: true },
+    });
+    expect(local?.whyNow).toMatch(/low measured volume/i);
+  });
+
   it("creates AEO proposals only for measured, relevant topics", () => {
     const inputs = makeInputs();
     const proposals = buildDeterministicProposals(inputs);

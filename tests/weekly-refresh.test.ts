@@ -163,7 +163,7 @@ describe("weekly refresh", () => {
     expect(new Set(queries).size).toBe(queries.length);
   });
 
-  it("raises a timely proposal only for a source within 14 days", () => {
+  it("raises a timely proposal only for a source within 21 days", () => {
     const recent = buildTimelyProposals({
       news: [recentNews(5)],
       now,
@@ -176,15 +176,24 @@ describe("weekly refresh", () => {
     expect(recent.proposals[0].whyNow).toContain("2026-10-31");
     expect(Date.parse(recent.proposals[0].expiresAt!)).toBeGreaterThan(now.getTime());
 
+    const sixteenDays = buildTimelyProposals({
+      news: [recentNews(16)],
+      now,
+      domain: "atelier-harmonie.example",
+      knowledgeEvidenceIds: ["knowledge-1"],
+      localEvidenceIds: ["local-1"],
+    });
+    expect(sixteenDays.proposals).toHaveLength(1);
+
     const old = buildTimelyProposals({
-      news: [recentNews(45)],
+      news: [recentNews(25)],
       now,
       domain: "atelier-harmonie.example",
       knowledgeEvidenceIds: ["knowledge-1"],
       localEvidenceIds: ["local-1"],
     });
     expect(old.proposals).toHaveLength(0);
-    expect(old.reason).toMatch(/14 days/);
+    expect(old.reason).toMatch(/21 days/);
   });
 
   it("dry run makes no writes", async () => {
@@ -225,12 +234,12 @@ describe("weekly refresh", () => {
     const result = await runWeeklyRefresh(
       db as never,
       { siteId: "site-1", mode: "execute", now },
-      makeDeps({ fetchNews: async () => [recentNews(45)] })
+      makeDeps({ fetchNews: async () => [recentNews(25)] })
     );
     expect(result.status).toBe("completed");
     expect(result.timely.proposals).toHaveLength(0);
     expect(result.timely.stored).toBe(0);
-    expect(result.timely.reason).toMatch(/14 days/);
+    expect(result.timely.reason).toMatch(/21 days/);
   });
 
   it("parks an expired timely item instead of leaving it on the board", async () => {

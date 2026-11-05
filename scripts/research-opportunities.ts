@@ -246,10 +246,12 @@ async function main(): Promise<void> {
 
     const kept: Proposal[] = [];
     const dropped: Array<{ title: string; reason: string }> = [];
+    const droppedKeys: string[] = [];
     for (const proposal of proposals) {
       const decision = critique.decisions.get(proposal.dedupKey);
       if (decision?.verdict === "drop") {
         dropped.push({ title: proposal.title, reason: decision.reason });
+        droppedKeys.push(proposal.dedupKey);
         continue;
       }
       kept.push({
@@ -275,6 +277,16 @@ async function main(): Promise<void> {
       clusters,
     });
     dropped.push(...stored.dropped);
+    if (droppedKeys.length > 0) {
+      await db.opportunity.updateMany({
+        where: {
+          projectId: site.projectId,
+          dedupKey: { in: droppedKeys },
+          status: { in: ["detected", "parked"] },
+        },
+        data: { status: "closed", parkReason: "dropped by critique" },
+      });
+    }
 
     const report = {
       version: 1,
