@@ -103,8 +103,12 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     disabledDetectors.push({ type: "O14_offer_positioning_gap", missing: ["gap-typed research_finding"] });
   }
 
-  const phase3Count = await db.opportunity.count({
-    where: { projectId: site.projectId, detectedBy: "phase3:topic-map", status: "detected" },
+  // The board is the proposal board: rows from the drafting system, not every
+  // detector that has ever written to this project. "All sources" is explicit.
+  const PROPOSAL_SOURCES = ["phase3:topic-map", "phase5:weekly"];
+  const source = query.source ?? "proposals";
+  const proposalCount = await db.opportunity.count({
+    where: { projectId: site.projectId, detectedBy: { in: PROPOSAL_SOURCES }, status: "detected" },
   });
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {
@@ -114,7 +118,12 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       types: query.type && query.type !== "all" ? [query.type as never] : undefined,
       search: query.q,
       lane: query.lane as never,
-      detectedBy: query.source === "phase3" ? "phase3:topic-map" : undefined,
+      detectedBy:
+        source === "proposals"
+          ? PROPOSAL_SOURCES
+          : source === "phase3"
+            ? "phase3:topic-map"
+            : undefined,
     }),
     getFunnelCounts(db, site.projectId),
   ]);
@@ -151,24 +160,24 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <nav aria-label="Opportunity lane" className="flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">
           <Link
-            href={`/sites/${siteId}/opportunities?status=${tab.key}${query.leg ? `&leg=${query.leg}` : ""}`}
-            aria-current={!query.lane ? "page" : undefined}
+            href={`/sites/${siteId}/opportunities?status=${tab.key}&source=all${query.leg ? `&leg=${query.leg}` : ""}`}
+            aria-current={source === "all" ? "page" : undefined}
             className={cn(
               "rounded-lg px-3 py-1.5 text-xs font-medium transition",
               !query.lane ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            All lanes · {counts.total}
+            All sources · {counts.total}
           </Link>
           <Link
-            href={`/sites/${siteId}/opportunities?status=${tab.key}&source=phase3${query.leg ? `&leg=${query.leg}` : ""}`}
-            aria-current={query.source === "phase3" ? "page" : undefined}
+            href={`/sites/${siteId}/opportunities?status=${tab.key}&source=proposals${query.leg ? `&leg=${query.leg}` : ""}`}
+            aria-current={source === "proposals" ? "page" : undefined}
             className={cn(
               "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-              query.source === "phase3" ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
+              source === "proposals" ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            New proposals · {phase3Count}
+            New proposals · {proposalCount}
           </Link>
           {OPPORTUNITY_LANES.map((lane) => (
             <Link

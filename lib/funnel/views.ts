@@ -185,8 +185,12 @@ export function headlineFor(record: RawEvidence): string {
       return `SERP analysed for "${str(record, "query") ?? "query"}"`;
     case "ai_visibility_observation":
       return `AI answer observed for "${str(record, "question") ?? "question"}"`;
-    case "knowledge_fact":
-      return `Business fact recorded: ${str(record, "question") ?? str(record, "field") ?? "fact"}`;
+    case "knowledge_fact": {
+      const field = (str(record, "field") ?? str(record, "question") ?? "fact").replaceAll("_", " ");
+      const value = str(record, "value");
+      const short = value && value.length > 90 ? `${value.slice(0, 87)}…` : value;
+      return short ? `Business knowledge — ${field}: ${short}` : `Business knowledge — ${field}`;
+    }
     case "research_finding":
       return str(record, "painPointSummary") ?? str(record, "gapSummary") ?? "Research finding recorded";
     case "question_coverage":
@@ -225,7 +229,7 @@ export type OpportunityFilter = {
   completeness?: string[];
   search?: string;
   lane?: OpportunityLane;
-  detectedBy?: string;
+  detectedBy?: string | string[];
 };
 
 /**
@@ -388,7 +392,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       status: filter.statuses?.length ? { in: filter.statuses } : undefined,
       type: filter.types?.length ? { in: filter.types } : undefined,
       dimension: filter.dimensions?.length ? { in: filter.dimensions } : undefined,
-      detectedBy: filter.detectedBy,
+      detectedBy: Array.isArray(filter.detectedBy) ? { in: filter.detectedBy } : filter.detectedBy,
       evidenceCompleteness: filter.completeness?.length ? { in: filter.completeness as never } : undefined,
       OR: filter.search
         ? [{ title: { contains: filter.search, mode: "insensitive" } }, { summary: { contains: filter.search, mode: "insensitive" } }]

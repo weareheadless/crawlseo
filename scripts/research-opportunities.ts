@@ -191,8 +191,8 @@ async function main(): Promise<void> {
       }),
       db.evidenceRecord.findMany({
         where: { projectId: site.projectId, siteId: site.id, kind: "knowledge_fact", supersededById: null },
-        select: { id: true },
-        take: 4,
+        select: { id: true, dimensions: true },
+        take: 6,
       }),
       db.evidenceRecord.findMany({
         where: {
@@ -241,6 +241,48 @@ async function main(): Promise<void> {
       orderBy: { scoreValue: "desc" },
       take: 5,
     });
+    // Technical evidence comes from the crawl itself, not from the legacy
+    // detector rows: those are retired, and the drafting call must keep working
+    // after they are gone. One row per issue and URL.
+    const crawlRows = await db.evidenceRecord.findMany({
+      where: { projectId: site.projectId, siteId: site.id, kind: "onpage_crawl", supersededById: null },
+      select: { id: true, kind: true, dimensions: true, observedAt: true },
+      orderBy: { observedAt: "desc" },
+      take: 300,
+    });
+    // Group by defect: "duplicate description on 59 pages" is one delivery, and
+    // the model cannot see that from 12 individual rows.
+    const byIssue = new Map<string, { id: string; kind: string; issue: string; url: string; pages: number }>();
+    for (const row of crawlRows) {
+      const dimensions = row.dimensions as { url?: string; issueType?: string } | null;
+      if (!dimensions?.issueType || !dimensions.url) continue;
+      const existing = byIssue.get(dimensions.issueType);
+      if (existing) {
+        existing.pages += 1;
+        continue;
+      }
+      byIssue.set(dimensions.issueType, {
+        id: row.id,
+        kind: row.kind,
+        issue: dimensions.issueType,
+        url: dimensions.url,
+        pages: 1,
+      });
+    }
+    const technicalEvidence = [...byIssue.values()]
+      .sort((a, b) => b.pages - a.pages)
+      .slice(0, 8)
+      .map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        issue: entry.issue,
+        query: null,
+        position: null,
+        impressions: null,
+        volume: null,
+        url: entry.url,
+        pages: entry.pages,
+      }));
 
     const evidenceCatalogue = buildClusterEvidenceCatalogue(map.clusters, evidenceRows, evidenceByCluster);
     const draft = await draftProposals({
@@ -261,6 +303,22 @@ async function main(): Promise<void> {
         excerpt: row.excerpt,
       })),
       knowledgeEvidenceIds: knowledge.map((row) => row.id),
+      knowledgeFacts: knowledge.map((row) => {
+        const dimensions = row.dimensions as { field?: string; value?: string } | null;
+        const field = dimensions?.field ?? "business fact";
+        const value = dimensions?.value ?? "";
+        return {
+          id: row.id,
+          kind: "knowledge_fact",
+          query: null,
+          position: null,
+          impressions: null,
+          volume: null,
+          url: null,
+          text: value ? `${field}: ${value}` : field,
+        };
+      }),
+      technicalEvidence,
       now: new Date(),
     });
     // Identity is the asset the proposal touches, so a re-worded proposal
@@ -348,13 +406,20 @@ async function main(): Promise<void> {
       select: { id: true },
     });
     const evidenceIds = new Set(allEvidenceRows.map((row) => row.id));
-    // "High confidence" has to rest on first-party search data. Provider
-    // volume is a market estimate; the crawl and Search Console are the site.
-    const firstPartyEvidenceIds = new Set(
-      evidenceRows
-        .filter((row) => row.producer === "search_console" || row.producer === "crawler")
-        .map((row) => row.id)
-    );
+    // "High confidence" has to rest on first-party data. Provider volume is a
+    // market estimate; the crawl and Search Console are the site. This covers
+    // every first-party row, including the crawl rows a technical proposal
+    // cites, not only the cluster evidence loaded above.
+    const firstPartyRows = await db.evidenceRecord.findMany({
+      where: {
+        projectId: site.projectId,
+        siteId: site.id,
+        producer: { in: ["search_console", "crawler"] },
+        supersededById: null,
+      },
+      select: { id: true },
+    });
+    const firstPartyEvidenceIds = new Set(firstPartyRows.map((row) => row.id));
     const stored = await storeProposals(db, {
       projectId: site.projectId,
       siteId: site.id,

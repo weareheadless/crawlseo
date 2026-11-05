@@ -97,7 +97,10 @@ export type ProposalRunResult = {
   counts: { proposals: number; byLane: Record<string, number>; dropped: number };
 };
 
-const TYPE_FOR_PROPOSAL: Record<string, "O3_content_gap" | "O4_aeo_citation_gap" | "O11_freshness_decay" | "O14_offer_positioning_gap"> = {
+const TYPE_FOR_PROPOSAL: Record<
+  string,
+  "O3_content_gap" | "O4_aeo_citation_gap" | "O11_freshness_decay" | "O14_offer_positioning_gap" | "O7_technical_defect"
+> = {
   "content_business:article": "O3_content_gap",
   "content_business:update": "O3_content_gap",
   "content_business:cluster_hub": "O3_content_gap",
@@ -106,6 +109,7 @@ const TYPE_FOR_PROPOSAL: Record<string, "O3_content_gap" | "O4_aeo_citation_gap"
   "timely:article": "O11_freshness_decay",
   "timely:update": "O11_freshness_decay",
   "timely:business": "O14_offer_positioning_gap",
+  "technical:technical": "O7_technical_defect",
 };
 
 const DIMENSION_FOR_TYPE = {
@@ -113,6 +117,7 @@ const DIMENSION_FOR_TYPE = {
   O4_aeo_citation_gap: "aeo",
   O11_freshness_decay: "seo",
   O14_offer_positioning_gap: "content",
+  O7_technical_defect: "technical",
 } as const;
 
 export function proposalHash(proposal: Omit<Proposal, "dedupKey">): string {
@@ -445,16 +450,37 @@ export async function storeProposals(
       continue;
     }
     const cluster = input.map.clusters.find((entry) => entry.slug === proposal.topicSlug) ?? null;
-    const howEvidenceIds = proposal.evidenceRefs.filter((id) => !input.knowledgeEvidenceIds.includes(id)).slice(0, 8);
-    const whyEvidenceIds = input.knowledgeEvidenceIds.slice(0, 2);
+    // The "why" leg is the business fact this proposal actually rests on. If
+    // the drafting did not cite one, the leg stays empty rather than repeating
+    // the same knowledge row on every card.
+    const whyEvidenceIds = proposal.evidenceRefs
+      .filter((id) => input.knowledgeEvidenceIds.includes(id))
+      .slice(0, 3);
+    const howEvidenceIds = proposal.evidenceRefs
+      .filter((id) => !input.knowledgeEvidenceIds.includes(id))
+      .slice(0, 8);
     try {
       // A refresh replaces the evidence this generated proposal rests on. Old
       // membership-only edges must not linger next to the new query/SERP edges.
       const existing = await db.opportunity.findUnique({
         where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: proposal.dedupKey } },
-        select: { id: true },
+        select: { id: true, status: true, parkReason: true },
       });
       if (existing) {
+        // A proposal that the system closed on a previous run (superseded,
+        // merged, or dropped by advice) comes back when it is proposed again.
+        // A human rejection is never reopened.
+        const autoClosed =
+          existing.status === "closed" &&
+          (existing.parkReason === "superseded by refreshed proposal" ||
+            existing.parkReason === "merged into another proposal" ||
+            existing.parkReason === "dropped by critique");
+        if (autoClosed) {
+          await db.opportunity.update({
+            where: { id: existing.id },
+            data: { status: "detected", parkReason: null },
+          });
+        }
         await db.evidenceEdge.deleteMany({
           where: {
             toType: "opportunity",
@@ -590,7 +616,7 @@ export function renderProposalBoard(input: {
   lines.push("- This board is a proposal set, not accepted work. No task, delivery or publication is created.");
   lines.push("- Proposals are drafted from the reviewed topic map and its cited evidence; the critique can challenge or group them but cannot add queries, pages or evidence.");
   lines.push("- A business proposal with no target page is an investigation, not an article.");
-  lines.push("- Technical items are the existing board opportunities; this phase does not re-score or replace them.");
+  lines.push("- Technical proposals are drafted from the crawl findings like any other lane; the crawl rows are cited as evidence.");
   lines.push("");
   return lines.join("\n");
 }

@@ -83,7 +83,12 @@ export default async function ClusterPage({ params }: Props) {
     if (current == null || position < current) positionByQuery.set(dims.query, position);
   }
 
-  const opportunities = (await listOpportunities(db, { projectId: site.projectId })).filter(
+  // Open work only: closed and superseded rows are audit history, not a cluster's
+  // current opportunity list.
+  const opportunities = (await listOpportunities(db, {
+    projectId: site.projectId,
+    statuses: ["detected", "accepted", "in_progress"],
+  })).filter(
     (row) => row.clusterSlug === cluster.slug
   );
   const covered = members.filter((query) => positionByQuery.has(query)).length;

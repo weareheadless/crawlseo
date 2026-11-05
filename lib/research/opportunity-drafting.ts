@@ -26,6 +26,12 @@ import type {
 export type DraftEvidence = {
   id: string;
   kind: string;
+  /** Crawl defect label, when the row is a crawl observation. */
+  issue?: string | null;
+  /** How many pages share the defect; one delivery closes them together. */
+  pages?: number | null;
+  /** Readable text for a business fact. */
+  text?: string | null;
   query: string | null;
   position: number | null;
   impressions: number | null;
@@ -56,6 +62,10 @@ export type DraftInput = {
   news: DraftNews[];
   /** Evidence that describes the business itself, used as the "why" leg. */
   knowledgeEvidenceIds: string[];
+  /** Business facts the model may cite as the proposal's "why". */
+  knowledgeFacts?: DraftEvidence[];
+  /** Site-level crawl defects the model can turn into technical proposals. */
+  technicalEvidence?: DraftEvidence[];
   now: Date;
 };
 
@@ -192,7 +202,8 @@ const SYSTEM = [
   "lane is one of timely, content_business, aeo_geo. kind is article, update, cluster_hub, business or aeo. effort is small, medium, large or unknown. confidence is high, medium or low.",
   "kind business is an owner decision about the offer with no page to build. When the work creates a page, use article for a new content page and cluster_hub for a hub or category page.",
   "Use lane aeo_geo when the proposal rests on measured AI Overview observations and the work is answer blocks on a page that already exists.",
-  "Every proposal needs at least one evidenceId from the supplied evidence for its cluster. Keep titles under 120 characters, summaries under 300, actions under 600, confidenceReason under 200.",
+  "A technical finding is a crawl defect with its evidence id, a sample URL and how many pages share it. A defect on many pages is one delivery, not many. If it is worth proposing, use lane technical, kind technical, target the affected URL, cite its evidence id, and describe the fix; do not invent a defect that is not in the findings.",
+  "Cite a business fact from businessFacts as evidence when the proposal rests on what the business actually offers; do not cite one that does not apply. Every proposal needs at least one evidenceId from the supplied evidence for its cluster. Keep titles under 120 characters, summaries under 300, actions under 600, confidenceReason under 200.",
 ].join("\n");
 
 function parseProposals(
@@ -240,7 +251,9 @@ function parseProposals(
     if (!kind || !KINDS.includes(kind)) { reject(title, "invalid kind"); continue; }
     if (!EFFORTS.includes(effort)) { reject(title, "invalid effort"); continue; }
     if (!title || !summary || !action || !expectedOutcome) { reject(title, "missing required field"); continue; }
-    if (!topicSlug || !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
+    const technical = lane === "technical";
+    if (technical && topicSlug && !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
+    if (!technical && (!topicSlug || !slugs.has(topicSlug))) { reject(title, "unknown topic"); continue; }
     const known = evidenceIds.filter((id) => allowedEvidence.has(id));
     if (known.length === 0) {
       reject(title, evidenceIds.length === 0 ? "no evidence ids" : "evidence ids not in the supplied catalogue");
@@ -266,7 +279,9 @@ function parseProposals(
       title: title.slice(0, 160),
       summary: summary.slice(0, 400),
       whyNow: text(row.whyNow)?.slice(0, 400) ?? null,
-      evidenceRefs: [...new Set([...input.knowledgeEvidenceIds.slice(0, 2), ...known])].slice(0, 10),
+      // Only the evidence the model actually cited. A blanket business fact on
+      // every proposal made the "why" leg identical everywhere.
+      evidenceRefs: [...new Set(known)].slice(0, 10),
       target: { url, newAsset, section: text(target.section)?.slice(0, 120) ?? null },
       action: action.slice(0, 900),
       expectedOutcome: expectedOutcome.slice(0, 400),
@@ -297,6 +312,8 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   for (const cluster of clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) allowedEvidence.set(row.id, row);
   }
+  for (const row of input.technicalEvidence ?? []) allowedEvidence.set(row.id, row);
+  for (const row of input.knowledgeFacts ?? []) allowedEvidence.set(row.id, row);
 
   const proposals: Proposal[] = [];
   const errors: string[] = [];
@@ -307,6 +324,16 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
     const payload = {
       ...businessPayload(input),
       aeoQuestions: input.aeoQuestions.slice(0, 12),
+      businessFacts: (input.knowledgeFacts ?? []).slice(0, 6).map((row) => ({
+        evidenceId: row.id,
+        fact: row.text,
+      })),
+      technicalFindings: (input.technicalEvidence ?? []).slice(0, 6).map((row) => ({
+        evidenceId: row.id,
+        issue: row.issue ?? row.kind,
+        url: row.url,
+        pages: row.pages ?? 1,
+      })),
       clusters: batch.map((cluster) =>
         clusterPayload(cluster, input.evidenceByCluster.get(cluster.slug) ?? [])
       ),
