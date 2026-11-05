@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
 import { lookup } from "dns/promises";
+import http from "node:http";
+import https from "node:https";
+import { isIP } from "node:net";
+import { Readable } from "node:stream";
 import { db } from "@/lib/db";
 import type { IssueSeverity, IssueType } from "@prisma/client";
 import robotsParser from "robots-parser";
@@ -102,29 +106,132 @@ function originOf(url: string): string {
 /*  SSRF protection                                                   */
 /* ------------------------------------------------------------------ */
 
-function isPrivateIp(ip: string): boolean {
-  // IPv4-mapped IPv6 (::ffff:x.x.x.x)
-  const v4mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (v4mapped) return isPrivateIp(v4mapped[1]);
-
-  // IPv4
-  const parts = ip.split(".").map(Number);
-  if (parts.length === 4 && parts.every((n) => n >= 0 && n <= 255)) {
-    if (parts[0] === 0) return true;                                  // 0.0.0.0/8
-    if (parts[0] === 127) return true;                                // 127.0.0.0/8
-    if (parts[0] === 10) return true;                                 // 10.0.0.0/8
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
-    if (parts[0] === 192 && parts[1] === 168) return true;            // 192.168.0.0/16
-    if (parts[0] === 169 && parts[1] === 254) return true;            // 169.254.0.0/16
-    return false;
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let value = 0;
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null;
+    const n = Number(part);
+    if (n < 0 || n > 255) return null;
+    value = value * 256 + n;
   }
+  return value;
+}
 
-  // IPv6
-  const lower = ip.toLowerCase();
-  if (lower === "::1") return true;
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;  // fc00::/7
-  if (lower.startsWith("fe80")) return true;                           // fe80::/10 link-local
+function ipv4InRange(value: number, base: string, bits: number): boolean {
+  const baseValue = ipv4ToInt(base);
+  if (baseValue == null) return false;
+  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  return (value & mask) === (baseValue & mask);
+}
+
+function ipv6ToBigInt(input: string): bigint | null {
+  let ip = input.trim().toLowerCase();
+  const zone = ip.indexOf("%");
+  if (zone >= 0) ip = ip.slice(0, zone);
+  if (ip.startsWith("[") && ip.endsWith("]")) ip = ip.slice(1, -1);
+  if (isIP(ip) !== 6) return null;
+
+  const parseGroups = (part: string): number[] | null => {
+    if (!part) return [];
+    const out: number[] = [];
+    for (const group of part.split(":")) {
+      if (group.includes(".")) {
+        const v4 = ipv4ToInt(group);
+        if (v4 == null) return null;
+        out.push((v4 >>> 16) & 0xffff, v4 & 0xffff);
+        continue;
+      }
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      out.push(parseInt(group, 16));
+    }
+    return out;
+  };
+
+  const halves = ip.split("::");
+  if (halves.length > 2) return null;
+  const head = parseGroups(halves[0]);
+  const tail = halves.length === 2 ? parseGroups(halves[1]) : [];
+  if (!head || !tail) return null;
+  let groups: number[];
+  if (halves.length === 2) {
+    const missing = 8 - head.length - tail.length;
+    if (missing < 0) return null;
+    groups = [...head, ...Array(missing).fill(0), ...tail];
+  } else {
+    if (head.length !== 8) return null;
+    groups = head;
+  }
+  return groups.reduce((value, group) => (value << BigInt(16)) | BigInt(group), BigInt(0));
+}
+
+function ipv6InRange(value: bigint, base: string, bits: number): boolean {
+  const baseValue = ipv6ToBigInt(base);
+  if (baseValue == null) return false;
+  const shift = BigInt(128 - bits);
+  return (value >> shift) === (baseValue >> shift);
+}
+
+/**
+ * True only for addresses that are safe to contact.
+ *
+ * This is an allow-list in effect: every non-public, reserved, documentation,
+ * benchmarking, multicast and shared address range is refused, including the
+ * carrier-grade NAT range 100.64.0.0/10 that the previous classifier missed.
+ * IPv4-mapped IPv6 addresses are unwrapped and classified as IPv4.
+ */
+export function isPublicAddress(input: string): boolean {
+  const ip = input.trim();
+  const family = isIP(ip);
+  if (family === 4) {
+    const value = ipv4ToInt(ip);
+    if (value == null) return false;
+    const blocked: Array<[string, number]> = [
+      ["0.0.0.0", 8],
+      ["10.0.0.0", 8],
+      ["100.64.0.0", 10],
+      ["127.0.0.0", 8],
+      ["169.254.0.0", 16],
+      ["172.16.0.0", 12],
+      ["192.0.0.0", 24],
+      ["192.0.2.0", 24],
+      ["192.88.99.0", 24],
+      ["192.168.0.0", 16],
+      ["198.18.0.0", 15],
+      ["198.51.100.0", 24],
+      ["203.0.113.0", 24],
+      ["224.0.0.0", 4],
+      ["240.0.0.0", 4],
+    ];
+    return !blocked.some(([base, bits]) => ipv4InRange(value, base, bits));
+  }
+  if (family === 6) {
+    const value = ipv6ToBigInt(ip);
+    if (value == null) return false;
+    if (ipv6InRange(value, "::ffff:0.0.0.0", 96)) {
+      const low = Number(value & BigInt(0xffffffff));
+      return isPublicAddress(`${(low >>> 24) & 255}.${(low >>> 16) & 255}.${(low >>> 8) & 255}.${low & 255}`);
+    }
+    const blocked: Array<[string, number]> = [
+      ["::", 128],
+      ["::1", 128],
+      ["fc00::", 7],
+      ["fe80::", 10],
+      ["ff00::", 8],
+      ["100::", 64],
+      ["2001:2::", 48],
+      ["2001:10::", 28],
+      ["2001:20::", 28],
+      ["2001:db8::", 32],
+    ];
+    return !blocked.some(([base, bits]) => ipv6InRange(value, base, bits));
+  }
   return false;
+}
+
+function isPrivateIp(ip: string): boolean {
+  return !isPublicAddress(ip);
 }
 
 async function assertPublicUrl(url: string): Promise<void> {
@@ -410,16 +517,32 @@ export type PublicDocument = {
   truncated: boolean;
 };
 
+export type ResolvedAddress = { address: string; family: number };
+
+export type PublicDocumentTransport = (
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal; address: string; family: number }
+) => Promise<Response>;
+
 export type PublicDocumentOptions = {
+  /** Exact byte allowance. Zero or negative means no dispatch at all. */
   maxBytes?: number;
   timeoutMs?: number;
+  /** Absolute epoch-millisecond deadline shared with the caller's budget. */
+  deadlineAt?: number;
   maxRedirects?: number;
   userAgent?: string;
   headers?: Record<string, string>;
+  /** Authorised-origin policy, checked on every hop before dispatch. */
+  allowedHost?: (url: URL) => boolean;
   /** Called before every network hop; throw to stop before dispatch. */
   beforeHop?: (url: string) => void | Promise<void>;
+  /** Called with every byte actually read, including partial and aborted reads. */
+  onBytes?: (bytes: number) => void;
   /** Test seam: resolve a hostname without real DNS. */
-  resolve?: (hostname: string) => Promise<string>;
+  resolve?: (hostname: string) => Promise<string | ResolvedAddress | ResolvedAddress[]>;
+  /** Test seam: perform the pinned request without a real socket. */
+  transport?: PublicDocumentTransport;
 };
 
 function assertSafeUrlShape(url: URL): void {
@@ -435,45 +558,131 @@ function assertSafeUrlShape(url: URL): void {
   }
 }
 
+async function withDeadline<T>(promise: Promise<T>, deadlineAt: number, message: string): Promise<T> {
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) throw new Error(message);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), remaining);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function normaliseResolved(value: string | ResolvedAddress | ResolvedAddress[]): ResolvedAddress[] {
+  const rows = Array.isArray(value) ? value : [value];
+  return rows.map((row) => {
+    if (typeof row === "string") return { address: row, family: isIP(row) || 4 };
+    return row;
+  });
+}
+
+/**
+ * A connection whose DNS answer is pinned to the address already validated.
+ *
+ * Passing the validated address into `lookup` removes the DNS-rebinding window
+ * between the safety check and the socket connection.
+ */
+function pinnedTransport(
+  url: string,
+  init: { headers: Record<string, string>; signal: AbortSignal; address: string; family: number }
+): Promise<Response> {
+  const target = new URL(url);
+  const client = target.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || undefined,
+        path: `${target.pathname}${target.search}`,
+        method: "GET",
+        headers: init.headers,
+        signal: init.signal,
+        servername: target.hostname,
+        lookup: ((_hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void) => {
+          callback(null, init.address, init.family);
+        }) as never,
+      },
+      (response) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (typeof value === "string") headers.set(name, value);
+          else if (Array.isArray(value)) headers.set(name, value.join(", "));
+        }
+        const body = Readable.toWeb(response) as unknown as ReadableStream<Uint8Array>;
+        resolve(new Response(body, { status: response.statusCode ?? 0, headers }));
+      }
+    );
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 /**
  * Bounded public-document retrieval with manual redirects.
  *
- * Every hop is shape-checked and resolved before it is dispatched, so a redirect
- * cannot make the process contact a private or unsupported destination. The body
- * is streamed up to a byte limit and returned with an explicit truncation flag.
+ * Every hop is shape-checked, origin-checked, fully resolved and validated before
+ * it is dispatched, so a redirect cannot make the process contact an unauthorised
+ * or private destination. The validated address is pinned to the connection. The
+ * body is streamed against the exact remaining byte allowance, charged as it is
+ * read, and returned with an explicit truncation flag.
  */
 export async function fetchPublicDocument(
   input: string,
   opts: PublicDocumentOptions = {}
 ): Promise<PublicDocument> {
-  const maxBytes = Math.max(1_024, Math.min(opts.maxBytes ?? 2 * 1024 * 1024, MAX_RESPONSE_BYTES));
-  const timeoutMs = Math.max(1_000, Math.min(opts.timeoutMs ?? FETCH_TIMEOUT_MS, 60_000));
+  const requestedMax = opts.maxBytes ?? 2 * 1024 * 1024;
+  if (!Number.isFinite(requestedMax) || requestedMax <= 0) {
+    throw new Error("Blocked: no byte allowance remains");
+  }
+  const maxBytes = Math.min(Math.floor(requestedMax), MAX_RESPONSE_BYTES);
+  const timeoutMs = Math.max(1, Math.min(opts.timeoutMs ?? FETCH_TIMEOUT_MS, 60_000));
   const maxRedirects = Math.max(0, Math.min(opts.maxRedirects ?? MAX_REDIRECTS, 10));
-  const resolveHost = opts.resolve ?? (async (hostname: string) => (await lookup(hostname)).address);
+  const deadlineAt = Math.min(Date.now() + timeoutMs, opts.deadlineAt ?? Number.POSITIVE_INFINITY);
+  if (deadlineAt <= Date.now()) {
+    throw new Error("Blocked: deadline exceeded before dispatch");
+  }
+  const resolveHost = opts.resolve ?? (async (hostname: string) => lookup(hostname, { all: true }));
+  const transport = opts.transport ?? pinnedTransport;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const started = Date.now();
-  void started;
+  const timer = setTimeout(() => controller.abort(), Math.max(1, deadlineAt - Date.now()));
   try {
     let currentUrl = input;
     let response: Response | null = null;
     for (let hop = 0; hop <= maxRedirects; hop += 1) {
+      if (Date.now() >= deadlineAt) throw new Error("Blocked: deadline exceeded before dispatch");
       const parsed = new URL(currentUrl);
       assertSafeUrlShape(parsed);
-      const address = await resolveHost(parsed.hostname);
-      if (isPrivateIp(address)) {
-        throw new Error(`Blocked: ${parsed.hostname} resolves to private/reserved IP`);
+      if (opts.allowedHost && !opts.allowedHost(parsed)) {
+        throw new Error(`Blocked: ${parsed.host} is outside the authorised origin`);
       }
+      const addresses = normaliseResolved(
+        await withDeadline(resolveHost(parsed.hostname), deadlineAt, "Blocked: deadline exceeded during DNS resolution")
+      );
+      if (addresses.length === 0) throw new Error(`Blocked: ${parsed.hostname} did not resolve`);
+      for (const entry of addresses) {
+        if (!isPublicAddress(entry.address)) {
+          throw new Error(`Blocked: ${parsed.hostname} resolves to private/reserved IP (${entry.address})`);
+        }
+      }
+      const address = addresses[0];
       await opts.beforeHop?.(currentUrl);
-      response = await fetch(currentUrl, {
-        redirect: "manual",
-        signal: controller.signal,
+      response = await transport(currentUrl, {
         headers: {
           "User-Agent": opts.userAgent ?? USER_AGENT,
           Accept: "text/html,application/xhtml+xml",
           "Accept-Language": "en-US,en;q=0.9",
           ...(opts.headers ?? {}),
         },
+        signal: controller.signal,
+        address: address.address,
+        family: address.family,
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
@@ -497,16 +706,30 @@ export async function fetchPublicDocument(
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (bytes + value.byteLength > maxBytes) {
-          const remaining = maxBytes - bytes;
-          if (remaining > 0) chunks.push(value.slice(0, remaining));
-          bytes = maxBytes;
+        const remaining = maxBytes - bytes;
+        if (value.byteLength > remaining) {
+          const take = Math.max(0, remaining);
+          if (take > 0) {
+            chunks.push(value.slice(0, take));
+            bytes += take;
+            opts.onBytes?.(take);
+          }
           truncated = true;
           await reader.cancel();
           break;
         }
-        bytes += value.byteLength;
         chunks.push(value);
+        bytes += value.byteLength;
+        opts.onBytes?.(value.byteLength);
+        if (bytes >= maxBytes) {
+          // One extra read distinguishes an exact-size body from a capped one.
+          const next = await reader.read();
+          if (!next.done) {
+            truncated = true;
+            await reader.cancel();
+          }
+          break;
+        }
       }
     }
     const buf = new Uint8Array(bytes);

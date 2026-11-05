@@ -115,8 +115,12 @@ export const PacketPageSchema = z.object({
   inspected: z.number().int().nonnegative(),
   /** Known body length at retrieval time, before sectioning. */
   totalChars: z.number().int().nonnegative(),
+  /** Start offset of the supplied text within the known body. */
+  offset: z.number().int().nonnegative().optional(),
   /** Why retrieval failed or produced no usable text; null when text was read. */
   retrievalNote: z.string().max(400).nullable(),
+  /** Which limit caused incompleteness; absent for legacy packets. */
+  truncation: z.enum(["none", "sectioned", "byte_limit", "text_limit", "offset"]).optional(),
   sections: z.array(z.object({ id, locator: z.string().max(200), text: z.string() })).max(12),
 });
 
@@ -183,6 +187,10 @@ export const EvidencePacketSchema = z.object({
     z.object({
       type: z.enum(["page_text", "source_text", "journey_links", "inventory_search"]),
       target: z.string().max(2_000),
+      /** Canonical identity so equivalent URL/id wording cannot evade history. */
+      key: z.string().max(2_500).optional(),
+      /** Requested start offset for a later section of a long page. */
+      offset: z.number().int().nonnegative().optional(),
       status: z.enum(["fulfilled", "partial", "unavailable", "no_progress", "budget_exhausted"]),
       detail: z.string().max(500),
     })
@@ -250,6 +258,12 @@ const CoverageSchema = z.object({
 
 const InvestigationSchema = z.object({
   question: shortText,
+  /**
+   * Why a person or qualified reviewer is needed. This is explicit structure, not
+   * a prose classifier: external owner/expert input is named rather than inferred
+   * from a URL appearing inside an instruction.
+   */
+  kind: z.enum(["owner_input", "qualified_review", "private_data", "external_evidence"]).optional(),
   inspect: z.array(z.string().max(500)).min(1).max(8),
   decisionCriteria: z.array(z.string().max(500)).min(1).max(8),
   deliverable: shortText,
@@ -352,6 +366,8 @@ export const EvidenceRequestSchema = z.object({
         type: z.enum(["page_text", "source_text", "journey_links", "inventory_search"]),
         /** page:<id>, source:<id>, a URL, or a short discovery query. */
         target: z.string().min(1).max(2_000),
+        /** Read a later section of a long page instead of the same prefix again. */
+        offset: z.number().int().nonnegative().optional(),
         question: z.string().min(1).max(600),
         whyItMatters: z.string().min(1).max(600),
       })
@@ -598,13 +614,21 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
   if (decision.readiness === "needs_investigation") {
     if (decision.intervention !== "investigate") errors.push("an investigation readiness must use the investigate intervention");
     if (!decision.investigation) errors.push("an investigation needs a bounded question, evidence to inspect, criteria and deliverable");
+    if (decision.investigation && !decision.investigation.kind) {
+      errors.push("an investigation must name its external requirement kind");
+    }
     if (decision.change?.trim()) errors.push("an investigation must not carry an implementation change");
     // Asking a person to inspect content the packet already contains is unfinished
     // machine analysis. Such a request must be an evidence request instead.
     for (const item of decision.investigation?.inspect ?? []) {
-      const lower = item.toLowerCase();
+      // Only an exact packet reference is a request to inspect supplied content.
+      // A prose instruction that happens to mention a URL is not reclassified by
+      // substring matching; the investigation's `kind` names the external need.
+      const exact = item.trim().toLowerCase().replace(/\/$/, "");
       const supplied = packet.pages.find(
-        (page) => page.text.trim().length > 0 && (lower.includes(page.id.toLowerCase()) || lower.includes(page.url.toLowerCase()))
+        (page) =>
+          page.text.trim().length > 0 &&
+          (exact === page.id.toLowerCase() || exact === page.url.toLowerCase().replace(/\/$/, ""))
       );
       if (supplied) {
         errors.push(`investigation asks to inspect ${supplied.url}, which was already supplied; complete that inspection before returning a final decision`);
@@ -646,10 +670,24 @@ export function validateDecision(decision: RecommendationDecision, packet: Evide
         continue;
       }
       if (target.pageUrl && target.pageUrl !== page.url) errors.push(`target URL ${target.pageUrl} does not match packet page ${page.url}`);
+      if (target.sectionId) {
+        const section = page.sections.find((entry) => entry.id === target.sectionId);
+        if (!section) {
+          errors.push(`target section "${target.sectionId}" is not in the supplied text of ${page.url}`);
+        }
+      }
       if (decision.intervention === "update_page") {
         const coverage = coverageByPage.get(page.id);
         if (!coverage || (coverage.state !== "partially_answers" && coverage.state !== "does_not_answer")) {
           errors.push(`update_page target ${page.url} has no assessed inadequacy`);
+        } else if ((coverage.scope ?? "whole_page") === "section") {
+          // A section-local absence cannot authorise a whole-page change or a
+          // different, uninspected section.
+          if (!target.sectionId) {
+            errors.push(`update_page target ${page.url} was assessed only at section scope, so it cannot authorise a whole-page change`);
+          } else if (!(coverage.sectionIds ?? []).includes(target.sectionId)) {
+            errors.push(`update_page target section "${target.sectionId}" on ${page.url} was not one of the assessed sections`);
+          }
         }
       }
     }
@@ -806,6 +844,132 @@ export type ResolvedEvidenceRequest = {
   /** Existing packet identity, or a URL/query the service may retrieve. */
   pageId: string | null;
   url: string | null;
+  /** Requested start offset for a later section of a long page. */
+  offset: number | null;
+  /** Canonical identity used for request history and repeat detection. */
+  key: string;
+};
+
+function normaliseRequestUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.hash = "";
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (url.pathname.length > 1 && url.pathname.endsWith("/")) url.pathname = url.pathname.slice(0, -1);
+    return url.toString();
+  } catch {
+    return raw.trim().toLowerCase();
+  }
+}
+
+/**
+ * Canonical request identity.
+ *
+ * A page named by packet id and the same page named by URL are one request, not
+ * two. Including the offset keeps a legitimate later-section request distinct.
+ */
+export function canonicalRequestKey(
+  type: EvidenceRequest["requests"][number]["type"],
+  target: string,
+  opts: { pageId?: string | null; url?: string | null; offset?: number | null } = {}
+): string {
+  const offset = opts.offset != null ? `#offset=${opts.offset}` : "";
+  if (opts.pageId) return `${type}|page:${opts.pageId}${offset}`;
+  if (opts.url) return `${type}|url:${normaliseRequestUrl(opts.url)}${offset}`;
+  const raw = target.startsWith("page:http") ? target.slice("page:".length) : target;
+  if (type === "source_text") return `${type}|${raw.trim().toLowerCase()}${offset}`;
+  if (type === "inventory_search") {
+    const terms = [...new Set(raw.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term) => term.length >= 3))].sort();
+    return `${type}|${terms.join("+")}`;
+  }
+  if (raw.startsWith("http")) return `${type}|url:${normaliseRequestUrl(raw)}${offset}`;
+  return `${type}|${raw.trim().toLowerCase()}${offset}`;
+}
+
+export const DEPENDENCY_MANIFEST_VERSION = "dependency-manifest/1";
+
+export type DependencyManifest = {
+  version: typeof DEPENDENCY_MANIFEST_VERSION;
+  finalPacketHash: string;
+  businessKnowledge: {
+    documentRevision: number | null;
+    factsHash: string;
+  };
+  pages: Array<{
+    url: string;
+    contentHash: string | null;
+    retrieval: string;
+    truncated: boolean;
+    offset: number;
+  }>;
+  sources: Array<{
+    id: string;
+    url: string;
+    excerptHash: string | null;
+    observedAt: string;
+  }>;
+  searchIds: string[];
+};
+
+/**
+ * The exact external inputs a decision depended on.
+ *
+ * Reuse is only safe when this manifest still matches current versioned storage
+ * (or, for live pages inside the freshness window, the archived retrieval).
+ */
+export function buildDependencyManifest(packet: EvidencePacket): DependencyManifest {
+  return {
+    version: DEPENDENCY_MANIFEST_VERSION,
+    finalPacketHash: packet.packetHash,
+    businessKnowledge: {
+      documentRevision: packet.businessFacts.reduce<number | null>(
+        (max, fact) => (fact.documentRevision == null ? max : Math.max(max ?? 0, fact.documentRevision)),
+        null
+      ),
+      factsHash: hashValue(packet.businessFacts.map((fact) => ({ id: fact.id, value: fact.value, revision: fact.documentRevision }))),
+    },
+    pages: packet.pages.map((page) => ({
+      url: page.url,
+      contentHash: page.contentHash,
+      retrieval: page.retrieval,
+      truncated: page.truncated,
+      offset: page.offset ?? 0,
+    })),
+    sources: packet.sources.map((source) => ({
+      id: source.id,
+      url: source.url,
+      excerptHash: source.excerpt ? hashValue(source.excerpt) : null,
+      observedAt: source.observedAt,
+    })),
+    searchIds: packet.search.map((row) => row.id),
+  };
+}
+
+export function parsePersistedDependencyManifest(value: unknown): DependencyManifest | null {
+  if (typeof value === "string") {
+    try {
+      return parsePersistedDependencyManifest(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (row.version !== DEPENDENCY_MANIFEST_VERSION || typeof row.finalPacketHash !== "string") return null;
+  if (!row.businessKnowledge || typeof row.businessKnowledge !== "object") return null;
+  if (!Array.isArray(row.pages) || !Array.isArray(row.sources) || !Array.isArray(row.searchIds)) return null;
+  return value as DependencyManifest;
+}
+
+export type AssessmentAttempt = {
+  round: number;
+  attempt: number;
+  inputPacketHash: string;
+  feedback: string | null;
+  kind: "transport_error" | "invalid_output" | "validation_error" | "request_evidence" | "final_decision";
+  raw: unknown;
+  responseText: string | null;
+  errors: string[];
 };
 
 /**
@@ -825,31 +989,51 @@ export function validateEvidenceRequest(
   const max = Math.max(1, Math.min(opts.maxRequests ?? 4, 6));
   if (request.requests.length > max) errors.push(`request_evidence: at most ${max} requests are allowed per round`);
   const pages = new Map(packet.pages.map((page) => [page.id, page]));
+  const pagesByUrl = new Map(packet.pages.map((page) => [page.url, page]));
   const sources = new Map(packet.sources.map((source) => [source.id, source]));
   const inventory = new Set(packet.inventory.map((row) => row.url));
   const domain = opts.siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
 
-  const terminal = new Map(
-    packet.requests.map((row) => [`${row.type}|${row.target}`, row] as const)
-  );
+  const terminal = new Map<string, { status: string; offset?: number }>();
+  for (const row of packet.requests) {
+    const key = row.key ?? canonicalRequestKey(row.type, row.target, { offset: row.offset });
+    terminal.set(key, { status: row.status, offset: row.offset });
+  }
+
+  const rejectRepeat = (key: string, label: string): boolean => {
+    const previous = terminal.get(key);
+    if (!previous) return false;
+    if (previous.status === "partial") return false;
+    errors.push(
+      `request ${label} was already attempted and is ${previous.status}; use the supplied evidence, request a later section, or return a final decision`
+    );
+    return true;
+  };
+
   for (const entry of request.requests) {
-    const previous = terminal.get(`${entry.type}|${entry.target}`);
-    if (previous && ["unavailable", "no_progress", "budget_exhausted"].includes(previous.status)) {
-      errors.push(
-        `request ${entry.type} ${entry.target} was already attempted and is ${previous.status}; use the supplied evidence or return a final decision`
-      );
-      continue;
-    }
+    const offset = entry.offset ?? null;
     if (entry.type === "page_text") {
       // Models sometimes write page:<url> instead of the packet's page:<hash>.
       // That is a naming variant of the same site page, not a different origin.
       const target = entry.target.startsWith("page:http") ? entry.target.slice("page:".length) : entry.target;
-      const page = pages.get(target);
+      const page = pages.get(target) ?? pagesByUrl.get(target);
       if (page) {
-        if (page.retrieval !== "unavailable" && page.text.trim() && !page.truncated) {
-          errors.push(`request for ${page.url} asks for text that was already supplied in full`);
+        if (offset != null && page.totalChars > 0 && offset >= page.totalChars) {
+          errors.push(`request for ${page.url} starts at offset ${offset}, beyond the known ${page.totalChars} characters`);
+          continue;
         }
-        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url });
+        if (offset == null && page.retrieval !== "unavailable" && page.text.trim() && !page.truncated) {
+          errors.push(`request for ${page.url} asks for text that was already supplied in full`);
+          continue;
+        }
+        const targetIsUrl = target.startsWith("http");
+        const key = canonicalRequestKey(
+          "page_text",
+          entry.target,
+          targetIsUrl ? { url: page.url, offset } : { pageId: page.id, offset }
+        );
+        if (rejectRepeat(key, `${entry.type} ${page.url}`)) continue;
+        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url, offset, key });
         continue;
       }
       let url: URL | null = null;
@@ -867,7 +1051,9 @@ export function validateEvidenceRequest(
         errors.push(`page_text target ${entry.target} is outside the site domain`);
         continue;
       }
-      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: url.toString() });
+      const key = canonicalRequestKey("page_text", entry.target, { url: url.toString(), offset });
+      if (rejectRepeat(key, `page_text ${entry.target}`)) continue;
+      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: url.toString(), offset, key });
       continue;
     }
     if (entry.type === "source_text") {
@@ -876,20 +1062,26 @@ export function validateEvidenceRequest(
         errors.push(`source_text target "${entry.target}" is not in the packet`);
         continue;
       }
-      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: source.url });
+      const key = canonicalRequestKey("source_text", entry.target, { offset });
+      if (rejectRepeat(key, `source_text ${entry.target}`)) continue;
+      resolved.push({ type: entry.type, target: entry.target, pageId: null, url: source.url, offset, key });
       continue;
     }
     if (entry.type === "journey_links") {
       const target = entry.target.startsWith("page:http") ? entry.target.slice("page:".length) : entry.target;
-      const page = pages.get(target);
+      const page = pages.get(target) ?? pagesByUrl.get(target);
       if (page) {
-        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url });
+        const key = canonicalRequestKey("journey_links", entry.target, { pageId: page.id });
+        if (rejectRepeat(key, `journey_links ${page.url}`)) continue;
+        resolved.push({ type: entry.type, target: entry.target, pageId: page.id, url: page.url, offset: null, key });
         continue;
       }
       // A known inventory URL may be inspected for links even when its text was
       // not in the initial selection. The service fetches it before reading links.
       if (inventory.has(target)) {
-        resolved.push({ type: entry.type, target: entry.target, pageId: null, url: target });
+        const key = canonicalRequestKey("journey_links", entry.target, { url: target });
+        if (rejectRepeat(key, `journey_links ${target}`)) continue;
+        resolved.push({ type: entry.type, target: entry.target, pageId: null, url: target, offset: null, key });
         continue;
       }
       errors.push(`journey_links target "${entry.target}" is neither a supplied page nor a known inventory URL`);
@@ -909,7 +1101,9 @@ export function validateEvidenceRequest(
       errors.push(`inventory_search "${entry.target}" found no known page; absence in the known inventory is not proof of absence`);
       continue;
     }
-    resolved.push({ type: entry.type, target: entry.target, pageId: null, url: matches[0] });
+    const key = canonicalRequestKey("inventory_search", entry.target, { url: matches[0] });
+    if (rejectRepeat(key, `inventory_search ${entry.target}`)) continue;
+    resolved.push({ type: entry.type, target: entry.target, pageId: null, url: matches[0], offset: null, key });
   }
   return { ok: errors.length === 0, errors, resolved };
 }

@@ -269,6 +269,7 @@ describe("structural recommendation regressions", () => {
         benefits: [],
         coverage: [],
         investigation: {
+          kind: "owner_input",
           question: "Does the service page mention price?",
           inspect: ["page:read", "https://site.test/services"],
           decisionCriteria: ["the page states a price"],

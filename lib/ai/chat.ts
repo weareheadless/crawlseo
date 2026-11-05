@@ -11,6 +11,14 @@
 
 export type ChatConfig = { apiKey: string; baseUrl: string; model: string };
 
+export type ChatAttemptRecord = {
+  attempt: number;
+  status: "ok" | "error";
+  error?: string;
+  /** Raw provider text when one was available, even for a failed attempt. */
+  responseText?: string | null;
+};
+
 export type ChatJsonInput = {
   config: ChatConfig;
   system: string;
@@ -20,11 +28,16 @@ export type ChatJsonInput = {
   timeoutMs?: number;
   /** Total attempts including the first. */
   attempts?: number;
+  /** Absolute epoch-millisecond deadline for the whole call, including queue and backoff. */
+  deadlineAt?: number;
   /**
-   * Called before every transport attempt. Throw to stop before dispatch; the
-   * caller uses this to charge a shared budget per actual request.
+   * Called immediately before every transport attempt, inside the serialised
+   * queue. Throw to stop before dispatch; the caller uses this to charge a shared
+   * budget per actual request.
    */
   beforeAttempt?: () => void;
+  /** Observes every transport attempt, including failures and malformed output. */
+  onAttempt?: (record: ChatAttemptRecord) => void;
 };
 
 export class ChatError extends Error {
@@ -37,8 +50,14 @@ export class ChatError extends Error {
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Serialise calls: one request in flight per process. */
-function serialise<T>(task: () => Promise<T>): Promise<T> {
-  const next = queue.then(task, task);
+function serialise<T>(task: () => Promise<T>, deadlineAt?: number): Promise<T> {
+  const guarded = async (): Promise<T> => {
+    if (deadlineAt != null && Date.now() >= deadlineAt) {
+      throw new ChatError("The analysis deadline was exceeded before the request could be dispatched");
+    }
+    return task();
+  };
+  const next = queue.then(guarded, guarded);
   queue = next.then(
     () => undefined,
     () => undefined
@@ -60,10 +79,16 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
   const attempts = Math.max(1, Math.min(input.attempts ?? 5, 6));
   let lastError: Error = new ChatError("The model could not be reached");
 
+  const deadlineAt = input.deadlineAt;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    input.beforeAttempt?.();
     try {
       return await serialise(async () => {
+        if (deadlineAt != null && Date.now() >= deadlineAt) {
+          throw new ChatError("The analysis deadline was exceeded before the request could be dispatched");
+        }
+        input.beforeAttempt?.();
+        const remaining = deadlineAt != null ? Math.max(1, deadlineAt - Date.now()) : (input.timeoutMs ?? 120_000);
+        const timeoutMs = Math.max(1, Math.min(input.timeoutMs ?? 120_000, remaining));
         const response = await fetch(`${input.config.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { Authorization: `Bearer ${input.config.apiKey}`, "Content-Type": "application/json" },
@@ -77,12 +102,13 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
               { role: "user", content: input.user },
             ],
           }),
-          signal: AbortSignal.timeout(input.timeoutMs ?? 120_000),
+          signal: AbortSignal.timeout(timeoutMs),
         });
 
         if (response.status === 429 || response.status >= 500) {
           const retryAfter = Number(response.headers.get("retry-after"));
           const body = (await response.text().catch(() => "")).slice(0, 200);
+          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: body });
           throw new ChatError(
             `The model is ${response.status === 429 ? "rate-limited" : "unavailable"} (HTTP ${response.status})${body ? `: ${body}` : ""}`,
             response.status,
@@ -90,16 +116,31 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
           );
         }
         if (!response.ok) {
+          const text = (await response.text().catch(() => "")).slice(0, 2_000);
+          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: text });
           throw new ChatError(`The model returned HTTP ${response.status}`, response.status);
         }
 
         const body = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
         const content = body.choices?.[0]?.message?.content;
         if (typeof content !== "string" || !content.trim()) {
+          input.onAttempt?.({ attempt: attempt + 1, status: "error", error: "empty response", responseText: null });
           throw new ChatError("The model returned an empty response");
         }
-        return parseJson(content);
-      });
+        try {
+          const parsed = parseJson(content);
+          input.onAttempt?.({ attempt: attempt + 1, status: "ok" });
+          return parsed;
+        } catch (error) {
+          input.onAttempt?.({
+            attempt: attempt + 1,
+            status: "error",
+            error: error instanceof Error ? error.message : "non-JSON content",
+            responseText: content.slice(0, 4_000),
+          });
+          throw error;
+        }
+      }, deadlineAt);
     } catch (error) {
       const failure = error instanceof Error ? error : new ChatError(String(error));
       lastError = failure;
@@ -111,7 +152,11 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       const retryable = timedOut || malformed || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
       if (!retryable) throw failure;
       const retryAfterMs = failure instanceof ChatError ? failure.retryAfterMs : undefined;
-      if (attempt < attempts - 1) await sleep(backoffMs(attempt, retryAfterMs));
+      if (attempt < attempts - 1) {
+        const remaining = deadlineAt != null ? deadlineAt - Date.now() : Number.POSITIVE_INFINITY;
+        if (remaining <= 0) throw new ChatError("The analysis deadline was exceeded before retry");
+        await sleep(Math.min(backoffMs(attempt, retryAfterMs), remaining));
+      }
     }
   }
   throw lastError;

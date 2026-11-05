@@ -119,26 +119,24 @@ function fixture(pageCount = 1) {
 
 describe("safe bounded retrieval", () => {
   it("refuses a redirect to a private destination before dispatching that hop", async () => {
-    const fetchMock = vi.fn(async () =>
+    const transport = vi.fn(async () =>
       new Response(null, { status: 302, headers: { location: "https://private.test/secret" } })
     );
-    vi.stubGlobal("fetch", fetchMock);
     await expect(
       fetchPublicDocument("https://public.test/page", {
         resolve: async (hostname) => (hostname === "private.test" ? "127.0.0.1" : "93.184.216.34"),
+        transport,
       })
     ).rejects.toThrow(/private\/reserved IP/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(1);
   });
 
   it("stops reading at the byte limit and reports truncation", async () => {
     const body = "a".repeat(5_000);
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(body, { status: 200, headers: { "content-type": "text/html" } })
-    ));
     const doc = await fetchPublicDocument("https://public.test/page", {
       maxBytes: 1_024,
       resolve: async () => "93.184.216.34",
+      transport: async () => new Response(body, { status: 200, headers: { "content-type": "text/html" } }),
     });
     expect(doc.truncated).toBe(true);
     expect(doc.bytes).toBe(1_024);
@@ -179,7 +177,7 @@ describe("analysis budget and convergence", () => {
     const result = await expandEvidencePacket(
       db as never,
       packet,
-      [{ type: "page_text", target: "https://site.test/new", pageId: null, url: "https://site.test/new" }],
+      [{ type: "page_text", target: "https://site.test/new", pageId: null, url: "https://site.test/new", offset: null, key: "page_text|url:https://site.test/new" }],
       {
         siteDomain: "site.test",
         maxLiveFetches: 0,

@@ -87,7 +87,7 @@ export type OpportunityDetail = OpportunityRow & {
     coverage: string | null;
     coverageDetail: Array<{ pageId: string; url: string | null; state: string; rationale: string; excerpts: string[] }>;
     premise: { state: string; rationale: string } | null;
-    investigation: { question: string; inspect: string[]; decisionCriteria: string[]; deliverable: string } | null;
+    investigation: { kind?: string; question: string; inspect: string[]; decisionCriteria: string[]; deliverable: string } | null;
     benefits: Array<{ track: string; mechanism: string; measurement: string; uncertainty: string[] }>;
     risks: string[];
     contradictions: string[];

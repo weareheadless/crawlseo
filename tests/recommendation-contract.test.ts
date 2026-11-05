@@ -145,6 +145,7 @@ describe("canonical recommendation integrity", () => {
       intervention: "investigate",
       change: "Confirm which documents the warranty team actually requires.",
       investigation: {
+        kind: "owner_input",
         question: "Which documents does the warranty team require?",
         inspect: ["the warranty policy"],
         decisionCriteria: ["the team confirms the list"],

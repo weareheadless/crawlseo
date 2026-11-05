@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { contentWriterConfigured } from "@/lib/ai-seo/writer";
-import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
+import { parsePersistedDecision } from "@/lib/recommendation/contracts";
 import { buildEvidencePacket } from "@/lib/recommendation/packet";
 import { assessFinding, findReusableDecision, type AssessmentRunDb, type FindingForAssessment } from "@/lib/recommendation/run";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
@@ -101,6 +101,56 @@ export async function reassessProjectRecommendations(
   const model = opts.assessor ? null : contentWriterConfig()?.model ?? null;
   let attempts = 0;
 
+  // Persistent fairness cursor. The latest attempt for each candidate is stored
+  // in the existing raw-response table, so a repeatedly failing early candidate
+  // moves behind candidates that have not had a turn.
+  const progressRows = await db.rawProviderResponse.findMany({
+    where: { provider: "recommendation-analysis", product: "candidate-progress" },
+    select: { payload: true },
+    orderBy: { requestedAt: "desc" },
+    take: 500,
+  });
+  const lastAttempt = new Map<string, number>();
+  for (const row of progressRows) {
+    const payload = row.payload as { findingId?: unknown; attemptedAt?: unknown; projectId?: unknown; siteId?: unknown } | null;
+    if (typeof payload?.findingId !== "string" || typeof payload?.attemptedAt !== "string") continue;
+    if (payload.projectId !== opts.projectId || payload.siteId !== opts.siteId) continue;
+    const at = Date.parse(payload.attemptedAt);
+    if (!Number.isFinite(at) || lastAttempt.has(payload.findingId)) continue;
+    lastAttempt.set(payload.findingId, at);
+  }
+  rows.sort((a, b) => {
+    const aId = (a.dimensions as { findingId?: unknown } | null)?.findingId;
+    const bId = (b.dimensions as { findingId?: unknown } | null)?.findingId;
+    const aLast = typeof aId === "string" ? lastAttempt.get(aId) ?? 0 : 0;
+    const bLast = typeof bId === "string" ? lastAttempt.get(bId) ?? 0 : 0;
+    return aLast - bLast || a.observedAt.getTime() - b.observedAt.getTime();
+  });
+
+  const recordProgress = async (findingId: string, outcome: string): Promise<void> => {
+    try {
+      await db.rawProviderResponse.create({
+        data: {
+          provider: "recommendation-analysis",
+          product: "candidate-progress",
+          endpoint: "internal",
+          requestedAt: new Date(),
+          deliveredAt: new Date(),
+          status: outcome,
+          payload: {
+            projectId: opts.projectId,
+            siteId: opts.siteId,
+            findingId,
+            attemptedAt: new Date().toISOString(),
+            outcome,
+          } as never,
+        },
+      });
+    } catch (error) {
+      console.error("[recommendation] failed to record candidate progress", error);
+    }
+  };
+
   for (const row of rows) {
     const dimensions = (row.dimensions ?? {}) as Record<string, unknown>;
     if (dimensions.painPoint !== "true" && dimensions.positioningGap !== "true") continue;
@@ -143,6 +193,7 @@ export async function reassessProjectRecommendations(
         projectId: opts.projectId,
         siteId: opts.siteId,
         maxLiveFetches: 0,
+        remainingBytes: () => ledger.remainingBytes(),
         candidate: {
           findingId: candidate.id,
           dedupKey: candidate.dedupKey,
@@ -155,7 +206,10 @@ export async function reassessProjectRecommendations(
         },
       });
       const existing = parsePersistedDecision(dimensions.recommendationDecisionJson);
-      const status = !existing ? "missing" : existing.packetHash === packet.packetHash ? "current" : "stale";
+      const reusable = existing
+        ? await findReusableDecision(db, dimensions, packet, opts.assessor ? null : contentWriterConfig()?.model ?? null)
+        : null;
+      const status = !existing ? "missing" : reusable ? "current" : "stale";
       if (status === "current") result.current += 1;
       if (status === "stale") result.stale += 1;
       if (status === "missing") result.missing += 1;
@@ -174,6 +228,7 @@ export async function reassessProjectRecommendations(
       projectId: opts.projectId,
       siteId: opts.siteId,
       maxLiveFetches: 0,
+      remainingBytes: () => ledger.remainingBytes(),
       candidate: {
         findingId: candidate.id,
         dedupKey: candidate.dedupKey,
@@ -185,14 +240,14 @@ export async function reassessProjectRecommendations(
         sourceIds: candidate.sourceIds,
       },
     });
-    const reusable = findReusableDecision(dimensions, currentPacket, model);
+    const reusable = await findReusableDecision(db, dimensions, currentPacket, model);
     if (reusable) {
       result.reused += 1;
       result.outcomes.push({
         findingId: candidate.id,
         theme: candidate.theme,
         status: "reused",
-        readiness: reusable.readiness,
+        readiness: reusable.decision.readiness,
       });
       continue;
     }
@@ -232,6 +287,9 @@ export async function reassessProjectRecommendations(
     else if (assessed.status === "assessed") result.assessed += 1;
     else if (assessed.status === "failed") result.failed += 1;
     else if (assessed.status === "no_decision") result.failed += 1;
+    if (assessed.status === "assessed" || assessed.status === "failed" || assessed.status === "no_decision") {
+      await recordProgress(candidate.id, assessed.status);
+    }
     result.outcomes.push({
       findingId: candidate.id,
       theme: candidate.theme,

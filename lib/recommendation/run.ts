@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { PrismaClient } from "@prisma/client";
 
 import {
@@ -10,11 +12,17 @@ import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import {
   RECOMMENDATION_POLICY_VERSION,
   ANALYSIS_RESOURCE_POLICY,
+  buildDependencyManifest,
   decisionFingerprint,
+  hashPacket,
+  hashValue,
   parsePersistedDecision,
+  parsePersistedDependencyManifest,
   parsePersistedPacket,
   validateDecision,
   validateEvidenceRequest,
+  type AssessmentAttempt,
+  type DependencyManifest,
   type EvidencePacket,
   type RecommendationDecision,
 } from "@/lib/recommendation/contracts";
@@ -58,13 +66,27 @@ export type FindingAssessmentResult = {
   errors: string[];
   raw?: unknown;
   trace?: string[];
+  attempts?: AssessmentAttempt[];
   ledger?: ReturnType<AnalysisLedger["snapshot"]>;
 };
 
 async function recordAnalysisFailure(
   db: AssessmentRunDb,
-  input: { projectId: string; siteId: string; findingId: string; packetHash: string; errors: string[]; ledger: unknown; raw: unknown }
-): Promise<void> {
+  input: {
+    projectId: string;
+    siteId: string;
+    findingId: string;
+    packet: EvidencePacket;
+    initialPacketHash: string;
+    errors: string[];
+    ledger: unknown;
+    raw: unknown;
+    attempts: AssessmentAttempt[];
+    requests: EvidencePacket["requests"];
+    trace: string[];
+    dependencies: DependencyManifest;
+  }
+): Promise<{ ok: boolean; error?: string }> {
   try {
     await db.rawProviderResponse.create({
       data: {
@@ -78,15 +100,24 @@ async function recordAnalysisFailure(
           projectId: input.projectId,
           siteId: input.siteId,
           findingId: input.findingId,
-          packetHash: input.packetHash,
+          packetHash: input.packet.packetHash,
+          initialPacketHash: input.initialPacketHash,
+          packetJson: JSON.stringify(input.packet),
+          dependenciesJson: JSON.stringify(input.dependencies),
           errors: input.errors,
           ledger: input.ledger,
           raw: input.raw,
+          attempts: input.attempts,
+          requests: input.requests,
+          trace: input.trace,
         } as never,
       },
     });
+    return { ok: true };
   } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
     console.error("[recommendation] failed to record analysis failure", error);
+    return { ok: false, error: `analysis failure archive could not be written: ${message}` };
   }
 }
 
@@ -94,40 +125,140 @@ function currentModel(): string | null {
   return contentWriterConfig()?.model ?? null;
 }
 
-export function findReusableDecision(
+type ReuseDb = Pick<
+  PrismaClient,
+  "auditPage" | "crawl" | "researchSource" | "businessKnowledgeDocument" | "businessKnowledgeRevision" | "evidenceRecord"
+>;
+
+/**
+ * Check the archived dependency manifest against current versioned storage.
+ *
+ * Stored pages must still have the exact content hash the decision used. Sources
+ * must still have the same excerpt and observation time. Business knowledge must
+ * still be the same revision. Live pages cannot be version-checked without a new
+ * fetch; they are reusable only inside the freshness window and only when the
+ * archived retrieval was not truncated.
+ */
+async function dependenciesStillMatch(
+  db: ReuseDb,
+  manifest: DependencyManifest,
+  packet: EvidencePacket
+): Promise<boolean> {
+  const urls = manifest.pages.map((page) => page.url);
+  const crawl = await db.crawl.findFirst({
+    where: { siteId: packet.siteId, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { id: true },
+  });
+  const storedPages = urls.length && crawl
+    ? await db.auditPage.findMany({
+        where: { crawlId: crawl.id, url: { in: urls } },
+        select: { url: true, contentHash: true, contentText: true },
+      })
+    : [];
+  const pageByUrl = new Map(storedPages.map((row) => [row.url, row]));
+  for (const page of manifest.pages) {
+    if (page.retrieval === "stored") {
+      const row = pageByUrl.get(page.url);
+      if (!row) return false;
+      const currentHash =
+        row.contentHash ??
+        (row.contentText ? createHash("sha256").update(row.contentText).digest("hex") : null);
+      if (currentHash !== page.contentHash) return false;
+    } else if (page.retrieval === "live") {
+      // Incomplete live retrieval cannot support a reused whole-page decision.
+      if (page.truncated) return false;
+    } else {
+      return false;
+    }
+  }
+
+  const sourceIds = manifest.sources.map((source) => source.id.replace(/^source:/, ""));
+  const storedSources = sourceIds.length
+    ? await db.researchSource.findMany({
+        where: { id: { in: sourceIds } },
+        select: { id: true, excerpt: true, retrievedAt: true },
+      })
+    : [];
+  const sourceById = new Map(storedSources.map((row) => [`source:${row.id}`, row]));
+  for (const source of manifest.sources) {
+    const row = sourceById.get(source.id);
+    if (!row) return false;
+    const currentHash = row.excerpt ? hashValue(row.excerpt) : null;
+    if (currentHash !== source.excerptHash) return false;
+    if (row.retrievedAt.toISOString() !== source.observedAt) return false;
+  }
+
+  const document = await db.businessKnowledgeDocument.findUnique({
+    where: { projectId: packet.projectId },
+    select: { id: true, revision: true, acceptedRevision: true },
+  });
+  const revisionNumber = document ? (document.acceptedRevision ?? document.revision) : null;
+  if ((revisionNumber ?? null) !== (manifest.businessKnowledge.documentRevision ?? null)) return false;
+
+  const searchIds = manifest.searchIds.map((id) => id.replace(/^search:/, ""));
+  if (searchIds.length > 0) {
+    const found = await db.evidenceRecord.findMany({
+      where: { id: { in: searchIds } },
+      select: { id: true },
+    });
+    if (found.length !== searchIds.length) return false;
+  }
+  return true;
+}
+
+export async function findReusableDecision(
+  db: ReuseDb,
   dimensions: Record<string, unknown> | null,
   initialPacket: EvidencePacket,
-  model: string | null
-): RecommendationDecision | null {
+  model: string | null,
+  opts: { now?: Date } = {}
+): Promise<{ decision: RecommendationDecision; packet: EvidencePacket } | null> {
   const decision = parsePersistedDecision(dimensions?.recommendationDecisionJson);
   if (!decision) return null;
   if (decision.promptVersion !== RECOMMENDATION_PROMPT_VERSION) return null;
   if (decision.policyVersion !== RECOMMENDATION_POLICY_VERSION) return null;
   if (model && decision.model !== model) return null;
 
+  const now = opts.now ?? new Date();
   const assessedAt = Date.parse(decision.assessedAt);
   if (!Number.isFinite(assessedAt)) return null;
-  const ageMs = Date.now() - assessedAt;
+  const ageMs = now.getTime() - assessedAt;
   if (ageMs < 0 || ageMs > ANALYSIS_RESOURCE_POLICY.reuseMaxAgeDays * 24 * 60 * 60_000) return null;
 
-  // The exact packet the decision used is archived with it. Revalidate against
-  // that packet, not against a freshly rebuilt initial selection.
-  const finalPacket =
-    parsePersistedPacket(dimensions?.recommendationFinalPacketJson) ??
-    parsePersistedPacket(dimensions?.recommendationPacketJson);
-
+  // The exact initial selection is mandatory. Without it an archive cannot be
+  // bound to the current project, site or candidate.
   const initialHash = dimensions?.recommendationInitialPacketHash;
-  if (typeof initialHash === "string" && initialHash !== initialPacket.packetHash) return null;
+  if (typeof initialHash !== "string" || initialHash !== initialPacket.packetHash) return null;
+  if (hashPacket(initialPacket) !== initialPacket.packetHash) return null;
 
-  if (finalPacket) {
-    if (finalPacket.packetHash !== decision.packetHash) return null;
-    return validateDecision(decision, finalPacket).ok ? decision : null;
+  const finalPacket = parsePersistedPacket(dimensions?.recommendationFinalPacketJson);
+  if (!finalPacket) return null;
+
+  // Archived content must still match its own hash. A mutable JSON blob is not
+  // evidence until that is verified.
+  if (hashPacket(finalPacket) !== finalPacket.packetHash) return null;
+  if (decision.packetHash !== finalPacket.packetHash) return null;
+
+  if (
+    finalPacket.projectId !== initialPacket.projectId ||
+    finalPacket.siteId !== initialPacket.siteId ||
+    finalPacket.candidate.findingId !== initialPacket.candidate.findingId ||
+    finalPacket.candidate.dedupKey !== initialPacket.candidate.dedupKey
+  ) {
+    return null;
   }
 
-  // Legacy decisions without an archived final packet are reusable only when the
-  // initial packet itself was the exact input.
-  if (decision.packetHash !== initialPacket.packetHash) return null;
-  return validateDecision(decision, initialPacket).ok ? decision : null;
+  if (!validateDecision(decision, finalPacket).ok) return null;
+
+  const storedManifest = parsePersistedDependencyManifest(dimensions?.recommendationDependenciesJson);
+  if (!storedManifest) return null;
+  if (storedManifest.finalPacketHash !== finalPacket.packetHash) return null;
+  const computedManifest = buildDependencyManifest(finalPacket);
+  if (hashValue(computedManifest) !== hashValue(storedManifest)) return null;
+  if (!(await dependenciesStillMatch(db, storedManifest, finalPacket))) return null;
+
+  return { decision, packet: finalPacket };
 }
 
 export async function assessFinding(
@@ -159,6 +290,7 @@ export async function assessFinding(
     // The initial selection is deterministic stored evidence only. Material live
     // content is requested explicitly, so replay can compare a stable identity.
     maxLiveFetches: 0,
+    remainingBytes: () => ledger.remainingBytes(),
     candidate: {
       findingId: input.finding.id,
       dedupKey: input.finding.dedupKey,
@@ -179,7 +311,8 @@ export async function assessFinding(
   const previous = active.find((row) => (row.dimensions as { findingId?: unknown } | null)?.findingId === input.finding.id);
 
   if (!input.force) {
-    const reusable = findReusableDecision(
+    const reusable = await findReusableDecision(
+      db,
       (previous?.dimensions ?? null) as Record<string, unknown> | null,
       initialPacket,
       // An injected assessor is a test/fixture producer; comparing its model name
@@ -190,8 +323,8 @@ export async function assessFinding(
       return {
         findingId: input.finding.id,
         status: "reused",
-        decision: reusable,
-        packet,
+        decision: reusable.decision,
+        packet: reusable.packet,
         evidenceId: previous?.id ?? null,
         errors: [],
         ledger: ledger.snapshot(),
@@ -208,6 +341,7 @@ export async function assessFinding(
   let round = 0;
   let noProgressRounds = 0;
   const rawAttempts: unknown[] = [];
+  const attempts: AssessmentAttempt[] = [];
   const requestOutcomes: EvidencePacket["requests"] = [];
 
   while (round <= ledger.policy.maxEvidenceRounds) {
@@ -224,6 +358,23 @@ export async function assessFinding(
     raw = outcome.raw;
     if (outcome.rawAttempts && outcome.rawAttempts.length > 0) rawAttempts.push(...outcome.rawAttempts);
     else if (outcome.raw != null) rawAttempts.push(outcome.raw);
+    if (outcome.history && outcome.history.length > 0) {
+      attempts.push(...outcome.history);
+    } else {
+      // A custom assessor may not supply history. Keep the raw artifact and its
+      // packet identity rather than silently losing the attempt.
+      const rawArtifact = outcome.raw ?? outcome.rawAttempts?.[outcome.rawAttempts.length - 1] ?? null;
+      attempts.push({
+        round,
+        attempt: 1,
+        inputPacketHash: packet.packetHash,
+        feedback: feedback || null,
+        kind: outcome.kind === "final" ? "final_decision" : outcome.kind === "request" ? "request_evidence" : "validation_error",
+        raw: rawArtifact,
+        responseText: null,
+        errors: outcome.kind === "failure" ? outcome.errors : [],
+      });
+    }
 
     if (outcome.kind === "final") {
       decision = outcome.decision;
@@ -269,6 +420,8 @@ export async function assessFinding(
         ledger.chargeFetchAttempt();
       },
       onBytes: (bytes) => ledger.chargeBytes(bytes),
+      remainingBytes: () => ledger.remainingBytes(),
+      deadlineAt: ledger.deadlineAt(),
     });
     ledger.record({
       round: round + 1,
@@ -299,20 +452,27 @@ export async function assessFinding(
         errors,
         raw,
         trace,
+        attempts,
         ledger: ledger.snapshot(),
       };
     }
+    const dependencies = buildDependencyManifest(packet);
     // A model failure is not a rejection of the customer need. Preserve the
     // previous valid decision and record the failed attempt separately.
     if (previous) {
-      await recordAnalysisFailure(db, {
+      const archived = await recordAnalysisFailure(db, {
         projectId: input.projectId,
         siteId: input.siteId,
         findingId: input.finding.id,
-        packetHash: packet.packetHash,
+        packet,
+        initialPacketHash: initialPacket.packetHash,
         errors,
         ledger: ledger.snapshot(),
         raw,
+        attempts,
+        requests: requestOutcomes,
+        trace,
+        dependencies,
       });
       return {
         findingId: input.finding.id,
@@ -320,9 +480,10 @@ export async function assessFinding(
         decision: null,
         packet,
         evidenceId: previous.id,
-        errors,
+        errors: archived.ok ? errors : [...errors, archived.error ?? "analysis failure archive could not be written"],
         raw,
         trace,
+        attempts,
         ledger: ledger.snapshot(),
       };
     }
@@ -341,8 +502,9 @@ export async function assessFinding(
         recommendationPacketJson: JSON.stringify(packet),
         recommendationFinalPacketJson: JSON.stringify(packet),
         recommendationInitialPacketHash: initialPacket.packetHash,
-        recommendationAttemptsJson: JSON.stringify(rawAttempts),
+        recommendationAttemptsJson: JSON.stringify(attempts),
         recommendationRequestsJson: JSON.stringify(requestOutcomes),
+        recommendationDependenciesJson: JSON.stringify(dependencies),
         recommendationAnalysisJson: JSON.stringify(ledger.snapshot()),
       },
       metrics: {},
@@ -356,6 +518,7 @@ export async function assessFinding(
       errors,
       raw,
       trace,
+      attempts,
       ledger: ledger.snapshot(),
     };
   }
@@ -364,15 +527,34 @@ export async function assessFinding(
   if (!validation.ok) {
     // Defensive: the assessor validates before returning. Never publish an invalid
     // decision merely because a custom assessor skipped that check.
+    let errors = validation.errors;
+    if (input.persist !== false) {
+      const archived = await recordAnalysisFailure(db, {
+        projectId: input.projectId,
+        siteId: input.siteId,
+        findingId: input.finding.id,
+        packet,
+        initialPacketHash: initialPacket.packetHash,
+        errors: validation.errors,
+        ledger: ledger.snapshot(),
+        raw,
+        attempts,
+        requests: requestOutcomes,
+        trace,
+        dependencies: buildDependencyManifest(packet),
+      });
+      if (!archived.ok) errors = [...errors, archived.error ?? "analysis failure archive could not be written"];
+    }
     return {
       findingId: input.finding.id,
       status: "failed",
       decision: null,
       packet,
       evidenceId: previous?.id ?? null,
-      errors: validation.errors,
+      errors,
       raw,
       trace,
+      attempts,
       ledger: ledger.snapshot(),
     };
   }
@@ -387,6 +569,7 @@ export async function assessFinding(
       errors: [],
       raw,
       trace,
+      attempts,
       ledger: ledger.snapshot(),
     };
   }
@@ -405,8 +588,9 @@ export async function assessFinding(
     recommendationPacketJson: JSON.stringify(packet),
     recommendationFinalPacketJson: JSON.stringify(packet),
     recommendationInitialPacketHash: initialPacket.packetHash,
-    recommendationAttemptsJson: JSON.stringify(rawAttempts),
+    recommendationAttemptsJson: JSON.stringify(attempts),
     recommendationRequestsJson: JSON.stringify(requestOutcomes),
+    recommendationDependenciesJson: JSON.stringify(buildDependencyManifest(packet)),
     recommendationAnalysisJson: JSON.stringify(ledger.snapshot()),
     recommendationFingerprint: fingerprint,
     recommendationVersion: decision.schemaVersion,
@@ -460,6 +644,7 @@ export async function assessFinding(
     errors: [],
     raw,
     trace,
+    attempts,
     ledger: ledger.snapshot(),
   };
 }

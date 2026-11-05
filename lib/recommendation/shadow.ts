@@ -150,6 +150,7 @@ export async function shadowRecommendations(
       projectId: opts.projectId,
       siteId: opts.siteId,
       maxLiveFetches: 0,
+      remainingBytes: () => ledger.remainingBytes(),
       candidate: {
         findingId: candidate.id,
         dedupKey: candidate.dedupKey,
@@ -162,12 +163,12 @@ export async function shadowRecommendations(
       },
     });
     const current = parsePersistedDecision(dimensions.recommendationDecisionJson);
-    const reusable = findReusableDecision(dimensions, packet, model);
+    const reusable = await findReusableDecision(db, dimensions, packet, model);
 
     let proposed: RecommendationDecision | null = null;
     let failure: string | null = null;
     if (reusable) {
-      proposed = reusable;
+      proposed = reusable.decision;
     } else if (attempts >= maxAssessments) {
       failure = "shadow assessment budget exhausted";
     } else if (!contentWriterConfig() && !opts.assessor) {

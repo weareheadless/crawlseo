@@ -21,6 +21,8 @@ export type AnalysisLedgerSnapshot = {
   liveFetches: number;
   bytesFetched: number;
   elapsedMs: number;
+  remainingMs: number;
+  deadlineAt: string;
   startedAt: string;
   exhausted: string[];
   trace: AnalysisTraceEntry[];
@@ -46,8 +48,16 @@ export class AnalysisLedger {
     return Date.now() - this.startedAt.getTime();
   }
 
+  deadlineAt(): number {
+    return this.startedAt.getTime() + this.policy.maxElapsedMs;
+  }
+
+  remainingMs(): number {
+    return Math.max(0, this.deadlineAt() - Date.now());
+  }
+
   canStart(): boolean {
-    if (this.elapsedMs() >= this.policy.maxElapsedMs) {
+    if (this.remainingMs() <= 0) {
       this.exhausted.add("elapsed_time");
       return false;
     }
@@ -99,11 +109,15 @@ export class AnalysisLedger {
       this.exhausted.add("live_fetches");
       return false;
     }
-    if (this.bytesFetched >= this.policy.maxTotalBytes) {
+    if (this.remainingBytes() <= 0) {
       this.exhausted.add("bytes");
       return false;
     }
     return true;
+  }
+
+  remainingBytes(): number {
+    return Math.max(0, this.policy.maxTotalBytes - this.bytesFetched);
   }
 
   chargeFetchAttempt(): void {
@@ -114,6 +128,12 @@ export class AnalysisLedger {
     if (!Number.isFinite(bytes) || bytes <= 0) return;
     this.bytesFetched += Math.floor(bytes);
     if (this.bytesFetched >= this.policy.maxTotalBytes) this.exhausted.add("bytes");
+  }
+
+  /** The exact number of bytes a retrieval may read, never above the cap. */
+  grantBytes(requested: number): number {
+    if (!Number.isFinite(requested) || requested <= 0) return 0;
+    return Math.min(Math.floor(requested), this.remainingBytes());
   }
 
   canRetrieve(count: number): boolean {
@@ -151,6 +171,8 @@ export class AnalysisLedger {
       liveFetches: this.liveFetches,
       bytesFetched: this.bytesFetched,
       elapsedMs: this.elapsedMs(),
+      remainingMs: this.remainingMs(),
+      deadlineAt: new Date(this.deadlineAt()).toISOString(),
       startedAt: this.startedAt.toISOString(),
       exhausted: [...this.exhausted],
       trace: [...this.trace],

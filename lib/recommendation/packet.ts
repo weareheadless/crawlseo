@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 
 import type { PrismaClient } from "@prisma/client";
 
-import { documentMarkup, fetchPublicDocument } from "@/lib/crawler/engine";
+import {
+  documentMarkup,
+  fetchPublicDocument,
+  type PublicDocumentTransport,
+  type ResolvedAddress,
+} from "@/lib/crawler/engine";
 import { htmlToText } from "@/lib/projects/business-knowledge-extract";
 import { resolveSiteContext } from "@/lib/site/context";
 import {
@@ -66,6 +71,14 @@ export type PacketOptions = {
   beforeFetch?: () => void;
   /** Reports the bytes actually read for budget accounting. */
   onBytes?: (bytes: number) => void;
+  /** Remaining aggregate byte allowance, read before each fetch. */
+  remainingBytes?: () => number;
+  /** Absolute epoch-millisecond deadline shared with the run budget. */
+  deadlineAt?: number;
+  /** Test seam: perform the pinned request without a real socket. */
+  transport?: PublicDocumentTransport;
+  /** Test seam: resolve a hostname without real DNS. */
+  resolve?: (hostname: string) => Promise<string | ResolvedAddress | ResolvedAddress[]>;
   now?: Date;
 };
 
@@ -199,6 +212,10 @@ type RetrievedPage = {
   note: string | null;
   retrieval: "live" | "unavailable";
   bytes: number;
+  /** Length of the extracted body before the live-text cap was applied. */
+  totalChars: number;
+  /** True when the transport or extraction limit made the text incomplete. */
+  truncated: boolean;
 };
 
 const SHELL_MARKERS = /enable javascript|javascript is required|access denied|just a moment|attention required|captcha|cf-challenge|please verify you are human/i;
@@ -212,48 +229,83 @@ const SHELL_MARKERS = /enable javascript|javascript is required|access denied|ju
 export async function retrievePage(
   url: string,
   siteDomain: string,
-  opts: { beforeHop?: () => void; maxBytes?: number } = {}
+  opts: {
+    beforeHop?: (url: string) => void;
+    maxBytes?: number;
+    deadlineAt?: number;
+    transport?: PublicDocumentTransport;
+    resolve?: (hostname: string) => Promise<string | ResolvedAddress | ResolvedAddress[]>;
+    onBytes?: (bytes: number) => void;
+  } = {}
 ): Promise<RetrievedPage> {
   const domain = siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
+  const unavailable = (note: string, status = 0, bytes = 0, finalUrl = url): RetrievedPage => ({
+    url,
+    title: null,
+    text: "",
+    html: "",
+    status,
+    finalUrl,
+    note,
+    retrieval: "unavailable",
+    bytes,
+    totalChars: 0,
+    truncated: false,
+  });
   let target: URL;
   try {
     target = new URL(url);
   } catch {
-    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "invalid URL", retrieval: "unavailable", bytes: 0 };
+    return unavailable("invalid URL");
   }
   const host = target.hostname.replace(/^www\./, "").toLowerCase();
   if (host !== domain && !host.endsWith(`.${domain}`)) {
-    return { url, title: null, text: "", html: "", status: 0, finalUrl: url, note: "URL is outside the site domain", retrieval: "unavailable", bytes: 0 };
+    return unavailable("URL is outside the site domain");
   }
+  const isSiteHost = (candidate: URL): boolean => {
+    const candidateHost = candidate.hostname.replace(/^www\./, "").toLowerCase();
+    return candidateHost === domain || candidateHost.endsWith(`.${domain}`);
+  };
   try {
     const doc = await fetchPublicDocument(target.toString(), {
       maxBytes: opts.maxBytes ?? 2 * 1024 * 1024,
       timeoutMs: 20_000,
-      beforeHop: () => {
-        opts.beforeHop?.();
-      },
+      deadlineAt: opts.deadlineAt,
+      allowedHost: isSiteHost,
+      beforeHop: opts.beforeHop,
+      onBytes: opts.onBytes,
+      transport: opts.transport,
+      resolve: opts.resolve,
     });
     const finalUrl = doc.finalUrl || url;
     const finalHost = new URL(finalUrl).hostname.replace(/^www\./, "").toLowerCase();
     if (finalHost !== domain && !finalHost.endsWith(`.${domain}`)) {
-      return { url, title: null, text: "", html: "", status: doc.statusCode, finalUrl, note: "redirect left the site domain", retrieval: "unavailable", bytes: doc.bytes };
+      return unavailable("redirect left the site domain", doc.statusCode, doc.bytes, finalUrl);
     }
     if (!doc.contentType.includes("html") && !doc.contentType.includes("xml")) {
-      return { url, title: null, text: "", html: "", status: doc.statusCode, finalUrl, note: `non-HTML content (${doc.contentType || "unknown"})`, retrieval: "unavailable", bytes: doc.bytes };
+      return unavailable(`non-HTML content (${doc.contentType || "unknown"})`, doc.statusCode, doc.bytes, finalUrl);
     }
     const html = doc.html;
     const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? null;
     // Wix and similar builders embed base64 payloads inside comments and
     // templates; stripping tags alone would hand the model encoded noise.
-    const text = htmlToText(documentMarkup(html)).slice(0, MAX_LIVE_CHARS);
+    const extracted = htmlToText(documentMarkup(html));
+    const textLimited = extracted.length > MAX_LIVE_CHARS;
+    const text = extracted.slice(0, MAX_LIVE_CHARS);
+    const truncated = doc.truncated || textLimited;
+    const note = doc.truncated
+      ? "document exceeded the byte limit; text may be incomplete"
+      : textLimited
+        ? "extracted text exceeded the live-text limit; text may be incomplete"
+        : null;
     if (doc.statusCode !== 200) {
-      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: `HTTP ${doc.statusCode}`, retrieval: "unavailable", bytes: doc.bytes };
+      return { ...unavailable(`HTTP ${doc.statusCode}`, doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
     }
     if (SHELL_MARKERS.test(html) && text.length < 1_500) {
-      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: "page is a bot challenge or client-rendered shell", retrieval: "unavailable", bytes: doc.bytes };
+      return { ...unavailable("page is a bot challenge or client-rendered shell", doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
     }
     if (text.length < 80) {
-      return { url, title, text: "", html, status: doc.statusCode, finalUrl, note: "no usable body text was extracted", retrieval: "unavailable", bytes: doc.bytes };
+      return { ...unavailable("no usable body text was extracted", doc.statusCode, doc.bytes, finalUrl), title, html, truncated };
     }
     return {
       url,
@@ -262,22 +314,14 @@ export async function retrievePage(
       html,
       status: doc.statusCode,
       finalUrl,
-      note: doc.truncated ? "document exceeded the byte limit; text may be incomplete" : null,
+      note,
       retrieval: "live",
       bytes: doc.bytes,
+      totalChars: extracted.length,
+      truncated,
     };
   } catch (error) {
-    return {
-      url,
-      title: null,
-      text: "",
-      html: "",
-      status: 0,
-      finalUrl: url,
-      note: error instanceof Error ? error.message.slice(0, 300) : "retrieval failed",
-      retrieval: "unavailable",
-      bytes: 0,
-    };
+    return unavailable(error instanceof Error ? error.message.slice(0, 300) : "retrieval failed");
   }
 }
 
@@ -321,7 +365,14 @@ function buildPage(
   const text = row.contentText ?? "";
   const selected = relevantSections(text, terms, maxChars);
   const supplied = selected.map((section) => section.text).join("\n\n");
-  const truncated = supplied.length < text.length;
+  const sectioned = supplied.length < text.length;
+  const truncation = sectioned
+    ? "sectioned"
+    : row.retrievalNote && /byte limit/i.test(row.retrievalNote)
+      ? "byte_limit"
+      : row.retrievalNote && /live-text limit/i.test(row.retrievalNote)
+        ? "text_limit"
+        : "none";
   const id = pageId(row.url);
   return {
     id,
@@ -329,13 +380,15 @@ function buildPage(
     title: row.title,
     contentHash: row.contentHash ?? (text ? createHash("sha256").update(text).digest("hex") : null),
     text: supplied,
-    truncated,
+    truncated: sectioned || truncation === "byte_limit" || truncation === "text_limit",
     retrieval: row.retrieval,
     status: row.statusCode,
     language: row.language,
     inspected: supplied.length,
     totalChars: text.length,
+    offset: 0,
     retrievalNote: row.retrievalNote,
+    truncation,
     sections: selected.map((section, index) => ({
       id: `section:${id}:${index}`,
       locator: section.locator,
@@ -344,7 +397,7 @@ function buildPage(
   };
 }
 
-/** A requested page is supplied whole, not re-sectioned, so it can be assessed. */
+/** A requested page is supplied from the requested offset, not re-sectioned. */
 function buildFullPage(
   row: {
     url: string;
@@ -356,27 +409,59 @@ function buildFullPage(
     retrieval: "stored" | "live" | "unavailable";
     retrievalNote: string | null;
   },
-  maxChars: number
+  maxChars: number,
+  opts: {
+    offset?: number;
+    /** Absolute offset represented by `contentText` when it is already a slice. */
+    startOffset?: number;
+    /** Known total body length, when `contentText` is only the requested slice. */
+    totalChars?: number;
+    transportTruncated?: boolean;
+    previous?: PacketPage;
+  } = {}
 ): PacketPage {
   const full = row.contentText ?? "";
-  const text = full.slice(0, maxChars);
+  const offset = Math.max(0, opts.offset ?? 0);
+  const startOffset = Math.max(0, opts.startOffset ?? offset);
+  const totalChars = Math.max(full.length, opts.totalChars ?? full.length);
+  const text = full.slice(offset, offset + maxChars);
+  const transportTruncated = opts.transportTruncated === true;
+  const reachesEnd = startOffset + text.length >= totalChars;
+  const truncated = transportTruncated || !reachesEnd;
+  const truncation = transportTruncated
+    ? "byte_limit"
+    : !reachesEnd
+      ? startOffset > 0
+        ? "offset"
+        : "text_limit"
+      : "none";
   const id = pageId(row.url);
+  const append = Boolean(opts.previous && opts.previous.truncation !== "sectioned" && startOffset > 0);
+  const newSection = text
+    ? { id: `section:${id}:${startOffset}`, locator: `chars:${startOffset}-${startOffset + text.length}`, text }
+    : null;
+  const sections = append && opts.previous
+    ? [...opts.previous.sections, ...(newSection ? [newSection] : [])].slice(-12)
+    : newSection
+      ? [newSection]
+      : [];
+  const combinedText = append && opts.previous ? `${opts.previous.text}\n\n${text}` : text;
   return {
     id,
     url: row.url,
     title: row.title,
     contentHash: row.contentHash ?? (full ? createHash("sha256").update(full).digest("hex") : null),
-    text,
-    truncated: full.length > maxChars,
+    text: combinedText,
+    truncated,
     retrieval: row.retrieval,
     status: row.statusCode,
     language: row.language,
-    inspected: text.length,
-    totalChars: full.length,
+    inspected: combinedText.length,
+    totalChars,
+    offset: append ? opts.previous?.offset ?? 0 : startOffset,
     retrievalNote: row.retrievalNote,
-    sections: text
-      ? [{ id: `section:${id}:0`, locator: `chars:0-${text.length}`, text }]
-      : [],
+    truncation,
+    sections,
   };
 }
 
@@ -545,32 +630,39 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     let title = row.title;
     let statusCode = row.statusCode;
     if (!contentText && row.statusCode === 200 && liveFetches < maxLiveFetches) {
-      let live: RetrievedPage;
-      try {
-        live = await retrievePage(row.url, site.domain, { beforeHop: opts.beforeFetch });
-        opts.onBytes?.(live.bytes);
-      } catch (error) {
-        limitations.push(`page text for ${row.url} was not retrieved: ${error instanceof Error ? error.message.slice(0, 200) : "budget exhausted"}`);
-        pages.push(
-          buildPage(
-            { url: row.url, title, contentText: null, contentHash: row.contentHash, statusCode, language: context?.language ?? null, retrieval: "unavailable", retrievalNote: "fetch budget exhausted" },
-            terms,
-            maxChars
-          )
-        );
-        continue;
-      }
-      liveFetches += 1;
-      if (live.retrieval === "live") {
-        contentText = live.text;
-        retrieval = "live";
-        note = null;
-        title = live.title ?? title;
-        statusCode = live.status;
-        limitations.push(`page text for ${row.url} came from a bounded live fetch, not the stored crawl`);
+      const remaining = opts.remainingBytes?.() ?? 2 * 1024 * 1024;
+      if (remaining <= 0) {
+        note = "byte budget exhausted";
+        limitations.push(`page text for ${row.url} was not retrieved: byte budget exhausted`);
       } else {
-        note = live.note;
-        limitations.push(`page text for ${row.url} could not be retrieved: ${live.note}`);
+        let live: RetrievedPage | null = null;
+        try {
+          live = await retrievePage(row.url, site.domain, {
+            beforeHop: opts.beforeFetch,
+            onBytes: opts.onBytes,
+            deadlineAt: opts.deadlineAt,
+            transport: opts.transport,
+            resolve: opts.resolve,
+            maxBytes: Math.min(2 * 1024 * 1024, remaining),
+          });
+        } catch (error) {
+          note = "fetch budget exhausted";
+          limitations.push(`page text for ${row.url} was not retrieved: ${error instanceof Error ? error.message.slice(0, 200) : "budget exhausted"}`);
+        }
+        if (live) {
+          liveFetches += 1;
+          if (live.retrieval === "live") {
+            contentText = live.text;
+            retrieval = "live";
+            note = live.note;
+            title = live.title ?? title;
+            statusCode = live.status;
+            limitations.push(`page text for ${row.url} came from a bounded live fetch, not the stored crawl`);
+          } else {
+            note = live.note;
+            limitations.push(`page text for ${row.url} could not be retrieved: ${live.note}`);
+          }
+        }
       }
     }
     pages.push(
@@ -677,14 +769,24 @@ export type ExpandResult = {
   retrieved: number;
   failed: number;
   progress: boolean;
+  newEvidence: boolean;
+  limitations: string[];
+};
+
+type UpsertOutcome = {
+  page: PacketPage | null;
+  changed: boolean;
+  status: "fulfilled" | "partial" | "unavailable" | "no_progress" | "budget_exhausted";
+  detail: string;
 };
 
 /**
  * Resolve evidence requests against the site and return a new sealed packet.
  *
  * Requests never authorise a new web crawl: page retrieval is limited to the
- * site's own origin, and inventory discovery only searches known URLs. A request
- * that cannot be satisfied becomes an explicit limitation, not an absence claim.
+ * site's own origin, and inventory discovery only searches known URLs. Stored
+ * crawl text is used before a live fetch. A request that cannot be satisfied
+ * becomes an explicit terminal outcome, never a fake success or absence claim.
  */
 export async function expandEvidencePacket(
   db: PacketDb,
@@ -696,6 +798,11 @@ export async function expandEvidencePacket(
     round?: number;
     beforeFetch?: () => void;
     onBytes?: (bytes: number) => void;
+    /** Remaining aggregate byte allowance, read before each fetch. */
+    remainingBytes?: () => number;
+    deadlineAt?: number;
+    transport?: PublicDocumentTransport;
+    resolve?: (hostname: string) => Promise<string | ResolvedAddress | ResolvedAddress[]>;
     now?: Date;
   }
 ): Promise<ExpandResult> {
@@ -705,7 +812,6 @@ export async function expandEvidencePacket(
   const trace = [...packet.trace];
   const requests = [...packet.requests];
   const actions: string[] = [];
-  const terms = packetTerms(packet.candidate.theme, packet.candidate.summary, packet.candidate.premise);
   const maxFetches = Math.max(0, Math.min(opts.maxLiveFetches ?? 4, 6));
   const requestedFullText = 20_000;
   let fetches = 0;
@@ -713,40 +819,136 @@ export async function expandEvidencePacket(
   let failed = 0;
   let progress = false;
 
+  const pushLimitation = (line: string): void => {
+    if (!limitations.includes(line)) limitations.push(line);
+  };
+
   const site = await db.site.findUnique({ where: { id: packet.siteId }, select: { domain: true } });
   const domain = opts.siteDomain || site?.domain || "";
   const round = opts.round ?? 1;
 
-  const upsertPage = async (url: string) => {
+  const upsertPage = async (url: string, requestedOffset: number | null): Promise<UpsertOutcome> => {
     const existingIndex = pages.findIndex((page) => page.url === url);
     const existing = existingIndex >= 0 ? pages[existingIndex] : null;
-    // A requested page must be supplied in full enough to assess. Sectioning a
-    // page again would make the model request it forever.
-    if (existing && existing.text.trim() && !existing.truncated) return existing;
+
+    if (existing && existing.text.trim() && !existing.truncated && requestedOffset == null) {
+      return { page: existing, changed: false, status: "partial", detail: "page text was already supplied in full" };
+    }
+    if (existingIndex < 0 && pages.length >= 10) {
+      const detail = `packet page capacity reached (${pages.length}); the requested page could not be added`;
+      pushLimitation(`evidence request for ${url} was not supplied: ${detail}`);
+      return { page: null, changed: false, status: "unavailable", detail };
+    }
+
+    const canContinue =
+      Boolean(existing?.truncated) &&
+      existing?.truncation !== "sectioned" &&
+      existing?.truncation !== "byte_limit";
+    const start = requestedOffset ?? (canContinue && existing ? (existing.offset ?? 0) + existing.inspected : 0);
+    if (existing && existing.totalChars > 0 && start >= existing.totalChars) {
+      return {
+        page: existing,
+        changed: false,
+        status: "no_progress",
+        detail: `no unread text remains after offset ${start} of ${existing.totalChars}`,
+      };
+    }
+
+    // Stored crawl text comes first: a live fetch must not replace text the
+    // crawl already holds.
+    let stored: {
+      contentText: string | null;
+      title: string | null;
+      contentHash: string | null;
+      statusCode: number;
+    } | null = null;
+    try {
+      stored = await db.auditPage.findFirst({
+        where: { url, crawl: { siteId: packet.siteId } } as never,
+        select: { contentText: true, title: true, contentHash: true, statusCode: true },
+      });
+    } catch {
+      stored = null;
+    }
+    if (stored?.contentText && stored.contentText.length > start) {
+      const page = buildFullPage(
+        {
+          url,
+          title: stored.title,
+          contentText: stored.contentText,
+          contentHash: stored.contentHash,
+          statusCode: stored.statusCode,
+          language: existing?.language ?? packet.context.language,
+          retrieval: "stored",
+          retrievalNote: null,
+        },
+        requestedFullText,
+        { offset: start, previous: canContinue ? existing ?? undefined : undefined }
+      );
+      const changed = !existing || existing.text !== page.text || existing.contentHash !== page.contentHash;
+      if (existingIndex >= 0) pages[existingIndex] = page;
+      else pages.push(page);
+      retrieved += 1;
+      pushLimitation(`page text for ${url} came from stored crawl text, not a live fetch`);
+      return {
+        page,
+        changed,
+        status: page.truncated ? "partial" : "fulfilled",
+        detail: page.truncated
+          ? `stored text was supplied from offset ${start} and remains incomplete`
+          : "stored page text supplied in full",
+      };
+    }
+
     if (fetches >= maxFetches) {
-      limitations.push(`evidence request for ${url} was not retrieved: live-fetch limit reached`);
-      return existing;
+      const detail = "live-fetch limit reached";
+      pushLimitation(`evidence request for ${url} was not retrieved: ${detail}`);
+      return { page: existing, changed: false, status: "budget_exhausted", detail };
+    }
+    const remaining = opts.remainingBytes?.() ?? 2 * 1024 * 1024;
+    if (remaining <= 0) {
+      const detail = "byte budget exhausted";
+      pushLimitation(`evidence request for ${url} was not retrieved: ${detail}`);
+      return { page: existing, changed: false, status: "budget_exhausted", detail };
     }
     fetches += 1;
     let live: RetrievedPage;
     try {
-      live = await retrievePage(url, domain, { beforeHop: opts.beforeFetch });
-      opts.onBytes?.(live.bytes);
-    } catch {
-      limitations.push(`evidence request for ${url} was not retrieved: fetch budget exhausted`);
-      return existing;
+      live = await retrievePage(url, domain, {
+        beforeHop: () => opts.beforeFetch?.(),
+        onBytes: opts.onBytes,
+        deadlineAt: opts.deadlineAt,
+        transport: opts.transport,
+        resolve: opts.resolve,
+        maxBytes: Math.min(2 * 1024 * 1024, remaining),
+      });
+    } catch (error) {
+      failed += 1;
+      const detail = error instanceof Error ? error.message.slice(0, 200) : "fetch budget exhausted";
+      pushLimitation(`evidence request for ${url} was not retrieved: ${detail}`);
+      return { page: existing, changed: false, status: "budget_exhausted", detail };
     }
     if (live.retrieval !== "live") {
       failed += 1;
       const note = live.note ?? "retrieval failed";
-      limitations.push(`evidence request for ${url} failed: ${note}`);
+      pushLimitation(`evidence request for ${url} failed: ${note}`);
       if (existing) {
         existing.retrieval = "unavailable";
         existing.retrievalNote = note;
       }
-      return existing;
+      return { page: existing, changed: false, status: "unavailable", detail: note };
     }
-    retrieved += 1;
+    if (live.text.length <= start) {
+      return {
+        page: existing,
+        changed: false,
+        status: "no_progress",
+        detail:
+          live.truncated || live.totalChars > live.text.length
+            ? `the live-text limit was reached before offset ${start}; later text could not be retrieved`
+            : `no text remains after offset ${start}`,
+      };
+    }
     const page = buildFullPage(
       {
         url,
@@ -756,63 +958,89 @@ export async function expandEvidencePacket(
         statusCode: live.status,
         language: existing?.language ?? packet.context.language,
         retrieval: "live",
-        retrievalNote: null,
+        retrievalNote: live.note,
       },
-      requestedFullText
+      requestedFullText,
+      {
+        offset: start,
+        totalChars: live.totalChars,
+        transportTruncated: live.truncated,
+        previous: canContinue ? existing ?? undefined : undefined,
+      }
     );
-    limitations.push(`page text for ${url} was retrieved on request and is not stored crawl text`);
+    const changed = !existing || existing.text !== page.text || existing.contentHash !== page.contentHash;
     if (existingIndex >= 0) pages[existingIndex] = page;
-    else if (pages.length < 10) pages.push(page);
-    return page;
+    else pages.push(page);
+    retrieved += 1;
+    pushLimitation(`page text for ${url} was retrieved on request and is not stored crawl text`);
+    const status: UpsertOutcome["status"] =
+      page.truncated && page.truncation === "byte_limit" && !changed
+        ? "unavailable"
+        : page.truncated
+          ? "partial"
+          : "fulfilled";
+    return {
+      page,
+      changed,
+      status,
+      detail:
+        status === "unavailable"
+          ? "transport byte limit reached; later content could not be retrieved"
+          : page.truncated
+            ? `text was supplied from offset ${start} and remains incomplete`
+            : "page text supplied in full",
+    };
   };
 
   for (const request of resolved) {
     if (request.type === "page_text" || request.type === "inventory_search") {
       if (!request.url) {
         failed += 1;
-        requests.push({ type: request.type, target: request.target, status: "unavailable", detail: "no retrievable URL" });
+        requests.push({ type: request.type, target: request.target, key: request.key, status: "unavailable", detail: "no retrievable URL" });
         actions.push(`${request.type} ${request.target}: no retrievable URL`);
         continue;
       }
-      const before = pages.find((page) => page.url === request.url);
-      const page = await upsertPage(request.url);
-      const supplied = Boolean(page?.text.trim());
-      if (!supplied) {
+      const outcome = await upsertPage(request.url, request.offset);
+      if (!outcome.page || !outcome.page.text.trim()) {
         failed += 1;
-        const budget = limitations.some((line) => line.includes("fetch budget exhausted") || line.includes("live-fetch limit reached"));
         requests.push({
           type: request.type,
           target: request.target,
-          status: budget ? "budget_exhausted" : "unavailable",
-          detail: page?.retrievalNote ?? "no text could be retrieved",
+          key: request.key,
+          offset: request.offset ?? undefined,
+          status: outcome.status === "fulfilled" || outcome.status === "partial" ? "unavailable" : outcome.status,
+          detail: outcome.detail.slice(0, 500),
         });
-        actions.push(`${request.type} ${request.target}: unavailable`);
+        actions.push(`${request.type} ${request.target}: ${outcome.status}`);
         continue;
       }
-      const changed = !before || before.text !== page?.text;
-      const status = changed || page?.retrieval === "live" ? "fulfilled" : "partial";
-      if (status === "fulfilled") progress = true;
+      if (outcome.status === "fulfilled" || outcome.status === "partial") {
+        progress = progress || outcome.changed;
+      }
       requests.push({
         type: request.type,
         target: request.target,
-        status,
-        detail: status === "fulfilled" ? "page text supplied" : "page text was already supplied",
+        key: request.key,
+        offset: request.offset ?? undefined,
+        status: outcome.status,
+        detail: outcome.detail.slice(0, 500),
       });
-      actions.push(`${request.type} ${request.target}: ${status}`);
+      actions.push(`${request.type} ${request.target}: ${outcome.status}`);
       continue;
     }
     if (request.type === "source_text") {
       const source = packet.sources.find((entry) => entry.id === request.target);
       if (!source) {
         failed += 1;
-        requests.push({ type: "source_text", target: request.target, status: "unavailable", detail: "source is not in the packet" });
+        requests.push({ type: "source_text", target: request.target, key: request.key, status: "unavailable", detail: "source is not in the packet" });
         actions.push(`source_text ${request.target}: not in packet`);
         continue;
       }
-      limitations.push(`source ${source.url} has only a stored excerpt; external full-text retrieval is not authorised`);
+      pushLimitation(`source ${source.url} has only a stored excerpt; external full-text retrieval is not authorised`);
       requests.push({
         type: "source_text",
         target: request.target,
+        key: request.key,
         status: "unavailable",
         detail: "only a stored excerpt exists and external full-text retrieval is not authorised",
       });
@@ -822,60 +1050,76 @@ export async function expandEvidencePacket(
     // journey_links
     let page = request.pageId ? pages.find((entry) => entry.id === request.pageId) : undefined;
     if (!page && request.url) {
-      page = (await upsertPage(request.url)) ?? undefined;
+      const outcome = await upsertPage(request.url, null);
+      page = outcome.page ?? undefined;
     }
     if (!page) {
       failed += 1;
-      requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: "page not in packet" });
+      requests.push({ type: "journey_links", target: request.target, key: request.key, status: "unavailable", detail: "page not in packet" });
       actions.push(`journey_links ${request.target}: page not in packet`);
       continue;
     }
     if (!page.text.trim()) {
-      const fetched = await upsertPage(page.url);
-      if (!fetched?.text.trim()) {
+      const outcome = await upsertPage(page.url, null);
+      if (!outcome.page?.text.trim()) {
         failed += 1;
-        requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: "page text unavailable, links unknown" });
+        requests.push({ type: "journey_links", target: request.target, key: request.key, status: "unavailable", detail: "page text unavailable, links unknown" });
         actions.push(`journey_links ${page.url}: page text unavailable, links unknown`);
         continue;
       }
     }
     if (fetches >= maxFetches) {
       failed += 1;
-      limitations.push(`journey links for ${page.url} were not inspected: live-fetch limit reached`);
-      requests.push({ type: "journey_links", target: request.target, status: "budget_exhausted", detail: "live-fetch limit reached" });
+      pushLimitation(`journey links for ${page.url} were not inspected: live-fetch limit reached`);
+      requests.push({ type: "journey_links", target: request.target, key: request.key, status: "budget_exhausted", detail: "live-fetch limit reached" });
+      continue;
+    }
+    const remaining = opts.remainingBytes?.() ?? 2 * 1024 * 1024;
+    if (remaining <= 0) {
+      failed += 1;
+      requests.push({ type: "journey_links", target: request.target, key: request.key, status: "budget_exhausted", detail: "byte budget exhausted" });
       continue;
     }
     fetches += 1;
     let live: RetrievedPage;
     try {
-      live = await retrievePage(page.url, domain, { beforeHop: opts.beforeFetch });
-      opts.onBytes?.(live.bytes);
+      live = await retrievePage(page.url, domain, {
+        beforeHop: () => opts.beforeFetch?.(),
+        onBytes: opts.onBytes,
+        deadlineAt: opts.deadlineAt,
+        transport: opts.transport,
+        resolve: opts.resolve,
+        maxBytes: Math.min(2 * 1024 * 1024, remaining),
+      });
     } catch {
       failed += 1;
-      requests.push({ type: "journey_links", target: request.target, status: "budget_exhausted", detail: "fetch budget exhausted" });
+      requests.push({ type: "journey_links", target: request.target, key: request.key, status: "budget_exhausted", detail: "fetch budget exhausted" });
       continue;
     }
     if (live.retrieval !== "live") {
       failed += 1;
-      limitations.push(`journey links for ${page.url} could not be inspected: ${live.note ?? "retrieval failed"}`);
-      requests.push({ type: "journey_links", target: request.target, status: "unavailable", detail: live.note ?? "retrieval failed" });
+      pushLimitation(`journey links for ${page.url} could not be inspected: ${live.note ?? "retrieval failed"}`);
+      requests.push({ type: "journey_links", target: request.target, key: request.key, status: "unavailable", detail: live.note ?? "retrieval failed" });
       continue;
     }
+    const beforeLinks = links.length;
     const found = extractInternalLinks(live.html, live.finalUrl, domain);
     for (const link of found) {
       if (links.length >= MAX_LINKS) break;
       if (links.some((entry) => entry.fromPageId === page.id && entry.toUrl === link.toUrl && entry.anchor === link.anchor)) continue;
       links.push({ fromPageId: page.id, toUrl: link.toUrl, anchor: link.anchor, observation: "observed", status: null });
     }
-    limitations.push(`journey links for ${page.url} are observed anchors only; destination status was not checked`);
-    progress = progress || found.length > 0;
+    const added = links.length - beforeLinks;
+    pushLimitation(`journey links for ${page.url} are observed anchors only; destination status was not checked`);
+    progress = progress || added > 0;
     requests.push({
       type: "journey_links",
       target: request.target,
-      status: found.length > 0 ? "fulfilled" : "partial",
-      detail: `${found.length} internal anchors observed; destination status not checked`,
+      key: request.key,
+      status: added > 0 ? "fulfilled" : "no_progress",
+      detail: `${added} new internal anchors observed; ${found.length} total; destination status not checked`,
     });
-    actions.push(`journey_links ${page.url}: ${found.length} internal anchors observed`);
+    actions.push(`journey_links ${page.url}: ${added} new internal anchors observed`);
   }
 
   trace.push({
@@ -884,6 +1128,11 @@ export async function expandEvidencePacket(
     detail: actions.join("; ").slice(0, 600) || "no request could be resolved",
     at: new Date().toISOString(),
   });
+
+  const cappedLimitations =
+    limitations.length > 20
+      ? [...limitations.slice(0, 19), `+${limitations.length - 19} further retrieval limitations were recorded in request outcomes`]
+      : limitations;
 
   const expanded = sealPacket(
     {
@@ -900,9 +1149,18 @@ export async function expandEvidencePacket(
       trace,
       inventory: packet.inventory,
       search: packet.search,
-      limitations: limitations.slice(0, 20),
+      limitations: cappedLimitations,
     },
     opts.now ?? new Date()
   );
-  return { packet: expanded, actions, requested: resolved.length, retrieved, failed, progress };
+  return {
+    packet: expanded,
+    actions,
+    requested: resolved.length,
+    retrieved,
+    failed,
+    progress,
+    newEvidence: progress,
+    limitations: cappedLimitations,
+  };
 }

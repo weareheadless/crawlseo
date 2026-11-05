@@ -9,7 +9,9 @@ import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapshot";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 import { finaliseDecision } from "@/lib/recommendation/contracts";
+import { AnalysisLedger } from "@/lib/recommendation/ledger";
 import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
+import { assessFinding } from "@/lib/recommendation/run";
 
 /**
  * Database integration for the customer-centred brief (§6, §7).
@@ -85,7 +87,7 @@ async function seedTenant(suffix: string) {
   return { workspace, project, site, crawl };
 }
 
-dbDescribe("customer-centred recommendations on a disposable schema", () => {
+dbDescribe("customer-centred recommendations on a disposable schema", { timeout: 20_000 }, () => {
   afterEach(async () => {
     if (workspaces.size) await db.workspace.deleteMany({ where: { id: { in: [...workspaces] } } });
     workspaces.clear();
@@ -476,4 +478,134 @@ dbDescribe("customer-centred recommendations on a disposable schema", () => {
     writeFileSync(path, JSON.stringify(parsed));
     await expect(restoreBoardSnapshot(db, path)).rejects.toThrow(/checksum/);
   });
+  it("replays an unchanged decision and invalidates it when a stored dependency changes", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site } = await seedTenant(suffix);
+    const run = await db.researchRun.create({
+      data: { siteId: site.id, projectId: project.id, title: "Replay fixture", brief: { topics: ["wardrobes"] }, status: "COMPLETED" },
+    });
+    const finding = await db.researchFinding.create({
+      data: {
+        runId: run.id,
+        type: "CONCERN",
+        theme: "Fitted wardrobe cost",
+        summary: "Homeowners ask what a fitted wardrobe costs.",
+        evidenceSourceIds: [],
+      },
+    });
+    await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-11-04T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: {
+          findingId: finding.id,
+          findingType: "CONCERN",
+          theme: finding.theme,
+          painPoint: "true",
+          painPointSummary: finding.summary,
+        },
+        metrics: {},
+        observationHash: `replay-${suffix}`,
+      },
+    });
+
+    const decisionModel = {
+      question: {
+        text: "What does a fitted wardrobe cost?",
+        audience: null,
+        journeyStage: null,
+        bases: [{ basis: "inferred_need" as const, references: [], note: "A plausible buying question from the service page." }],
+        state: "unverified" as const,
+        rationale: "The finding and page support a low-risk inferred question.",
+      },
+      premise: { state: "unverified" as const, rationale: "Not established here.", references: [] },
+      offerFit: { state: "unverified" as const, rationale: "No business fact was supplied.", references: [] },
+      coverage: [],
+      readiness: "no_action" as const,
+      intervention: "maintain" as const,
+      change: null,
+      assetJustification: null,
+      investigation: null,
+      targets: [],
+      benefits: [],
+      effort: { size: "unknown" as const, rationale: "No work proposed.", uncertainty: [] },
+      risks: [],
+      reviews: [],
+      success: { measure: "No work proposed.", instrumentation: "unknown" as const, rationale: "No work proposed." },
+      uncertainty: [],
+      contradictions: [],
+      reasons: ["No evidenced improvement."],
+    };
+    let calls = 0;
+    const assessor = async (packet: Parameters<typeof finaliseDecision>[0]["packet"]) => {
+      calls += 1;
+      return {
+        kind: "final" as const,
+        attempts: 1,
+        raw: { kind: "final_decision" },
+        decision: finaliseDecision({ model: decisionModel, packet, modelName: "fixture-model", promptVersion: "recommendation-prompt/2" }),
+      };
+    };
+    const candidate = {
+      id: finding.id,
+      runId: run.id,
+      type: finding.type,
+      theme: finding.theme,
+      summary: finding.summary,
+      premise: finding.summary,
+      observedAt: finding.createdAt,
+      sourceIds: [],
+      dedupKey: `O13:${finding.id}`,
+      dimensions: { findingId: finding.id, painPoint: "true", theme: finding.theme },
+    };
+
+    const first = await assessFinding(db, {
+      projectId: project.id,
+      siteId: site.id,
+      finding: candidate,
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(first.status).toBe("assessed");
+    expect(first.packet?.packetHash).toBe(first.decision?.packetHash);
+    const stored = await db.evidenceRecord.findFirstOrThrow({
+      where: { projectId: project.id, kind: "research_finding", supersededById: null },
+      select: { dimensions: true },
+    });
+    const dimensions = stored.dimensions as Record<string, unknown>;
+    expect(typeof dimensions.recommendationInitialPacketHash).toBe("string");
+    expect(typeof dimensions.recommendationDependenciesJson).toBe("string");
+    expect(JSON.parse(dimensions.recommendationAttemptsJson as string).length).toBeGreaterThan(0);
+
+    const second = await assessFinding(db, {
+      projectId: project.id,
+      siteId: site.id,
+      finding: candidate,
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(second.status).toBe("reused");
+    expect(calls).toBe(1);
+    expect(second.packet?.packetHash).toBe(first.decision?.packetHash);
+
+    const page = await db.auditPage.findFirstOrThrow({ where: { crawl: { siteId: site.id } } });
+    await db.auditPage.update({
+      where: { id: page.id },
+      data: { contentText: `${page.contentText ?? ""} A newly added price section changes the stored evidence.` },
+    });
+
+    const third = await assessFinding(db, {
+      projectId: project.id,
+      siteId: site.id,
+      finding: candidate,
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(third.status).toBe("assessed");
+    expect(calls).toBe(2);
+  });
+
 });

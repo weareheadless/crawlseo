@@ -4,6 +4,7 @@ import {
   finaliseDecision,
   parseModelOutput,
   validateDecision,
+  type AssessmentAttempt,
   type EvidencePacket,
   type EvidenceRequest,
   type RecommendationDecision,
@@ -28,6 +29,7 @@ You receive one JSON packet. Use only its facts, sources, pages, links, search o
 
 FIRST decide whether you can make a responsible final decision from the supplied evidence.
 - If a material page, section, source or navigation observation is missing or truncated and the service could retrieve it, return an evidence request instead of a recommendation. Do not ask a person to read a public page that the service can read.
+- If a supplied page is truncated and the answer may be later, request the same page with an "offset" equal to the number of characters already supplied. Do not request the same prefix again; that produces no new evidence.
 - Evidence requests are analysis work, not customer work. Use them only when the answer could change the decision.
 - When the evidence is sufficient, or the remaining gap genuinely needs owner/private/qualified-expert input, return the final decision.
 
@@ -40,6 +42,7 @@ A) Evidence request:
     {
       "type": "page_text" | "source_text" | "journey_links" | "inventory_search",
       "target": "page:<id> or source:<id> or a site URL or a short inventory query",
+      "offset": 0,
       "question": "the exact unresolved question",
       "whyItMatters": "how the answer could change the decision"
     }
@@ -53,12 +56,12 @@ B) Final decision:
   "question": {"text","audience","journeyStage","bases":[{"basis","references":[],"note"}],"state","rationale"},
   "premise": {"state","rationale","references":[]},
   "offerFit": {"state","rationale","references":[]},
-  "coverage": [{"pageId","state","rationale","excerpts":[],"limitations":[]}],
+  "coverage": [{"pageId","state","scope":"whole_page|section","sectionIds":[],"rationale","excerpts":[],"limitations":[]}],
   "readiness": "actionable|needs_investigation|research_backlog|no_action|rejected",
   "intervention": "maintain|update_page|improve_journey|create_asset|investigate|technical_fix",
   "change": "specific implementation change, or null",
   "assetJustification": {"distinctIntent","whyExistingInsufficient"} or null,
-  "investigation": {"question","inspect":[],"decisionCriteria":[],"deliverable"} or null,
+  "investigation": {"kind":"owner_input|qualified_review|private_data|external_evidence","question","inspect":[],"decisionCriteria":[],"deliverable"} or null,
   "targets": [{"pageId","pageUrl","sectionId","role","rationale"}],
   "benefits": [{"track","mechanism","measurement","baselineReference","assumptions":[],"uncertainty":[]}],
   "effort": {"size":"small|medium|large|unknown","rationale","uncertainty":[]},
@@ -86,7 +89,7 @@ Rules:
 - The premise is contradicted only when a supplied page answers the finding's claimed gap; cite that page and quote it. A related page of the same type is not enough. An unrelated corpus is a research-quality failure, not a customer need. A false finding premise does not automatically make the underlying customer question useless: if that question is supported or explicitly inferred and an existing page is genuinely inadequate, you may return actionable for the question while recording the premise as contradicted. Use rejected when the customer question itself is unsupported or the business should not serve it.
 - Choose readiness and intervention together:
   - actionable: supported (or explicitly inferred) question + supported offer fit + an evidenced inadequacy or a justified new asset/journey change + a specific change. Missing keyword volume does not prevent this.
-  - needs_investigation: the question matters but a genuinely non-automatable answer, business intent or qualified judgement is unresolved. Provide a bounded question, what to inspect, decision criteria and a concrete deliverable. Do not put an implementation instruction in "change". Do not use this for public content the service could read; request that evidence instead.
+  - needs_investigation: the question matters but a genuinely non-automatable answer, business intent or qualified judgement is unresolved. Provide an explicit "kind" naming the external need, a bounded question, what to inspect, decision criteria and a concrete deliverable. Do not put an implementation instruction in "change". Do not use this for public content the service could read; request that evidence instead. Use exact packet ids or URLs in "inspect" only when you really mean supplied content; a prose instruction that mentions a URL is not a request to re-read it.
   - research_backlog: weak/ambiguous need, not yet ready for work.
   - no_action: the site already answers it and no improvement is demonstrated.
   - rejected: the finding's premise is false, the business should not serve it, or the research is unusable. Explain why.
@@ -99,9 +102,9 @@ Rules:
 - Prefer restraint over fabricated work, but do not reject a useful low-risk improvement merely because its traffic impact is unquantified.`;
 
 export type AssessmentOutcome =
-  | { kind: "final"; decision: RecommendationDecision; attempts: number; raw: unknown; rawAttempts?: unknown[] }
-  | { kind: "request"; request: EvidenceRequest; attempts: number; raw: unknown; rawAttempts?: unknown[] }
-  | { kind: "failure"; errors: string[]; raw: unknown; attempts: number; rawAttempts?: unknown[] };
+  | { kind: "final"; decision: RecommendationDecision; attempts: number; raw: unknown; rawAttempts?: unknown[]; history?: AssessmentAttempt[] }
+  | { kind: "request"; request: EvidenceRequest; attempts: number; raw: unknown; rawAttempts?: unknown[]; history?: AssessmentAttempt[] }
+  | { kind: "failure"; errors: string[]; raw: unknown; attempts: number; rawAttempts?: unknown[]; history?: AssessmentAttempt[] };
 
 export async function assessRecommendation(
   packet: EvidencePacket,
@@ -118,6 +121,7 @@ export async function assessRecommendation(
   let lastErrors: string[] = [];
   let attempts = 0;
   const rawAttempts: unknown[] = [];
+  const history: AssessmentAttempt[] = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (!ledger.canStart()) {
       lastErrors = ["analysis wall-clock budget exhausted before a valid result"];
@@ -140,16 +144,42 @@ export async function assessRecommendation(
         maxTokens: ledger.policy.maxTokens,
         attempts: 3,
         timeoutMs: ledger.policy.timeoutMs,
-        // Charge every transport attempt before it is dispatched, including
-        // retries. A failed request still spends the run's allowance.
+        // Charge every transport attempt immediately before it is dispatched,
+        // including retries. A failed request still spends the run's allowance.
         beforeAttempt: () => {
           if (!ledger.canCallModel()) throw new Error("analysis model-call budget exhausted before dispatch");
           ledger.chargeModelCall(round, attempt === 1 ? "assessment transport" : "repair transport");
+        },
+        deadlineAt: ledger.deadlineAt(),
+        onAttempt: (record) => {
+          if (record.status === "ok") return;
+          history.push({
+            round,
+            attempt,
+            inputPacketHash: packet.packetHash,
+            feedback: feedback || null,
+            kind: "transport_error",
+            raw: null,
+            responseText: record.responseText ?? null,
+            errors: [record.error ?? "transport failed"],
+          });
         },
       });
       rawAttempts.push(raw);
     } catch (error) {
       lastErrors = [error instanceof Error ? error.message : String(error)];
+      if (!history.some((entry) => entry.kind === "transport_error" && entry.attempt === attempt)) {
+        history.push({
+          round,
+          attempt,
+          inputPacketHash: packet.packetHash,
+          feedback: feedback || null,
+          kind: "transport_error",
+          raw: null,
+          responseText: null,
+          errors: lastErrors,
+        });
+      }
       feedback = `Your previous answer could not be read as JSON. Return one complete JSON object and no prose. Error: ${lastErrors[0]}`;
       if (!ledger.canRepair()) break;
       ledger.chargeRepair();
@@ -159,6 +189,16 @@ export async function assessRecommendation(
     const parsed = parseModelOutput(raw);
     if (!parsed.ok) {
       lastErrors = parsed.errors;
+      history.push({
+        round,
+        attempt,
+        inputPacketHash: packet.packetHash,
+        feedback: feedback || null,
+        kind: "invalid_output",
+        raw,
+        responseText: null,
+        errors: parsed.errors,
+      });
       feedback = `Your previous answer was invalid. Correct these errors and return the complete JSON object again:\n- ${parsed.errors.join("\n- ")}`;
       if (!ledger.canRepair()) break;
       ledger.chargeRepair();
@@ -166,7 +206,17 @@ export async function assessRecommendation(
     }
 
     if (parsed.output.kind === "request_evidence") {
-      return { kind: "request", request: parsed.output.request, attempts, raw, rawAttempts };
+      history.push({
+        round,
+        attempt,
+        inputPacketHash: packet.packetHash,
+        feedback: feedback || null,
+        kind: "request_evidence",
+        raw,
+        responseText: null,
+        errors: [],
+      });
+      return { kind: "request", request: parsed.output.request, attempts, raw, rawAttempts, history };
     }
 
     const decision = finaliseDecision({
@@ -177,14 +227,36 @@ export async function assessRecommendation(
       now: opts.now,
     });
     const validation = validateDecision(decision, packet);
-    if (validation.ok) return { kind: "final", decision, attempts, raw, rawAttempts };
+    if (validation.ok) {
+      history.push({
+        round,
+        attempt,
+        inputPacketHash: packet.packetHash,
+        feedback: feedback || null,
+        kind: "final_decision",
+        raw,
+        responseText: null,
+        errors: [],
+      });
+      return { kind: "final", decision, attempts, raw, rawAttempts, history };
+    }
     lastErrors = validation.errors;
+    history.push({
+      round,
+      attempt,
+      inputPacketHash: packet.packetHash,
+      feedback: feedback || null,
+      kind: "validation_error",
+      raw,
+      responseText: null,
+      errors: validation.errors,
+    });
     feedback = `Your previous answer failed integrity validation. Correct these errors and return the complete JSON object again:\n- ${validation.errors.join("\n- ")}`;
     if (!ledger.canRepair()) break;
     ledger.chargeRepair();
   }
 
-  return { kind: "failure", errors: lastErrors, raw, attempts, rawAttempts };
+  return { kind: "failure", errors: lastErrors, raw, attempts, rawAttempts, history };
 }
 
 /** A small deterministic check used by tests and callers that already have a decision. */
