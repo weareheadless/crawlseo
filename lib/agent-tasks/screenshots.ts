@@ -78,7 +78,7 @@ export function selectScreenshotUrls(input: {
   return selected;
 }
 
-async function chromeExecutable(): Promise<string | null> {
+export async function chromeExecutable(): Promise<string | null> {
   const candidates = [
     process.env.CHROME_BIN,
     "/usr/bin/chromium",

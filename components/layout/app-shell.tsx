@@ -64,6 +64,7 @@ export function AppShell({
       <div className={cn("flex items-center gap-2.5 px-4 py-5", collapsed && "justify-center px-2")}>
         <Link
           href="/dashboard"
+          aria-label="CrawlSEO home"
           className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"
         >
           <svg viewBox="0 0 24 24" className="size-4" fill="none" aria-hidden>
@@ -215,6 +216,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
             className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="size-5" />
@@ -230,6 +232,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation"
             className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Menu className="size-5" />

@@ -10,8 +10,10 @@ import { restoreBoardSnapshot, takeBoardSnapshot } from "@/lib/ops/board-snapsho
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
 import { finaliseDecision, hashPacket } from "@/lib/recommendation/contracts";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
+import { publishDecision } from "@/lib/recommendation/publish";
 import { reassessProjectRecommendations } from "@/lib/recommendation/reassess";
 import { assessFinding } from "@/lib/recommendation/run";
+import { shadowRecommendations } from "@/lib/recommendation/shadow";
 
 /**
  * Database integration for the customer-centred brief (§6, §7).
@@ -445,7 +447,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
       data: { title: "Accepted later", decidedBy: "owner-2", decidedAt: new Date(Date.now() + 1000) },
     });
 
-    const result = await restoreBoardSnapshot(db, path);
+    const result = await restoreBoardSnapshot(db, path, { all: true });
     expect(result.restored).toBeGreaterThan(0);
     expect(result.conflicts.length).toBe(2);
     expect(result.conflicts.join(" ")).toContain("created after the snapshot");
@@ -797,7 +799,7 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
     });
     await db.evidenceRecord.update({ where: { id: before.id }, data: { supersededById: after.id } });
 
-    const result = await restoreBoardSnapshot(db, path);
+    const result = await restoreBoardSnapshot(db, path, { all: true });
     expect(result.conflicts.join(" ")).toContain("created after the snapshot");
     const restoredBefore = await db.evidenceRecord.findUniqueOrThrow({ where: { id: before.id } });
     const restoredAfter = await db.evidenceRecord.findUniqueOrThrow({ where: { id: after.id } });
@@ -855,12 +857,184 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
       },
     });
 
-    const result = await restoreBoardSnapshot(db, path);
+    const result = await restoreBoardSnapshot(db, path, { all: true });
     const restoredBefore = await db.evidenceRecord.findUniqueOrThrow({ where: { id: before.id } });
     const restoredAfter = await db.evidenceRecord.findUniqueOrThrow({ where: { id: acceptedEvidence.id } });
     expect(restoredBefore.supersededById).toBe(acceptedEvidence.id);
     expect(restoredAfter.supersededById).toBeNull();
     expect(result.conflicts.join(" ")).toContain("preserved newer work");
+  });
+
+  it("shadow writes nothing and apply projects the same semantic result", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site } = await seedTenant(suffix);
+    const knowledge = await db.businessKnowledgeDocument.create({
+      data: {
+        projectId: project.id,
+        logicalId: `shadow-knowledge-${suffix}`,
+        revision: 1,
+        acceptedRevision: 1,
+      },
+    });
+    await db.businessKnowledgeRevision.create({
+      data: {
+        documentId: knowledge.id,
+        revision: 1,
+        state: "accepted",
+        fields: { services: { value: ["fitted wardrobes"] } },
+        reason: "shadow apply fixture",
+        changedFields: {},
+        affectedActionIds: [],
+        serviceCaller: "integration",
+      },
+    });
+    const run = await db.researchRun.create({
+      data: {
+        siteId: site.id,
+        projectId: project.id,
+        title: "Shadow apply fixture",
+        brief: {},
+        status: "COMPLETED",
+      },
+    });
+    const finding = await db.researchFinding.create({
+      data: {
+        runId: run.id,
+        type: "CONCERN",
+        theme: "Fitted wardrobe pricing",
+        summary: "Customers ask what a fitted wardrobe costs.",
+        evidenceSourceIds: [],
+      },
+    });
+    const evidence = await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-11-01T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: {
+          findingId: finding.id,
+          painPoint: "true",
+          theme: finding.theme,
+          recommendationDedupKey: `O13:${finding.id}`,
+        },
+        metrics: {},
+        observationHash: `shadow-apply-${suffix}`,
+      },
+    });
+
+    const assessor = async (packet: Parameters<typeof finaliseDecision>[0]["packet"]) => {
+      const page = packet.pages[0];
+      const model = {
+        question: {
+          text: "What does a fitted wardrobe cost?",
+          audience: null,
+          journeyStage: null,
+          bases: [{ basis: "inferred_need" as const, references: [], note: "The service page supports the question." }],
+          state: "unverified" as const,
+          rationale: "A plausible buying question.",
+        },
+        premise: { state: "unverified" as const, rationale: "Not established here.", references: [] },
+        offerFit: { state: "supported" as const, rationale: "The business knowledge names fitted wardrobes as a service.", references: ["fact:services"] },
+        coverage: page
+          ? [
+              {
+                pageId: page.id,
+                state: "partially_answers" as const,
+                scope: "whole_page" as const,
+                rationale: "The service page gives a starting price but not a full quote breakdown.",
+                excerpts: [page.text.slice(0, 200)],
+                limitations: [],
+              },
+            ]
+          : [],
+        readiness: "actionable" as const,
+        intervention: "update_page" as const,
+        change: "Add an itemised quote breakdown to the fitted wardrobe service page.",
+        assetJustification: null,
+        investigation: null,
+        targets: page
+          ? [
+              {
+                pageId: page.id,
+                pageUrl: page.url,
+                sectionId: null,
+                role: "update" as const,
+                rationale: "The existing service page is the right place for the breakdown.",
+              },
+            ]
+          : [],
+        benefits: [
+          {
+            track: "customer_value" as const,
+            mechanism: "A quote breakdown helps a customer judge affordability before booking a survey.",
+            measurement: "unquantified" as const,
+            baselineReference: null,
+            assumptions: [],
+            uncertainty: ["The frequency of the question is not measured."],
+          },
+        ],
+        effort: { size: "small" as const, rationale: "One section on an existing page.", uncertainty: [] },
+        risks: [],
+        reviews: [],
+        success: { measure: "A customer can see what the quote includes.", instrumentation: "unknown" as const, rationale: "No analytics change." },
+        uncertainty: [],
+        contradictions: [],
+        reasons: ["The service page only gives a starting price."],
+      };
+      return {
+        kind: "final" as const,
+        attempts: 1,
+        raw: { kind: "final_decision" },
+        decision: finaliseDecision({
+          model,
+          packet,
+          modelName: "fixture-model",
+          promptVersion: "recommendation-prompt/2",
+        }),
+      };
+    };
+
+    const before = await db.opportunity.count({ where: { projectId: project.id } });
+    const report = await shadowRecommendations(db, {
+      projectId: project.id,
+      siteId: site.id,
+      maxAssessments: "all",
+      assessor: assessor as never,
+      ledger: new AnalysisLedger(),
+    });
+    expect(report.complete).toBe(true);
+    expect(report.entries).toHaveLength(1);
+    expect(await db.opportunity.count({ where: { projectId: project.id } })).toBe(before);
+    const proposed = report.entries[0].proposedDecision;
+    const projection = report.entries[0].proposedProjection;
+    expect(proposed).not.toBeNull();
+    expect(projection).not.toBeNull();
+
+    await publishDecision(db, {
+      projectId: project.id,
+      decision: proposed!,
+      findingType: finding.type,
+      evidenceId: evidence.id,
+    });
+    const applied = await db.opportunity.findUniqueOrThrow({
+      where: { projectId_dedupKey: { projectId: project.id, dedupKey: proposed!.dedupKey } },
+    });
+    expect(applied.title).toBe(projection!.title);
+    expect(applied.summary).toBe(projection!.summary);
+    expect(applied.type).toBe(projection!.type);
+    expect(applied.scoreInputs).toEqual(projection!.scoreInputs);
+    expect(applied.recommendationDecision).toMatchObject(projection!.recommendationDecision);
+    expect(applied.recommendationEvidenceId).toBe(evidence.id);
+
+    await publishDecision(db, {
+      projectId: project.id,
+      decision: proposed!,
+      findingType: finding.type,
+      evidenceId: evidence.id,
+    });
+    expect(await db.opportunity.count({ where: { projectId: project.id, dedupKey: proposed!.dedupKey } })).toBe(1);
   });
 
 });

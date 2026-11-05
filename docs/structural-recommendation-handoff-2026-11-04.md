@@ -1,5 +1,14 @@
 # Structural recommendation handoff — 2026-11-04
 
+> **Correction (2026-11-04): this handoff is stale and is not acceptance evidence.**
+> It predates the R7/R8 repair (`36e7e46`), the safety repairs (`dfefa00`,
+> `828ed5c`) and the residual repair. Its `982 passed / 16 skipped` total is
+> superseded by the current `1,054 passed / 21 skipped`; its rollback description
+> predates the transactional, scoped repair. The G1–G10 residuals are repaired in
+> `docs/recommendation-migration-residual-repair-2026-11-04.md`. Package 6 live
+> evaluation, independent review and package 7 rollout remain gated. A corrected
+> handoff is package 7 work.
+
 ## Release identity
 
 - Branch: `main`, local commits only. **Not pushed, merged or deployed.**

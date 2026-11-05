@@ -28,7 +28,12 @@ import {
 } from "@/lib/recommendation/contracts";
 import { RECOMMENDATION_PROMPT_VERSION, assessRecommendation } from "@/lib/recommendation/assess";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
-import { buildEvidencePacket, expandEvidencePacket, type PacketDb } from "@/lib/recommendation/packet";
+import {
+  buildEvidencePacket,
+  expandEvidencePacket,
+  inventoryRowsForPacket,
+  type PacketDb,
+} from "@/lib/recommendation/packet";
 import { publishDecision } from "@/lib/recommendation/publish";
 
 /**
@@ -165,8 +170,8 @@ async function dependenciesStillMatch(
         row.contentHash ??
         (row.contentText ? createHash("sha256").update(row.contentText).digest("hex") : null);
       if (currentHash !== page.contentHash) return false;
-    } else if (page.retrieval === "live") {
-      // Incomplete live retrieval cannot support a reused whole-page decision.
+    } else if (page.retrieval === "live" || page.retrieval === "rendered") {
+      // Incomplete live or rendered retrieval cannot support a reused whole-page decision.
       if (page.truncated) return false;
     } else {
       return false;
@@ -388,6 +393,7 @@ export async function assessFinding(
     const requestValidation = validateEvidenceRequest(outcome.request, packet, {
       siteDomain,
       maxRequests: ledger.policy.maxRequestsPerRound,
+      inventoryRows: inventoryRowsForPacket(packet),
     });
     if (!requestValidation.ok) {
       // The model asked for something the service cannot resolve. Treat it as an

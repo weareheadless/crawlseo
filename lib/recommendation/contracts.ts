@@ -108,7 +108,7 @@ export const PacketPageSchema = z.object({
   contentHash: z.string().nullable(),
   text: z.string(),
   truncated: z.boolean(),
-  retrieval: z.enum(["stored", "live", "unavailable"]),
+  retrieval: z.enum(["stored", "live", "rendered", "unavailable"]),
   status: z.number().int(),
   language: z.string().nullable(),
   /** Characters of the page body that were actually supplied and inspected. */
@@ -210,7 +210,7 @@ export const EvidencePacketSchema = z.object({
       title: z.string().nullable(),
       status: z.number().int(),
       indexable: z.boolean(),
-      retrieval: z.enum(["stored", "unavailable"]),
+      retrieval: z.enum(["stored", "rendered", "unavailable"]),
     })
   ).max(2_000),
   search: z.array(
@@ -840,6 +840,12 @@ export function parseModelOutput(raw: unknown): { ok: true; output: ModelOutput 
   return { ok: true, output: { kind: "final_decision", decision: parsed.decision } };
 }
 
+export type InventorySearchRow = {
+  url: string;
+  title: string | null;
+  contentText: string | null;
+};
+
 export type EvidenceRequestValidation = { ok: boolean; errors: string[]; resolved: ResolvedEvidenceRequest[] };
 
 export type ResolvedEvidenceRequest = {
@@ -986,7 +992,7 @@ export type AssessmentAttempt = {
 export function validateEvidenceRequest(
   request: EvidenceRequest,
   packet: EvidencePacket,
-  opts: { siteDomain: string; maxRequests?: number }
+  opts: { siteDomain: string; maxRequests?: number; inventoryRows?: InventorySearchRow[] }
 ): EvidenceRequestValidation {
   const errors: string[] = [];
   const resolved: ResolvedEvidenceRequest[] = [];
@@ -1094,17 +1100,27 @@ export function validateEvidenceRequest(
       errors.push("inventory_search needs at least one word of three characters or more");
       continue;
     }
-    const matches = [...inventory].filter((url) => {
-      const lower = url.toLowerCase();
-      return terms.some((term) => lower.includes(term));
-    });
-    if (matches.length === 0) {
+    const searchRows = opts.inventoryRows?.length
+      ? opts.inventoryRows
+      : [...inventory].map((url) => ({ url, title: null, contentText: null }));
+    const scored = searchRows
+      .map((row) => {
+        const haystack = `${row.url} ${row.title ?? ""} ${(row.contentText ?? "").slice(0, 8_000)}`
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+        return { url: row.url, score };
+      })
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score || a.url.length - b.url.length);
+    if (scored.length === 0) {
       errors.push(`inventory_search "${entry.target}" found no known page; absence in the known inventory is not proof of absence`);
       continue;
     }
-    const key = canonicalRequestKey("inventory_search", entry.target, { url: matches[0] });
+    const key = canonicalRequestKey("inventory_search", entry.target, { url: scored[0].url });
     if (rejectRepeat(key, `inventory_search ${entry.target}`)) continue;
-    resolved.push({ type: entry.type, target: entry.target, pageId: null, url: matches[0], offset: null, key });
+    resolved.push({ type: entry.type, target: entry.target, pageId: null, url: scored[0].url, offset: null, key });
   }
   return { ok: errors.length === 0, errors, resolved };
 }

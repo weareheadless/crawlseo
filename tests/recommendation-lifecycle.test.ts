@@ -317,6 +317,7 @@ describe("R8 shadow compares full decisions and preserves accepted work", () => 
       },
       evidenceEdge: { findMany: vi.fn(async () => []) },
       rawProviderResponse: { findUnique: vi.fn(async () => null) },
+      task: { findMany: vi.fn(async () => []) },
     } as never;
   }
 

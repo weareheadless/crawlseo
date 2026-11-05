@@ -1,7 +1,10 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
 
 import type { PrismaClient } from "@prisma/client";
 
+import { chromeExecutable } from "@/lib/agent-tasks/screenshots";
 import {
   documentMarkup,
   fetchPublicDocument,
@@ -85,10 +88,14 @@ export type PacketOptions = {
 const DEFAULT_MAX_PAGES = 6;
 const DEFAULT_MAX_CHARS = 3_000;
 const DEFAULT_MAX_SOURCES = 8;
-const MAX_INVENTORY = 500;
+/** Read the whole known inventory in bounded batches. */
+const INVENTORY_BATCH = 500;
+/** The packet projection is bounded by the schema; search uses every row. */
+const MAX_PACKET_INVENTORY = 2_000;
 const MAX_SEARCH = 40;
 const MAX_LINKS = 200;
 const MAX_LIVE_CHARS = 120_000;
+const execFileAsync = promisify(execFile);
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "without", "from", "this", "that", "these", "those",
@@ -210,7 +217,7 @@ type RetrievedPage = {
   status: number;
   finalUrl: string;
   note: string | null;
-  retrieval: "live" | "unavailable";
+  retrieval: "live" | "rendered" | "unavailable";
   bytes: number;
   /** Length of the extracted body before the live-text cap was applied. */
   totalChars: number;
@@ -228,6 +235,54 @@ const SHELL_MARKERS = /enable javascript|javascript is required|access denied|ju
  * Redirects are followed manually and every hop is checked before dispatch. The
  * body is streamed to a byte cap and returned with an explicit truncation flag.
  */
+/**
+ * A bounded client-side render through the existing Chromium capability.
+ *
+ * This is not a second crawler: the initial document has already passed the
+ * origin/redirect/SSRF/byte checks, and the render is one extra bounded attempt
+ * on that same final URL. A failed or unavailable render stays unknown.
+ */
+async function renderClientPage(
+  url: string,
+  opts: { deadlineAt?: number; maxBytes?: number; beforeRender?: () => void } = {}
+): Promise<{ html: string; text: string; title: string | null; bytes: number; truncated: boolean } | null> {
+  const chrome = await chromeExecutable();
+  if (!chrome) return null;
+  const remaining = opts.deadlineAt ? Math.max(1, opts.deadlineAt - Date.now()) : 20_000;
+  const timeout = Math.max(1, Math.min(20_000, remaining));
+  const maxBuffer = Math.max(64 * 1024, Math.min(opts.maxBytes ?? 2 * 1024 * 1024, 4 * 1024 * 1024));
+  try {
+    opts.beforeRender?.();
+    const { stdout } = await execFileAsync(
+      chrome,
+      [
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--hide-scrollbars",
+        "--virtual-time-budget=15000",
+        "--run-all-compositor-stages-before-draw",
+        "--dump-dom",
+        url,
+      ],
+      { timeout, maxBuffer }
+    );
+    const html = stdout;
+    const text = htmlToText(documentMarkup(html));
+    const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? null;
+    return {
+      html,
+      text,
+      title,
+      bytes: Buffer.byteLength(html),
+      truncated: Buffer.byteLength(html) >= maxBuffer,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function retrievePage(
   url: string,
   siteDomain: string,
@@ -238,6 +293,10 @@ export async function retrievePage(
     transport?: PublicDocumentTransport;
     resolve?: (hostname: string) => Promise<string | ResolvedAddress | ResolvedAddress[]>;
     onBytes?: (bytes: number) => void;
+    /** Test seam for the bounded client-side render. */
+    render?: (
+      url: string
+    ) => Promise<{ html: string; text: string; title: string | null; bytes: number; truncated: boolean } | null>;
   } = {}
 ): Promise<RetrievedPage> {
   const domain = siteDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
@@ -305,11 +364,39 @@ export async function retrievePage(
     if (doc.statusCode !== 200) {
       return { ...unavailable(`HTTP ${doc.statusCode}`, doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
     }
-    if (SHELL_MARKERS.test(html) && text.length < 1_500) {
-      return { ...unavailable("page is a bot challenge or client-rendered shell", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
-    }
-    if (text.length < 80) {
-      return { ...unavailable("no usable body text was extracted", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
+    if ((SHELL_MARKERS.test(html) && text.length < 1_500) || text.length < 80) {
+      const rendered = opts.render
+        ? await opts.render(finalUrl)
+        : await renderClientPage(finalUrl, {
+            deadlineAt: opts.deadlineAt,
+            maxBytes: opts.maxBytes,
+            beforeRender: () => opts.beforeHop?.(finalUrl),
+          });
+      if (rendered && rendered.text.length >= 80) {
+        opts.onBytes?.(rendered.bytes);
+        const renderedLimited = rendered.text.length > MAX_LIVE_CHARS;
+        const renderedText = rendered.text.slice(0, MAX_LIVE_CHARS);
+        return {
+          url,
+          title: rendered.title ?? title,
+          text: renderedText,
+          html: rendered.html,
+          status: doc.statusCode,
+          finalUrl,
+          note: "text came from a bounded client-side render",
+          retrieval: "rendered",
+          bytes: doc.bytes + rendered.bytes,
+          totalChars: rendered.text.length,
+          truncated: rendered.truncated || renderedLimited,
+          truncation: rendered.truncated ? "byte_limit" : renderedLimited ? "text_limit" : "none",
+        };
+      }
+      if (SHELL_MARKERS.test(html) && text.length < 1_500) {
+        return { ...unavailable("page is a bot challenge or client-rendered shell", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
+      }
+      if (text.length < 80) {
+        return { ...unavailable("no usable body text was extracted", doc.statusCode, doc.bytes, finalUrl), title, html, truncated, truncation };
+      }
     }
     return {
       url,
@@ -361,7 +448,7 @@ function buildPage(
     contentHash: string | null;
     statusCode: number;
     language: string | null;
-    retrieval: "stored" | "live" | "unavailable";
+    retrieval: "stored" | "live" | "rendered" | "unavailable";
     retrievalNote: string | null;
     truncation?: "none" | "sectioned" | "byte_limit" | "text_limit" | "offset";
   },
@@ -414,7 +501,7 @@ function buildFullPage(
     contentHash: string | null;
     statusCode: number;
     language: string | null;
-    retrieval: "stored" | "live" | "unavailable";
+    retrieval: "stored" | "live" | "rendered" | "unavailable";
     retrievalNote: string | null;
   },
   maxChars: number,
@@ -519,14 +606,49 @@ export type InventoryRow = {
   indexable: boolean;
 };
 
-/** The complete known inventory, bounded only by the existing crawl size. */
+/** The complete known inventory, read in bounded batches. */
 export async function loadInventory(db: PacketDb, crawlId: string): Promise<InventoryRow[]> {
-  return db.auditPage.findMany({
-    where: { crawlId },
-    select: { url: true, title: true, contentText: true, contentHash: true, statusCode: true, indexable: true },
-    orderBy: { url: "asc" },
-    take: MAX_INVENTORY,
-  });
+  const rows: InventoryRow[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const batch: Array<InventoryRow & { id: string }> = await db.auditPage.findMany({
+      where: { crawlId },
+      select: { id: true, url: true, title: true, contentText: true, contentHash: true, statusCode: true, indexable: true },
+      orderBy: { id: "asc" },
+      take: INVENTORY_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    rows.push(
+      ...batch.map((row) => ({
+        url: row.url,
+        title: row.title,
+        contentText: row.contentText,
+        contentHash: row.contentHash,
+        statusCode: row.statusCode,
+        indexable: row.indexable,
+      }))
+    );
+    if (batch.length < INVENTORY_BATCH) break;
+    const nextCursor = batch[batch.length - 1].id;
+    // A fixture or a client that ignores the cursor must not loop forever.
+    if (!nextCursor || nextCursor === cursor) break;
+    cursor = nextCursor;
+  }
+  return rows.sort((a, b) => a.url.localeCompare(b.url));
+}
+
+/**
+ * The rows behind one packet, kept out of the serialized evidence.
+ *
+ * `inventory_search` must search every known page, not only the packet's bounded
+ * URL projection. The packet is still the exact evidence the model receives; this
+ * in-process index is only the service-side resolver. Replayed packets have no
+ * index, and their terminal request history is already in the packet.
+ */
+const packetInventoryRows = new WeakMap<EvidencePacket, InventoryRow[]>();
+
+export function inventoryRowsForPacket(packet: EvidencePacket): InventoryRow[] {
+  return packetInventoryRows.get(packet) ?? [];
 }
 
 function rankRows(rows: InventoryRow[], terms: string[]): Array<{ row: InventoryRow; score: number }> {
@@ -609,7 +731,11 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
 
   const rows = crawl ? await loadInventory(db, crawl.id) : [];
   if (crawl) {
-    if (rows.length >= MAX_INVENTORY) limitations.push(`inventory was limited to ${MAX_INVENTORY} known pages`);
+    if (rows.length > MAX_PACKET_INVENTORY) {
+      limitations.push(
+        `the packet shows the first ${MAX_PACKET_INVENTORY} of ${rows.length} known pages; inventory_search still searches every known page`
+      );
+    }
     if (crawl.maxPages > 0 && crawl.pagesFound >= crawl.maxPages) {
       limitations.push(`the crawl reached its ${crawl.maxPages}-page cap, so the inventory is incomplete`);
     }
@@ -636,7 +762,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
   let liveFetches = 0;
   for (const row of selectedRows.slice(0, maxPages)) {
     let contentText = row.contentText;
-    let retrieval: "stored" | "live" | "unavailable" = contentText ? "stored" : "unavailable";
+    let retrieval: "stored" | "live" | "rendered" | "unavailable" = contentText ? "stored" : "unavailable";
     let note: string | null = contentText ? null : "no stored page text";
     let title = row.title;
     let statusCode = row.statusCode;
@@ -663,9 +789,9 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
         }
         if (live) {
           liveFetches += 1;
-          if (live.retrieval === "live") {
+          if (live.retrieval === "live" || live.retrieval === "rendered") {
             contentText = live.text;
-            retrieval = "live";
+            retrieval = live.retrieval;
             note = live.note;
             title = live.title ?? title;
             statusCode = live.status;
@@ -738,7 +864,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     cappedLimitations = [...limitations.slice(0, 19), `+${overflow.length} further limitations were recorded in the trace`];
   }
 
-  return sealPacket(
+  const packet = sealPacket(
     {
       projectId: opts.projectId,
       siteId: opts.siteId,
@@ -773,7 +899,7 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
       links: [],
       requests,
       trace,
-      inventory: rows.slice(0, MAX_INVENTORY).map((row) => ({
+      inventory: rows.slice(0, MAX_PACKET_INVENTORY).map((row) => ({
         url: row.url,
         title: row.title,
         status: row.statusCode,
@@ -785,6 +911,8 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     },
     opts.now ?? new Date()
   );
+  packetInventoryRows.set(packet, rows);
+  return packet;
 }
 
 export type ExpandResult = {
@@ -953,7 +1081,7 @@ export async function expandEvidencePacket(
       pushLimitation(`evidence request for ${url} was not retrieved: ${detail}`);
       return { page: existing, changed: false, status: "budget_exhausted", detail };
     }
-    if (live.retrieval !== "live") {
+    if (live.retrieval !== "live" && live.retrieval !== "rendered") {
       failed += 1;
       const note = live.note ?? "retrieval failed";
       pushLimitation(`evidence request for ${url} failed: ${note}`);
@@ -982,7 +1110,7 @@ export async function expandEvidencePacket(
         contentHash: createHash("sha256").update(live.text).digest("hex"),
         statusCode: live.status,
         language: existing?.language ?? packet.context.language,
-        retrieval: "live",
+        retrieval: live.retrieval,
         retrievalNote: live.note,
       },
       requestedFullText,
@@ -1122,7 +1250,7 @@ export async function expandEvidencePacket(
       requests.push({ type: "journey_links", target: request.target, key: request.key, status: "budget_exhausted", detail: "fetch budget exhausted" });
       continue;
     }
-    if (live.retrieval !== "live") {
+    if (live.retrieval !== "live" && live.retrieval !== "rendered") {
       failed += 1;
       pushLimitation(`journey links for ${page.url} could not be inspected: ${live.note ?? "retrieval failed"}`);
       requests.push({ type: "journey_links", target: request.target, key: request.key, status: "unavailable", detail: live.note ?? "retrieval failed" });
@@ -1186,6 +1314,7 @@ export async function expandEvidencePacket(
     },
     opts.now ?? new Date()
   );
+  packetInventoryRows.set(expanded, packetInventoryRows.get(packet) ?? []);
   return {
     packet: expanded,
     actions,

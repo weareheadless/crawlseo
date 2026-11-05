@@ -38,6 +38,9 @@ export async function publishDecision(
     findingType: input.findingType,
     projectId: input.projectId,
     evidenceId: input.evidenceId,
+    // publishDecision always supplies the why evidence and no how evidence; an
+    // existing opportunity keeps a previously attached how leg in upsertOpportunity.
+    evidenceCompleteness: "why",
   });
   const fingerprint = projection.recommendationFingerprint;
 

@@ -46,9 +46,21 @@ export type SnapshotEvidenceRow = {
   updatedAt: string;
 };
 
+export type SnapshotScope = {
+  /** Present when the snapshot covers exactly one project. */
+  projectId?: string;
+  /** Present when the snapshot covers exactly one site. */
+  siteId?: string;
+  /** The authorised analysis run this snapshot belongs to, when known. */
+  runId?: string;
+  /** An explicit all-sites snapshot. Restore still requires `{ all: true }`. */
+  all?: boolean;
+};
+
 export type BoardSnapshot = {
   takenAt: string;
   checksum: string;
+  scope: SnapshotScope;
   sites: Array<{
     siteId: string;
     projectId: string;
@@ -68,12 +80,31 @@ function checksumOf(snapshot: BoardSnapshot): string {
   return createHash("sha256").update(body).digest("hex");
 }
 
-export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<BoardSnapshot> {
+export async function takeBoardSnapshot(
+  db: SnapshotDb,
+  path: string,
+  scope: SnapshotScope = {}
+): Promise<BoardSnapshot> {
+  const scoped = Boolean(scope.projectId || scope.siteId);
   const sites = await db.site.findMany({
-    where: { retiredAt: null, projectId: { not: null } },
+    where: {
+      retiredAt: null,
+      projectId: { not: null },
+      ...(scope.projectId ? { projectId: scope.projectId } : {}),
+      ...(scope.siteId ? { id: scope.siteId } : {}),
+    },
     select: { id: true, domain: true, projectId: true },
   });
-  const snapshot: BoardSnapshot = { takenAt: new Date().toISOString(), checksum: "", sites: [] };
+  const snapshot: BoardSnapshot = {
+    takenAt: new Date().toISOString(),
+    checksum: "",
+    scope: scope.all
+      ? { all: true }
+      : scoped
+        ? { projectId: scope.projectId, siteId: scope.siteId, runId: scope.runId }
+        : { all: true },
+    sites: [],
+  };
   for (const site of sites) {
     const opportunities = await db.opportunity.findMany({
       where: { projectId: site.projectId! },
@@ -115,6 +146,16 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
 export type RestoreResult = {
   restored: number;
   conflicts: string[];
+  /** Snapshot sites that the requested scope excluded and left untouched. */
+  skipped: string[];
+};
+
+export type RestoreScope = {
+  projectId?: string;
+  siteId?: string;
+  runId?: string;
+  /** Explicitly restore every site in the snapshot. */
+  all?: boolean;
 };
 
 /**
@@ -124,7 +165,11 @@ export type RestoreResult = {
  * compare-and-swap; evidence writes use the same guard. A post-snapshot evidence
  * row is deactivated only when it is not used by preserved accepted work.
  */
-export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promise<RestoreResult> {
+export async function restoreBoardSnapshot(
+  db: SnapshotDb,
+  path: string,
+  opts: RestoreScope = {}
+): Promise<RestoreResult> {
   if (!existsSync(path)) throw new Error(`snapshot not found: ${path}`);
   const snapshot = JSON.parse(readFileSync(path, "utf8")) as BoardSnapshot;
   if (!snapshot.checksum) throw new Error("snapshot has no checksum; refusing to restore it");
@@ -134,11 +179,37 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
   const transaction = db.$transaction;
   if (!transaction) throw new Error("board restore requires a transaction-capable database client");
 
+  const snapshotScope = snapshot.scope ?? { all: true };
+  const explicitScope = Boolean(opts.projectId || opts.siteId);
+  if (!opts.all && !explicitScope) {
+    throw new Error("restore requires an explicit project/site scope or all: true");
+  }
+  if (opts.runId && snapshotScope.runId && opts.runId !== snapshotScope.runId) {
+    throw new Error("snapshot belongs to a different analysis run");
+  }
+  if (snapshotScope.projectId && opts.projectId && snapshotScope.projectId !== opts.projectId) {
+    throw new Error("snapshot belongs to a different project");
+  }
+  if (snapshotScope.siteId && opts.siteId && snapshotScope.siteId !== opts.siteId) {
+    throw new Error("snapshot belongs to a different site");
+  }
+
+  const inScope = snapshot.sites.filter((site) => {
+    if (opts.all) return true;
+    if (opts.projectId && site.projectId !== opts.projectId) return false;
+    if (opts.siteId && site.siteId !== opts.siteId) return false;
+    return true;
+  });
+  if (inScope.length === 0) throw new Error("snapshot has no sites in the requested restore scope");
+  const skipped = snapshot.sites
+    .filter((site) => !inScope.includes(site))
+    .map((site) => `${site.domain}: outside the requested restore scope and left unchanged`);
+
   const takenAt = new Date(snapshot.takenAt).getTime();
   return transaction(async (tx) => {
     let restored = 0;
     const conflicts: string[] = [];
-    for (const site of snapshot.sites) {
+    for (const site of inScope) {
       const preservedEvidence = new Set<string>();
 
       for (const row of site.opportunities) {
@@ -281,6 +352,6 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
         }
       }
     }
-    return { restored, conflicts };
+    return { restored, conflicts, skipped };
   });
 }

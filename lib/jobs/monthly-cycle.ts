@@ -3,6 +3,7 @@ import { JobKind, JobStatus, type PrismaClient } from "@prisma/client";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { createResearchRun } from "@/lib/research/service";
 import { resolveSiteContext } from "@/lib/site/context";
+import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
 
 /**
  * The monthly cycle, for every site.
@@ -76,6 +77,27 @@ export async function runMonthlyCycle(
   for (const site of sites) {
     const stages: MonthlyCycleStage[] = [];
 
+    // 0. Bootstrap the tenant before deciding whether research has anything to
+    //    ask. A new site has no profile, no knowledge and no topics; without this
+    //    pass the research stage below would skip it forever. The bootstrap is
+    //    knowledge/context/topics only; this cycle still owns research queueing.
+    if (!opts.dryRun) {
+      try {
+        await ensureTenantAnalysis(db, site.id, {
+          apply: true,
+          bootstrapOnly: true,
+          skipResearch: true,
+          requestedBy: "monthly-cycle",
+          now,
+        });
+      } catch (error) {
+        console.error(
+          `[monthly-cycle] tenant bootstrap failed for ${site.domain}`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
     // 1. Crawl: page-level evidence has to be current before the funnel scores it.
     const crawlKey = key("crawl");
     const crawlJob = await db.job.findUnique({
@@ -142,8 +164,14 @@ export async function runMonthlyCycle(
         results.push({ siteId: site.id, domain: site.domain, month, stages });
         continue;
       }
-      const topics = Array.isArray(site.siteProfile?.topics)
-        ? (site.siteProfile?.topics as unknown[]).filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
+      // Re-read the profile: the bootstrap above may have derived topics in this
+      // same pass, and the site row was loaded before it ran.
+      const freshProfile = await db.siteProfile.findUnique({
+        where: { siteId: site.id },
+        select: { topics: true, audience: true },
+      });
+      const topics = Array.isArray(freshProfile?.topics)
+        ? (freshProfile.topics as unknown[]).filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
         : [];
       if (topics.length === 0) {
         // Not a failure of the cycle: the site has no topics, and a run would have
@@ -157,7 +185,7 @@ export async function runMonthlyCycle(
             kind: "MARKET",
             trigger: "SCHEDULED",
             topics,
-            audience: typeof site.siteProfile?.audience === "string" ? site.siteProfile.audience : undefined,
+            audience: typeof freshProfile?.audience === "string" ? freshProfile.audience : undefined,
             market: context.market ?? undefined,
             language: context.language,
             questions: [],

@@ -20,7 +20,7 @@
 import { writeFileSync } from "node:fs";
 
 import { db } from "@/lib/db";
-import { extractBusinessKnowledgeFromSite } from "@/lib/projects/business-knowledge-extract";
+import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
 import { buildPageInventory } from "@/lib/research/page-inventory";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
 import { assessFinding } from "@/lib/recommendation/run";
@@ -104,18 +104,15 @@ async function main() {
     assessments: [] as unknown[],
   };
 
-  // Missing or empty knowledge is not a blocker: the production extractor reads the
-  // site itself. Dry run keeps the evaluation read-only.
+  // Missing or empty knowledge is not a blocker: the same tenant bootstrap the
+  // monthly path uses reads the site itself. `dryRun` keeps evaluation read-only.
   let extractedFacts: EvidencePacket["businessFacts"] = [];
-  const knowledge = await db.businessKnowledgeDocument.findUnique({
-    where: { projectId },
-    select: { id: true },
-  });
-  if (!knowledge) {
-    const extracted = await extractBusinessKnowledgeFromSite(db, { projectId, siteId: site.id, dryRun: true });
+  const bootstrap = await ensureTenantAnalysis(db, site.id, { dryRun: true });
+  const extracted = bootstrap.extraction ?? null;
+  if (extracted) {
     extractedFacts = factsFromExtraction(extracted.fields as Record<string, unknown>, extracted.pageUrls);
     report.extraction = {
-      method: "extractBusinessKnowledgeFromSite (dry run, same orchestration as the monthly bootstrap)",
+      method: "ensureTenantAnalysis (dry run, same orchestration as the monthly bootstrap)",
       pagesRead: extracted.pagesRead,
       pageUrls: extracted.pageUrls,
       contentLanguage: extracted.contentLanguage,

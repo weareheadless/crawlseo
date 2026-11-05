@@ -67,7 +67,7 @@ function SourceLink({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="break-all text-primary underline-offset-2 hover:underline"
+      className="break-all text-primary underline decoration-primary/60 underline-offset-2 hover:decoration-primary"
     >
       {url}
     </a>

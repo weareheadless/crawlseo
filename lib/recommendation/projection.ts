@@ -1,3 +1,4 @@
+import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
 import {
   decisionFingerprint,
   hashValue,
@@ -20,6 +21,8 @@ const POSITIONING_TYPES = new Set([
   "COMPETITOR_GAP",
 ]);
 
+export type EvidenceLeg = "both" | "why" | "how" | "none";
+
 export type OpportunityProjection = {
   projectId: string;
   type: "O13_user_pain_point" | "O14_offer_positioning_gap";
@@ -27,7 +30,7 @@ export type OpportunityProjection = {
   title: string;
   summary: string;
   dedupKey: string;
-  scoreInputs: ReturnType<typeof scoreInputsFromDecision>;
+  scoreInputs: ScoreInputs;
   recommendationDecision: RecommendationDecision;
   recommendationVersion: string;
   recommendationFingerprint: string;
@@ -65,10 +68,11 @@ function coverageSummary(decision: RecommendationDecision): string {
  * These are deliberately not a second decision: readiness, intervention and the
  * proposal are copied from the canonical decision.
  */
-export function scoreInputsFromDecision(decision: RecommendationDecision) {
+export function scoreInputsFromDecision(decision: RecommendationDecision, evidenceCompleteness: EvidenceLeg = "none") {
   const targets = decisionTargetPages(decision);
   const benefit = decision.benefits[0];
   return {
+    evidenceCompleteness,
     worth: {
       volume: null,
       ctrAtPosition: null,
@@ -112,6 +116,7 @@ export function projectDecision(input: {
   findingType: string;
   projectId: string;
   evidenceId: string | null;
+  evidenceCompleteness?: EvidenceLeg;
 }): OpportunityProjection {
   const { decision } = input;
   return {
@@ -121,7 +126,7 @@ export function projectDecision(input: {
     title: decision.question.text.slice(0, 240),
     summary: decision.question.rationale.slice(0, 4_000),
     dedupKey: decision.dedupKey,
-    scoreInputs: scoreInputsFromDecision(decision),
+    scoreInputs: computeScore(scoreInputsFromDecision(decision, input.evidenceCompleteness ?? "none")).inputs,
     recommendationDecision: decision,
     recommendationVersion: decision.schemaVersion,
     recommendationFingerprint: decisionFingerprint({

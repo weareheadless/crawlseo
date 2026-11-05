@@ -8,11 +8,13 @@ import { buildEvidencePacket, type PacketDb } from "@/lib/recommendation/packet"
 import { assessFinding, findReusableDecision, type FindingForAssessment } from "@/lib/recommendation/run";
 import type { assessRecommendation } from "@/lib/recommendation/assess";
 import {
+  hashValue,
   parsePersistedDecision,
   parsePersistedPacket,
   type EvidencePacket,
   type RecommendationDecision,
 } from "@/lib/recommendation/contracts";
+import { assertShadowOutputPath } from "@/lib/recommendation/shadow-destination";
 import {
   decisionsEquivalent,
   fallbackDedupKey,
@@ -31,12 +33,15 @@ import {
  */
 
 export type ShadowDb = PacketDb &
-  Pick<PrismaClient, "researchFinding" | "evidenceRecord" | "opportunity" | "rawProviderResponse" | "evidenceEdge">;
+  Pick<
+    PrismaClient,
+    "researchFinding" | "evidenceRecord" | "opportunity" | "rawProviderResponse" | "evidenceEdge" | "task"
+  >;
 
 export type ShadowEntry = {
   findingId: string;
   theme: string;
-  status: "added" | "changed" | "unchanged" | "removed" | "failed" | "blocked";
+  status: "added" | "changed" | "unchanged" | "removed" | "failed" | "blocked" | "not_assessed";
   currentReadiness: string | null;
   proposedReadiness: string | null;
   currentIntervention: string | null;
@@ -56,6 +61,13 @@ export type ShadowEntry = {
   currentStatus: string | null;
   /** True when accepted/in-progress human work exists and the proposal differs. */
   preservedHumanWork: boolean;
+  /** The accepted/progressed task snapshots an apply must not rewrite. */
+  preservedTasks: Array<{
+    id: string;
+    status: string;
+    decisionId: string | null;
+    planHash: string | null;
+  }>;
   reason: string | null;
 };
 
@@ -66,6 +78,16 @@ export type ShadowReport = {
   projectId: string;
   siteId: string;
   model: string | null;
+  /** True only when every candidate reached a terminal status. */
+  complete: boolean;
+  candidateCount: number;
+  assessedCount: number;
+  notAssessedCount: number;
+  budget: {
+    maxAssessments: number | "all";
+    attempts: number;
+    reason: string | null;
+  };
   totals: Record<ShadowEntry["status"], number>;
   entries: ShadowEntry[];
 };
@@ -91,11 +113,12 @@ export async function shadowRecommendations(
     projectId: string;
     siteId: string;
     outPath?: string;
-    maxAssessments?: number;
+    maxAssessments?: number | "all";
     assessor?: typeof assessRecommendation;
     ledger?: AnalysisLedger;
   }
 ): Promise<ShadowReport> {
+  if (opts.outPath) assertShadowOutputPath(opts.outPath);
   const site = await db.site.findUnique({ where: { id: opts.siteId }, select: { domain: true, projectId: true } });
   if (!site || site.projectId !== opts.projectId) throw new Error("shadow site does not belong to the project");
   const ledger = opts.ledger ?? new AnalysisLedger();
@@ -108,18 +131,22 @@ export async function shadowRecommendations(
   const existing = await db.opportunity.findMany({
     where: { projectId: opts.projectId },
     select: {
+      id: true,
       dedupKey: true,
       status: true,
       title: true,
       summary: true,
       scoreInputs: true,
+      evidenceCompleteness: true,
       recommendationDecision: true,
       recommendationEvidenceId: true,
     },
   });
   const opportunityByKey = new Map(existing.map((row) => [row.dedupKey, row]));
 
-  const maxAssessments = Math.max(0, Math.min(opts.maxAssessments ?? 8, 12));
+  const requestedAssessments = opts.maxAssessments ?? 8;
+  const maxAssessments =
+    requestedAssessments === "all" ? Number.POSITIVE_INFINITY : Math.max(0, Math.min(requestedAssessments, 12));
   let attempts = 0;
   const entries: ShadowEntry[] = [];
 
@@ -146,6 +173,7 @@ export async function shadowRecommendations(
         proposedProjection: null,
         currentStatus: null,
         preservedHumanWork: false,
+        preservedTasks: [],
         reason: "evidence row has no finding identity",
       });
       continue;
@@ -173,6 +201,7 @@ export async function shadowRecommendations(
         proposedProjection: null,
         currentStatus: null,
         preservedHumanWork: false,
+        preservedTasks: [],
         reason: "research finding row is missing",
       });
       continue;
@@ -237,6 +266,7 @@ export async function shadowRecommendations(
           findingType: stored.type,
           projectId: opts.projectId,
           evidenceId: opportunity?.recommendationEvidenceId ?? row.id,
+          evidenceCompleteness: opportunity?.evidenceCompleteness ?? "none",
         })
       : null;
     const reusable = await findReusableDecision(db, dimensions, packet, model);
@@ -244,11 +274,12 @@ export async function shadowRecommendations(
     let proposed: RecommendationDecision | null = null;
     let proposedPacket: EvidencePacket | null = null;
     let failure: string | null = null;
+    let notAssessed = false;
     if (reusable) {
       proposed = reusable.decision;
       proposedPacket = reusable.packet;
     } else if (attempts >= maxAssessments) {
-      failure = "shadow assessment budget exhausted";
+      notAssessed = true;
     } else if (!contentWriterConfig() && !opts.assessor) {
       failure = "no model is configured for shadow analysis";
     } else {
@@ -271,7 +302,8 @@ export async function shadowRecommendations(
     const after = decisionSummary(proposed);
     let status: ShadowEntry["status"];
     let preservedHumanWork = false;
-    if (failure) status = "failed";
+    if (notAssessed) status = "not_assessed";
+    else if (failure) status = "failed";
     else if (!current && proposed) status = after.readiness === "rejected" || after.readiness === "no_action" ? "unchanged" : "added";
     else if (current && !proposed) status = "removed";
     else if (current && proposed) status = decisionsEquivalent(current, proposed) ? "unchanged" : "changed";
@@ -280,7 +312,7 @@ export async function shadowRecommendations(
     // A previously published row that the proposed decision would reject is a
     // removal only while no human has accepted or progressed it. Accepted work is
     // preserved and shown as a changed decision instead.
-    if (!failure && proposed && (after.readiness === "rejected" || after.readiness === "no_action")) {
+    if (!notAssessed && !failure && proposed && (after.readiness === "rejected" || after.readiness === "no_action")) {
       if (opportunity?.status === "detected") status = "removed";
       else if (opportunity && (opportunity.status === "accepted" || opportunity.status === "in_progress")) {
         status = "changed";
@@ -288,6 +320,7 @@ export async function shadowRecommendations(
       }
     }
     if (
+      !notAssessed &&
       !failure &&
       opportunity &&
       (opportunity.status === "accepted" || opportunity.status === "in_progress") &&
@@ -302,8 +335,26 @@ export async function shadowRecommendations(
           findingType: stored.type,
           projectId: opts.projectId,
           evidenceId: null,
+          evidenceCompleteness: opportunity?.evidenceCompleteness ?? "why",
         })
       : null;
+
+    const tasks = opportunity
+      ? await db.task.findMany({
+          where: { opportunityId: opportunity.id },
+          select: { id: true, status: true, plan: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+    const preservedTasks = tasks.map((task) => {
+      const plan = (task.plan ?? null) as { decisionId?: unknown } | null;
+      return {
+        id: task.id,
+        status: task.status,
+        decisionId: typeof plan?.decisionId === "string" ? plan.decisionId : null,
+        planHash: task.plan == null ? null : hashValue(task.plan),
+      };
+    });
 
     entries.push({
       findingId: candidate.id,
@@ -323,7 +374,9 @@ export async function shadowRecommendations(
       proposedProjection,
       currentStatus: opportunity?.status ?? null,
       preservedHumanWork,
+      preservedTasks,
       reason:
+        (notAssessed ? "shadow assessment budget exhausted; this candidate was not assessed" : null) ??
         failure ??
         (preservedHumanWork
           ? "accepted human work is preserved; review the changed decision before applying"
@@ -338,8 +391,10 @@ export async function shadowRecommendations(
     removed: 0,
     failed: 0,
     blocked: 0,
+    not_assessed: 0,
   };
   for (const entry of entries) totals[entry.status] += 1;
+  const notAssessedCount = totals.not_assessed;
   const report: ShadowReport = {
     schemaVersion: "recommendation-shadow/1",
     generatedAt: new Date().toISOString(),
@@ -347,6 +402,15 @@ export async function shadowRecommendations(
     projectId: opts.projectId,
     siteId: opts.siteId,
     model,
+    complete: notAssessedCount === 0,
+    candidateCount: entries.length,
+    assessedCount: entries.length - notAssessedCount,
+    notAssessedCount,
+    budget: {
+      maxAssessments: requestedAssessments,
+      attempts,
+      reason: notAssessedCount > 0 ? "shadow assessment budget exhausted" : null,
+    },
     totals,
     entries,
   };

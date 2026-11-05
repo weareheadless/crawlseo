@@ -42,6 +42,8 @@ export type TenantAnalysis = {
   /** True when nothing is missing or blocked: the tenant has a complete analysis. */
   ready: boolean;
   steps: TenantStep[];
+  /** Present when a bootstrap pass extracted the site's own facts. */
+  extraction?: Awaited<ReturnType<typeof extractBusinessKnowledgeFromSite>> | null;
 };
 
 /**
@@ -82,7 +84,8 @@ async function deriveTopics(
   db: PrismaClient,
   projectId: string | null,
   siteId: string,
-  context: { language: string; location: string | null; market: string | null }
+  context: { language: string; location: string | null; market: string | null },
+  opts: { persist?: boolean } = {}
 ): Promise<string[]> {
   if (!projectId) return [];
   const document = await db.businessKnowledgeDocument.findUnique({
@@ -127,17 +130,39 @@ async function deriveTopics(
 
   const topics = candidates.slice(0, 5);
   if (topics.length === 0) return [];
-  await db.siteProfile.upsert({
-    where: { siteId },
-    create: { siteId, projectId, language: context.language, topics },
-    update: { topics },
-  });
+  if (opts.persist !== false) {
+    await db.siteProfile.upsert({
+      where: { siteId },
+      create: { siteId, projectId, language: context.language, topics },
+      update: { topics },
+    });
+  }
   return topics;
+}
+
+function hasUsableKnowledgeFields(fields: unknown): boolean {
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return false;
+  for (const [key, entry] of Object.entries(fields as Record<string, unknown>)) {
+    // A language tag alone is not a business fact: the why-leg needs an offer,
+    // audience, service or differentiator it can actually cite.
+    if (key === "contentLanguage") continue;
+    const value = entry && typeof entry === "object" ? (entry as { value?: unknown }).value : entry;
+    if (typeof value === "string" && value.trim().length > 0) return true;
+    if (Array.isArray(value) && value.some((item) => typeof item === "string" && item.trim().length > 0)) return true;
+    if (value != null && typeof value !== "string" && typeof value !== "object") return true;
+  }
+  return false;
 }
 
 export type TenantAnalysisOptions = {
   /** Perform the fixes that can be performed now. Without it, this is a read. */
   apply?: boolean;
+  /** Read-only bootstrap for evaluation: extract and report, never write. */
+  dryRun?: boolean;
+  /** Bootstrap knowledge/context/topics but leave research queueing to the caller. */
+  skipResearch?: boolean;
+  /** Skip paid acquisition and joins during a bootstrap-only pass. */
+  bootstrapOnly?: boolean;
   /** Ceiling for the join's paid collectors. */
   maxJoinSpendMicros?: number;
   /** Ceiling for the observed-performance acquisition pass. */
@@ -236,12 +261,25 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
   const knowledge = site.projectId
     ? await db.businessKnowledgeDocument.findUnique({
         where: { projectId: site.projectId },
-        select: { revision: true, acceptedRevision: true },
+        select: {
+          revision: true,
+          acceptedRevision: true,
+          revisions: { orderBy: { revision: "desc" }, take: 1, select: { fields: true } },
+        },
       })
     : null;
-  steps.push(knowledge
-    ? step({ step: "business-knowledge", status: "ok", detail: `revision ${knowledge.acceptedRevision ?? knowledge.revision}${knowledge.acceptedRevision ? " (accepted)" : " (unverified)"}` })
-    : step({ step: "business-knowledge", status: "missing", detail: "no knowledge document: the why-leg has no business facts" }));
+  const knowledgeUsable = knowledge ? hasUsableKnowledgeFields(knowledge.revisions[0]?.fields) : false;
+  steps.push(
+    knowledge && knowledgeUsable
+      ? step({ step: "business-knowledge", status: "ok", detail: `revision ${knowledge.acceptedRevision ?? knowledge.revision}${knowledge.acceptedRevision ? " (accepted)" : " (unverified)"}` })
+      : step({
+          step: "business-knowledge",
+          status: "missing",
+          detail: knowledge
+            ? "knowledge document has no usable business facts: the why-leg has nothing to cite"
+            : "no knowledge document: the why-leg has no business facts",
+        })
+  );
 
   // 5. A crawl that actually covered the site. "COMPLETED" only means the job
   //    stopped; a cap or a challenge can leave most of the site unobserved.
@@ -334,7 +372,8 @@ export async function ensureTenantAnalysis(
   opts: TenantAnalysisOptions = {}
 ): Promise<TenantAnalysis> {
   const before = await inspectTenant(db, siteId);
-  if (!opts.apply) return before;
+  if (!opts.apply && !opts.dryRun) return before;
+  const persist = Boolean(opts.apply) && !opts.dryRun;
 
   const site = await db.site.findUniqueOrThrow({
     where: { id: siteId },
@@ -359,11 +398,15 @@ export async function ensureTenantAnalysis(
   let extraction: Awaited<ReturnType<typeof extractBusinessKnowledgeFromSite>> | null = null;
   if ((knowledgeMissing || languageMissing) && site.projectId) {
     try {
-      extraction = await extractBusinessKnowledgeFromSite(db, { projectId: site.projectId, siteId: site.id });
+      extraction = await extractBusinessKnowledgeFromSite(db, {
+        projectId: site.projectId,
+        siteId: site.id,
+        dryRun: opts.dryRun,
+      });
       replace(step({
         step: "business-knowledge",
-        status: "fixed",
-        detail: `extracted ${extraction.extracted.length} field(s) from ${extraction.pagesRead} page(s), revision ${extraction.revision}`,
+        status: opts.dryRun ? "ok" : "fixed",
+        detail: `${opts.dryRun ? "dry run extracted" : "extracted"} ${extraction.extracted.length} field(s) from ${extraction.pagesRead} page(s), revision ${extraction.revision}`,
       }));
     } catch (error) {
       replace(step({
@@ -375,7 +418,7 @@ export async function ensureTenantAnalysis(
   }
 
   // The pages' own language, persisted so it is stable and visible to the owner.
-  if (languageMissing && extraction?.contentLanguage) {
+  if (languageMissing && extraction?.contentLanguage && persist) {
     await db.siteProfile.upsert({
       where: { siteId: site.id },
       create: { siteId: site.id, projectId: site.projectId, language: extraction.contentLanguage, topics: [] },
@@ -396,14 +439,20 @@ export async function ensureTenantAnalysis(
     ? site.siteProfile.topics.filter((topic): topic is string => typeof topic === "string" && topic.trim().length > 0)
     : [];
   if (existingTopics.length === 0) {
-    const derived = await deriveTopics(db, site.projectId, site.id, context);
+    const derived = await deriveTopics(db, site.projectId, site.id, context, { persist });
     if (derived.length > 0) {
-      replace(step({ step: "topics", status: "fixed", detail: `${derived.length} topic(s) derived from the site's own services` }));
+      replace(step({ step: "topics", status: opts.dryRun ? "ok" : "fixed", detail: `${derived.length} topic(s) derived from the site's own services` }));
     }
   }
 
+  // Evaluation asks only for the same bootstrap the monthly path performs; it
+  // must not queue jobs, spend money or write an analysis board.
+  if (opts.dryRun) {
+    return { ...before, steps, extraction };
+  }
+
   // Research: queue a run when the last one is outside the cadence window.
-  if (steps.find((entry) => entry.step === "research")?.status === "missing" && site.projectId) {
+  if (!opts.skipResearch && steps.find((entry) => entry.step === "research")?.status === "missing" && site.projectId) {
     // Read the profile again: the bootstrap above may have created it in this same
     // call, and the snapshot taken at the top predates the derived topics. A run
     // created from that snapshot has no topics and fails immediately.
@@ -473,7 +522,7 @@ export async function ensureTenantAnalysis(
   // Acquisition: enrich observed queries before hypothesised ones. This is the step
   // that was missing — joins bought volume only for ideas a model had already
   // proposed, so the measured phrases and the ranking phrases never met.
-  if (site.projectId) {
+  if (!opts.bootstrapOnly && site.projectId) {
     const window = await currentPerformanceWindow(db, site.id);
     if (!window) {
       replace(step({ step: "acquisition", status: "missing", detail: "no performance window: nothing observed to enrich" }));
@@ -559,7 +608,7 @@ export async function ensureTenantAnalysis(
   }
 
   // Joins: attach the how leg to every why-only opportunity.
-  if (steps.find((entry) => entry.step === "joins")?.status === "missing" && site.projectId) {
+  if (!opts.bootstrapOnly && steps.find((entry) => entry.step === "joins")?.status === "missing" && site.projectId) {
     const setup = await buildJoinCollectors(db, {
       projectId: site.projectId,
       siteId: site.id,
@@ -600,6 +649,7 @@ export async function ensureTenantAnalysis(
   return {
     ...before,
     steps,
+    extraction,
     ready: steps.every((entry) => entry.status === "ok" || entry.status === "fixed"),
   };
 }

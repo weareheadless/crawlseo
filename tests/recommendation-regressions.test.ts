@@ -430,6 +430,7 @@ describe("structural recommendation regressions", () => {
       },
       evidenceEdge: { findMany: vi.fn(async () => []) },
       rawProviderResponse: { findUnique: vi.fn(async () => null) },
+      task: { findMany: vi.fn(async () => []) },
     };
     const assessor = vi.fn(async (packet: EvidencePacket) => ({
       kind: "final" as const,
@@ -493,6 +494,7 @@ describe("structural recommendation regressions", () => {
       opportunity: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), update: vi.fn(), updateMany: vi.fn() },
       evidenceEdge: { findMany: vi.fn(async () => []) },
       rawProviderResponse: { findUnique: vi.fn(async () => null) },
+      task: { findMany: vi.fn(async () => []) },
     };
     const assess = vi
       .fn()
