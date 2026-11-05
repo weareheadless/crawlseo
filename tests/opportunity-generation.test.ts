@@ -40,6 +40,7 @@ function query(value: string, impressions: number, volume: number | null = null)
 function makeInputs(overrides: Partial<ProposalInputs> = {}): ProposalInputs {
   const data: TopicMapData = {
     site: { id: "site-1", domain: "atelier-harmonie.example", projectId: "proj-1" },
+    marketScope: { default: "local", offers: [] },
     context: { language: "fr", country: "FR" } as never,
     fields: {
       businessName: { value: "Atelier Test" },

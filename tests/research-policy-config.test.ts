@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = vi.hoisted(() => ({
   site: { findUnique: vi.fn() },
-  siteProfile: { upsert: vi.fn() },
+  siteProfile: { findUnique: vi.fn(), upsert: vi.fn() },
   researchPolicy: { upsert: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ db: mockDb }));
@@ -13,6 +13,7 @@ describe("research targeting remains independent from canonical business facts",
   beforeEach(() => {
     vi.clearAllMocks();
     mockDb.site.findUnique.mockResolvedValue({ id: "site-1", projectId: "project-1" });
+    mockDb.siteProfile.findUnique.mockResolvedValue({ constraints: {} });
     mockDb.siteProfile.upsert.mockResolvedValue({});
     mockDb.researchPolicy.upsert.mockResolvedValue({ id: "policy-1", revision: 2 });
   });

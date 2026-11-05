@@ -1,6 +1,6 @@
 # Topic map — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-05T12:29:16.181Z. Locale fr/FR.
+Generated 2026-11-05T14:29:47.407Z. Locale fr/FR.
 
 ## Business
 
@@ -18,31 +18,29 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Map spans artisan lampshades, seating restoration, lighting, DIY kits and local trade. Six reviewed topics show strong coverage; main gaps are thin category copy, missing service pages and missing product-type terms.
+8 clusters: 7 high relevance, 1 medium (objets-deco). Local scope: restauration-siege, restauration-abat-jour, kits-ateliers, local-normandie. International: creation-abat-jour, marque, luminaires, objets-deco. Coverage strong except restauration-abat-jour partial; gaps: thin abat-jour/suspensions pages and missing tapissier, chaises, plafonnier, réparer terms.
 
-Prioritize restoration and lighting clusters with clear commercial demand and fixable page gaps. Brand and objets déco are not SEO priorities; local should stay focused on Normandie, not off-area voucher queries.
+Start with creation-abat-jour (international; 51,140 monthly volume; thin page), luminaires (996 impressions; thin page; plafonnier gap), restauration-siege (local Normandie; tapissier/chaises gaps), restauration-abat-jour (local; no service/category page; réparer gap), kits-ateliers (local transactional; fabrication/luminaire gaps). Treat marque as brand support, not first. Objets-deco is weak (medium relevance, 50 volume). local-normandie has off-area demand and 0 volume; do not chase Le Mans/Sarthe/Sainte-Adresse without business reason.
 
-Priority topics: restauration-abat-jour, restauration-siege, creation-abat-jour, luminaires, kits-ateliers.
-Weak topics: local-normandie, objets-deco, marque.
-
-Note: Review from an earlier successful call on 2026-11-05; a later refresh retry returned an empty response. The deterministic map is unchanged.
+Priority topics: creation-abat-jour, luminaires, restauration-siege, restauration-abat-jour, kits-ateliers.
+Weak topics: objets-deco, local-normandie.
 
 ## Topic table
 
-| Topic | Intent | Relevance | Queries | Impressions | Volume | Coverage | Main page | Main gap |
-|---|---|---|---:|---:|---:|---|---|---|
-| Lampes & luminaires artisanaux | commercial | high | 40 | 996 | 500 | strong | /lampes | Thin coverage: https://www.atelier-harmonie.com/lampes/suspensions has 152 words. |
-| Restauration d'abat-jour | commercial | high | 14 | 284 | 230 | partial | /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | Coverage exists, but there is no service or category page for this topic. |
-| Kits DIY & ateliers créatifs | transactional | high | 11 | 195 | 140 | strong | /les-ateliers | Queries mention “fabrication” (2 querys, 40 impressions) but no matched page does. |
-| Restauration de sièges & tapisserie d'ameublement | commercial | high | 26 | 186 | 2360 | strong | /tapisserie-restauration | Queries mention “tapissier” (7 querys, 34 impressions) but no matched page does. |
-| Marque Atelier de l'harmonie | mixed | high | 13 | 179 | 1940 | strong | / | Queries mention “harmony” (2 querys, 23 impressions) but no matched page does. |
-| Création d'abat-jours artisanaux & sur mesure | commercial | high | 16 | 123 | 51140 | strong | /lampes/abat-jours | Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words. |
-| Tapissier & atelier en Normandie | local | high | 9 | 52 | 0 | strong | / | No dedicated local landing page combining the trade and the place; the home and workshop pages carry the local signal. |
-| Objets déco & coussins | transactional | medium | 7 | 36 | 50 | strong | /objets-deco | — |
-| Cartes cadeaux | transactional | medium | 5 | 35 | 0 | strong | /gift-card | Queries mention “decoration” (2 querys, 16 impressions) but no matched page does. |
-| Tissus & matières | informational | medium | 7 | 22 | 0 | strong | /les-tissus | Thin coverage: https://www.atelier-harmonie.com/les-tissus has 146 words. |
-| Projets professionnels & hôtels | commercial | medium | 0 | 0 | 0 | strong | /b2b | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Blog & culture artisanat | informational | low | 7 | 57 | 3600 | strong | /blog | Queries mention “blogging” (1 query, 39 impressions) but no matched page does. |
+| Topic | Intent | Relevance | Market scope | Queries | Impressions | Volume | Coverage | Main page | Main gap |
+|---|---|---|---|---:|---:|---:|---|---|---|
+| Lampes & luminaires artisanaux | commercial | high | international (France, Europe, International) | 40 | 996 | 500 | strong | /lampes | Thin coverage: https://www.atelier-harmonie.com/lampes/suspensions has 152 words. |
+| Restauration d'abat-jour | commercial | high | local (Normandie) | 14 | 284 | 230 | partial | /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | Coverage exists, but there is no service or category page for this topic. |
+| Kits DIY & ateliers créatifs | transactional | high | local (Normandie) | 11 | 195 | 140 | strong | /les-ateliers | Queries mention “fabrication” (2 querys, 40 impressions) but no matched page does. |
+| Restauration de sièges & tapisserie d'ameublement | commercial | high | local (Normandie, Saint-Pierre-en-Port) | 26 | 186 | 2360 | strong | /tapisserie-restauration | Queries mention “tapissier” (7 querys, 34 impressions) but no matched page does. |
+| Marque Atelier de l'harmonie | mixed | high | international (France, International) | 13 | 179 | 1940 | strong | / | Queries mention “harmony” (2 querys, 23 impressions) but no matched page does. |
+| Création d'abat-jours artisanaux & sur mesure | commercial | high | international (France, Europe, International) | 16 | 123 | 51140 | strong | /lampes/abat-jours | Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words. |
+| Tapissier & atelier en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 9 | 52 | 0 | strong | / | No dedicated local landing page combining the trade and the place; the home and workshop pages carry the local signal. |
+| Objets déco & coussins | transactional | medium | international (France, Europe, International) | 7 | 36 | 50 | strong | /objets-deco | — |
+| Cartes cadeaux | transactional | medium | international (France, International) | 5 | 35 | 0 | strong | /gift-card | Queries mention “decoration” (2 querys, 16 impressions) but no matched page does. |
+| Tissus & matières | informational | medium | national (France) | 7 | 22 | 0 | strong | /les-tissus | Thin coverage: https://www.atelier-harmonie.com/les-tissus has 146 words. |
+| Projets professionnels & hôtels | commercial | medium | national (France) | 0 | 0 | 0 | strong | /b2b | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Blog & culture artisanat | informational | low | international (France, International) | 7 | 57 | 3600 | strong | /blog | Queries mention “blogging” (1 query, 39 impressions) but no matched page does. |
 
 ## Clusters
 
@@ -50,9 +48,10 @@ Note: Review from an earlier successful call on 2026-11-05; a later refresh retr
 
 - Slug: `luminaires`
 - Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: international (France, Europe, International)
 - Rationale: Core product range: handmade table lamps, pendants, portable lamps, wall lights and upcycled lighting.
 - Demand: 40 queries, 996 impressions, 0 clicks, 500 measured monthly volume; average position 41.9.
-- AEO: 6 measured questions, 0 citations of the site.
+- AEO: 5 measured questions, 0 citations of the site.
 - Action hint: The range is well covered, but check whether plafonnier, lustre and lampadaire demand has a matching product page.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
@@ -95,9 +94,10 @@ Gaps:
 
 - Slug: `restauration-abat-jour`
 - Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: local (Normandie)
 - Rationale: Core service: repairing, re-covering and restoring old or damaged lampshades, including contrecollé and lining work.
 - Demand: 14 queries, 284 impressions, 12 clicks, 230 measured monthly volume; average position 8.7.
-- AEO: 5 measured questions, 0 citations of the site.
+- AEO: 4 measured questions, 0 citations of the site.
 - Action hint: Check whether a dedicated restoration page exists; a blog post alone is not a service landing page.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
@@ -112,7 +112,7 @@ Gaps:
 | renover abat jour | 18 | 3 | 10.7 | 90 | 0 |
 | reparer abat jour | 16 | 0 | 10.8 | — | — |
 | réparer un abat jour | 13 | 0 | 9.3 | — | — |
-| reparation abat jour | 7 | 0 | 10.8 | — | — |
+| reparation abat jour | 7 | 0 | 10.7 | — | — |
 | restauration abat-jour ancien | 6 | 0 | 8.1 | — | — |
 | refection abat jour | 6 | 0 | 13.3 | — | — |
 | rénover un abat jour en tissu | 1 | 0 | 34.0 | — | — |
@@ -135,9 +135,10 @@ Gaps:
 
 - Slug: `kits-ateliers`
 - Intent: transactional; relevance: high; confidence: 1.00
+- Market scope: local (Normandie)
 - Rationale: Product and service: DIY lamp kits and small-group upholstery/lampshade workshops in Normandy.
 - Demand: 11 queries, 195 impressions, 2 clicks, 140 measured monthly volume; average position 9.2.
-- AEO: 2 measured questions, 0 citations of the site.
+- AEO: 1 measured questions, 0 citations of the site.
 - Action hint: Keep the workshop page and the kit product linked; the query set is transactional and close to purchase.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
@@ -171,6 +172,7 @@ Gaps:
 
 - Slug: `restauration-siege`
 - Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: local (Normandie, Saint-Pierre-en-Port)
 - Rationale: Core service: restoring chairs, armchairs and sofas with traditional upholstery, including made-to-measure seating.
 - Demand: 26 queries, 186 impressions, 6 clicks, 2360 measured monthly volume; average position 21.7.
 - AEO: 1 measured questions, 0 citations of the site.
@@ -215,6 +217,7 @@ Gaps:
 
 - Slug: `marque`
 - Intent: mixed; relevance: high; confidence: 1.00
+- Market scope: international (France, International)
 - Rationale: Navigational brand demand: people looking for the atelier by name, including spelling variants.
 - Demand: 13 queries, 179 impressions, 10 clicks, 1940 measured monthly volume; average position 5.9.
 - AEO: 0 measured questions, 0 citations of the site.
@@ -251,6 +254,7 @@ Gaps:
 
 - Slug: `creation-abat-jour`
 - Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: international (France, Europe, International)
 - Rationale: Core product: handmade fabric lampshades, including pagode, drum and bespoke shapes in named collections.
 - Demand: 16 queries, 123 impressions, 0 clicks, 51140 measured monthly volume; average position 14.1.
 - AEO: 0 measured questions, 0 citations of the site.
@@ -292,9 +296,10 @@ Gaps:
 
 - Slug: `local-normandie`
 - Intent: local; relevance: high; confidence: 0.93
+- Market scope: local (Normandie, Saint-Pierre-en-Port)
 - Rationale: Local intent: people searching for an upholsterer, workshop or fabric shop around Saint-Pierre-en-Port and Normandy.
 - Demand: 9 queries, 52 impressions, 6 clicks, 0 measured monthly volume; average position 26.9.
-- AEO: 1 measured questions, 0 citations of the site.
+- AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Check whether a dedicated local landing page exists; the home page naming the village is not the same as a local service page.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
@@ -331,6 +336,7 @@ Gaps:
 
 - Slug: `objets-deco`
 - Intent: transactional; relevance: medium; confidence: 0.98
+- Market scope: international (France, Europe, International)
 - Rationale: Adjacent product: handmade cushions and decorative objects that support the lighting and seating offer.
 - Demand: 7 queries, 36 impressions, 2 clicks, 50 measured monthly volume; average position 10.8.
 - AEO: 0 measured questions, 0 citations of the site.
@@ -356,9 +362,10 @@ Coverage pages:
 
 - Slug: `carte-cadeau`
 - Intent: transactional; relevance: medium; confidence: 0.89
+- Market scope: international (France, International)
 - Rationale: Gift product: a way to buy the atelier's craftsmanship without choosing a specific piece.
 - Demand: 5 queries, 35 impressions, 0 clicks, 0 measured monthly volume; average position 21.1.
-- AEO: 1 measured questions, 0 citations of the site.
+- AEO: 0 measured questions, 0 citations of the site.
 - Action hint: The gift-card page exists. Check whether the Le Mans/Sarthe queries are a real market or historical noise.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
@@ -383,6 +390,7 @@ Gaps:
 
 - Slug: `tissus-matieres`
 - Intent: informational; relevance: medium; confidence: 0.84
+- Market scope: national (France)
 - Rationale: Supporting content: the fabrics, trims and materials customers ask about before choosing a restoration or lampshade.
 - Demand: 7 queries, 22 impressions, 0 clicks, 0 measured monthly volume; average position 12.6.
 - AEO: 0 measured questions, 0 citations of the site.
@@ -413,6 +421,7 @@ Gaps:
 
 - Slug: `b2b`
 - Intent: commercial; relevance: medium; confidence: 0.50
+- Market scope: national (France)
 - Rationale: Business development: hotels, restaurants, architects and decorators buying bespoke restoration or lighting projects.
 - Demand: 0 queries, 0 impressions, 0 clicks, 0 measured monthly volume; average position unknown.
 - AEO: 0 measured questions, 0 citations of the site.
@@ -432,6 +441,7 @@ Gaps:
 
 - Slug: `blog-artisanat`
 - Intent: informational; relevance: low; confidence: 1.00
+- Market scope: international (France, International)
 - Rationale: Supporting content: craft, restoration stories and inspiration that build topical authority around the core services.
 - Demand: 7 queries, 57 impressions, 0 clicks, 3600 measured monthly volume; average position 11.2.
 - AEO: 1 measured questions, 0 citations of the site.

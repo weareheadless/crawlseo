@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { resolveSiteContext } from "@/lib/site/context";
+import { parseMarketScope, type MarketScopeConfig } from "@/lib/site/market-scope";
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -36,6 +37,7 @@ export type ResearchConfigInput = {
   monthlyBudget: number;
   autoDraft: boolean;
   autoAgent: boolean;
+  marketScope?: MarketScopeConfig;
 };
 
 export async function getResearchConfig(siteId: string) {
@@ -57,6 +59,7 @@ export async function getResearchConfig(siteId: string) {
     providers: stringList(policy?.providers).length > 0 ? stringList(policy?.providers) : ["reddit", "news", "web"],
     audience: typeof profile?.audience === "string" ? profile.audience : "",
     market: typeof constraints.market === "string" ? constraints.market : "",
+    marketScope: parseMarketScope(constraints.marketScope),
     // The same resolver the runner uses, so settings and execution cannot
     // disagree. Empty (not "en") when the site has not said what language it is.
     language: context?.language ?? "",
@@ -74,8 +77,21 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
   if (input.providers.some((provider) => !["reddit", "news", "web", "competitor"].includes(provider))) {
     throw new Error("Research configuration contains an unsupported provider");
   }
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, projectId: true } });
+  const [site, existingProfile] = await Promise.all([
+    db.site.findUnique({ where: { id: siteId }, select: { id: true, projectId: true } }),
+    db.siteProfile.findUnique({ where: { siteId }, select: { constraints: true } }),
+  ]);
   if (!site) throw new Error("Site not found");
+  const existingConstraints = existingProfile?.constraints && typeof existingProfile.constraints === "object" && !Array.isArray(existingProfile.constraints)
+    ? (existingProfile.constraints as Record<string, unknown>)
+    : {};
+  const constraints = {
+    ...existingConstraints,
+    ...(input.market ? { market: input.market } : {}),
+    exclusions: input.exclusions ?? [],
+    goals: input.goals ?? [],
+    ...(input.marketScope ? { marketScope: input.marketScope } : {}),
+  };
   await db.siteProfile.upsert({
     where: { siteId },
     create: {
@@ -84,13 +100,13 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
       language: input.language,
       topics: json(input.topics),
       audience: input.audience ? json(input.audience) : undefined,
-      constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
+      constraints: json(constraints),
     },
     update: {
       language: input.language,
       topics: json(input.topics),
       audience: input.audience ? json(input.audience) : Prisma.JsonNull,
-      constraints: json({ ...(input.market ? { market: input.market } : {}), exclusions: input.exclusions ?? [], goals: input.goals ?? [] }),
+      constraints: json(constraints),
     },
   });
 

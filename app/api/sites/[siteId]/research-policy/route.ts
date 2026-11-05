@@ -21,6 +21,15 @@ const schema = z.object({
   monthlyBudget: z.number().int().min(0).max(500).default(9),
   autoDraft: z.boolean().default(false),
   autoAgent: z.boolean().default(false),
+  marketScope: z.object({
+    default: z.enum(["local", "national", "international"]),
+    offers: z.array(z.object({
+      offer: z.string().trim().min(1).max(120),
+      scope: z.enum(["local", "national", "international"]),
+      markets: z.array(z.string().trim().max(80)).max(12).default([]),
+      notes: z.string().trim().max(300).optional(),
+    })).max(24),
+  }).optional(),
 });
 
 export async function GET(

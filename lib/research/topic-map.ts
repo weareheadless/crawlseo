@@ -6,6 +6,12 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, resolveSiteContext } from "@/lib/site/context";
+import {
+  parseMarketScope,
+  marketScopeForTopic,
+  type MarketScopeConfig,
+  type MarketScopeLevel,
+} from "@/lib/site/market-scope";
 import type { TopicDefinition, TopicIntent, TopicRelevance } from "@/lib/research/topic-taxonomy";
 
 /**
@@ -59,6 +65,7 @@ export type TopicCluster = {
   relevance: TopicRelevance;
   rationale: string;
   actionHint: string;
+  marketScope: { scope: MarketScopeLevel; markets: string[]; source: "offer" | "default" };
   confidence: number;
   metrics: {
     queries: number;
@@ -102,6 +109,7 @@ export type TopicMap = {
   month: string;
   generatedAt: string;
   locale: { language: string; country: string | null };
+  marketScope: MarketScopeConfig;
   business: {
     name: string | null;
     services: string[];
@@ -127,6 +135,7 @@ export type TopicMapData = {
   site: { id: string; domain: string; projectId: string };
   context: Awaited<ReturnType<typeof resolveSiteContext>>;
   fields: Record<string, unknown>;
+  marketScope: MarketScopeConfig;
   queries: DemandQuery[];
   pages: TopicPage[];
   aeo: Array<{ question: string; cited: number; observedAt: Date }>;
@@ -434,7 +443,7 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
   const context = await resolveSiteContext(db, siteId);
   const fields = await businessKnowledgeFields(db, projectId);
 
-  const [rankRows, metricRows, crawl, bundleRun, aeoRows] = await Promise.all([
+  const [rankRows, metricRows, crawl, bundleRun, aeoRows, profile] = await Promise.all([
     db.evidenceRecord.findMany({
       where: { projectId, siteId, kind: "keyword_rank", supersededById: null },
       select: { dimensions: true, metrics: true, observedAt: true },
@@ -464,7 +473,12 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
       },
       select: { dimensions: true, metrics: true, observedAt: true },
     }),
+    db.siteProfile.findUnique({ where: { siteId }, select: { constraints: true } }),
   ]);
+  const constraints = profile?.constraints && typeof profile.constraints === "object" && !Array.isArray(profile.constraints)
+    ? (profile.constraints as Record<string, unknown>)
+    : {};
+  const marketScope = parseMarketScope(constraints.marketScope);
 
   const byQuery = new Map<string, DemandQuery>();
   for (const row of rankRows) {
@@ -596,6 +610,7 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
     site: { id: site.id, domain: site.domain, projectId },
     context,
     fields,
+    marketScope,
     queries: [...byQuery.values()].sort((a, b) => b.impressions - a.impressions),
     pages,
     aeo,
@@ -637,6 +652,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       aeoCited: aeo.reduce((sum, row) => sum + row.cited, 0),
     };
     const gaps = buildGaps({ topic, queries, pages, allPages, coverage });
+    const scope = marketScopeForTopic(data.marketScope, topic.offerKey);
     const demandScore = Math.log10(metrics.impressions + metrics.volume + 1) / 4;
     const confidence = Math.min(1, 0.35 + demandScore + (coverage === "strong" ? 0.15 : coverage === "partial" ? 0.05 : 0));
     return {
@@ -647,6 +663,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       relevance: topic.relevance,
       rationale: topic.rationale,
       actionHint: topic.actionHint,
+      marketScope: scope,
       confidence,
       metrics,
       queries: queries.sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0)),
@@ -674,6 +691,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     month: data.month,
     generatedAt: now.toISOString(),
     locale: { language: data.context.language, country: data.context.country },
+    marketScope: data.marketScope,
     business: {
       name: fieldText(data.fields, "businessName"),
       services: fieldList(data.fields, "services"),
@@ -761,6 +779,7 @@ export async function synthesizeTopicMap(
       intent: cluster.intent,
       relevance: cluster.relevance,
       coverage: cluster.coverage,
+      marketScope: cluster.marketScope,
       demand: `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.volume} monthly volume`,
       gaps: cluster.gaps.slice(0, 2),
     })),
@@ -768,8 +787,9 @@ export async function synthesizeTopicMap(
   };
 
   const system = [
-    "You are an SEO reviewer for a small French craft business.",
+    "You are an SEO reviewer for a small craft business.",
     "Review the supplied topic map. Use only the supplied clusters, slugs and facts; do not invent queries, pages or metrics.",
+    "Respect each cluster's marketScope. A local offer is local; a national or international offer is not limited to Normandy. Do not assume every offer is local.",
     "Say which topics are worth doing first and which are weak or off-area.",
     "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",
@@ -781,12 +801,13 @@ export async function synthesizeTopicMap(
       config,
       system,
       user: JSON.stringify(payload),
-      maxTokens: 1_500,
+      maxTokens: 16_000,
       temperature: 0.2,
       attempts: 2,
-      timeoutMs: 60_000,
-      // This provider returns an empty body or a malformed tool-call artifact in
-      // JSON mode for longer prompts. The prompt itself already asks for JSON.
+      timeoutMs: 120_000,
+      // This provider is a reasoning model: a small completion budget can be
+      // spent on reasoning before any content is emitted, which looked like an
+      // empty response. Keep a generous completion budget.
       jsonMode: false,
     });
     const record = asRecord(parsed);
@@ -1032,13 +1053,13 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Topic table");
   lines.push("");
-  lines.push("| Topic | Intent | Relevance | Queries | Impressions | Volume | Coverage | Main page | Main gap |");
-  lines.push("|---|---|---|---:|---:|---:|---|---|---|");
+  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Volume | Coverage | Main page | Main gap |");
+  lines.push("|---|---|---|---|---:|---:|---:|---|---|---|");
   for (const cluster of map.clusters) {
     const mainPage = cluster.pages[0]?.url.replace(/^https?:\/\/[^/]+/, "") ?? "—";
     const mainGap = cluster.gaps[0] ?? "—";
     lines.push(
-      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.coverage} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
+      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.coverage} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
     );
   }
   lines.push("");
@@ -1049,6 +1070,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     lines.push("");
     lines.push(`- Slug: \`${cluster.slug}\``);
     lines.push(`- Intent: ${cluster.intent}; relevance: ${cluster.relevance}; confidence: ${cluster.confidence.toFixed(2)}`);
+    lines.push(`- Market scope: ${formatScope(cluster.marketScope)}`);
     lines.push(`- Rationale: ${cluster.rationale}`);
     lines.push(`- Demand: ${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.clicks} clicks, ${cluster.metrics.volume} measured monthly volume; average position ${cluster.metrics.position?.toFixed(1) ?? "unknown"}.`);
     lines.push(`- AEO: ${cluster.metrics.aeoQuestions} measured questions, ${cluster.metrics.aeoCited} citations of the site.`);
@@ -1120,6 +1142,11 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("- Search Console query rows are privacy-limited and do not sum to the page total.");
   lines.push("");
   return lines.join("\n");
+}
+
+function formatScope(scope: { scope: string; markets: string[]; source: string }): string {
+  const markets = scope.markets.length > 0 ? ` (${scope.markets.join(", ")})` : "";
+  return `${scope.scope}${markets}${scope.source === "default" ? " · default" : ""}`;
 }
 
 function escapePipe(value: string): string {

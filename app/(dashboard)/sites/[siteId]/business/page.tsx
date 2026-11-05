@@ -7,6 +7,7 @@ import { profileValue, confirmationStatus } from "@/lib/projects/business-profil
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { getResearchConfig } from "@/lib/research/policy";
 import { BusinessOperationalForm } from "@/components/business/business-operational-form";
+import { MarketScopeEditor } from "@/components/business/market-scope-editor";
 
 export default async function BusinessPage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
@@ -102,6 +103,22 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
         competitors: Array.isArray(profile?.competitors) ? profile.competitors.filter((value): value is string => typeof value === "string") : [],
         brandVoice: typeof profile?.brandVoice === "string" ? profile.brandVoice : "",
       }} />
+
+      <MarketScopeEditor
+        siteId={siteId}
+        revision={config.policy?.revision ?? 0}
+        profileUpdatedAt={profile?.updatedAt.toISOString() ?? null}
+        initial={
+          config.marketScope.offers.length > 0
+            ? config.marketScope
+            : {
+                default: "local",
+                offers: (Array.isArray(profile?.services) ? profile.services : [])
+                  .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+                  .map((service) => ({ offer: service, scope: "local" as const, markets: [] })),
+              }
+        }
+      />
 
       <section className="panel p-4 sm:p-5">
         <h2 className="font-heading text-lg font-semibold">Research configuration</h2>

@@ -22,6 +22,8 @@ export type TopicDefinition = {
   relevance: TopicRelevance;
   /** What a strong page for this topic looks like. */
   coverageKind: TopicCoverageKind;
+  /** The offer key used by the tenant market-scope configuration. */
+  offerKey: string;
   /** Why this topic matters to the business, in one sentence. */
   rationale: string;
   /** At least one of these must appear in the query for the topic to apply. */
@@ -49,6 +51,7 @@ export type TopicDefinition = {
 export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   {
     slug: "restauration-siege",
+    offerKey: "Restauration de siège",
     preferredPages: ["/tapisserie-restauration"],
     name: "Restauration de sièges & tapisserie d'ameublement",
     intent: "commercial",
@@ -76,6 +79,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "creation-abat-jour",
+    offerKey: "Création d'abat-jours",
     preferredPages: ["/lampes/abat-jours"],
     name: "Création d'abat-jours artisanaux & sur mesure",
     intent: "commercial",
@@ -96,6 +100,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "restauration-abat-jour",
+    offerKey: "Restauration d'abat-jour",
     name: "Restauration d'abat-jour",
     intent: "commercial",
     relevance: "high",
@@ -119,6 +124,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "luminaires",
+    offerKey: "Lampes & luminaires",
     preferredPages: ["/lampes"],
     name: "Lampes & luminaires artisanaux",
     intent: "commercial",
@@ -147,6 +153,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "kits-ateliers",
+    offerKey: "Kits DIY & ateliers",
     preferredPages: ["/les-ateliers"],
     name: "Kits DIY & ateliers créatifs",
     intent: "transactional",
@@ -172,6 +179,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "carte-cadeau",
+    offerKey: "Cartes cadeaux",
     preferredPages: ["/gift-card"],
     name: "Cartes cadeaux",
     intent: "transactional",
@@ -189,6 +197,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "objets-deco",
+    offerKey: "Objets déco",
     preferredPages: ["/objets-deco"],
     name: "Objets déco & coussins",
     intent: "transactional",
@@ -206,6 +215,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "tissus-matieres",
+    offerKey: "Tissus & matières",
     preferredPages: ["/les-tissus"],
     name: "Tissus & matières",
     intent: "informational",
@@ -223,6 +233,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "local-normandie",
+    offerKey: "Restauration de siège",
     preferredPages: ["/"],
     name: "Tapissier & atelier en Normandie",
     intent: "local",
@@ -249,6 +260,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "marque",
+    offerKey: "Marque",
     preferredPages: ["/"],
     name: "Marque Atelier de l'harmonie",
     intent: "mixed",
@@ -267,6 +279,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "b2b",
+    offerKey: "Projets professionnels",
     preferredPages: ["/b2b"],
     name: "Projets professionnels & hôtels",
     intent: "commercial",
@@ -284,6 +297,7 @@ export const ATELIER_TOPIC_TAXONOMY: TopicDefinition[] = [
   },
   {
     slug: "blog-artisanat",
+    offerKey: "Blog",
     preferredPages: ["/blog"],
     name: "Blog & culture artisanat",
     intent: "informational",

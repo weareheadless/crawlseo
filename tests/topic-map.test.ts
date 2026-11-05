@@ -30,6 +30,7 @@ function page(path: string, title: string, type: TopicMapData["pages"][number]["
 function data(overrides: Partial<TopicMapData> = {}): TopicMapData {
   return {
     site: { id: "site-1", domain: "atelier.example", projectId: "proj-1" },
+    marketScope: { default: "local", offers: [] },
     context: { language: "fr", country: "FR" } as never,
     fields: {
       businessName: { value: "Atelier Test" },
@@ -130,6 +131,34 @@ describe("topic map build", () => {
     const local = map.clusters.find((cluster) => cluster.slug === "local-normandie")!;
     expect(local.gaps.join(" ")).toMatch(/dedicated local landing page/i);
     expect(local.gaps.join(" ")).toMatch(/le mans|off-area/i);
+  });
+
+  it("uses the tenant offer scope for local and international topics", () => {
+    const map = buildTopicMap(
+      data({
+        marketScope: {
+          default: "local",
+          offers: [
+            { offer: "Restauration de siège", scope: "local", markets: ["Normandie"] },
+            { offer: "Lampes & luminaires", scope: "international", markets: ["France", "Europe"] },
+          ],
+        },
+        queries: [query("fauteuil restauration", 40, 480), query("luminaire artisanal", 100)],
+        pages: [
+          page("/tapisserie-restauration", "Restauration de Sièges", "service", 712),
+          page("/lampes", "Créations Lumineuses Artisanales", "category", 342),
+        ],
+      }),
+      taxonomy
+    );
+    expect(map.clusters.find((cluster) => cluster.slug === "restauration-siege")?.marketScope).toMatchObject({
+      scope: "local",
+      source: "offer",
+    });
+    expect(map.clusters.find((cluster) => cluster.slug === "luminaires")?.marketScope).toMatchObject({
+      scope: "international",
+      source: "offer",
+    });
   });
 
   it("renders a readable report with the topic table and unmapped demand", () => {

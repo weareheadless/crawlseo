@@ -93,7 +93,7 @@ function printMap(map: TopicMap): void {
   process.stdout.write(`AI: ${map.ai.available ? `available (${map.ai.model})` : `not run${map.ai.error ? ` (${map.ai.error})` : ""}`}\n\n`);
   for (const cluster of map.clusters) {
     process.stdout.write(
-      `- ${cluster.name} [${cluster.slug}] · ${cluster.intent} · ${cluster.relevance} · q ${cluster.metrics.queries} · imp ${cluster.metrics.impressions} · vol ${cluster.metrics.volume} · coverage ${cluster.coverage}\n`
+      `- ${cluster.name} [${cluster.slug}] · ${cluster.intent} · ${cluster.relevance} · scope ${cluster.marketScope.scope} · q ${cluster.metrics.queries} · imp ${cluster.metrics.impressions} · vol ${cluster.metrics.volume} · coverage ${cluster.coverage}\n`
     );
     if (cluster.pages[0]) process.stdout.write(`    page: ${cluster.pages[0].url}\n`);
     for (const gap of cluster.gaps.slice(0, 2)) process.stdout.write(`    gap: ${gap}\n`);

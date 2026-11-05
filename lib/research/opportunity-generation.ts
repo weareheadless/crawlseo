@@ -193,11 +193,11 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
       lane: "content_business",
       kind: "update",
       title: "Renforcer le hub luminaires et les sous-catégories",
-      summary: `${lighting.metrics.queries} queries, ${lighting.metrics.impressions} impressions and ${lighting.metrics.volume} measured volume; the hub ranks, but the suspensions and baladeuses pages are 152 words.`,
+      summary: `${lighting.metrics.queries} queries, ${lighting.metrics.impressions} impressions and ${lighting.metrics.volume} measured volume; the hub ranks, but the thin subcategory pages are not supporting the format queries. Market scope: ${lighting.marketScope.scope}${lighting.marketScope.markets.length ? ` (${lighting.marketScope.markets.join(", ")})` : ""}.`,
       whyNow: "The lighting range has the most first-party demand, and the thin subcategory pages cannot support the head and format queries.",
       evidenceRefs: evidenceOf("luminaires"),
       target: { url: "/lampes", newAsset: false, section: "hub and subcategories" },
-      action: "Expand /lampes and the thin subcategory pages with buying guidance, format comparisons, room use, materials and internal links; add product schema where it is missing. Do not create pages for formats the atelier does not sell.",
+      action: "Expand /lampes and the thin subcategory pages with buying guidance, format comparisons, room use, materials and internal links; add product schema where it is missing. If the owner wants to add formats, plan the range and pages.",
       expectedOutcome: "Improve rankings for luminaire artisanal and the subcategory queries, and send clearer traffic to the product pages.",
       effort: "medium",
       confidence: "medium",
@@ -208,13 +208,13 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
     add({
       lane: "content_business",
       kind: "business",
-      title: "Décider du lancement plafonnier / lustre / lampadaire",
-      summary: "Queries for plafonnier, lustre and lampadaire have demand, but the site has no matching product page or range.",
-      whyNow: "These are product-range questions, not content gaps. Creating pages before the product decision would invent an offer the atelier does not have.",
+      title: "Opportunité gamme plafonniers / lustres / lampadaires",
+      summary: `Queries for plafonnier, lustre and lampadaire have demand; no matching product page is visible in the current crawl. The configured market scope for this offer is ${lighting.marketScope.scope}${lighting.marketScope.markets.length ? ` (${lighting.marketScope.markets.join(", ")})` : ""}.`,
+      whyNow: "The demand is already visible in Search Console; the owner can decide whether to add the formats, source a curated selection or leave the queries unserved.",
       evidenceRefs: evidenceOf("luminaires"),
-      target: { url: null, newAsset: false, section: "product range decision" },
-      action: "Decide whether the atelier will make or sell plafonniers, lustres or lampadaires. If yes, plan the range and pages; if no, leave the queries unserved and do not create thin pages.",
-      expectedOutcome: "Avoid content for products the business does not sell, and give the owner a clear go/no-go on the range.",
+      target: { url: null, newAsset: false, section: "product range opportunity" },
+      action: "Evaluate adding plafonniers, lustres or lampadaires, or a curated selection. If the owner accepts, plan the product pages, collection copy and internal links. The owner decides; the system does not assume the range exists or does not exist.",
+      expectedOutcome: "Give the owner a clear, demand-backed product opportunity without inventing a range or blocking the idea before they decide.",
       effort: "small",
       confidence: "high",
       expiresAt: null,
@@ -245,11 +245,11 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
       lane: "content_business",
       kind: "update",
       title: "Ajouter une preuve locale à la page restauration",
-      summary: "Local queries exist around Saint-Pierre-en-Port and Normandy, but no dedicated local landing page combines the trade and the place.",
+      summary: `Local queries exist around ${inputs.map.business.location ?? inputs.map.business.serviceArea[0] ?? "the service area"}, but no dedicated local landing page combines the trade and the place.`,
       whyNow: "A local landing page is a larger commitment; a local proof section on the service page tests the demand first.",
       evidenceRefs: evidenceOf("local-normandie"),
       target: { url: "/tapisserie-restauration", newAsset: false, section: "local proof" },
-      action: "Add a local section naming Saint-Pierre-en-Port, the Normandy service area, workshop visits and nearby towns. Do not chase Le Mans/Sarthe queries unless the business decides to serve that market.",
+      action: `Add a local section naming ${inputs.map.business.location ?? inputs.map.business.serviceArea[0] ?? "the service area"}, the places served, workshop visits and nearby towns. Do not chase off-area queries unless the business decides to serve that market.`,
       expectedOutcome: "Test local intent without creating a thin local page; measure whether local queries and quote requests move.",
       effort: "small",
       confidence: "medium",
@@ -299,6 +299,7 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
     const cited = rows.reduce((sum, row) => sum + row.cited, 0);
     const newAsset = slug === "restauration-abat-jour";
     const target = newAsset ? "/restauration-abat-jour" : cluster.pages[0]?.url ?? "/";
+    const formatDecision = rows.some((row) => /\b(plafonnier|lustre|lampadaire)\b/i.test(row.question));
     add({
       lane: "aeo_geo",
       kind: "aeo",
@@ -307,7 +308,7 @@ export function buildDeterministicProposals(inputs: ProposalInputs): Proposal[] 
       whyNow: "These are measured answers, not question coverage: the site was asked and not cited.",
       evidenceRefs: rows.map((row) => row.id),
       target: { url: target, newAsset, section: "answer blocks and FAQ" },
-      action: `Add concise, source-backed answer blocks to ${target} for: ${rows.slice(0, 5).map((row) => row.question).join("; ")}. Use definitions, process, materials, lead time and local proof, with headings and FAQ schema where appropriate.${newAsset ? " Add them to the new restoration service page; keep the blog post as the how-to." : ""}`,
+      action: `Add concise, source-backed answer blocks to ${target} for: ${rows.slice(0, 5).map((row) => row.question).join("; ")}. Use definitions, process, materials, lead time and local proof, with headings and FAQ schema where appropriate.${newAsset ? " Add them to the new restoration service page; keep the blog post as the how-to." : ""}${formatDecision ? " If a question targets a format the atelier does not currently sell, treat it as a range decision for the owner; do not publish a product claim before that decision." : ""}`,
       expectedOutcome: `Increase the chance of being cited in Google AI Overviews for the ${cluster.name.toLowerCase()} questions and improve the supporting organic answer.`,
       effort: "medium",
       confidence: "medium",
@@ -535,8 +536,9 @@ export async function critiqueProposals(
     })),
   };
   const system = [
-    "You are an SEO critic for a small French craft business.",
-    "Check each proposal for unsupported claims, duplicates, wrong target pages and product-range overreach.",
+    "You are an SEO critic for a small craft business.",
+    "Check each proposal for unsupported claims, duplicates and wrong target pages.",
+    "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
     "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }] }.",
     "Use only the supplied dedupKeys. Keep the summary under 300 characters and each reason under 200 characters.",
   ].join("\n");
@@ -546,10 +548,12 @@ export async function critiqueProposals(
       config,
       system,
       user: JSON.stringify(payload),
-      maxTokens: 1_500,
+      maxTokens: 12_000,
       temperature: 0.2,
-      attempts: 1,
-      timeoutMs: 60_000,
+      attempts: 2,
+      timeoutMs: 120_000,
+      // Reasoning models can spend a small completion budget before emitting
+      // content; keep enough room for both the reasoning and the JSON answer.
       jsonMode: false,
     });
     const record = asRecord(parsed);

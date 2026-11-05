@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { configurationSectionFields, mergeConstraints, type ConfigurationSection } from "@/lib/pipeline/configuration";
+import { normalizeMarketScope } from "@/lib/site/market-scope";
 
 export class ConfigurationConflict extends Error { status = 409; }
 export class ConfigurationPreconditionRequired extends Error { status = 428; }
@@ -29,12 +30,16 @@ function validate(section: ConfigurationSection, values: Record<string, unknown>
       if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) throw new InvalidConfigurationSection(`Invalid ${key}`);
     } else if (["enabled", "autoDraft", "autoAgent"].includes(key)) {
       if (typeof value !== "boolean") throw new InvalidConfigurationSection(`Invalid ${key}`);
+    } else if (key === "marketScope") {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidConfigurationSection("Invalid marketScope");
+      const normalized = normalizeMarketScope(value);
+      if (normalized.offers.length > 24) throw new InvalidConfigurationSection("Invalid marketScope");
     } else if (key === "cadence" && (typeof value !== "string" || !cadence.includes(value))) throw new InvalidConfigurationSection("Invalid cadence");
   }
 }
 
 export async function saveConfigurationSection(siteId: string, section: ConfigurationSection, values: Record<string, unknown>, expectedPolicyRevision?: number, expectedProfileUpdatedAt?: string | null) {
-  values = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Array.isArray(value) ? value.map((entry) => typeof entry === "string" ? entry.trim() : entry) : typeof value === "string" ? value.trim() : value]));
+  values = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, key === "marketScope" ? normalizeMarketScope(value) : Array.isArray(value) ? value.map((entry) => typeof entry === "string" ? entry.trim() : entry) : typeof value === "string" ? value.trim() : value]));
   validate(section, values);
   const changesPolicy = Object.keys(values).some((key) => section !== "business" || key === "goals");
   const changesProfile = Object.keys(values).some((key) => section === "business" || key === "exclusions");
@@ -57,7 +62,7 @@ export async function saveConfigurationSection(siteId: string, section: Configur
         if (changesProfile && profileStamp !== expectedProfileUpdatedAt) {
           const originalProfile = initialProfile;
           const changedKeys = Object.keys(values).filter((key) => ["topics", "audience", "language", "services", "competitors", "brandVoice"].includes(key));
-          const constraintKeys = Object.keys(values).filter((key) => ["market", "goals", "exclusions"].includes(key));
+          const constraintKeys = Object.keys(values).filter((key) => ["market", "goals", "exclusions", "marketScope"].includes(key));
           const sameTouchedValues = attempt > 0 && originalProfile !== null && changedKeys.every((key) => JSON.stringify(profileRecord?.[key] ?? null) === JSON.stringify(originalProfile[key] ?? null)) && constraintKeys.every((key) => {
             const current = mergeConstraints(profileRecord?.constraints, {});
             const initial = mergeConstraints(originalProfile.constraints, {});
@@ -71,7 +76,7 @@ export async function saveConfigurationSection(siteId: string, section: Configur
         const constraintsPatch: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(values)) {
           if (key === "topics" || key === "audience" || key === "language" || key === "services" || key === "competitors" || key === "brandVoice") profilePatch[key] = key === "audience" && value === "" ? Prisma.JsonNull : value;
-          else if (key === "market" || key === "goals") constraintsPatch[key] = value;
+          else if (key === "market" || key === "goals" || key === "marketScope") constraintsPatch[key] = value;
           else policyPatch[key] = value;
         }
         if (Object.hasOwn(values, "goals")) policyPatch.goals = values.goals;
