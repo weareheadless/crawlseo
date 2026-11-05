@@ -31,6 +31,12 @@ export type CollectionInput = {
   domain?: string;
   /** SERP device; rankings differ between desktop and mobile. */
   device?: "desktop" | "mobile";
+  /**
+   * Distinguishes an explicit retry from the first attempt. A released budget
+   * reservation is terminal, so a retry of the same query needs its own key;
+   * the token is recorded in the reservation detail for audit.
+   */
+  attempt?: string;
 };
 
 export type CollectedEvidence = {
@@ -107,7 +113,11 @@ export async function withResearchBudget<T>(
 export async function collectKeywordMetrics(db: CollectionDb, input: CollectionInput): Promise<CollectionOutput> {
   const { result: overview, spentMicros: spent } = await withResearchBudget(input.projectId, {
     operation: "dataforseo:keyword_metrics",
-    detail: { queries: input.queries.slice(0, 20), locale: `${input.languageCode}:${input.locationCode}` },
+    detail: {
+      queries: input.queries.slice(0, 20),
+      locale: `${input.languageCode}:${input.locationCode}`,
+      attempt: input.attempt ?? null,
+    },
     expectedMicros: 20_000,
     run: () =>
       executeDataForSeoKeywordOverview({
@@ -175,7 +185,12 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
   for (const query of input.queries) {
     const { result: serp, spentMicros: callSpent } = await withResearchBudget(input.projectId, {
       operation: "dataforseo:serp_snapshot",
-      detail: { query, locale: `${input.languageCode}:${input.locationCode}` },
+      detail: {
+        query,
+        locale: `${input.languageCode}:${input.locationCode}`,
+        device: input.device ?? "desktop",
+        attempt: input.attempt ?? null,
+      },
       expectedMicros: 5_000,
       run: () =>
         executeDataForSeoOrganicSerp({
@@ -213,6 +228,9 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
     const dimensions = {
       query,
       device: input.device ?? "desktop",
+      // Locale is part of the observation's identity: a SERP is bought for one
+      // market, and a later bundle may only reuse it for the same market.
+      locale: `${input.languageCode}:${input.locationCode}`,
       competitorCovered: covered ? "true" : "false",
       topUrl: items[0]?.url ?? null,
     };
