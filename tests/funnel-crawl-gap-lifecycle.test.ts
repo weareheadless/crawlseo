@@ -99,6 +99,8 @@ function mockDb(seed: Array<Record<string, unknown>>) {
       findMany: vi.fn(async () => outcomes),
     },
   };
+  (db as unknown as { $transaction: (fn: (tx: typeof db) => unknown) => Promise<unknown> }).$transaction =
+    async (fn) => fn(db);
   return { db: db as never, opportunities, tasks, outcomes };
 }
 

@@ -764,4 +764,103 @@ dbDescribe("customer-centred recommendations on a disposable schema", { timeout:
     expect(second.packet?.packetHash).toBe(first.decision?.packetHash);
   });
 
+  it("restores the active evidence selection without leaving both generations active", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site } = await seedTenant(suffix);
+    const before = await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-10-01T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: { findingId: "selection-1", painPoint: "true", theme: "Selection" },
+        metrics: {},
+        observationHash: `selection-before-${suffix}`,
+      },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "board-evidence-"));
+    const path = join(dir, "board.json");
+    await takeBoardSnapshot(db, path);
+
+    const after = await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-11-01T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: { findingId: "selection-2", painPoint: "true", theme: "Selection" },
+        metrics: {},
+        observationHash: `selection-after-${suffix}`,
+      },
+    });
+    await db.evidenceRecord.update({ where: { id: before.id }, data: { supersededById: after.id } });
+
+    const result = await restoreBoardSnapshot(db, path);
+    expect(result.conflicts.join(" ")).toContain("created after the snapshot");
+    const restoredBefore = await db.evidenceRecord.findUniqueOrThrow({ where: { id: before.id } });
+    const restoredAfter = await db.evidenceRecord.findUniqueOrThrow({ where: { id: after.id } });
+    expect(restoredBefore.supersededById).toBeNull();
+    expect(restoredAfter.supersededById).not.toBeNull();
+  });
+
+  it("preserves evidence used by newer accepted human work during rollback", async () => {
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+    const { project, site } = await seedTenant(suffix);
+    const before = await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-10-01T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: { findingId: "preserved-1", painPoint: "true", theme: "Preserved" },
+        metrics: {},
+        observationHash: `preserved-before-${suffix}`,
+      },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "board-preserved-"));
+    const path = join(dir, "board.json");
+    await takeBoardSnapshot(db, path);
+
+    const acceptedEvidence = await db.evidenceRecord.create({
+      data: {
+        projectId: project.id,
+        siteId: site.id,
+        kind: "research_finding",
+        observedAt: new Date("2026-11-01T00:00:00.000Z"),
+        producer: "research-runner",
+        dimensions: { findingId: "preserved-2", painPoint: "true", theme: "Preserved" },
+        metrics: {},
+        observationHash: `preserved-after-${suffix}`,
+      },
+    });
+    await db.evidenceRecord.update({ where: { id: before.id }, data: { supersededById: acceptedEvidence.id } });
+    await db.opportunity.create({
+      data: {
+        projectId: project.id,
+        type: "O13_user_pain_point",
+        dimension: "content",
+        title: "Accepted after snapshot",
+        summary: "Uses newer evidence",
+        dedupKey: `O13:preserved-${suffix}`,
+        scoreValue: 10,
+        scoreInputs: { worth: { volume: null, ctrAtPosition: null, businessValue: 0.8 } },
+        status: "accepted",
+        decidedBy: "owner",
+        decidedAt: new Date(Date.now() + 1_000),
+        recommendationEvidenceId: acceptedEvidence.id,
+        detectedBy: "integration",
+      },
+    });
+
+    const result = await restoreBoardSnapshot(db, path);
+    const restoredBefore = await db.evidenceRecord.findUniqueOrThrow({ where: { id: before.id } });
+    const restoredAfter = await db.evidenceRecord.findUniqueOrThrow({ where: { id: acceptedEvidence.id } });
+    expect(restoredBefore.supersededById).toBe(acceptedEvidence.id);
+    expect(restoredAfter.supersededById).toBeNull();
+    expect(result.conflicts.join(" ")).toContain("preserved newer work");
+  });
+
 });

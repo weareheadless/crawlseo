@@ -182,9 +182,8 @@ actual orchestration.
 
 ## Remaining blockers
 
-- R7 lifecycle/acceptance: render-time version, canonical investigation
-  acceptance and accepted-premise change visibility.
-- R8 shadow/rollback equivalence and atomic evidence restoration.
+- R7 lifecycle/acceptance and R8 shadow/rollback are repaired in
+  `docs/recommendation-lifecycle-shadow-repair.md`.
 - Independent SEO/business review, held-out fresh monthly discovery, full
   all-tenant shadow diff, browser/accessibility validation and production
   rollout.

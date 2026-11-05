@@ -45,6 +45,8 @@ const opportunityDb = () => {
     },
     evidenceRecord: { findMany: vi.fn().mockResolvedValue([]) },
   };
+  (db as unknown as { $transaction: (fn: (tx: typeof db) => unknown) => Promise<unknown> }).$transaction =
+    async (fn) => fn(db);
   return { db, store };
 };
 

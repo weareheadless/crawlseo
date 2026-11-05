@@ -155,7 +155,12 @@ export default async function OpportunityDetailPage({ params }: Props) {
             <p className="text-sm text-muted-foreground">
               No task yet. Accepting turns this opportunity into a task for a person to execute — the only way work enters the queue.
             </p>
-            <OpportunityDecisionBar siteId={siteId} opportunityId={detail.id} status={detail.status} />
+            <OpportunityDecisionBar
+              siteId={siteId}
+              opportunityId={detail.id}
+              status={detail.status}
+              expectedDecisionId={detail.recommendation?.decisionId ?? null}
+            />
           </div>
         )}
       </Stage>

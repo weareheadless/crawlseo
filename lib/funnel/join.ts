@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { addEdge, type EdgeDb } from "@/lib/funnel/edges";
-import { upsertOpportunity, completenessLeg } from "@/lib/funnel/opportunity";
+import { completenessLeg } from "@/lib/funnel/opportunity";
 import { computeScore, freshnessFactor, type ScoreInputs } from "@/lib/funnel/scoring";
 import { parsePersistedDecision } from "@/lib/recommendation/contracts";
 
@@ -230,12 +230,23 @@ export function taskPlanFromOpportunity(opportunity: {
 export async function acceptOpportunityIntoTask(
   db: TaskDb,
   opportunityId: string,
-  input: { title: string; assignedTo: string; plan?: unknown; agentPreparedById?: string; recommendationDecision?: unknown }
+  input: {
+    title: string;
+    assignedTo: string;
+    plan?: unknown;
+    agentPreparedById?: string;
+    recommendationDecision?: unknown;
+    /** The decision version rendered to the person who clicked accept. */
+    expectedDecisionId?: string | null;
+    /** The project that owns the site the person is acting in. */
+    expectedProjectId?: string | null;
+  }
 ): Promise<string> {
   const opportunity = await db.opportunity.findUnique({
     where: { id: opportunityId },
     select: {
       id: true,
+      projectId: true,
       status: true,
       type: true,
       title: true,
@@ -253,14 +264,22 @@ export async function acceptOpportunityIntoTask(
     throw new Error("a task requires a human executor (plan decision 3)");
   }
 
-  const rawDecision = input.recommendationDecision as { readiness?: unknown } | null | undefined;
-  if (rawDecision && typeof rawDecision.readiness === "string" && rawDecision.readiness !== "actionable") {
-    throw new Error(`opportunity readiness "${rawDecision.readiness}" cannot be accepted into implementation work`);
-  }
   const decision = parsePersistedDecision(opportunity.recommendationDecision);
   if (MIGRATED_TYPES.has(opportunity.type)) {
     if (!decision) {
       throw new Error("this recommendation has not been assessed under the current contract and cannot become work");
+    }
+    if (input.expectedProjectId && opportunity.projectId !== input.expectedProjectId) {
+      throw new Error("this opportunity does not belong to the site's project");
+    }
+    if (!input.expectedProjectId) {
+      throw new Error("accepting a recommendation requires its project scope");
+    }
+    if (!input.expectedDecisionId) {
+      throw new Error("accepting a recommendation requires the decision version shown to the user");
+    }
+    if (input.expectedDecisionId !== decision.decisionId) {
+      throw new Error("the recommendation changed since this page was loaded; review the current decision before accepting");
     }
     if (decision.readiness !== "actionable" && decision.readiness !== "needs_investigation") {
       throw new Error(`opportunity readiness "${decision.readiness}" cannot be accepted into work`);
@@ -272,10 +291,17 @@ export async function acceptOpportunityIntoTask(
       }
     }
   } else if (input.recommendationDecision != null) {
+    const raw = input.recommendationDecision as { readiness?: unknown } | null;
+    if (raw && typeof raw.readiness === "string" && raw.readiness !== "actionable") {
+      throw new Error(`opportunity readiness "${raw.readiness}" cannot be accepted into implementation work`);
+    }
     const supplied = parsePersistedDecision(input.recommendationDecision);
     if (!supplied) throw new Error("the recommendation decision is malformed and cannot be accepted");
     if (supplied.readiness !== "actionable") {
       throw new Error(`opportunity readiness "${supplied.readiness}" cannot be accepted into implementation work`);
+    }
+    if (input.expectedDecisionId && supplied.decisionId !== input.expectedDecisionId) {
+      throw new Error("the recommendation changed since this page was loaded; review the current decision before accepting");
     }
   }
 
@@ -306,7 +332,10 @@ export async function acceptOpportunityIntoTask(
     });
   };
 
-  const task = db.$transaction ? await db.$transaction((tx) => write(tx)) : await write(db);
+  if (!db.$transaction) {
+    throw new Error("accepting a recommendation requires a transaction-capable database client");
+  }
+  const task = await db.$transaction((tx) => write(tx));
   return task.id;
 }
 

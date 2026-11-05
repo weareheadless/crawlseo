@@ -7,10 +7,12 @@ import { Prisma, type PrismaClient } from "@prisma/client";
  * Board snapshot and rollback (brief §6).
  *
  * A reanalysis changes what the board says, so it must be reversible without
- * deleting evidence or accepted work. Two properties matter and both were missing:
+ * deleting evidence or accepted work. Three properties matter:
  *
- *  - the snapshot must capture the whole published state, not a few scores;
- *  - a restore must not overwrite a human decision made after the snapshot.
+ *  - the snapshot captures the whole published state, not a few scores;
+ *  - a restore does not overwrite a human decision made after the snapshot;
+ *  - restoring the active evidence selection is atomic and cannot leave both the
+ *    snapshot row and its post-snapshot replacement active.
  */
 
 export type SnapshotRow = {
@@ -38,6 +40,10 @@ export type SnapshotEvidenceRow = {
   id: string;
   supersededById: string | null;
   observedAt: string;
+  /** Creation time is the post-snapshot guard; observedAt can be backfilled. */
+  createdAt: string;
+  /** Compare-and-swap guard for concurrent evidence edits. */
+  updatedAt: string;
 };
 
 export type BoardSnapshot = {
@@ -81,7 +87,7 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
     });
     const evidence = await db.evidenceRecord.findMany({
       where: { projectId: site.projectId!, kind: "research_finding" },
-      select: { id: true, supersededById: true, observedAt: true },
+      select: { id: true, supersededById: true, observedAt: true, createdAt: true, updatedAt: true },
     });
     snapshot.sites.push({
       siteId: site.id,
@@ -96,6 +102,8 @@ export async function takeBoardSnapshot(db: SnapshotDb, path: string): Promise<B
         id: row.id,
         supersededById: row.supersededById,
         observedAt: row.observedAt.toISOString(),
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
       })),
     });
   }
@@ -112,8 +120,9 @@ export type RestoreResult = {
 /**
  * Restore the published state, preserving newer human decisions.
  *
- * A snapshot that does not match its checksum is refused: restoring a truncated
- * board is worse than not restoring it.
+ * The whole restore is one transaction. Opportunity writes use an updatedAt
+ * compare-and-swap; evidence writes use the same guard. A post-snapshot evidence
+ * row is deactivated only when it is not used by preserved accepted work.
  */
 export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promise<RestoreResult> {
   if (!existsSync(path)) throw new Error(`snapshot not found: ${path}`);
@@ -122,81 +131,156 @@ export async function restoreBoardSnapshot(db: SnapshotDb, path: string): Promis
   if (checksumOf(snapshot) !== snapshot.checksum) {
     throw new Error("snapshot checksum does not match its contents");
   }
+  const transaction = db.$transaction;
+  if (!transaction) throw new Error("board restore requires a transaction-capable database client");
 
   const takenAt = new Date(snapshot.takenAt).getTime();
-  let restored = 0;
-  const conflicts: string[] = [];
-  for (const site of snapshot.sites) {
-    for (const row of site.opportunities) {
-      const current = await db.opportunity.findUnique({
-        where: { id: row.id },
-        select: { decidedAt: true, updatedAt: true },
-      });
-      if (!current) continue;
-      if (current.decidedAt && current.decidedAt.getTime() > takenAt) {
-        conflicts.push(`${site.domain}: ${row.dedupKey} was decided after the snapshot`);
+  return transaction(async (tx) => {
+    let restored = 0;
+    const conflicts: string[] = [];
+    for (const site of snapshot.sites) {
+      const preservedEvidence = new Set<string>();
+
+      for (const row of site.opportunities) {
+        const current = await tx.opportunity.findUnique({
+          where: { id: row.id },
+          select: { decidedAt: true, updatedAt: true, status: true, recommendationEvidenceId: true },
+        });
+        if (!current) continue;
+        const decidedAfter = current.decidedAt ? current.decidedAt.getTime() > takenAt : false;
+        const humanProgressed =
+          (current.status === "accepted" || current.status === "in_progress") &&
+          row.status !== current.status;
+        if (decidedAfter || humanProgressed) {
+          conflicts.push(`${site.domain}: ${row.dedupKey} was decided after the snapshot and was preserved`);
+          if (current.recommendationEvidenceId) preservedEvidence.add(current.recommendationEvidenceId);
+          continue;
+        }
+        // Compare-and-swap: a row changed between the read and this write is a
+        // concurrent edit, not a row to overwrite.
+        const updated = await tx.opportunity.updateMany({
+          where: { id: row.id, updatedAt: current.updatedAt },
+          data: {
+            title: row.title,
+            summary: row.summary,
+            scoreValue: row.scoreValue,
+            scoreInputs: row.scoreInputs as never,
+            recommendationDecision: row.recommendationDecision == null ? Prisma.DbNull : (row.recommendationDecision as never),
+            recommendationVersion: row.recommendationVersion,
+            recommendationFingerprint: row.recommendationFingerprint,
+            recommendationEvidenceId: row.recommendationEvidenceId,
+            evidenceCompleteness: row.evidenceCompleteness as never,
+            status: row.status as never,
+            parkReason: row.parkReason,
+            assessmentVersion: row.assessmentVersion,
+          },
+        });
+        if (updated.count === 0) {
+          conflicts.push(`${site.domain}: ${row.dedupKey} changed concurrently`);
+          continue;
+        }
+        restored += 1;
+      }
+
+      // A row created after the snapshot was not part of the reviewed state. Park it
+      // unless a human has already accepted or progressed it. Older snapshots have no
+      // projectId; refuse to guess rather than park another project's rows.
+      if (!site.projectId) {
+        conflicts.push(`${site.domain}: snapshot has no project id, so new rows were not reconciled`);
         continue;
       }
-      // Compare-and-swap: a row changed between the read and this write is a
-      // concurrent edit, not a row to overwrite.
-      const updated = await db.opportunity.updateMany({
-        where: { id: row.id, updatedAt: current.updatedAt },
-        data: {
-          title: row.title,
-          summary: row.summary,
-          scoreValue: row.scoreValue,
-          scoreInputs: row.scoreInputs as never,
-          recommendationDecision: row.recommendationDecision == null ? Prisma.DbNull : (row.recommendationDecision as never),
-          recommendationVersion: row.recommendationVersion,
-          recommendationFingerprint: row.recommendationFingerprint,
-          recommendationEvidenceId: row.recommendationEvidenceId,
-          evidenceCompleteness: row.evidenceCompleteness as never,
-          status: row.status as never,
-          parkReason: row.parkReason,
-          assessmentVersion: row.assessmentVersion,
+      const snapshotIds = new Set(site.opportunities.map((row) => row.id));
+      const createdAfter = await tx.opportunity.findMany({
+        where: { projectId: site.projectId, status: "detected" },
+        select: { id: true, dedupKey: true },
+      });
+      for (const row of createdAfter) {
+        if (snapshotIds.has(row.id)) continue;
+        const parked = await tx.opportunity.updateMany({
+          where: { id: row.id, status: "detected" },
+          data: { status: "parked", parkReason: "rollback_new_row", decidedBy: "board-restore", decidedAt: new Date() },
+        });
+        if (parked.count === 0) {
+          conflicts.push(`${site.domain}: ${row.dedupKey} changed concurrently and was not parked`);
+        } else {
+          conflicts.push(`${site.domain}: ${row.dedupKey} was created after the snapshot and was parked`);
+        }
+      }
+
+      // Restore which research evidence was active. A record created after the
+      // snapshot is newer history; it is deactivated unless preserved work uses it.
+      // Human work that exists now and was accepted/progressed after the snapshot
+      // keeps its evidence active even when the opportunity was created later.
+      const humanWork = await tx.opportunity.findMany({
+        where: {
+          projectId: site.projectId,
+          OR: [
+            { decidedAt: { gt: new Date(takenAt) } },
+            { status: { in: ["accepted", "in_progress"] } },
+          ],
         },
+        select: { recommendationEvidenceId: true },
       });
-      if (updated.count === 0) {
-        conflicts.push(`${site.domain}: ${row.dedupKey} changed concurrently`);
-        continue;
+      for (const row of humanWork) {
+        if (row.recommendationEvidenceId) preservedEvidence.add(row.recommendationEvidenceId);
       }
-      restored += 1;
-    }
 
-    // A row created after the snapshot was not part of the reviewed state. Park it
-    // unless a human has already accepted or progressed it. Older snapshots have no
-    // projectId; refuse to guess rather than park another project's rows.
-    if (!site.projectId) {
-      conflicts.push(`${site.domain}: snapshot has no project id, so new rows were not reconciled`);
-      continue;
-    }
-    const snapshotIds = new Set(site.opportunities.map((row) => row.id));
-    const createdAfter = await db.opportunity.findMany({
-      where: { projectId: site.projectId, status: "detected" },
-      select: { id: true, dedupKey: true },
-    });
-    for (const row of createdAfter) {
-      if (snapshotIds.has(row.id)) continue;
-      await db.opportunity.updateMany({
-        where: { id: row.id, status: "detected" },
-        data: { status: "parked", parkReason: "rollback_new_row", decidedBy: "board-restore", decidedAt: new Date() },
-      });
-      conflicts.push(`${site.domain}: ${row.dedupKey} was created after the snapshot and was parked`);
-    }
+      const snapshotEvidenceIds = new Set(site.evidence.map((row) => row.id));
+      const activeAnchor =
+        site.evidence.find((row) => row.supersededById == null)?.id ?? site.evidence[0]?.id ?? null;
 
-    // Restore which research evidence was active. A record observed after the
-    // snapshot is newer history and is not rewound.
-    for (const row of site.evidence ?? []) {
-      const observedAt = new Date(row.observedAt);
-      if (observedAt.getTime() > takenAt) {
-        conflicts.push(`${site.domain}: evidence ${row.id} is newer than the snapshot and was left unchanged`);
-        continue;
+      for (const row of site.evidence ?? []) {
+        const current = await tx.evidenceRecord.findUnique({
+          where: { id: row.id },
+          select: { updatedAt: true, createdAt: true, supersededById: true },
+        });
+        if (!current) {
+          conflicts.push(`${site.domain}: evidence ${row.id} no longer exists`);
+          continue;
+        }
+        if (current.supersededById && preservedEvidence.has(current.supersededById)) {
+          conflicts.push(`${site.domain}: evidence ${row.id} remains superseded by preserved newer work`);
+          continue;
+        }
+        const updated = await tx.evidenceRecord.updateMany({
+          where: { id: row.id, updatedAt: current.updatedAt },
+          data: { supersededById: row.supersededById ?? null },
+        });
+        if (updated.count === 0) {
+          conflicts.push(`${site.domain}: evidence ${row.id} changed concurrently`);
+        }
       }
-      await db.evidenceRecord.updateMany({
-        where: { id: row.id },
-        data: { supersededById: row.supersededById ?? null },
+
+      const postSnapshot = await tx.evidenceRecord.findMany({
+        where: {
+          projectId: site.projectId,
+          kind: "research_finding",
+          createdAt: { gt: new Date(takenAt) },
+        },
+        select: { id: true, observedAt: true, createdAt: true, supersededById: true },
       });
+      for (const row of postSnapshot) {
+        if (snapshotEvidenceIds.has(row.id)) continue;
+        if (preservedEvidence.has(row.id)) {
+          conflicts.push(`${site.domain}: evidence ${row.id} is used by preserved newer work and was left active`);
+          continue;
+        }
+        if (row.supersededById) continue;
+        if (!activeAnchor) {
+          conflicts.push(`${site.domain}: evidence ${row.id} is newer than the snapshot but there is no snapshot anchor to deactivate it`);
+          continue;
+        }
+        const deactivated = await tx.evidenceRecord.updateMany({
+          where: { id: row.id, supersededById: null },
+          data: { supersededById: activeAnchor },
+        });
+        if (deactivated.count === 0) {
+          conflicts.push(`${site.domain}: evidence ${row.id} changed concurrently and was not deactivated`);
+        } else {
+          conflicts.push(`${site.domain}: evidence ${row.id} was created after the snapshot and was deactivated`);
+        }
+      }
     }
-  }
-  return { restored, conflicts };
+    return { restored, conflicts };
+  });
 }

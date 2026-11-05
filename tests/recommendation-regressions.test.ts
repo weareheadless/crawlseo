@@ -339,6 +339,7 @@ describe("structural recommendation regressions", () => {
         "op1",
         {
           id: "op1",
+          projectId: "p1",
           status: "detected",
           type: "O13_user_pain_point",
           title: "Fitted wardrobe cost",
@@ -364,11 +365,14 @@ describe("structural recommendation regressions", () => {
           return { id: `task-${tasks.length}` };
         }),
       },
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
     };
     await expect(
       acceptOpportunityIntoTask(db as never, "op1", {
         title: "Update the page",
         assignedTo: "dana",
+        expectedDecisionId: decision.decisionId,
+        expectedProjectId: "p1",
         recommendationDecision: { ...decision, decisionId: "decision-stale" },
       })
     ).rejects.toThrow(/changed since this page was loaded/);
@@ -376,6 +380,8 @@ describe("structural recommendation regressions", () => {
     const taskId = await acceptOpportunityIntoTask(db as never, "op1", {
       title: "Update the page",
       assignedTo: "dana",
+      expectedDecisionId: decision.decisionId,
+      expectedProjectId: "p1",
       recommendationDecision: decision,
     });
     expect(taskId).toBe("task-1");

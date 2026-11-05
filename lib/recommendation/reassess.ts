@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { contentWriterConfigured } from "@/lib/ai-seo/writer";
 import { parsePersistedDecision } from "@/lib/recommendation/contracts";
 import { buildEvidencePacket } from "@/lib/recommendation/packet";
+import { fallbackDedupKey } from "@/lib/recommendation/projection";
 import { assessFinding, findReusableDecision, type AssessmentRunDb, type FindingForAssessment } from "@/lib/recommendation/run";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
@@ -193,9 +194,10 @@ export async function reassessProjectRecommendations(
       summary: String(dimensions.painPointSummary ?? dimensions.gapSummary ?? stored.summary),
       observedAt: stored.createdAt,
       sourceIds,
-      dedupKey: typeof dimensions.recommendationDedupKey === "string"
-        ? dimensions.recommendationDedupKey
-        : `${stored.type.toUpperCase().includes("POSITION") ? "O14" : "O13"}:${stored.id}`,
+      dedupKey:
+        typeof dimensions.recommendationDedupKey === "string"
+          ? dimensions.recommendationDedupKey
+          : fallbackDedupKey(stored.type, stored.id),
       dimensions: dimensions as Record<string, string | number | boolean | null>,
     });
 

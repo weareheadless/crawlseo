@@ -121,9 +121,9 @@ Return actual failing-before/passing-after results, complete command exit codes 
 
 ## Resolution
 
-Repaired in the follow-up patch. See
+Repaired in the follow-up patches. See
 `docs/recommendation-analysis-safety-252df72-repair.md` for the per-finding
-implementation, the preserved failing-before probe results, and the passing
-verification. R7 lifecycle/acceptance and R8 shadow/rollback remain separate
-release blockers; this resolution does not authorise a live evaluation,
+safety implementation and `docs/recommendation-lifecycle-shadow-repair.md` for
+R7 lifecycle/acceptance and R8 shadow/rollback. R7 and R8 are no longer release
+blockers. This resolution does not authorise a live evaluation,
 application-database migration, publication, merge or deployment.

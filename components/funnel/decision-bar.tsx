@@ -15,10 +15,12 @@ export function OpportunityDecisionBar({
   siteId,
   opportunityId,
   status,
+  expectedDecisionId,
 }: {
   siteId: string;
   opportunityId: string;
   status: string;
+  expectedDecisionId?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -29,7 +31,7 @@ export function OpportunityDecisionBar({
       <button
         type="button"
         disabled={pending || status === "accepted" || status === "in_progress"}
-        onClick={() => run(() => acceptOpportunityAction(siteId, opportunityId))}
+        onClick={() => run(() => acceptOpportunityAction(siteId, opportunityId, expectedDecisionId ?? null))}
         className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:bg-[var(--a-info-800)] disabled:opacity-50"
       >
         {pending ? "Working…" : "Accept into a task"}
