@@ -30,6 +30,8 @@ export type ChatJsonInput = {
   attempts?: number;
   /** Absolute epoch-millisecond deadline for the whole call, including queue and backoff. */
   deadlineAt?: number;
+  /** Ask the provider for a JSON object. Disable for providers that return an empty body in JSON mode. */
+  jsonMode?: boolean;
   /**
    * Called immediately before every transport attempt, inside the serialised
    * queue. Throw to stop before dispatch; the caller uses this to charge a shared
@@ -101,7 +103,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
             model: input.config.model,
             temperature: input.temperature ?? 0.2,
             max_tokens: input.maxTokens ?? 3_000,
-            response_format: { type: "json_object" },
+            ...(input.jsonMode === false ? {} : { response_format: { type: "json_object" } }),
             messages: [
               { role: "system", content: input.system },
               { role: "user", content: input.user },
