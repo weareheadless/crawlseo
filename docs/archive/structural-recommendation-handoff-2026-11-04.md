@@ -1,5 +1,13 @@
 # Structural recommendation handoff — corrected 2026-11-04
 
+> **Product operating model — authoritative (2026-11-05).** Read
+> [`crawlseo-product-operating-model.md`](../crawlseo-product-operating-model.md).
+> This handoff is **engineering state only**. It does not claim product
+> usefulness, monthly research, article-idea generation, AEO/GEO wiring or board
+> visibility. The current board is still dominated by technical O7/O8 rows; the
+> weekly business-update research, monthly DataForSEO bundle, keyword → article
+> generation, AEO → O4/O5 wiring and board lanes are **not delivered**.
+
 > This replaces the stale 2026-11-04 draft. The earlier text is preserved in git
 > history. It reported `982 passed / 16 skipped`, predated the safety/R7/R8 repairs
 > and described the old rollback behaviour. Do not use it as acceptance evidence.
@@ -72,6 +80,26 @@ test and the full suite then passed. No assertion was weakened.
 
 “Accepted” here means the engineering exit checks for that package pass. It does
 not mean the SEO output is useful or independently approved.
+
+## Product gaps that remain
+
+The engineering packages above do not satisfy the product operating model. These
+are open:
+
+- **Weekly business-update research** — exhibitions, market/regulation news,
+  competitions and local events are not swept weekly.
+- **Monthly DataForSEO bundle** — keyword/SERP/AEO collection is not one scheduled
+  monthly run per site; article research remains manual and stale.
+- **Keyword/SERP → article ideas** — O3 still reads only `serp_snapshot`; keyword
+  data does not produce article proposals.
+- **AEO/GEO → O4/O5** — the 28 October DataForSEO observations are stored in
+  `AIVisibilityObservation`; the detectors read `EvidenceRecord`. The board’s O5
+  rows come from question coverage, not measured AI visibility.
+- **Timely lane** — no `whyNow` or expiry field on opportunities.
+- **Board lanes** — O7/O8 technical rows score 22 while O13/O14 business ideas
+  score 3 and are buried.
+- **Package 6** — fresh monthly discovery and same-evidence usefulness review are
+  not done.
 
 ## Original 13 defects
 

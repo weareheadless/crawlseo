@@ -1,5 +1,12 @@
 # CrawlSEO pipeline implementation
 
+> **Product operating model — authoritative (2026-11-05).** Read
+> [`crawlseo-product-operating-model.md`](../crawlseo-product-operating-model.md)
+> first. Weekly crawl/opportunity refresh and business-update research; monthly
+> DataForSEO keyword/SERP/AEO bundle; the system proposes, the human accepts. This
+> document describes the Business → Research → Findings → Work → Results
+> navigation and must not be read as a different cadence or proposal model.
+
 ## Steps
 - [ ] UI-042: Define stage semantics and reusable pipeline navigation.
 - [ ] UI-043: Implement a scoped, truthful action-lineage read model.

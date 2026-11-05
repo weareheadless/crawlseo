@@ -2,7 +2,7 @@
 
 Historical discovery review. The maintained architecture proposal and agent
 implementation backlog now live in
-[centralized-intelligence](architecture/centralized-intelligence/README.md).
+[centralized-intelligence](../architecture/centralized-intelligence/README.md).
 Use that reference for current requirements, baseline and ownership decisions.
 
 Code review dated 2026-10-25. This is a proposed product/architecture direction,

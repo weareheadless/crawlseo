@@ -1,8 +1,17 @@
 # SEO improvement funnel — spine plan
 
 Status: **proposed spec** (owner-ratified 2026-11-02 in working sessions; publication PR pending review)
-Supersedes: the *no schema migration* stance of `docs/pipeline-implementation-plan.md` (PIPE-07). The pipeline read-model contracts (`pipeline-stage-contract.md`, `pipeline-lineage-contract.md`, `pipeline-configuration-contract.md`) remain descriptive of the current system until the cutover in this plan; they are then frozen read-only with the legacy tables.
+Supersedes: the *no schema migration* stance of `docs/archive/pipeline-implementation-plan.md` (PIPE-07). The pipeline read-model contracts (`pipeline-stage-contract.md`, `pipeline-lineage-contract.md`, `pipeline-configuration-contract.md`) remain descriptive of the current system until the cutover in this plan; they are then frozen read-only with the legacy tables.
 Re-scopes in place: [DS-10 (site-agent#476)](https://github.com/weareheadless/site-agent/issues/476), [DS-17 (crawlseo#139)](https://github.com/weareheadless/crawlseo/issues/139) — see §7.
+
+> **Product operating model — authoritative (2026-11-05).** Read
+> [`crawlseo-product-operating-model.md`](crawlseo-product-operating-model.md)
+> before this plan. The product model is: **weekly** crawl, first-party evidence,
+> opportunity refresh and a lightweight business-update research sweep; **monthly**
+> one DataForSEO bundle per site (keyword, SERP, AEO/GEO); the system proposes
+> opportunities, article ideas and technical work; the human accepts before any
+> task or execution. Where this historical plan says otherwise about cadence,
+> priority or automatic execution, the product operating model wins.
 
 ## 1. Why this exists
 
@@ -17,6 +26,10 @@ Owner decisions applied (2026-11-02):
 3. **Tasks executed by humans for now** — detection, research and drafting can be agent-driven; execution/publication is human-confirmed. No autonomous publishing in this phase.
 4. **One page per opportunity** — the funnel and its reason visible at a glance; no tab/two-page deep-dives.
 5. **Business/market research is a first-class evidence source** — the "why" leg; every opportunity scores evidence completeness across both legs (see §2).
+6. **Weekly cadence** — crawl, first-party evidence, opportunity refresh and a lightweight business-update research sweep.
+7. **Monthly DataForSEO cadence** — one keyword/SERP/AEO bundle per site, stored once and reused; not five pulls a month.
+8. **Business-update research** — look for exhibitions, market/regulation news, competitions and local events that create timely actions.
+9. **Board lanes** — Timely, Content & business, AEO/GEO, Technical; technical hygiene must not bury the other lanes.
 
 ## 2. The funnel, stated once
 
@@ -228,7 +241,7 @@ Cleanup is its own wave; every deletion requires a migrated consumer or a frozen
 - [ ] Wave 2 — Task contract: task originates from an opportunity; human-executed workflow states
 - [ ] Wave 3 — Measurement spine: baselines, outcome observations, AEO joins
 - [ ] Wave 4 — UI rebuild mapped 1:1 to the schema (single-page opportunity view)
-- [ ] Wave 5 — Re-scope and resume the DS track on the new spine (DS-04/05/06 adapters)
+- [ ] Wave 5 — Re-scope and resume the DS track on the new spine (DS-04/05/06 adapters). DS-06 AI visibility runs in the **monthly** DataForSEO bundle, not weekly.
 - [ ] Wave 6 — Cleanup: delete the improvised scaffolding (§8 ledger)
 - [ ] Cutover: freeze legacy tables read-only, switch read paths, archive the old UI routes
 
@@ -239,7 +252,7 @@ Cleanup is its own wave; every deletion requires a migrated consumer or a frozen
 | O1 winnable rank | `keyword_rank` carrying a volume metric | rank rows exist **with** volume |
 | O2 striking distance | `keyword_rank` with impressions ≥ 10 | GSC rows carry impressions |
 | O3 content gap | `serp_snapshot` | SERP collection ran for a cluster |
-| O4/O5 AEO | `ai_visibility_observation`, `question_coverage` | AI visibility collection ran |
+| O4/O5 AEO | `ai_visibility_observation` | Measured AI visibility collection ran. `question_coverage` alone is “unobserved”, not an O5 opportunity. |
 | O6 fact mismatch | `onpage_crawl` + `knowledge_fact` | business knowledge ingested |
 | O7 technical defect | `onpage_crawl` (crawlability impact) | crawl completed |
 | O8 structured data | `onpage_crawl` (schemaMissing) + `knowledge_fact` for the why leg | crawl completed; why leg needs knowledge |

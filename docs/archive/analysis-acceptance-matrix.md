@@ -1,5 +1,13 @@
 # Analysis acceptance matrix
 
+> **Product note (2026-11-05):** this matrix records evidence/scoring correctness,
+> not product acceptance. The fact that Atelier, Oceanic and Casamigo “lead with
+> technical work because no query has enough impressions” is a missing demand-data
+> and business-update-research problem against
+> [`crawlseo-product-operating-model.md`](../crawlseo-product-operating-model.md), not
+> a finished product. The monthly DataForSEO bundle and weekly business-update
+> research must give the board real article and business proposals.
+
 Every failure in `docs/seo-foundation-audit-2026-11.md`, the code that now prevents it,
 and the test that fails if it returns. Status is **implemented** or **open**.
 

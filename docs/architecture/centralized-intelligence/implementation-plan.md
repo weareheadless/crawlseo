@@ -96,7 +96,7 @@ flowchart TD
 
 ## Wave 2: make the intelligence visible
 
-Added 2026-10-27 after the UI audit in [../../ui-intelligence-experience-audit.md](../../ui-intelligence-experience-audit.md). The backend contracts from UI-001..UI-011 are closed and producing data (44,704 keywords, 293 Actions, 24 completed DataForSEO keyword runs, 7 research runs). The dashboard does not present it: the only intelligence surface is unlinked from navigation, reads as a compliance log, and the keyword/business/AEO-GEO data has no owning page.
+Added 2026-10-27 after the UI audit in [../../archive/ui-intelligence-experience-audit.md](../../archive/ui-intelligence-experience-audit.md). The backend contracts from UI-001..UI-011 are closed and producing data (44,704 keywords, 293 Actions, 24 completed DataForSEO keyword runs, 7 research runs). The dashboard does not present it: the only intelligence surface is unlinked from navigation, reads as a compliance log, and the keyword/business/AEO-GEO data has no owning page.
 
 Wave 2 changes presentation and credential resolution only. No new store, no new provider, no paid research is triggered by rendering these pages.
 
@@ -142,7 +142,7 @@ No first-release exit criterion requires every long-term requirement to be imple
 
 ## Pipeline experience implementation
 
-Approved product sequence: Business -> Research -> Findings -> Work -> Results. Implementation plan: [pipeline-implementation-plan.md](../../pipeline-implementation-plan.md). Existing historical work above remains intact.
+Approved product sequence: Business -> Research -> Findings -> Work -> Results. Historical implementation plan: [pipeline-implementation-plan.md](../../archive/pipeline-implementation-plan.md). Existing historical work above remains intact.
 
 - [UI-042](https://github.com/weareheadless/crawlseo/issues/94): Stage contract and reusable pipeline navigation. Dependencies: none.
 - [UI-043](https://github.com/weareheadless/crawlseo/issues/95): Scoped recorded lineage from evidence to verification. Dependencies: none.
@@ -155,12 +155,12 @@ Approved product sequence: Business -> Research -> Findings -> Work -> Results. 
 
 ## AEO/GEO evaluation loop
 
-Plan: [aeo-geo-evaluation-plan.md](../../aeo-geo-evaluation-plan.md). One observation contract, two evaluators: AEO from our own surfaces, GEO from whether an engine selects and cites us. Weekly cadence, action-triggered re-ask, hard per-site caps.
+Historical plan: [aeo-geo-evaluation-plan.md](../../archive/aeo-geo-evaluation-plan.md). One observation contract, two evaluators: AEO from our own surfaces, GEO from whether an engine selects and cites us. **Monthly** cadence as part of the one DataForSEO bundle per site, action-triggered re-ask, hard per-site caps. See the authoritative [product operating model](../../crawlseo-product-operating-model.md).
 
 - [UI-049](https://github.com/weareheadless/crawlseo/issues/109): Versioned question sets from business data and research. Depends on none.
 - [UI-050](https://github.com/weareheadless/crawlseo/issues/110): Store asked answers, citations and surface metadata. Depends on none.
 - [UI-051](https://github.com/weareheadless/crawlseo/issues/111): Perplexity evaluator with absence and failure states. Depends on UI-049, UI-050.
 - [UI-052](https://github.com/weareheadless/crawlseo/issues/112): Google AI Overviews evaluator through DataForSEO. Depends on UI-049, UI-050.
-- [UI-053](https://github.com/weareheadless/crawlseo/issues/113): Weekly evaluation runs, caps and action-triggered re-ask. Depends on UI-051, UI-052.
+- [UI-053](https://github.com/weareheadless/crawlseo/issues/113): Monthly evaluation runs, caps and action-triggered re-ask. Depends on UI-051, UI-052.
 - [UI-054](https://github.com/weareheadless/crawlseo/issues/114): AEO/GEO evaluation surface with answer evidence. Depends on UI-050, UI-053.
 - [OPS-015](https://github.com/weareheadless/crawlseo/issues/115): Pilot AEO/GEO evaluation on the two live sites. Depends on UI-051, UI-052, UI-053, UI-054.

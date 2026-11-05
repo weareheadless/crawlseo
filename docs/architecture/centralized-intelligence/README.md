@@ -1,5 +1,11 @@
 # Centralized business intelligence and execution
 
+> **Product requirements:** read
+> [`../../crawlseo-product-operating-model.md`](../../crawlseo-product-operating-model.md)
+> first. It is authoritative for cadence, proposal flow and board priority. This
+> directory is the architecture and execution design; it does not override the
+> product model.
+
 Status: reviewed design baseline, v0.2, 2026-10-25. The first release is a bounded
 HelloAda content slice; the full design includes later AI and platform work.
 

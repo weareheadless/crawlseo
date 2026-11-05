@@ -1,5 +1,12 @@
 # Recommendation migration completion review — 2026-11-04
 
+> **Product scope notice (2026-11-05):** this is an **engineering** review. It does
+> not define product acceptance. Read
+> [`crawlseo-product-operating-model.md`](../crawlseo-product-operating-model.md) for
+> the authoritative cadence, proposal model and board requirements. The G1–G10
+> repairs below are necessary engineering, not proof that the product produces
+> useful article, business or AEO/GEO opportunities.
+
 > **Repair status (2026-11-04):** the ten gaps G1–G10 below have been repaired and
 > verified. See `docs/recommendation-migration-residual-repair-2026-11-04.md`.
 > The verdict and gap descriptions in this document are the pre-repair review;
