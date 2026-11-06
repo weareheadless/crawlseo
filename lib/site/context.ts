@@ -40,6 +40,15 @@ export type SiteContext = {
    */
   audienceMarket: string | null;
   audienceCountry: string | null;
+  /**
+   * Every market the owner sells into, primary first.
+   *
+   * Susi Macdonald sells to US and Canadian buyers. One monthly bundle cannot
+   * measure both without doubling its cost, so the primary market is measured
+   * and the rest are reported as not measured that month — never silently
+   * assumed to behave like the primary.
+   */
+  audienceCountries: string[];
   /** A place to name in generated assets: town, region or service area. */
   location: string | null;
   topics: string[];
@@ -51,6 +60,20 @@ export type SiteContext = {
     audienceCountry: ContextSource;
   };
 };
+
+/**
+ * The country a provider call should measure: where the audience searches,
+ * falling back to where the business sits.
+ *
+ * Susi Macdonald sells Playa del Carmen property to US and Canadian buyers.
+ * Keyword data, SERPs and AI answers have to come from the buyers' market, not
+ * from Mexico: an English query measured against MX returns nothing, and a
+ * Spanish-market SERP describes a different competition. Every consumer that
+ * asks "which country?" takes this, so the answer cannot drift per module.
+ */
+export function providerCountry(context: SiteContext): string | null {
+  return context.audienceCountry ?? context.country;
+}
 
 export class MissingSiteContextError extends Error {
   readonly siteId: string;
@@ -260,6 +283,14 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
   let audienceSource: ContextSource = audienceCountry ? "site_profile" : "unknown";
   if (audienceCountry && firstString(factValue(fields, "audienceMarket"))) audienceSource = "business_knowledge";
 
+  const declaredMarkets = [
+    ...stringList(factValue(fields, "audienceMarkets")),
+    ...stringList(constraints.audienceMarkets),
+  ]
+    .map((entry) => countryFromText(entry))
+    .filter((code): code is string => Boolean(code));
+  const audienceCountries = [...new Set([audienceCountry, ...declaredMarkets].filter((code): code is string => Boolean(code)))];
+
   // Business country: where the business is, which is not the audience's market.
   // A site can sell into the US from Mexico; taking `market` (an audience signal)
   // as the business country made Oceanic report "business in US".
@@ -286,6 +317,7 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     location,
     audienceMarket,
     audienceCountry,
+    audienceCountries,
     topics: stringList(profile?.topics),
     audience: typeof profile?.audience === "string" && profile.audience.trim() ? profile.audience.trim() : null,
     source: { language: languageSource, country: countrySource, location: locationSource, audienceCountry: audienceSource },

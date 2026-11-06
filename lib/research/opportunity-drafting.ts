@@ -85,7 +85,7 @@ export type DraftResult = {
 };
 
 /** Product rule: a story older than this is not timely. */
-const TIMELY_WINDOW_DAYS = 21;
+export const TIMELY_WINDOW_DAYS = 21;
 // Smaller batches and a larger completion budget: the drafting model is a
 // reasoning model, and a long batch spent its budget before emitting JSON.
 const CLUSTER_BATCH = 4;
@@ -360,20 +360,17 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   const rejected: Array<{ title: string; reason: string }> = [];
   const summaries: string[] = [];
   const truncations: string[] = [];
-  if (input.aeoQuestions.length > 12) truncations.push(`${input.aeoQuestions.length - 12} AEO questions were not sent to the drafting call`);
-  if ((input.technicalEvidence ?? []).length > 6) truncations.push(`${(input.technicalEvidence ?? []).length - 6} technical findings were not sent to the drafting call`);
-  if ((input.knowledgeFacts ?? []).length > 6) truncations.push(`${(input.knowledgeFacts ?? []).length - 6} business facts were not sent to the drafting call`);
   for (let index = 0; index < clusters.length; index += CLUSTER_BATCH) {
     const batch = clusters.slice(index, index + CLUSTER_BATCH);
     const payload = {
       ...businessPayload(input),
-      aeoQuestions: input.aeoQuestions.slice(0, 12),
-      businessFacts: (input.knowledgeFacts ?? []).slice(0, 6).map((row) => ({
+      aeoQuestions: input.aeoQuestions,
+      businessFacts: (input.knowledgeFacts ?? []).map((row) => ({
         evidenceId: row.id,
         fact: row.text,
       })),
       existingPaths: input.existingPaths ?? [],
-      technicalFindings: (input.technicalEvidence ?? []).slice(0, 6).map((row) => ({
+      technicalFindings: (input.technicalEvidence ?? []).map((row) => ({
         evidenceId: row.id,
         issue: row.issue ?? row.kind,
         url: row.url,
@@ -445,8 +442,11 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
   const evidenceClusters = localClusters.length > 0
     ? localClusters
     : [...input.map.clusters].sort((a, b) => b.metrics.impressions - a.metrics.impressions);
+  // Every cluster's evidence is citable: the model attaches a timely note to
+  // whichever topic the story touches, and a story about Tulum is not served by
+  // a catalogue that only accepted the two strongest local clusters.
   const evidence = new Map<string, DraftEvidence>();
-  for (const cluster of evidenceClusters.slice(0, 2)) {
+  for (const cluster of input.map.clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) evidence.set(row.id, row);
   }
   // The business's own facts are citable too: a timely note usually links the
@@ -457,7 +457,10 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
 
   const payload = {
     ...businessPayload(input),
-    news: current,
+    // No `id` on a news item: its id is a URL, not a stored evidence id, and
+    // offering one invited the model to cite something the catalogue rejects.
+    // The story is cited through sourceUrl instead.
+    news: current.map(({ id: _id, ...item }) => item),
     knowledgeEvidence: input.knowledgeEvidenceIds,
     localClusters: evidenceClusters.slice(0, 3).map((cluster) => ({
       slug: cluster.slug,

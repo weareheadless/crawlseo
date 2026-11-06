@@ -117,6 +117,20 @@ function termInText(text: string, term: string): boolean {
 }
 
 /**
+ * Does a measured query belong to one of the site's approved topics?
+ *
+ * The bundle and the topic map both need this answer, and both must give the
+ * same one: a site whose Search Console data contains queries the business does
+ * not sell into (a hospital query on a property site) should not spend its paid
+ * cap measuring them.
+ */
+export function queryMatchesTaxonomy(taxonomy: TopicTaxonomy | null, query: string): boolean {
+  if (!taxonomy || taxonomy.topics.length === 0) return false;
+  const text = normalizeTerm(query);
+  return taxonomy.topics.some((topic) => topic.requireAny.some((term) => termInText(text, term)));
+}
+
+/**
  * Keep only topics that claim at least one measured query. A topic whose terms
  * match nothing is an invented cluster: it would produce an empty row and a
  * false coverage finding. The taxonomy is proposed from the query sample, so no

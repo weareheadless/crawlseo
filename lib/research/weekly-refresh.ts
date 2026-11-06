@@ -15,13 +15,13 @@ import {
 import { buildNewsQueries } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
 import { buildClusterEvidenceCatalogue, buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
-import { draftTimelyProposals } from "@/lib/research/opportunity-drafting";
+import { draftTimelyProposals, TIMELY_WINDOW_DAYS } from "@/lib/research/opportunity-drafting";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
 import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
 import { loadTopicTaxonomy } from "@/lib/research/topic-taxonomy";
-import { businessKnowledgeFields, resolveSiteContext } from "@/lib/site/context";
+import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
 
 /**
  * Phase 5 weekly refresh.
@@ -89,6 +89,7 @@ export type WeeklyDeps = {
     limit?: number;
     language?: string;
     country?: string;
+    recencyDays?: number;
   }) => Promise<ResearchProviderSource[]>;
   saveNews: (runId: string, sources: ResearchProviderSource[]) => Promise<Array<{ id: string }>>;
   storeProposals: typeof storeProposals;
@@ -129,24 +130,25 @@ export function buildWeeklyNewsQueries(input: {
    *  hardcoded craft-event phrases. */
   taxonomyQueries?: string[];
 }): string[] {
-  const base = buildNewsQueries(
-    {
-      businessName: input.businessName,
-      services: input.services,
-      location: input.location,
-      serviceArea: input.serviceArea,
-      domain: input.domain,
-    },
-    6
-  );
-  const extra = (input.taxonomyQueries ?? []).map((query) => query.trim()).filter(Boolean);
+  // The approved taxonomy already says which searches find this business's
+  // current news; service labels scraped from navigation produce noise. Fall
+  // back to the business's own facts only when the taxonomy has none.
+  const curated = (input.taxonomyQueries ?? []).map((query) => query.trim()).filter(Boolean);
+  const base = buildNewsQueries({
+    businessName: input.businessName,
+    services: curated.length > 0 ? [] : input.services,
+    location: input.location,
+    serviceArea: input.serviceArea,
+    domain: input.domain,
+  });
   const seen = new Set<string>();
-  return [...base, ...extra].filter((query) => {
+  // Free searches, so nothing is dropped to save a budget.
+  return [...base, ...curated].filter((query) => {
     const key = query.toLowerCase().replace(/\s+/g, " ").trim();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 10);
+  });
 }
 
 export async function runWeeklyRefresh(
@@ -258,7 +260,8 @@ export async function runWeeklyRefresh(
           query,
           limit: 10,
           language: context.language,
-          country: context.country ?? undefined,
+          country: context.country ?? providerCountry(context) ?? undefined,
+          recencyDays: TIMELY_WINDOW_DAYS,
         });
         for (const item of items) {
           if (fetched.some((existingItem) => existingItem.contentHash === item.contentHash || existingItem.url === item.url)) continue;

@@ -105,7 +105,7 @@ function usd(micros: number): string {
 function printPlan(plan: BundlePlan): void {
   process.stdout.write(`${plan.domain} (${plan.siteId})\n`);
   process.stdout.write(
-    `month ${plan.month} · locale ${plan.locale.languageCode}:${plan.locale.locationCode} · key ${plan.idempotencyKey}\n`
+    `month ${plan.month} · locale ${plan.locale.languageCode}:${plan.locale.locationCode} (${plan.locale.marketSource} market) · key ${plan.idempotencyKey}\n`
   );
   process.stdout.write(
     `existing bundle: ${plan.existingRun ? `${plan.existingRun.status} (${plan.existingRun.id})` : "none"}\n`
@@ -121,6 +121,10 @@ function printPlan(plan: BundlePlan): void {
   );
   process.stdout.write(
     `caps: keywords ${plan.caps.keywordQueries} · serp ${plan.caps.serpQueries} · aeo ${plan.caps.aeoQuestions} · news ${plan.caps.newsItems} · bundle ${usd(plan.caps.capMicros)}\n`
+  );
+
+  process.stdout.write(
+    `coverage: ${plan.coverage.keywordQueriesAvailable} queries · ${plan.coverage.unmeasuredKeywordQueries} never measured · ${plan.coverage.keywordQueriesOmitted} get no volume this month · ${plan.coverage.serpQueriesOmitted} get no SERP snapshot · ${plan.coverage.queriesDroppedTooLong} too long for the keyword API\n`
   );
 
   printList("keyword queries", plan.selected.keywordQueries);

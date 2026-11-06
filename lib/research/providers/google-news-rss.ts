@@ -77,9 +77,15 @@ export async function fetchGoogleNewsRssSearch(input: {
   limit?: number;
   language?: string;
   country?: string;
+  /** Ask the source for recent items only, so a "timely" sweep is not fed
+   *  decade-old pages that merely mention the place. */
+  recencyDays?: number;
 }): Promise<ResearchProviderSource[]> {
-  const query = input.query.trim();
-  if (!query) throw new Error("Google News RSS query is required");
+  const rawQuery = input.query.trim();
+  if (!rawQuery) throw new Error("Google News RSS query is required");
+  const query = input.recencyDays && input.recencyDays > 0
+    ? `${rawQuery} when:${Math.floor(input.recencyDays)}d`
+    : rawQuery;
   const language = (input.language || "en").trim();
   const country = (input.country || "US").trim().toUpperCase();
   const params = new URLSearchParams({

@@ -250,6 +250,17 @@ async function main(): Promise<void> {
       orderBy: { finishedAt: "desc" },
       select: { id: true },
     });
+    const crawlRowTotal = latestCrawl
+      ? await db.evidenceRecord.count({
+          where: {
+            projectId: site.projectId,
+            siteId: site.id,
+            kind: "onpage_crawl",
+            supersededById: null,
+            dimensions: { path: ["crawlId"], equals: latestCrawl.id },
+          },
+        })
+      : 0;
     const crawlRows = latestCrawl
       ? await db.evidenceRecord.findMany({
           where: {
@@ -526,7 +537,13 @@ async function main(): Promise<void> {
         model: draft.model,
         summary: draft.summary,
         errors: draft.errors,
-        truncations: draft.truncations,
+        truncations: [
+          ...draft.truncations,
+          // The crawl read is bounded by a constant; say so when it binds.
+          ...(crawlRowTotal > crawlRows.length
+            ? [`${crawlRowTotal - crawlRows.length} crawl findings were not sent to the drafting call`]
+            : []),
+        ],
       },
       critique: {
         available: critique.available,

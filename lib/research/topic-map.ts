@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
-import { businessKnowledgeFields, resolveSiteContext } from "@/lib/site/context";
+import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
 import {
   parseMarketScope,
   marketScopeForTopic,
@@ -708,7 +708,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     month: data.month,
     generatedAt: now.toISOString(),
     taxonomy: data.taxonomy,
-    locale: { language: data.context.language, country: data.context.country },
+    locale: { language: data.context.language, country: providerCountry(data.context) },
     marketScope: data.marketScope,
     business: {
       name: fieldText(data.fields, "businessName"),

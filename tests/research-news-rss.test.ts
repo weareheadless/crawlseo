@@ -36,6 +36,19 @@ describe("Google News RSS", () => {
     expect(sources[0].metadata?.publisher).toBe("Taipei Times");
   });
 
+  it("asks for recent items only when a recency window is given", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(XML, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchGoogleNewsRssSearch({
+      query: '"Tulum real estate"',
+      language: "en",
+      country: "US",
+      recencyDays: 21,
+    });
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.searchParams.get("q")).toBe('"Tulum real estate" when:21d');
+  });
+
   it("requests the selected locale and a user agent", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(XML, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

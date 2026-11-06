@@ -25,7 +25,9 @@ import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-r
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
 import type { ResearchSourceInput } from "@/lib/research/types";
-import { businessKnowledgeFields, resolveSiteContext, type SiteContext } from "@/lib/site/context";
+import { businessKnowledgeFields, providerCountry, resolveSiteContext, type SiteContext } from "@/lib/site/context";
+import { loadTopicTaxonomy, queryMatchesTaxonomy } from "@/lib/research/topic-taxonomy";
+import { TIMELY_WINDOW_DAYS as TIMELY_NEWS_DAYS } from "@/lib/research/opportunity-drafting";
 
 /**
  * One monthly evidence bundle per site.
@@ -75,6 +77,8 @@ export type BundleLocale = {
   languageCode: string;
   country: string;
   locationCode: number;
+  /** Which fact chose the market, so a wrong locale is visible in the report. */
+  marketSource: "override" | "audience" | "business";
   fallback?: unknown;
 };
 
@@ -127,6 +131,20 @@ export type BundlePlan = {
     keywordQueries: string[];
     serpQueries: string[];
     aeoQuestions: string[];
+  };
+  /** What the paid caps left out, counted rather than dropped in silence. */
+  coverage: {
+    keywordQueriesAvailable: number;
+    unmeasuredKeywordQueries: number;
+    keywordQueriesOmitted: number;
+    serpQueriesOmitted: number;
+    queriesDroppedTooLong: number;
+    /** Audience markets the owner declared that this bundle did not measure. */
+    unmeasuredMarkets: string[];
+    /** Ranked queries the approved taxonomy does not claim, kept behind in-market ones. */
+    offTopicQueries: number;
+    /** False when no taxonomy is approved yet, so every query was ranked. */
+    taxonomyApplied: boolean;
   };
   paidCalls: PlannedPaidCall[];
   estimatedMicros: number;
@@ -199,6 +217,7 @@ export type BundleDeps = {
     limit?: number;
     language?: string;
     country?: string;
+    recencyDays?: number;
   }) => Promise<ResearchProviderSource[]>;
   saveNews: (runId: string, sources: ResearchSourceInput[]) => Promise<Array<{ id: string }>>;
   resolveLocale: (
@@ -347,14 +366,32 @@ export function withinBundleCap(spentMicros: number, estimateMicros: number, cap
   return spentMicros + estimateMicros <= capMicros;
 }
 
+/**
+ * Search Console queries longer than this are questions, not keyword phrases,
+ * and the keyword API returns no volume for them. They are still real demand,
+ * so the count is reported rather than dropped in silence.
+ */
+const MAX_KEYWORD_QUERY_LENGTH = 120;
+
 export function rankQueries(
   rows: Array<{ dimensions: unknown; metrics: unknown }>
 ): string[] {
+  return rankQueriesWithStats(rows).queries;
+}
+
+export function rankQueriesWithStats(
+  rows: Array<{ dimensions: unknown; metrics: unknown }>
+): { queries: string[]; droppedTooLong: number } {
   const byQuery = new Map<string, { query: string; impressions: number }>();
+  let droppedTooLong = 0;
   for (const row of rows) {
     const dimensions = asRecord(row.dimensions);
     const query = stringValue(dimensions.query);
-    if (!query || query.length > 120) continue;
+    if (!query) continue;
+    if (query.length > MAX_KEYWORD_QUERY_LENGTH) {
+      droppedTooLong += 1;
+      continue;
+    }
     if (dimensions.windowRole === "previous") continue;
     const metrics = asRecord(row.metrics);
     const impressions = Number(asRecord(metrics["first_party:impressions"]).value ?? 0);
@@ -363,9 +400,32 @@ export function rankQueries(
     if (current) current.impressions += Number.isFinite(impressions) ? impressions : 0;
     else byQuery.set(key, { query, impressions: Number.isFinite(impressions) ? impressions : 0 });
   }
-  return [...byQuery.values()]
+  const queries = [...byQuery.values()]
     .sort((a, b) => b.impressions - a.impressions || a.query.localeCompare(b.query))
     .map((entry) => entry.query);
+  return { queries, droppedTooLong };
+}
+
+/**
+ * Which queries this month's bundle buys. A paid cap is a budget, not a rule
+ * about what exists: queries that have never had volume data go first, in
+ * impression order, so the head is covered now and the tail rotates in over
+ * following months instead of being excluded forever. Anything left out is
+ * counted, never silent.
+ */
+export function selectQueriesForBundle(
+  ranked: string[],
+  measured: Set<string>,
+  cap: number
+): { selected: string[]; omitted: number; unmeasuredBefore: number } {
+  const unmeasured = ranked.filter((query) => !measured.has(normalizePhrase(query)));
+  const alreadyMeasured = ranked.filter((query) => measured.has(normalizePhrase(query)));
+  const selected = [...unmeasured, ...alreadyMeasured].slice(0, cap);
+  return {
+    selected,
+    omitted: Math.max(0, ranked.length - selected.length),
+    unmeasuredBefore: unmeasured.length,
+  };
 }
 
 export function selectAeoQuestions(
@@ -413,8 +473,7 @@ export function buildNewsQueries(
     location?: string | null;
     serviceArea?: string[];
     domain: string;
-  },
-  cap = 6
+  }
 ): string[] {
   const queries: string[] = [];
   const add = (value: string | null | undefined) => {
@@ -424,19 +483,23 @@ export function buildNewsQueries(
     queries.push(query);
   };
   if (input.businessName) add(`"${input.businessName}"`);
+  // A one-word service ("Buy", "Rent") is a navigation label, not a phrase:
+  // quoting it forces an exact match and returns unrelated pages.
+  const phrase = (service: string) => (service.trim().includes(" ") ? `"${service}"` : service);
   const place = input.location ?? input.serviceArea?.[0] ?? null;
   const area = input.serviceArea?.[0] ?? null;
-  const services = (input.services ?? []).slice(0, 2);
+  const services = input.services ?? [];
   for (const service of services) {
-    add(place ? `"${service}" ${place}` : `"${service}"`);
+    add(place ? `${phrase(service)} ${place}` : phrase(service));
   }
   // The business location is narrow. The service area is where the audience
   // actually reads the trade press, so it gets its own pass.
   for (const service of services) {
-    if (area && area !== place) add(`"${service}" ${area}`);
+    if (area && area !== place) add(`${phrase(service)} ${area}`);
   }
   if (queries.length === 0) add(input.domain.replace(/^www\./, ""));
-  return queries.slice(0, cap);
+  // Free searches: no cap. A cap here would decide which news exists.
+  return queries;
 }
 
 export async function hasDataForSeoCredentials(db: BundleDb, projectId: string): Promise<boolean> {
@@ -499,10 +562,17 @@ export async function resolveBundleLocale(input: {
   deps: BundleDeps;
 }): Promise<BundleLocale> {
   const language = (input.language ?? input.context.language).toLowerCase().slice(0, 2);
-  const country = (input.country ?? input.context.country)?.toUpperCase() ?? null;
+  // The audience's market, not the business address: a site selling into the US
+  // from Mexico is measured in the US, where its buyers search.
+  const marketSource: BundleLocale["marketSource"] = input.country
+    ? "override"
+    : input.context.audienceCountry
+      ? "audience"
+      : "business";
+  const country = (input.country ?? providerCountry(input.context))?.toUpperCase() ?? null;
   if (!country) {
     throw new BundleError(
-      "the site has no country in business knowledge, the site profile or its domain; pass --country",
+      "the site has no audience market or country in business knowledge, the site profile or its domain; pass --country",
       2
     );
   }
@@ -514,6 +584,7 @@ export async function resolveBundleLocale(input: {
         languageCode: resolved.languageCode,
         country: resolved.country ?? country,
         locationCode: resolved.locationCode,
+        marketSource,
         fallback: resolved.fallback,
       };
     } catch {
@@ -525,7 +596,7 @@ export async function resolveBundleLocale(input: {
   if (!locationCode) {
     throw new BundleError(`no DataForSEO location code is known for ${country}; pass a supported --country`, 2);
   }
-  return { language, languageCode: language, country, locationCode };
+  return { language, languageCode: language, country, locationCode, marketSource };
 }
 
 export async function buildBundlePlan(input: {
@@ -537,13 +608,15 @@ export async function buildBundlePlan(input: {
   now: Date;
   deps: BundleDeps;
   existingRun: BundleRunSummary | null;
+  /** Every market the owner declared; the first is the one measured. */
+  contextMarkets?: string[];
 }): Promise<BundlePlan> {
   const { db, site, locale, caps } = input;
   const monthStart = monthStartUtc(input.month);
   const localeKey = `${locale.languageCode}:${locale.locationCode}`;
   const warnings: string[] = [];
 
-  const [ranks, coverage] = await Promise.all([
+  const [ranks, coverage, measuredKeywords, measuredSerps] = await Promise.all([
     db.evidenceRecord.findMany({
       where: { projectId: site.projectId, siteId: site.id, kind: "keyword_rank", supersededById: null },
       select: { dimensions: true, metrics: true },
@@ -552,18 +625,79 @@ export async function buildBundlePlan(input: {
       where: { projectId: site.projectId, siteId: site.id, kind: "question_coverage", supersededById: null },
       select: { dimensions: true },
     }),
+    // Every query this site has ever had volume data for, not just this month:
+    // the cap buys the head first and then rotates the tail in over following
+    // months instead of measuring the same forty forever.
+    db.evidenceRecord.findMany({
+      where: {
+        projectId: site.projectId,
+        siteId: site.id,
+        // Any volume row counts, whatever producer wrote it: re-buying a
+        // query that already has volume data wastes the monthly cap.
+        kind: "keyword_metrics",
+        supersededById: null,
+      },
+      select: { dimensions: true },
+    }),
+    db.evidenceRecord.findMany({
+      where: {
+        projectId: site.projectId,
+        siteId: site.id,
+        kind: "serp_snapshot",
+        supersededById: null,
+      },
+      select: { dimensions: true },
+    }),
   ]);
 
-  const rankedQueries = rankQueries(ranks);
-  const keywordQueries = rankedQueries.slice(0, caps.keywordQueries);
-  const serpQueries = rankedQueries.slice(0, caps.serpQueries);
-  const coverageQuestions = coverage
+  const { queries: rankedQueries, droppedTooLong } = rankQueriesWithStats(ranks);
+  const measuredKeywordSet = new Set(
+    measuredKeywords
+      .map((row) => stringValue(asRecord(row.dimensions).query))
+      .filter((query): query is string => Boolean(query))
+      .map((query) => normalizePhrase(query))
+  );
+  const measuredSerpSet = new Set(
+    measuredSerps
+      .map((row) => stringValue(asRecord(row.dimensions).query))
+      .filter((query): query is string => Boolean(query))
+      .map((query) => normalizePhrase(query))
+  );
+  // Relevance decides order, not existence: queries the approved taxonomy
+  // claims are bought first, and queries it does not claim still fill the cap
+  // when the site has fewer in-market queries than the cap allows. This is why
+  // a property site no longer spends its paid cap on "hospital near me".
+  const taxonomy = await loadTopicTaxonomy(db, site.id);
+  const inMarket = taxonomy
+    ? rankedQueries.filter((query) => queryMatchesTaxonomy(taxonomy, query))
+    : rankedQueries;
+  const offTopic = taxonomy
+    ? rankedQueries.filter((query) => !queryMatchesTaxonomy(taxonomy, query))
+    : [];
+  const orderedQueries = [...inMarket, ...offTopic];
+
+  const keywordSelection = selectQueriesForBundle(orderedQueries, measuredKeywordSet, caps.keywordQueries);
+  const serpSelection = selectQueriesForBundle(orderedQueries, measuredSerpSet, caps.serpQueries);
+  const keywordQueries = keywordSelection.selected;
+  const serpQueries = serpSelection.selected;
+  const allCoverageQuestions = coverage
     .map((row) => stringValue(asRecord(row.dimensions).question))
     .filter((question): question is string => Boolean(question));
   // Prefer queries that are not already bought as SERP snapshots: the AI
   // Overview call is a SERP call too, and measuring a different slice of demand
   // is more useful than paying twice for the same query.
-  const aeoFallback = [...rankedQueries.slice(caps.serpQueries), ...rankedQueries];
+  const aeoFallback = [...orderedQueries.slice(caps.serpQueries), ...orderedQueries];
+  // A question the business does not serve is not an AEO target: the AI
+  // Overview call costs money and its answer describes someone else's market.
+  const coverageQuestions = taxonomy
+    ? allCoverageQuestions.filter((question) => queryMatchesTaxonomy(taxonomy, question))
+    : allCoverageQuestions;
+  const excludedCoverageQuestions = allCoverageQuestions.length - coverageQuestions.length;
+  if (excludedCoverageQuestions > 0) {
+    warnings.push(
+      `${excludedCoverageQuestions} of ${allCoverageQuestions.length} stored coverage questions match no approved topic and were not measured`
+    );
+  }
   const aeoQuestions = selectAeoQuestions(
     coverageQuestions,
     aeoFallback,
@@ -579,13 +713,42 @@ export async function buildBundlePlan(input: {
       location: fieldText(fields, "location"),
       serviceArea: fieldList(fields, "serviceArea"),
       domain: site.domain,
-    },
-    6
+    }
   );
 
   if (keywordQueries.length < caps.keywordQueries) {
     warnings.push(
       `only ${keywordQueries.length} Search Console queries are available for a ${caps.keywordQueries}-query cap`
+    );
+  }
+  if (keywordSelection.omitted > 0) {
+    warnings.push(
+      `${keywordSelection.omitted} of ${rankedQueries.length} queries get no volume data this month (cap ${caps.keywordQueries}); the bundle takes unmeasured queries first, so the rest rotate in over following months`
+    );
+  }
+  if (serpSelection.omitted > 0) {
+    warnings.push(
+      `${serpSelection.omitted} queries get no SERP snapshot this month (cap ${caps.serpQueries})`
+    );
+  }
+  if (droppedTooLong > 0) {
+    warnings.push(
+      `${droppedTooLong} queries longer than ${MAX_KEYWORD_QUERY_LENGTH} characters were not sent to the keyword API`
+    );
+  }
+  if (!taxonomy) {
+    warnings.push(
+      "no approved topic taxonomy: every query was ranked by impressions, so off-business queries can take the paid cap"
+    );
+  } else if (offTopic.length > 0) {
+    warnings.push(
+      `${offTopic.length} of ${rankedQueries.length} queries match no approved topic and were ranked behind in-market ones`
+    );
+  }
+  const unmeasuredMarkets = (input.contextMarkets ?? []).filter((code) => code !== locale.country);
+  if (unmeasuredMarkets.length > 0) {
+    warnings.push(
+      `audience markets ${unmeasuredMarkets.join(", ")} were not measured this month; the bundle measured ${locale.country} only`
     );
   }
   if (aeoQuestions.length < caps.aeoQuestions) {
@@ -665,6 +828,16 @@ export async function buildBundlePlan(input: {
     selected: { keywordQueries, serpQueries, aeoQuestions, newsQueries },
     reuse: { keywordQueries: keywordReuse, serpQueries: serpReuse, aeoQuestions: aeoReuse },
     missing: { keywordQueries: missingKeywords, serpQueries: missingSerp, aeoQuestions: missingAeo },
+    coverage: {
+      keywordQueriesAvailable: rankedQueries.length,
+      unmeasuredKeywordQueries: keywordSelection.unmeasuredBefore,
+      keywordQueriesOmitted: keywordSelection.omitted,
+      serpQueriesOmitted: serpSelection.omitted,
+      queriesDroppedTooLong: droppedTooLong,
+      unmeasuredMarkets: (input.contextMarkets ?? []).filter((code) => code !== locale.country),
+      offTopicQueries: offTopic.length,
+      taxonomyApplied: Boolean(taxonomy),
+    },
     paidCalls,
     estimatedMicros,
     budget,
@@ -767,6 +940,7 @@ export function buildBundleReport(input: {
     selected: input.plan.selected,
     reuse: input.plan.reuse,
     missing: input.plan.missing,
+    coverage: input.plan.coverage,
     sections: input.sections,
     counts: {
       evidenceByKind: input.evidenceByKind,
@@ -826,6 +1000,7 @@ export async function runMonthlyBundle(
     now,
     deps,
     existingRun,
+    contextMarkets: context.audienceCountries,
   });
 
   if (input.mode === "dry-run") {
@@ -1452,6 +1627,8 @@ async function collectNewsSection(
         limit: input.caps.newsItems,
         language: input.locale.languageCode,
         country: input.locale.country,
+        // The bundle feeds the timely lane, so stale items are not evidence.
+        recencyDays: TIMELY_NEWS_DAYS,
       });
       for (const item of items) {
         if (sources.length >= input.caps.newsItems) break;

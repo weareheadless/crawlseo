@@ -8,6 +8,8 @@ import {
   planPaidCalls,
   rankQueries,
   resolveBundleCaps,
+  resolveBundleLocale,
+  selectQueriesForBundle,
   runMonthlyBundle,
   selectAeoQuestions,
   withinBundleCap,
@@ -266,6 +268,47 @@ function seedCompletedRun(state: State, month = "2026-11") {
 }
 
 describe("monthly bundle selection", () => {
+  it("buys unmeasured queries before re-buying the head, and counts what it left out", () => {
+    const ranked = ["a", "b", "c", "d", "e"];
+    const first = selectQueriesForBundle(ranked, new Set(), 2);
+    expect(first.selected).toEqual(["a", "b"]);
+    expect(first.omitted).toBe(3);
+    // Next month the head is already measured, so the tail rotates in.
+    const second = selectQueriesForBundle(ranked, new Set(["a", "b"]), 2);
+    expect(second.selected).toEqual(["c", "d"]);
+    expect(second.unmeasuredBefore).toBe(3);
+  });
+
+  it("measures the audience market, not the business address", async () => {
+    const locale = await resolveBundleLocale({
+      mode: "dry-run",
+      projectId: "project-1",
+      context: {
+        siteId: "site-1",
+        projectId: "project-1",
+        domain: "www.example.com",
+        language: "en",
+        country: "MX",
+        market: "Mexico",
+        location: "Playa del Carmen",
+        audienceMarket: "United States",
+        audienceCountry: "US",
+        audienceCountries: ["US", "CA"],
+        topics: [],
+        audience: null,
+        source: {
+          language: "site_profile",
+          country: "business_knowledge",
+          location: "business_knowledge",
+          audienceCountry: "site_profile",
+        },
+      },
+      deps: {} as never,
+    });
+    expect(locale.country).toBe("US");
+    expect(locale.marketSource).toBe("audience");
+  });
+
   it("ranks queries by first-party impressions and removes duplicates", () => {
     const queries = rankQueries([
       { dimensions: { query: "b", windowRole: "current" }, metrics: { "first_party:impressions": { value: 10 } } },
