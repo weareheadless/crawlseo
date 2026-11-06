@@ -21,6 +21,10 @@ export default async function SitesPage({
   // Single-operator CrawlSEO: show all sites regardless of provisioning path.
   const [queriedSites, superseded] = await Promise.all([
     db.site.findMany({
+      // A retired site is kept as an audit anchor (an immutable legacy-budget
+      // receipt can point at it), but it is not a live tenant: showing it made
+      // a replaced duplicate look like a second OceanicVibes.
+      where: { retiredAt: null },
       select: {
         id: true,
         domain: true,

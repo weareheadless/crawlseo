@@ -1,0 +1,374 @@
+{
+  "reason": "Retired duplicate OceanicVibes project. It cannot be deleted: an immutable LegacyBudgetImportReceipt points at it (the migration that moved the budget to the live project), and that receipt is the audit anchor for the transfer. The project is suspended and its only site is retired, so it is not analysed or shown.",
+  "project": {
+    "id": "cmtd1b2wx0002oyrv4zgsmxwz",
+    "name": "OceanicVibes (retired duplicate)",
+    "externalProjectId": "oceanicvibes",
+    "workspaceId": "cmtd1b2wr0000oyrvbyw25mo9",
+    "createdAt": "2026-08-28T14:15:54.753Z",
+    "sites": [
+      {
+        "id": "cmtd1b2x30004oyrvcc0l5q10",
+        "domain": "oceanicvibes.com",
+        "retiredAt": "2026-11-04T02:09:28.376Z"
+      }
+    ]
+  },
+  "counts": {
+    "crawls": 9,
+    "evidence": 87,
+    "opportunities": 28,
+    "researchRuns": 17,
+    "jobs": 55
+  },
+  "legacyBudgetImportReceipts": [
+    {
+      "id": "dd96b7cd-06b1-4173-941a-db8f218c110e",
+      "sourceProjectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+      "sourceSiteId": "cmtd1b2x30004oyrvcc0l5q10",
+      "targetProjectId": "cmuriqdgn00m6oyqf7wzdkxp6",
+      "targetSiteId": "cmuriqdgv00m8oyqfit3vbvbw",
+      "idempotencyKey": "oceanic-historical-budget-import-20261025-v1",
+      "requestHash": "8c105d88743b3ecd789151bb3c9460b5b769eef789c66e84fdf21594fdbc29f0",
+      "sourceEvidenceHash": "38f821318fa112c00102d18c87c3ca2eefcecac5b341c234e28351cf47c0ddbb",
+      "reservationIds": [
+        "cmvo33b2a0003oyykewu05vx5",
+        "cmvo33b2f0005oyykrqe3x27z",
+        "cmvo33b2i0007oyykwb9iytxl",
+        "cmvo33b2l0009oyyk8853220k",
+        "cmvo33b2n000boyykvd24p93u",
+        "cmvo33b2q000doyykjmiw27f4",
+        "cmvo33b2t000foyykmm1czn9h"
+      ],
+      "snapshot": {
+        "rows": [
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmuy5gw010001oy5bu0aroykd",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-07T13:35:15+00:00",
+              "operation": "dataforseo:article_serp_snapshot",
+              "settledAt": "2026-10-07T13:35:16+00:00",
+              "updatedAt": "2026-10-07T13:35:16+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-0c138db0ae5eadff6be79f63"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-07T13:35:15.000Z",
+              "settledAt": "2026-10-07T13:35:16.000Z",
+              "updatedAt": "2026-10-07T13:35:16.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "2000"
+            },
+            "sourceTask": {
+              "id": "cmuy5gw010001oy5bu0aroykd",
+              "kind": "ORGANIC_SERP",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-07T13:35:50.124Z",
+              "costMicros": 2000,
+              "attemptedAt": "2026-10-07T13:35:16.890Z",
+              "completedAt": "2026-10-07T13:35:50.122Z",
+              "requestedAt": "2026-10-07T13:35:16.225Z",
+              "providerTaskId": "10071335-2144-0139-0000-1a62f654f402"
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmv6gkfar0005oy5betva6ay7",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-13T09:08:04+00:00",
+              "operation": "dataforseo:article_keyword_overview",
+              "settledAt": "2026-10-13T09:08:06+00:00",
+              "updatedAt": "2026-10-13T09:08:06+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-0fa4b2c316100ccec7c5b22b"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-13T09:08:04.000Z",
+              "settledAt": "2026-10-13T09:08:06.000Z",
+              "updatedAt": "2026-10-13T09:08:06.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "12120"
+            },
+            "sourceTask": {
+              "id": "cmv6gkfar0005oy5betva6ay7",
+              "kind": "KEYWORD_OVERVIEW",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-13T09:08:07.896Z",
+              "costMicros": 12120,
+              "attemptedAt": "2026-10-13T09:08:07.280Z",
+              "completedAt": "2026-10-13T09:08:07.895Z",
+              "requestedAt": "2026-10-13T09:08:06.387Z",
+              "providerTaskId": "10130908-2144-0607-0000-a631b4f1c068"
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmuwr3n3i000joyo40p61p0lx",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-06T14:05:15+00:00",
+              "operation": "dataforseo:article_keyword_overview",
+              "settledAt": "2026-10-06T14:05:17+00:00",
+              "updatedAt": "2026-10-06T14:05:17+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-3ababd3ed290ab69017ea931"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-06T14:05:15.000Z",
+              "settledAt": "2026-10-06T14:05:17.000Z",
+              "updatedAt": "2026-10-06T14:05:17.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "12120"
+            },
+            "sourceTask": {
+              "id": "cmuwr3n3i000joyo40p61p0lx",
+              "kind": "KEYWORD_OVERVIEW",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-06T14:05:18.901Z",
+              "costMicros": 12120,
+              "attemptedAt": "2026-10-06T14:05:18.289Z",
+              "completedAt": "2026-10-06T14:05:18.900Z",
+              "requestedAt": "2026-10-06T14:05:17.357Z",
+              "providerTaskId": "10061405-2144-0607-0000-fb6c04122a6e"
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmvl7hglr0011oy5ba5fdtawl",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-23T16:50:23+00:00",
+              "operation": "dataforseo:article_serp_snapshot",
+              "settledAt": "2026-10-23T16:50:24+00:00",
+              "updatedAt": "2026-10-23T16:50:24+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-477a1b879e285180de7a05fc"
+            },
+            "effective": {
+              "status": "UNCERTAIN",
+              "createdAt": "2026-10-23T16:50:23.000Z",
+              "settledAt": null,
+              "updatedAt": "2026-10-23T16:50:24.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": null
+            },
+            "sourceTask": {
+              "id": "cmvl7hglr0011oy5ba5fdtawl",
+              "kind": "ORGANIC_SERP",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "FAILED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-23T16:50:43.516Z",
+              "costMicros": null,
+              "attemptedAt": "2026-10-23T16:50:24.527Z",
+              "completedAt": "2026-10-23T16:50:43.515Z",
+              "requestedAt": "2026-10-23T16:50:24.206Z",
+              "providerTaskId": null
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmv6q2o2v0009oy5bloqkfapb",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-13T13:34:13+00:00",
+              "operation": "dataforseo:article_serp_snapshot",
+              "settledAt": "2026-10-13T13:34:14+00:00",
+              "updatedAt": "2026-10-13T13:34:14+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-755badeed09e30c809398830"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-13T13:34:13.000Z",
+              "settledAt": "2026-10-13T13:34:14.000Z",
+              "updatedAt": "2026-10-13T13:34:14.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "2000"
+            },
+            "sourceTask": {
+              "id": "cmv6q2o2v0009oy5bloqkfapb",
+              "kind": "ORGANIC_SERP",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-13T13:34:18.710Z",
+              "costMicros": 2000,
+              "attemptedAt": "2026-10-13T13:34:14.946Z",
+              "completedAt": "2026-10-13T13:34:18.708Z",
+              "requestedAt": "2026-10-13T13:34:14.120Z",
+              "providerTaskId": "10131334-2144-0139-0000-71449dd23780"
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmvl5yvca000xoy5bfmbfvn43",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-23T16:07:55+00:00",
+              "operation": "dataforseo:article_keyword_overview",
+              "settledAt": "2026-10-23T16:07:57+00:00",
+              "updatedAt": "2026-10-23T16:07:57+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-8a5c86086e292af00dd9593e"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-23T16:07:55.000Z",
+              "settledAt": "2026-10-23T16:07:57.000Z",
+              "updatedAt": "2026-10-23T16:07:57.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "12240"
+            },
+            "sourceTask": {
+              "id": "cmvl5yvca000xoy5bfmbfvn43",
+              "kind": "KEYWORD_OVERVIEW",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-23T16:07:58.431Z",
+              "costMicros": 12240,
+              "attemptedAt": "2026-10-23T16:07:57.702Z",
+              "completedAt": "2026-10-23T16:07:58.430Z",
+              "requestedAt": "2026-10-23T16:07:57.226Z",
+              "providerTaskId": "10231607-2144-0607-0000-7e2ae4c8119c"
+            }
+          },
+          {
+            "input": {
+              "period": "2026-10",
+              "taskId": "cmvbntjr4000loy5bfjp7l0dq",
+              "currency": "USD",
+              "timeZone": "UTC",
+              "createdAt": "2026-10-17T00:29:56+00:00",
+              "operation": "dataforseo:article_keyword_overview",
+              "settledAt": "2026-10-17T00:30:00+00:00",
+              "updatedAt": "2026-10-17T00:30:00+00:00",
+              "amountMicros": "100000",
+              "legacyStatus": "settled",
+              "localReservationId": "growth-budget-d17b5918dea9dd6361252630"
+            },
+            "effective": {
+              "status": "SETTLED",
+              "createdAt": "2026-10-17T00:29:56.000Z",
+              "settledAt": "2026-10-17T00:30:00.000Z",
+              "updatedAt": "2026-10-17T00:30:00.000Z",
+              "amountMicros": "100000",
+              "actualCostMicros": "12000"
+            },
+            "sourceTask": {
+              "id": "cmvbntjr4000loy5bfjp7l0dq",
+              "kind": "KEYWORD_OVERVIEW",
+              "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+              "status": "COMPLETED",
+              "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+              "updatedAt": "2026-10-17T00:30:01.393Z",
+              "costMicros": 12000,
+              "attemptedAt": "2026-10-17T00:30:00.759Z",
+              "completedAt": "2026-10-17T00:30:01.392Z",
+              "requestedAt": "2026-10-17T00:30:00.256Z",
+              "providerTaskId": "10170030-2144-0607-0000-86bc74d8c205"
+            }
+          }
+        ],
+        "source": {
+          "domain": "oceanicvibes.com",
+          "siteId": "cmtd1b2x30004oyrvcc0l5q10",
+          "currency": "USD",
+          "projectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+          "externalProjectId": "oceanicvibes"
+        },
+        "target": {
+          "domain": "oceanicvibes.com",
+          "siteId": "cmuriqdgv00m8oyqfit3vbvbw",
+          "currency": "USD",
+          "projectId": "cmuriqdgn00m6oyqf7wzdkxp6",
+          "bindingStatus": "ACTIVE",
+          "bindingExecutor": "helloada",
+          "bindingGeneration": 1,
+          "externalProjectId": "oceanicvibes"
+        }
+      },
+      "createdAt": "2026-10-25T17:10:43.825Z"
+    }
+  ],
+  "legacyBudgetSourceFreezeReceipts": [
+    {
+      "id": "0e4a38df-8963-44dc-9428-7520ede221a2",
+      "sourceProjectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+      "sourceSiteId": "cmtd1b2x30004oyrvcc0l5q10",
+      "targetProjectId": "cmuriqdgn00m6oyqf7wzdkxp6",
+      "targetSiteId": "cmuriqdgv00m8oyqfit3vbvbw",
+      "idempotencyKey": "oceanic-historical-source-freeze-20261025-v1",
+      "reason": "Retire duplicate historical Oceanic research before verified budget history transfer",
+      "requestHash": "fddaf89b56881c99da60bf070620071b13b17826f990b4d66e0e19c1b64cf140",
+      "sourcePolicyHash": "11492c00bb5c6635952ae49560dd80f5115fd57ec518be11327b209425d1ef2c",
+      "snapshot": {
+        "after": {
+          "seo": {
+            "id": "57bb63a29cfe712374aba4005c733fc8",
+            "enabled": false,
+            "updatedAt": "2026-10-25T17:10:33.804Z",
+            "articleResearchEnabled": false
+          },
+          "research": {
+            "id": "cmvo3339u0001oyykrunl3yvm",
+            "enabled": false,
+            "revision": 1,
+            "updatedAt": "2026-10-25T17:10:33.810Z"
+          }
+        },
+        "before": {
+          "seo": {
+            "id": "57bb63a29cfe712374aba4005c733fc8",
+            "enabled": true,
+            "updatedAt": "2026-08-29T01:01:08.119Z",
+            "articleResearchEnabled": true
+          },
+          "reason": "Retire duplicate historical Oceanic research before verified budget history transfer",
+          "executor": "helloada",
+          "research": null,
+          "pendingRuns": 0,
+          "sourceDomain": "oceanicvibes.com",
+          "sourceSiteId": "cmtd1b2x30004oyrvcc0l5q10",
+          "targetDomain": "oceanicvibes.com",
+          "targetSiteId": "cmuriqdgv00m8oyqfit3vbvbw",
+          "idempotencyKey": "oceanic-historical-source-freeze-20261025-v1",
+          "sourceProjectId": "cmtd1b2wx0002oyrv4zgsmxwz",
+          "targetProjectId": "cmuriqdgn00m6oyqf7wzdkxp6",
+          "bindingGeneration": 1,
+          "sourceProjectStatus": "ACTIVE",
+          "targetProjectStatus": "ACTIVE",
+          "targetWorkspaceStatus": "ACTIVE",
+          "sourceExternalProjectId": "oceanicvibes"
+        }
+      },
+      "createdAt": "2026-10-25T17:10:33.758Z"
+    }
+  ],
+  "status": "SUSPENDED"
+}
