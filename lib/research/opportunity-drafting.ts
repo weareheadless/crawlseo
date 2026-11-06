@@ -195,6 +195,7 @@ const SYSTEM = [
   "Write in the business's language, given in locale.language. Do not mix languages in one board.",
   "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, and the evidence rows the map cites.",
   "Decide for each cluster whether there is work worth proposing. It is correct to propose nothing for a cluster: say why in the batch summary.",
+  "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
   "Respect the market scope. A local offer is limited to the business location and service area; a national or international offer is not. Queries listed under outOfMarket are already excluded: never build a proposal on them.",
   "Do not assume a product range exists or does not exist. If demand names a format or service the supplied pages do not cover, the proposal is a decision for the owner, not an assumption.",
@@ -557,22 +558,25 @@ export async function draftTechnicalProposals(input: DraftInput): Promise<DraftR
   }
 }
 
+/**
+ * The monthly pass drafts content, AEO and technical work. Timely work belongs
+ * to the weekly sweep, which has this week's news; drafting it here as well
+ * produced a second timely lane from month-old bundle sources.
+ */
 export async function draftProposals(input: DraftInput): Promise<DraftResult> {
   const clusters = await draftClusterProposals(input);
   const technical = await draftTechnicalProposals(input);
-  const timely = await draftTimelyProposals(input);
   return {
-    proposals: [...clusters.proposals, ...technical.proposals, ...timely.proposals],
-    errors: [...clusters.errors, ...technical.errors, ...timely.errors],
-    rejected: [...clusters.rejected, ...technical.rejected, ...timely.rejected],
+    proposals: [...clusters.proposals, ...technical.proposals],
+    errors: [...clusters.errors, ...technical.errors],
+    rejected: [...clusters.rejected, ...technical.rejected],
     summary:
       [
         clusters.summary ? `Content and AEO: ${clusters.summary}` : null,
         technical.summary ? `Technical: ${technical.summary}` : null,
-        timely.summary ? `Timely: ${timely.summary}` : null,
       ]
         .filter(Boolean)
         .join("\n\n") || null,
-    model: clusters.model ?? technical.model ?? timely.model,
+    model: clusters.model ?? technical.model,
   };
 }

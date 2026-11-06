@@ -353,7 +353,7 @@ export async function critiqueProposals(
     "Check each proposal for unsupported claims, duplicates and wrong target pages.",
     "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
     "A low-demand but business-relevant local proposal is valid; do not drop it only because volume is low. Check whether it is a reasonable expansion or small test.",
-    "Group proposals that are the same job on the same asset, or that overlap so closely that the owner should see one row: a page update and its answer blocks, a hub update and a product-range question about the same formats. A group is advice on presentation; it does not delete the members.",
+    "Group proposals that one delivery would close: the same page, the same template, or the same metadata pass across many pages. Also group a page update with its answer blocks, and a hub update with a range question about the same formats. A group is advice on presentation; it does not delete the members.",
     "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }], groups: [{ members: string[], title: string, action: string }] }.",
     "Use only the supplied dedupKeys. A group needs at least two members. Keep the summary under 300 characters, each reason under 200, each group title under 120 and each group action under 600.",
   ].join("\n");
