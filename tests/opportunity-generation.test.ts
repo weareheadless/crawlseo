@@ -61,6 +61,12 @@ describe("proposal identity", () => {
     expect(proposalIdentity(first)).toBe(proposalIdentity(second));
   });
 
+  it("keeps one row for a new page even when the invented slug moves", () => {
+    const first = makeProposal({ kind: "article", target: { url: "/blog/art-et-tapisserie", newAsset: true, section: null } });
+    const second = makeProposal({ kind: "article", target: { url: "/post/art-tapisserie", newAsset: true, section: null } });
+    expect(proposalIdentity(first)).toBe(proposalIdentity(second));
+  });
+
   it("separates different assets, lanes and no-page topics", () => {
     expect(proposalIdentity(makeProposal())).not.toBe(
       proposalIdentity(makeProposal({ target: { url: "/lampes/abat-jours", newAsset: false, section: null } }))
@@ -170,6 +176,38 @@ describe("proposal critique", () => {
 });
 
 describe("proposal storage", () => {
+  it("does not rewrite an accepted proposal when it is drafted again", async () => {
+    let updated = 0;
+    const db = {
+      opportunity: {
+        findUnique: async () => ({ id: "opp-accepted", status: "accepted", parkReason: null }),
+        update: async () => {
+          updated += 1;
+          return { id: "opp-accepted", status: "accepted" };
+        },
+        create: async () => {
+          throw new Error("must not create a second row for an accepted proposal");
+        },
+      },
+      evidenceEdge: { upsert: async () => ({ id: "edge" }) },
+    };
+    const result = await storeProposals(db as never, {
+      projectId: "proj-1",
+      siteId: "site-1",
+      domain,
+      map,
+      topicMapRunId: "topic-run-1",
+      proposals: [makeProposal({ dedupKey: "accepted-key" })],
+      evidenceIds: new Set(["ev-1", "ev-2"]),
+      firstPartyEvidenceIds: new Set(["ev-1"]),
+      knowledgeEvidenceIds: [],
+      clusters: [],
+    });
+    expect(updated).toBe(0);
+    expect(result.stored).toHaveLength(0);
+    expect(result.dropped).toHaveLength(0);
+  });
+
   it("stores proposals and records evidence edges", async () => {
     const proposals = [makeProposal({ dedupKey: "hub" }), makeProposal({ dedupKey: "hub-2", target: { url: "/les-ateliers", newAsset: false, section: null } })];
     const evidenceIds = new Set(["ev-1", "ev-2"]);

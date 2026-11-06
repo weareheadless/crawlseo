@@ -242,14 +242,28 @@ async function main(): Promise<void> {
       take: 5,
     });
     // Technical evidence comes from the crawl itself, not from the legacy
-    // detector rows: those are retired, and the drafting call must keep working
-    // after they are gone. One row per issue and URL.
-    const crawlRows = await db.evidenceRecord.findMany({
-      where: { projectId: site.projectId, siteId: site.id, kind: "onpage_crawl", supersededById: null },
-      select: { id: true, kind: true, dimensions: true, observedAt: true },
-      orderBy: { observedAt: "desc" },
-      take: 300,
+    // detector rows. Crawl evidence is appended per crawl, so the pack must be
+    // scoped to the latest crawl: otherwise a fixed defect from a previous
+    // crawl keeps being proposed after the recrawl stopped finding it.
+    const latestCrawl = await db.crawl.findFirst({
+      where: { siteId: site.id, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      select: { id: true },
     });
+    const crawlRows = latestCrawl
+      ? await db.evidenceRecord.findMany({
+          where: {
+            projectId: site.projectId,
+            siteId: site.id,
+            kind: "onpage_crawl",
+            supersededById: null,
+            dimensions: { path: ["crawlId"], equals: latestCrawl.id },
+          },
+          select: { id: true, kind: true, dimensions: true, observedAt: true },
+          orderBy: { observedAt: "desc" },
+          take: 300,
+        })
+      : [];
     // Group by defect: "duplicate description on 59 pages" is one delivery, and
     // the model cannot see that from 12 individual rows.
     const byIssue = new Map<string, { id: string; kind: string; issue: string; url: string; pages: number }>();
@@ -469,8 +483,20 @@ async function main(): Promise<void> {
       });
     }
 
+    // Churn is the thing to watch on a re-run: the same asset keeps its row,
+    // but a new asset for the same job looks like a fresh recommendation.
+    const previousProposals = ((existing?.report as { proposals?: Array<{ dedupKey: string; title: string }> } | null)?.proposals ?? []);
+    const previousKeys = new Set(previousProposals.map((proposal) => proposal.dedupKey));
+    const currentKeys = new Set(kept.map((proposal) => proposal.dedupKey));
+    const changes = {
+      updated: kept.filter((proposal) => previousKeys.has(proposal.dedupKey)).length,
+      added: kept.filter((proposal) => !previousKeys.has(proposal.dedupKey)).map((proposal) => proposal.title),
+      closed: previousProposals.filter((proposal) => !currentKeys.has(proposal.dedupKey)).map((proposal) => proposal.title),
+    };
+
     const report = {
       version: 1,
+      changes,
       map: { siteId: map.siteId, domain: map.domain, month: map.month },
       proposals: kept,
       dropped,
@@ -538,6 +564,7 @@ async function main(): Promise<void> {
         dropped,
         critique: report.critique,
         drafting: report.drafting,
+        changes: report.changes,
         technical,
         generatedAt: report.generatedAt,
       }),

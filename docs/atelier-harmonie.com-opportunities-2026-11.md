@@ -1,6 +1,12 @@
 # Opportunity board — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-06T01:31:10.730Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-06T12:59:25.813Z. Proposals only; no task is created until a human accepts one.
+
+Since the previous run: 14 updated in place, 2 new, 2 closed.
+- new: Renforcer la page tapisserie : vocabulaire tapissier et chaises
+- new: Rétablir un sitemap XML pour les pages produit et catégories
+- closed: Renforcer la page sièges sur « tapissier » et « chaises »
+- closed: Test : enrichir la page Objets déco autour des coussins artisanaux
 
 ## Lanes
 
@@ -10,187 +16,186 @@ No proposal in this lane.
 
 ### Content & business
 
-#### Renforcer la page /lampes pour « luminaire artisanal »
+#### Enrichir la page /lampes pour remonter sur « luminaire artisanal »
 
-- Kind: update; effort: medium; confidence: high (Les données Search Console de la page montrent 996 impressions et 40 requêtes sans aucun clic, avec une requête déjà en position 12,9 : le levier est mesuré sur la page elle-même.)
-- Summary: La catégorie principale des lampes génère 996 impressions et 40 requêtes pour zéro clic, avec une page de 342 mots seulement. Le travail consiste à enrichir cette page pour qu'elle mérite sa position sur les requêtes artisanal / originales.
-- Why now: « Lampes artisanales originales » est déjà en position 12,9 et « luminaire artisanal » en 56 : le décalage vient du contenu de la page, pas du marché. Chaque mois sans enrichissement, ce sont 996 impressions qui ne produisent aucune visite.
-- Target: https://www.atelier-harmonie.com/lampes (Contenu principal de la catégorie)
-- Action: Réécrire et enrichir https://www.atelier-harmonie.com/lampes : une introduction de 250 à 350 mots sur la fabrication artisanale en Normandie (matériaux nobles, pièces uniques, finitions professionnelles), une section courte par famille de luminaires avec liens vers les sous-catégories existantes (suspensions, baladeuses, upcycling), et un paragraphe « comment choisir un luminaire artisanal ». Intégrer naturellement « luminaire artisanal » et « lampes artisanales originales » dans le H1 et les intertitres, et ajouter un visuel par famille pour sortir des 342 mots actuels.
-- Expected outcome: Position sur « luminaire artisanal » remontée dans les 30 premiers et premières visites organiques sur la catégorie, aujourd'hui à zéro clic.
+- Kind: cluster_hub; effort: medium; confidence: high (Les données Search Console placent /lampes en position 56 sur « luminaire artisanal » avec 85 impressions pour une page de 342 mots : le levier est mesuré directement.)
+- Summary: La catégorie /lampes (342 mots) porte l'essentiel des impressions du cluster mais se situe autour de la 42e position ; les sous-catégories font 152 à 255 mots. Le contenu est trop court pour capter « luminaire artisanal » (260 impressions, position 56).
+- Why now: Les impressions sont déjà là, sans clic : la page est vue mais trop faible pour être choisie. Chaque mois sans enrichissement laisse ces requêtes aux concurrents.
+- Target: https://www.atelier-harmonie.com/lampes (Contenu de la catégorie et maillage vers les sous-catégories)
+- Action: Réécrire /lampes : introduction qui positionne le fait main en Normandie, sections matériaux, finitions, entretien et sur-mesure, réponses courtes aux questions « luminaires artisanaux », « lampes artisanales » et « lampe à poser artisanale », maillage vers suspensions, baladeuses et upcycling, lien depuis l'accueil.
+- Expected outcome: Gagner des positions sur « luminaire artisanal » et « lampe artisanale » et convertir une partie des 996 impressions du cluster.
 - Evidence: 3 reference(s)
+
+#### Trancher : proposez-vous plafonniers, lustres et lampadaires ?
+
+- Kind: business; effort: small; confidence: low (Les impressions montrent un intérêt pour ces formats, mais rien ne prouve que l'atelier les fabrique : c'est une décision d'offre.)
+- Summary: Des requêtes de format sont mesurées sur la catégorie (plafonnier 104 impressions, lustre 58, lampadaire 45) mais aucune page ne les couvre. La décision d'élargir la gamme vous appartient, elle ne peut pas être supposée.
+- Why now: Ces formats pèsent plus de 200 impressions sur /lampes ; sans réponse claire, aucune page ne peut être créée ni optimisée.
+- Target: no page
+- Action: Décider si l'atelier propose ou non plafonniers, lustres et lampadaires. Si oui, ouvrir les sous-catégories correspondantes et les rattacher à /lampes. Si non, l'indiquer explicitement sur /lampes et orienter la demande vers suspensions, baladeuses et upcycling.
+- Expected outcome: Une réponse claire qui débloque soit une extension de gamme, soit un meilleur cadrage de la catégorie.
+- Evidence: 2 reference(s)
 
 #### Créer une page service « Restauration d'abat-jour en Normandie »
 
-- Kind: article; effort: medium; confidence: high (Search Console montre 12 clics et une position moyenne de 8,7 sur 14 requêtes, toutes atterrissant sur un article de blog et non sur une page service.)
-- Summary: Toutes les requêtes de réparation, rénovation et restauration d'abat-jour atterrissent sur un article de blog. Il manque la page service qui porte l'offre, la zone d'intervention et la demande de devis.
-- Why now: Le cluster fait 12 clics, 284 impressions et une position moyenne de 8,7 sur 14 requêtes, sans page service dédiée. La demande est déjà là et se convertit mal parce que la page d'arrivée est éditoriale.
-- Target: https://www.atelier-harmonie.com/restauration-abat-jour (Page service)
-- Action: Créer https://www.atelier-harmonie.com/restauration-abat-jour : promesse (redonner vie à un abat-jour taché, jauni ou craquelé en conservant le pied d'origine), étapes de la restauration, matériaux nobles utilisés, délais indicatifs, zone d'intervention Normandie et Saint-Pierre-en-Port, et un formulaire de demande de devis avec envoi de photo. Reprendre « réparation d'abat-jour », « réparer », « rénover » et « restaurer » dans le H1 et les intertitres, puis faire pointer l'article de blog existant vers cette page pour éviter le doublon.
-- Expected outcome: Une page commerciale qui capte les requêtes de réparation aujourd'hui absorbées par un article, avec des demandes de devis mesurables.
-- Evidence: 4 reference(s)
+- Kind: article; effort: medium; confidence: high (Les positions 5 à 9 et les 12 clics sont mesurés sur l'article, et le cluster signale explicitement l'absence de page service ou catégorie.)
+- Summary: L'article de blog sur la restauration d'abat-jour en contrecollé occupe les positions 5 à 9 sur les requêtes de réparation, mais aucune page service ne porte l'offre : les 12 clics du cluster arrivent sur un contenu éditorial.
+- Why now: La demande est déjà captée en page 1 ; il manque la page qui présente la prestation, la zone Normandie et la prise de contact.
+- Target: https://www.atelier-harmonie.com/restauration-abat-jour
+- Action: Créer une page service locale : ce qui est restauré (contrecollé, doublure, taches, plastique jauni), déroulé de la restauration, dépôt à Saint-Pierre-en-Port, zone Normandie, délais et demande de devis. Lier l'article de blog existant vers cette page et inversement.
+- Expected outcome: Transformer des positions éditoriales en page commerciale locale et générer des demandes de restauration en Normandie.
+- Evidence: 2 reference(s)
 
-#### Compléter la page du kit lampe pour « kit fabrication luminaire »
+#### Ajouter « kit de fabrication de luminaire » à la page du kit DIY
 
-- Kind: update; effort: small; confidence: high (Search Console place la même page en position 5 sur « kit lampe » et 16 sur « kit fabrication luminaire » : l'écart se corrige par le contenu de la page.)
-- Summary: La page produit est en position 5 sur « kit lampe » mais seulement 16 sur « kit fabrication luminaire ». Les mots fabrication et luminaire n'y figurent pas, ce qui explique l'écart.
-- Why now: 36 impressions sur une requête que la page couvre presque, pour 2 clics sur 195 impressions au total : c'est un ajustement de contenu peu coûteux sur une page déjà bien classée.
-- Target: https://www.atelier-harmonie.com/product-page/kit-diy-ma-lampe-%C3%A0-poser (Description produit)
-- Action: Ajouter sur la page produit un paragraphe « fabriquer son luminaire » qui décrit le contenu du kit, le niveau requis (pas besoin d'être bricoleur), le temps de montage et le résultat obtenu, en intégrant naturellement « kit fabrication luminaire » et « fabrication d'un luminaire ». Rappeler que le kit est fait main en Normandie et renvoyer vers les ateliers DIY locaux pour celles et ceux qui préfèrent être accompagnés en petit comité.
-- Expected outcome: Position sur « kit fabrication luminaire » alignée sur celle de « kit lampe », et plus de clics sur les 195 impressions du cluster.
+- Kind: update; effort: small; confidence: medium (La page est en position 5 sur « kit lampe » (53 impressions) mais en 16 sur « kit fabrication luminaire » : l'écart de formulation est un signal directionnel.)
+- Summary: Le kit lampe se classe en position 5 mais la page n'emploie ni « fabrication » ni « luminaire », alors que ces formulations pèsent une quarantaine d'impressions sur le cluster pour seulement 2 clics.
+- Why now: Les positions sont bonnes et les clics quasi nuls : le vocabulaire de la page ne correspond pas aux formulations recherchées.
+- Target: https://www.atelier-harmonie.com/product-page/kit-diy-ma-lampe-%C3%A0-poser (Titre, introduction et description du kit)
+- Action: Sur la page produit du kit, reformuler le titre et l'introduction autour de « kit de fabrication de luminaire », décrire le contenu du kit et le résultat obtenu, puis ajouter un lien depuis /les-ateliers vers le kit.
+- Expected outcome: Couvrir les requêtes en « fabrication » et « luminaire » et améliorer le taux de clic sur une page déjà bien classée.
+- Evidence: 2 reference(s)
+
+#### Renforcer la page tapisserie : vocabulaire tapissier et chaises
+
+- Kind: update; effort: medium; confidence: medium (Les requêtes tapissier et chaises sont mesurées avec des positions faibles (59e sur chaises) mais des volumes unitaires modestes : signal directionnel.)
+- Summary: La page tapisserie-restauration parle fauteuils mais pas tapissier, tapisserie d'ameublement ni chaises, alors que ces termes génèrent des impressions et que « chaises tapisserie » se classe au-delà de la 59e position.
+- Why now: Le cluster pèse 2 360 de volume pour 6 clics ; l'écart entre les requêtes et le vocabulaire de la page est net.
+- Target: https://www.atelier-harmonie.com/tapisserie-restauration (Titre, introduction et section sièges)
+- Action: Sur /tapisserie-restauration, intégrer tapissier et tapisserie d'ameublement dans le titre et l'introduction, ajouter une section chaises et sièges, détailler les prestations (sanglage, garnissage, choix du tissu) et mailler vers les articles fauteuil et tapisserie traditionnelle.
+- Expected outcome: Se positionner sur les requêtes tapissier et chaises et rapprocher la page des 2 360 de volume du cluster.
+- Evidence: 2 reference(s)
+
+#### Étoffer la page abat-jours (150 mots) pour capter la demande « pagode »
+
+- Kind: update; effort: medium; confidence: medium (Des impressions et un volume réels sur « abat jour pagode », et une fiche produit en page 2 : le signal est directionnel, pas une preuve de gain.)
+- Summary: La page catégorie abat-jours ne compte que 150 mots alors que la demande du cluster est forte (abat jour pagode : 390 de volume) et que la fiche pagode stagne en page 2. Le travail : réécrire l'introduction, structurer par formes et matières, relier les fiches produits existantes.
+- Why now: Les requêtes pagode génèrent déjà des impressions et la fiche produit associée se classe autour de la 15e position : sans contenu de catégorie, cette demande reste captée par les concurrents.
+- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Introduction, sections par formes et matières, FAQ courte)
+- Action: Réécrire le contenu de /lampes/abat-jours : introduction sur le fait main en Normandie et les finitions professionnelles, sections par forme (pagode, tambour) et par matière, critères de choix, liens vers les fiches produits existantes et vers les ateliers. Ajouter une courte FAQ sur les formes et les dimensions.
+- Expected outcome: Une page catégorie qui mérite sa place sur les requêtes d'abat-jour et soutient la fiche pagode, aujourd'hui en page 2.
 - Evidence: 3 reference(s)
 
-#### Introduire « tapissier », « chaises » et « fauteuil à tapisser » sur la page restauration
+#### Renforcer la fiche « abat-jour pagode vermillon » sur les requêtes pagode
 
-- Kind: update; effort: medium; confidence: medium (Les classements sièges existent en Search Console mais sur une URL différente de la page service et avec peu d'impressions : le potentiel est directionnel.)
-- Summary: La page service de tapisserie-restauration ne mentionne ni le métier de tapissier, ni les chaises, ni le fauteuil à tapisser, alors que ces requêtes génèrent des impressions. Les classements sièges se font sur une autre URL.
-- Why now: Le cluster pèse 2 360 de volume et 186 impressions pour 6 clics seulement. « Fauteuil restauration » est en position 19,7 et « chaises tapisserie » en 78, faute de vocabulaire correspondant sur la page service.
-- Target: https://www.atelier-harmonie.com/tapisserie-restauration (Contenu principal du service)
-- Action: Enrichir https://www.atelier-harmonie.com/tapisserie-restauration avec une section « tapissier en Normandie » expliquant la tapisserie traditionnelle et le savoir-faire, une section « chaises et fauteuils à tapisser » décrivant les types de sièges repris, et les expressions « fauteuil à tapisser » et « chaises tapisserie » en intertitres. Préciser la zone d'intervention Normandie et Saint-Pierre-en-Port, et ajouter des cas concrets avec photos avant/après. Vérifier au passage que la page /sieges, qui porte aujourd'hui les classements sièges, renvoie bien vers ce service.
-- Expected outcome: La page service se positionne sur les requêtes sièges et chaises aujourd'hui portées par une autre URL, et génère des demandes locales.
-- Evidence: 4 reference(s)
-
-#### Faire de la page abat-jours un vrai hub de catégorie
-
-- Kind: update; effort: medium; confidence: medium (La Search Console montre un volume élevé et une position moyenne de 14 sur la catégorie, mais aucun clic : le signal est directionnel, pas une preuve de gain.)
-- Summary: La page /lampes/abat-jours ne compte que 150 mots alors que le cluster pèse environ 51 000 de volume mensuel pour zéro clic et une position moyenne de 14. Elle ne peut pas porter les requêtes génériques en l'état.
-- Why now: C'est le seul cluster à fort volume du site et il ne génère aucun clic : le contenu de la catégorie est trop mince pour convertir l'impression en visite.
-- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Contenu principal de la catégorie)
-- Action: Étoffer la page : introduction sur l'abat-jour artisanal fait main en Normandie, explication des formes et des collections réellement présentes sur le site (tambour, pagode), paragraphes courts reliant chaque famille à ses pages produit, photos légendées, bloc questions fréquentes sur le choix et l'entretien d'un abat-jour, liens internes vers les fiches produits et vers l'atelier.
-- Expected outcome: Une page catégorie qui se positionne sur les requêtes génériques « abat-jour » et alimente les fiches produits en trafic interne.
-- Evidence: 4 reference(s)
-
-#### Optimiser la page Pagode Vermillon pour « abat jour pagode »
-
-- Kind: update; effort: small; confidence: medium (La Search Console situe précisément cette fiche en position 15 sur « abat jour pagode » avec un volume mesuré de 390 : signal direct, mais volume modeste.)
-- Summary: La requête « abat jour pagode » (390 de volume) place la fiche Pagode Vermillon en position 15 avec 33 impressions, et « abat-jour pagode moderne » en position 10,7. La page n'exploite pas explicitement l'expression recherchée.
-- Why now: La demande est déjà identifiée et la page existe : c'est un gain rapide sur une requête précise, sans création de contenu lourd.
-- Target: https://www.atelier-harmonie.com/product-page/abat-jour-pagode-vermillon (Titre, description et contenu de la fiche produit)
-- Action: Retravailler le titre et le H1 pour intégrer naturellement « abat jour pagode », enrichir la description avec la forme pagode, les dimensions et les usages, ajouter deux ou trois questions fréquentes en bas de fiche, renforcer le maillage depuis la page catégorie abat-jours et vérifier que les visuels montrent clairement la forme pagode.
-- Expected outcome: Entrée dans le top 10 sur « abat jour pagode » et ses variantes proches, avec des impressions qui se transforment en clics.
-- Evidence: 4 reference(s)
-
-#### Ancrer clairement l'offre de tapissier en Normandie sur l'accueil
-
-- Kind: update; effort: small; confidence: medium (La Search Console place déjà l'accueil en tête sur les requêtes « tapissier autour de moi », mais les volumes sont très faibles : le signal est réel et limité à la fois.)
-- Summary: L'accueil se classe n°1 sur « tapissier autour de moi » et « artisan tapissier autour de moi », alors qu'aucune page fournie n'emploie le mot « tapissier ». La restauration de siège et de fauteuil est pourtant une offre locale Normandie.
-- Why now: Le site est déjà visible sur ces requêtes locales sans le dire explicitement : le moindre doute de pertinence suffit à perdre la position, et la zone desservie n'est pas énoncée.
-- Target: https://www.atelier-harmonie.com/ (Bloc local en milieu de page d'accueil)
-- Action: Ajouter un bloc court et explicite du type « Tapissier à Saint-Pierre-en-Port, en Normandie », listant les prestations réellement proposées (restauration de siège, restauration de fauteuil, tapisserie traditionnelle, abat-jour), la zone desservie (Normandie) et un lien vers la page ateliers et le contact. Garder le vocabulaire métier exact (« tapissier », « tapisserie ») et ne citer que les communes réellement desservies.
-- Expected outcome: Une page d'accueil cohérente avec les requêtes locales qu'elle gagne déjà, et un ancrage géographique lisible pour l'internaute comme pour Google.
-- Evidence: 4 reference(s)
-
-#### Petit test : étoffer la page objets déco autour des coussins artisanaux
-
-- Kind: update; effort: small; confidence: low (Les impressions relevées sont de l'ordre de quelques unités par requête : c'est un test, pas une opportunité démontrée.)
-- Summary: La page /objets-deco (299 mots) est en position 10 sur « coussins artisanaux » et 9,3 sur « latelier du coussin », avec 2 clics seulement. La demande est faible mais cohérente avec la vente de créations artisanales.
-- Why now: Le cluster est peu demandé : c'est un test à faible coût, pas un investissement prioritaire. Mieux vaut le cadrer maintenant que le laisser en position 10 indéfiniment.
-- Target: https://www.atelier-harmonie.com/objets-deco (Texte d'introduction et descriptifs de la catégorie)
-- Action: Compléter l'introduction de la catégorie sur le coussin fait main et artisanal, décrire les matières et finitions réellement proposées, harmoniser les titres et descriptifs des produits affichés, et ajouter un lien interne depuis l'accueil et depuis la page ateliers. Ne pas créer de nouvelle gamme : seulement mieux décrire l'existant.
-- Expected outcome: Un test mesurable sur « coussins artisanaux » et « coussin fait main » ; si les impressions ne bougent pas, le sujet est refermé.
-- Evidence: 4 reference(s)
-
-#### Aligner la page Carte cadeau sur les variantes réellement recherchées
-
-- Kind: update; effort: small; confidence: medium (Les positions et impressions viennent de la Search Console du site, mais les volumes sont minuscules : 2 à 4 impressions par requête.)
-- Summary: La page /gift-card est 14e sur « carte cadeau artisanat » mais absente sur « par email » et « à imprimer », et la notion de décoration n'apparaît nulle part dans la page. La requête la plus vue mentionne Le Mans : ce n'est pas une cible géographique pour l'atelier, mais elle confirme l'attente « décoration ». Volume total très faible : ajustement de page, pas chantier.
-- Why now: Les requêtes existent déjà et la page est en page 2 : le gain se fait sans créer de contenu.
-- Target: https://www.atelier-harmonie.com/gift-card (titre, introduction et courte FAQ)
-- Action: Réécrire le title et le H1 autour de « carte cadeau artisanat » en gardant la mention décoration, ajouter deux phrases sur l'envoi par email et l'impression à la maison, et préciser ce que la carte permet d'offrir en renvoyant vers les pages existantes (abat-jour, lampes, ateliers). Ne pas inventer de montants ni de formules non proposées par l'atelier.
-- Expected outcome: Sortir des positions 14 à 29 sur les variantes email et impression et récupérer quelques clics sur une demande de niche.
-- Evidence: 4 reference(s)
-
-#### Étoffer la page Les Tissus, aujourd'hui limitée à 146 mots
-
-- Kind: update; effort: medium; confidence: medium (Les positions viennent de la Search Console du site, mais sur une à trois impressions par requête : la demande est réelle et très mince.)
-- Summary: La page /les-tissus fait 146 mots, alors que « tissu d'ameublement » et « tissu pour fauteuil » sont déjà positionnés en tête (sur une à trois impressions) et que « magasin tissu » atterrit en 27e position sur la page d'accueil. La page n'a tout simplement pas de contenu pour se classer sur un sujet national.
-- Why now: Les positions déjà acquises sur les requêtes fauteuil montrent que le sujet est validé par la Search Console ; il ne manque que de la matière sur la page.
-- Target: https://www.atelier-harmonie.com/les-tissus (contenu principal)
-- Action: Passer la page de 146 à environ 600 mots : quelles matières sont travaillées à l'atelier pour la restauration de siège et d'abat-jour, comment choisir un tissu d'ameublement pour un fauteuil, entretien et durabilité, photos des tissus réellement utilisés. Ajouter des liens vers la restauration de siège et la création d'abat-jours. Ne décrire que les matières effectivement proposées ; la requête « magasin tissu » ne doit être traitée que si l'atelier vend bien du tissu au mètre.
-- Expected outcome: Une page matière crédible à l'échelle nationale, capable de porter les requêtes tissu d'ameublement et tissu pour fauteuil aujourd'hui captées par l'accueil.
-- Evidence: 4 reference(s)
-
-#### Créer un article de fond sur l'art de la tapisserie
-
-- Kind: article; effort: medium; confidence: medium (Le volume de 3 600 vient d'une mesure de mots-clés, mais l'accueil ne génère que deux impressions sur la requête : le potentiel reste à confirmer.)
-- Summary: « art et tapisserie » est la seule requête du lot avec un volume mesuré (3 600), mais l'atelier n'a aucune page dédiée : il se positionne 7e avec sa page d'accueil, sur deux impressions seulement. Le blog existe déjà mais ne traite pas le sujet. L'article relie tapisserie traditionnelle et savoir-faire de l'atelier.
-- Why now: Le blog est en place et le sujet a un volume mesuré, contrairement aux autres requêtes du lot ; c'est un contenu de soutien peu risqué qui peut aussi nourrir les pages de service.
-- Target: /blog/art-de-la-tapisserie (nouvel article)
-- Action: Écrire un article illustré sur l'art de la tapisserie : histoire courte, gestes clés (sanglage, garnissage, couverture), ce qui distingue une restauration traditionnelle d'un rembourrage moderne, et dans quels cas confier un fauteuil à l'atelier. Lier vers la page restauration de siège et vers la page tissus, puis référencer l'article depuis le blog. Rester sur un contenu de culture artisanale, sans argumentaire commercial.
-- Expected outcome: Une page susceptible de se classer sur « art et tapisserie » et d'installer le blog comme source de contenu de fond, sans promesse de revenu direct.
+- Kind: update; effort: small; confidence: medium (Les positions et impressions sur les requêtes pagode viennent des données de recherche du site ; elles montrent un intérêt réel pour la fiche, sans garantir la progression.)
+- Summary: La fiche pagode vermillon se classe en 15e position sur « abat jour pagode » (33 impressions) et 10,75e sur « abat-jour pagode moderne ». Elle porte déjà le sujet mais manque d'éléments de choix : dimensions, matières, usage, montage.
+- Why now: La fiche est la seule page du site positionnée sur les requêtes pagode ; elle plafonne en page 2 alors que le volume et les impressions sont là.
+- Target: https://www.atelier-harmonie.com/product-page/abat-jour-pagode-vermillon (Description produit, caractéristiques, FAQ)
+- Action: Compléter la fiche : dimensions et matières, type de pied compatible, rendu de lumière, entretien, photos de détail, et une courte FAQ sur la forme pagode moderne et la forme rectangulaire si l'offre le permet (décision de l'artisane). Ajouter un lien depuis la page catégorie abat-jours.
+- Expected outcome: Une fiche qui répond aux questions de forme et de dimensions et peut remonter de la page 2 vers le haut de la page 1 sur les requêtes pagode.
 - Evidence: 3 reference(s)
+
+#### Dire « tapissier » et la Normandie sur la page d'accueil
+
+- Kind: update; effort: small; confidence: low (Les positions sont déjà en tête avec très peu d'impressions : c'est un ajustement de formulation, pas un gain mesurable attendu.)
+- Summary: La page d'accueil se classe 1re sur « tapissier autour de moi » et « artisan tapissier autour de moi », mais aucune page ne reprend le mot « tapissier ». Une petite édition suffit à sécuriser cette position locale.
+- Why now: Le cluster local est déjà en tête avec très peu d'impressions : il s'agit de consolider une position acquise avant qu'un concurrent local ne la reprenne.
+- Target: https://www.atelier-harmonie.com/ (Introduction et bloc zone d'intervention)
+- Action: Ajouter sur la page d'accueil une phrase explicite sur l'activité de tapissier (restauration de sièges et de fauteuils) et sur la zone d'intervention en Normandie autour de Saint-Pierre-en-Port, avec un lien vers les ateliers. Ne pas travailler les requêtes hors zone (Le Mans, Sarthe, Saint-Germain-en-Laye).
+- Expected outcome: Une formulation locale claire qui consolide les positions déjà en tête et rattache le mot « tapissier » à une page du site.
+- Evidence: 4 reference(s)
+
+#### Carte cadeau : préciser les formats (email, imprimable) et le mot « décoration »
+
+- Kind: update; effort: small; confidence: low (Le volume est très faible (35 impressions, aucun clic), mais les requêtes de format sont déjà servies par cette page en page 2 : c'est un signal directionnel, pas une preuve de trafic.)
+- Summary: La page /gift-card se classe en position 13-14 sur « carte cadeau artisanat par email » et « carte cadeau artisanat », mais elle n'explique pas les formats de livraison et ne reprend pas le vocabulaire « décoration » des requêtes locales. Un enrichissement ciblé du contenu, sans refonte, suffit.
+- Why now: Les requêtes « par email » et « à imprimer » sont déjà servies par cette page (positions ~14 et ~29) alors que la page ne décrit pas ces formats : le décalage entre la requête et le contenu est corrigeable tout de suite, sur une offre internationale sans contrainte de zone.
+- Target: https://www.atelier-harmonie.com/gift-card (Bloc formats de livraison et usages (email, imprimable, déco))
+- Action: Ajouter sur /gift-card un bloc court expliquant comment la carte est reçue (envoi par email, version à imprimer) et à quoi elle donne droit, en reprenant les termes des requêtes. Ajouter une phrase explicite sur l'usage « décoration » de la carte (cadeau pour un intérieur, une lampe, un abat-jour) et un lien vers les créations et ateliers. Garder la page courte et transactionnelle, avec un seul appel à l'action.
+- Expected outcome: Meilleure position sur « carte cadeau artisanat par email » et « à imprimer », et rattachement des requêtes « décoration » à la bonne page plutôt qu'à l'accueil.
+- Evidence: 4 reference(s)
+
+#### Étoffer la page Tissus & matières (146 mots) pour capter les requêtes tissu
+
+- Kind: update; effort: medium; confidence: medium (Les données de recherche montrent des positions déjà bonnes sur des requêtes tissu, mais portées par l'accueil et avec peu d'impressions : le diagnostic est directionnel, pas massif.)
+- Summary: La page /les-tissus ne compte que 146 mots, alors que plusieurs requêtes tissu (tissu d'ameublement, tissu pour fauteuil, magasin tissu) sont déjà visibles mais atterrissent sur l'accueil. Le travail consiste à donner à cette page un contenu réellement utile et à y rattacher ces requêtes.
+- Why now: Le site est déjà positionné sur « tissu d'ameublement » et « tissu pour fauteuil », mais via l'accueil et avec très peu d'impressions : la page dédiée existe et n'exploite pas ce positionnement. C'est une correction de contenu à faible risque sur une offre nationale.
+- Target: https://www.atelier-harmonie.com/les-tissus (Contenu principal : familles de tissus, usages, entretien)
+- Action: Développer /les-tissus avec un contenu substantiel : familles de tissus d'ameublement utilisés pour les sièges et les abat-jours, critères de choix pour un fauteuil, entretien et durabilité, et lien vers les prestations de restauration et les ateliers. Ajouter des liens internes depuis l'accueil et depuis la catégorie abat-jours vers cette page pour que les requêtes tissu la ciblent elle, et non la page d'accueil.
+- Expected outcome: La page /les-tissus devient l'URL de référence pour les requêtes tissu et gagne des positions sur « tissu d'ameublement », « tissu pour fauteuil » et « magasin tissu ».
+- Evidence: 4 reference(s)
+
+#### Article « art et tapisserie » : tester le seul volume mesuré du blog (3 600)
+
+- Kind: article; effort: medium; confidence: low (Un volume de 3 600 est mesuré mais la requête ne génère que 2 impressions aujourd'hui, et le cluster blog est jugé peu commercial : c'est un test, pas une priorité de revenu.)
+- Summary: « Art et tapisserie » est la seule requête du jeu de données avec un volume mesuré, et le site est déjà en position 7 dessus via l'accueil, sans page dédiée. Un article de fond relié à la tapisserie traditionnelle et aux ateliers permet de tester ce potentiel.
+- Why now: Le blog existe (583 mots sur la page d'index) mais aucun article ne traite ce sujet, alors que la requête est déjà visible en position 7 avec très peu d'impressions : le sujet est identifié, la page manque.
+- Target: https://www.atelier-harmonie.com/blog/art-et-tapisserie (Article de blog)
+- Action: Écrire un article sur l'art de la tapisserie : gestes, matériaux nobles, critères qui distinguent une restauration artisanale d'une réfection simple, avec des exemples de pièces. Terminer par un lien vers la prestation de tapisserie traditionnelle et vers les ateliers en petit comité, et renvoyer vers l'article depuis la page /blog. Rester sur un format explicatif, sans promesse commerciale.
+- Expected outcome: Une page dédiée sur « art et tapisserie » qui capte des impressions aujourd'hui attribuées à l'accueil, et un point d'entrée éditorial vers la tapisserie traditionnelle et les ateliers.
+- Evidence: 4 reference(s)
 
 ### AEO/GEO
 
-#### Blocs de réponse sur l'article de restauration d'abat-jour
+#### Ajouter des blocs de réponse abat-jour sur l'article existant
 
-- Kind: aeo; effort: small; confidence: medium (L'article se classe déjà en première page sur ces questions, mais aucune observation ne montre encore de citation : le gain reste à démontrer.)
-- Summary: Quatre questions sur la réparation et la restauration d'abat-jour sont observées dans les AI Overviews sans aucune citation de l'atelier, alors que l'article se classe en première page. Il faut des blocs de réponse courts et structurés.
-- Why now: L'article est en position 5 à 9 sur ces questions mais n'est jamais cité, face à 7 à 15 concurrents. Le contenu existe déjà : c'est sa forme qui ne répond pas aux extraits générés.
-- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Haut d'article, blocs de réponse)
-- Action: Ajouter en tête de l'article un bloc « réponse courte » de 40 à 60 mots pour chacune des questions observées : comment réparer un abat-jour, comment restaurer un abat-jour, rénover un abat-jour, restaurer un abat-jour. Structurer chaque réponse en étapes numérotées, garder un vocabulaire simple et concret (abat-jour taché, plastique jauni, contrecollé), puis placer un lien vers la page service de restauration.
-- Expected outcome: Des blocs éligibles aux réponses générées, avec un renvoi mesurable vers la page service.
-- Evidence: 3 reference(s)
+- Kind: aeo; effort: small; confidence: medium (Les observations montrent zéro citation face à 11 à 15 concurrents sur ces questions, alors que la page se classe en page 1 : le signal est directionnel.)
+- Summary: Les questions « comment réparer un abat jour », « comment restaurer un abat jour » et « renover un abat jour » sont posées à l'assistant sans citer l'atelier, alors que l'article se classe déjà en page 1 sur ces mêmes questions.
+- Why now: L'article est en position 8 sur ces questions mais n'est pas repris dans les réponses générées : c'est le format de réponse qui manque, pas le contenu.
+- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Blocs de réponse sous les titres en question)
+- Action: Sur l'article existant, ajouter sous chaque question un paragraphe de réponse directe de 40 à 60 mots (cause, geste, matériel), suivi du détail pas à pas et de photos, en conservant les titres formulés en question.
+- Expected outcome: Rendre l'article citable dans les réponses générées sur la réparation et la restauration d'abat-jour.
+- Evidence: 2 reference(s)
 
 ### Technical
 
-#### Ajouter le balisage Product aux 114 pages produit qui n'en ont pas
+#### Rétablir un sitemap XML pour les pages produit et catégories
 
-- Kind: technical; effort: medium; confidence: high (Le défaut est mesuré directement sur le site : 114 pages produit sans balisage, avec une fiche citée en exemple.)
-- Summary: Le balisage schema.org Product manque sur 114 pages, dont la fiche Phare Collection Bauhaus. Sans lui, ni les résultats enrichis ni les moteurs de réponse ne peuvent lire prix, disponibilité et matière — un frein direct sur les offres lampes et abat-jours vendues hors Normandie.
-- Why now: Le catalogue est déjà en ligne et se vend en France, en Europe et à l'international : le défaut touche 114 pages d'un coup et se corrige au niveau du gabarit, pas page par page.
-- Target: https://www.atelier-harmonie.com/en/product-page/phare-collection-bauhaus (gabarit de page produit / données structurées)
-- Action: Corriger le gabarit de page produit pour générer un balisage Product complet (nom, description, image, prix, devise, disponibilité, matière, marque) sur les 114 pages concernées, puis vérifier un échantillon dans le rapport d'URL enrichi de la Search Console. Contrôler que le balisage reste identique sur les versions /fr/ et /en/ du même produit.
-- Expected outcome: Des fiches produit lisibles par Google et par les moteurs de réponse, éligibles aux résultats enrichis sur l'ensemble du catalogue.
+- Kind: technical; effort: medium; confidence: high (Le finding MISSING_SITEMAP est explicite et porte sur 50 pages.)
+- Summary: Le crawl ne trouve pas de sitemap associé à 50 pages, dont /sieges. Sans sitemap, la découverte et la priorisation des URL dépendent uniquement des liens internes.
+- Why now: Défaut d'indexation direct sur 50 pages : il faut d'abord sécuriser la découverte des URL avant d'optimiser les métadonnées.
+- Target: https://www.atelier-harmonie.com/sieges (indexation)
+- Action: Générer un sitemap XML complet (pages, produits, catégories, articles), le déclarer dans robots.txt et Search Console, puis contrôler que /sieges et les 50 pages remontent sans erreur.
+- Expected outcome: Meilleure découverte et réindexation des pages ; réduction du risque d'URL oubliées.
 - Evidence: 1 reference(s)
 - Critique: revise — Thin evidence: fewer than two evidence references.
 
-#### Compléter le sitemap XML pour les 50 pages produits manquantes
+#### Unifier les titres et H1 des pages de catégorie paginées
 
-- Kind: technical; effort: small; confidence: high (Le finding MISSING_SITEMAP est explicite et porte sur 50 pages.)
-- Summary: Le finding MISSING_SITEMAP couvre 50 pages, dont la fiche Baladeuse Le Mini Phare Végétal. Sans entrée sitemap, la découverte de ces URL est plus lente et le crawl peut être moins efficace.
-- Why now: Les fiches produits sont les pages commerciales prioritaires ; un sitemap incomplet retarde leur prise en compte, surtout après ajout de nouvelles collections.
-- Target: https://www.atelier-harmonie.com/product-page/baladeuse-le-mini-phare-v%C3%A9g%C3%A9tal (Sitemap XML / pages produits)
-- Action: Générer ou corriger le sitemap XML pour inclure toutes les URL produits indexables, vérifier qu'elles répondent en 200 et soumettre le sitemap dans Google Search Console.
-- Expected outcome: Les 50 pages sont découvrables via le sitemap, avec une exploration plus rapide et moins de budget crawl gaspillé.
+- Kind: technical; effort: medium; confidence: high (Deux findings explicites portent sur le même modèle d'URL, avec des volumes de 45 et 17 pages.)
+- Summary: 45 pages partagent un title dupliqué et 17 pages n'ont pas de H1 sur /en/category/all-products?page=2. Cela brouille la distinction des pages aux yeux des moteurs et des utilisateurs.
+- Why now: Les pages paginées sont nombreuses et se concurrencent dans les SERP ; corriger les balises est rapide et directement mesurable.
+- Target: https://www.atelier-harmonie.com/en/category/all-products?page=2 (balises on-page)
+- Action: Réécrire les title avec un motif unique incluant le numéro de page et la catégorie ; ajouter un H1 unique et descriptif sur chaque page paginée ; vérifier qu'une seule H1 est présente.
+- Expected outcome: Titres différenciés, meilleure compréhension de la structure paginée, réduction de la cannibalisation.
+- Evidence: 2 reference(s)
+
+#### Ajouter une canonical sur les pages sans balise
+
+- Kind: technical; effort: small; confidence: high (Le finding MISSING_CANONICAL est explicite sur 17 pages.)
+- Summary: 17 pages, dont /livraison, n'ont pas de canonical. Cela expose le site à des versions concurrentes et complique la consolidation des signaux.
+- Why now: Défaut de consolidation d'URL sur 17 pages ; à traiter avec le sitemap pour stabiliser l'indexation.
+- Target: https://www.atelier-harmonie.com/livraison (indexation)
+- Action: Ajouter une balise canonical auto-référente par défaut sur les pages concernées, ou vers l'URL principale lorsqu'une duplication est connue ; contrôler le rendu côté serveur.
+- Expected outcome: Consolidation des signaux vers les bonnes URL et réduction des doublons d'indexation.
 - Evidence: 1 reference(s)
 - Critique: revise — Thin evidence: fewer than two evidence references.
 
-#### Rendre unique le title des 39 pages produits concernées
+#### Corriger les liens cassés vers la baladeuse à franges
 
-- Kind: technical; effort: medium; confidence: high (Finding DUPLICATE_TITLE explicite sur 39 pages.)
-- Summary: 39 pages partagent des titles identiques, dont la Suspension Pagode Les Cousus Rose. Cela dilue la différenciation des fiches et peut créer de la concurrence interne dans les résultats.
-- Why now: Les titles dupliqués réduisent la pertinence perçue des fiches produits et compliquent l'identification de la bonne page par les moteurs.
-- Target: https://www.atelier-harmonie.com/en/product-page/suspension-pagode-les-cousus-rose (Balises title / pages produits)
-- Action: Corriger le template de title pour intégrer systématiquement le nom du produit, la collection ou la finition, puis contrôler l'unicité sur les 39 URL signalées.
-- Expected outcome: Titles distincts sur les pages produits, signaux mieux répartis et snippets plus pertinents.
-- Evidence: 1 reference(s)
-- Critique: revise — Thin evidence: fewer than two evidence references.
-
-#### Ajouter une canonical auto-référente sur les 9 pages catégories
-
-- Kind: technical; effort: small; confidence: high (Finding MISSING_CANONICAL explicite sur 9 pages.)
-- Summary: 9 pages catégories, dont Collab x Atelier Tournebois, sont sans canonical. Cela expose des variantes à une indexation séparée et disperse les signaux.
-- Why now: Les catégories structurent la navigation et le maillage ; l'absence de canonical peut laisser plusieurs URL concurrentes dans l'index.
-- Target: https://www.atelier-harmonie.com/en/category/collab-x-ateliertournebois (Balises canonical / pages catégories)
-- Action: Implémenter une balise canonical absolue et auto-référente sur les 9 pages catégories, puis vérifier qu'elle pointe vers l'URL indexable choisie.
-- Expected outcome: Signaux consolidés sur l'URL de référence et réduction du risque de duplication d'indexation.
+- Kind: technical; effort: small; confidence: high (Le finding BROKEN_LINK est explicite sur 8 pages.)
+- Summary: 8 pages contiennent un lien cassé vers /product-page/baladeuse-a-franges-l-ondine-version-verte, ce qui interrompt le parcours et le crawl.
+- Why now: Un lien cassé sur une page produit est un point de friction immédiat pour l'utilisateur et le robot ; la correction est localisée et rapide.
+- Target: https://www.atelier-harmonie.com/product-page/baladeuse-a-franges-l-ondine-version-verte (navigation)
+- Action: Identifier les 8 pages sources, corriger l'URL cible ou mettre en place une redirection 301 vers la fiche produit active ; tester les liens après déploiement.
+- Expected outcome: Parcours de navigation rétabli, crawl plus propre, moins d'erreurs 404.
 - Evidence: 1 reference(s)
 - Critique: revise — Thin evidence: fewer than two evidence references.
 
 ## Drafting note
 
-Content and AEO: Quatre clusters, six propositions. Lampes & luminaires : la catégorie /lampes cumule 996 impressions et 40 requêtes sans un seul clic, alors que « lampes artisanales originales » est déjà en position 12 — on enrichit la page ; les formats plafonnier, lustre et lampadaire, absents des pages fournies, Quatre chantiers seulement, tous appuyés sur la Search Console du site. La création d'abat-jours concentre l'essentiel : ~51 000 de volume, zéro clic, position moyenne 14, une page catégorie de 150 mots et une page produit Pagode qui capte déjà « abat jour pagode ». Ce sont deux métiers différents : Trois clusters méritent du travail, plus un correctif technique. Cartes cadeaux : la demande est très mince (35 impressions) mais la page est déjà en page 2 sur « carte cadeau artisanat » — un réalignement de page suffit, sans création. Tissus & matières : le vrai frein est la page /les-tissus, qui 
+Content and AEO: Quatre clusters retenus, sept actions. Lampes & luminaires : la catégorie /lampes cumule près de 1 000 impressions mais reste au-delà de la 40e position avec 342 mots ; on enrichit le hub et on vous demande de trancher sur les formats plafonnier, lustre et lampadaire, qu'aucune page ne couvre. Resta Trois propositions, sur deux des quatre clusters. La création d'abat-jours concentre l'essentiel : la page catégorie ne fait que 150 mots alors que la demande « abat jour pagode » est mesurée, et la fiche pagode stagne en page 2 — deux métiers différents, contenu de catégorie d'un côté, fiche produi Trois clusters retenus sur cinq. Cartes cadeaux : la page /gift-card existe et se classe déjà en page 2 sur les formats « par email » et « à imprimer », un enrichissement suffit. Tissus & matières : la page dédiée ne fait que 146 mots et plusieurs requêtes tissu atterrissent sur l'accueil, il faut l
 
-Technical: 3 propositions techniques retenues sur 7 findings. Priorité au sitemap incomplet (50 pages), aux titles dupliqués (39 pages) et aux canonicals absentes (9 pages), car ils touchent la découverte, la consolidation des signaux et l'indexation. Les findings MISSING_DESCRIPTION, DUPLICATE_DESCRIPTION, MISSING_H1, MULTIPLE_H1 et MISSING_SCHEMA ne sont pas proposés : ce sont des améliorations de présenta
+Technical: J'ai retenu quatre corrections techniques qui touchent la découverte, la consolidation d'URL, la structure des pages et la navigation. Les descriptions dupliquées ou manquantes (59 et 36 pages) ainsi que le schéma absent sur les tags de blog (55 pages) sont écartés : ils peuvent dégrader l'affichage SERP ou les rich results, mais ne bloquent ni le crawl, ni l'indexation, ni la navigation.
 
 ## Critique
 
 Model: deterministic.
 
-Deterministic critique: 16 proposals checked; 0 target overlap(s), 0 new-asset dependency, 4 thin-evidence item(s).
+Deterministic critique: 16 proposals checked; 0 target overlap(s), 0 new-asset dependency, 3 thin-evidence item(s).
 
-Note: AI critique unavailable: Expected ',' or ']' after array element in JSON at position 2359 (line 53 column 6). Deterministic checks used.
+Note: AI critique unavailable: The operation was aborted due to timeout. Deterministic checks used.
 
 ## Limits
 

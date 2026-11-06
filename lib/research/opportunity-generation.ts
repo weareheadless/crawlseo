@@ -466,6 +466,11 @@ export async function storeProposals(
         where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: proposal.dedupKey } },
         select: { id: true, status: true, parkReason: true },
       });
+      if (existing && (existing.status === "accepted" || existing.status === "in_progress" || existing.status === "rejected")) {
+        // An accepted or rejected proposal is a human decision, and for accepted
+        // work it is the task's brief. A later draft must not rewrite it.
+        continue;
+      }
       if (existing) {
         // A proposal that the system closed on a previous run (superseded,
         // merged, or dropped by advice) comes back when it is proposed again.
@@ -546,6 +551,8 @@ export function renderProposalBoard(input: {
   critique: { available: boolean; model: string | null; summary: string | null; error: string | null };
   /** The drafting call's own note, including why it proposed nothing. */
   drafting?: { model: string | null; summary: string | null; errors: string[] } | null;
+  /** What changed against the previous run of this month. */
+  changes?: { updated: number; added: string[]; closed: string[] } | null;
   technical: ProposalInputs["technical"];
   generatedAt: string;
 }): string {
@@ -554,6 +561,14 @@ export function renderProposalBoard(input: {
   lines.push("");
   lines.push(`Generated ${input.generatedAt}. Proposals only; no task is created until a human accepts one.`);
   lines.push("");
+  if (input.changes) {
+    lines.push(
+      `Since the previous run: ${input.changes.updated} updated in place, ${input.changes.added.length} new, ${input.changes.closed.length} closed.`
+    );
+    for (const title of input.changes.added) lines.push(`- new: ${title}`);
+    for (const title of input.changes.closed) lines.push(`- closed: ${title}`);
+    lines.push("");
+  }
   lines.push("## Lanes");
   lines.push("");
   const lanes: Array<{ lane: ProposalLane; title: string }> = [

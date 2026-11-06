@@ -96,12 +96,19 @@ function hash(value: string): string {
  * proposal that rewrites it are the same board row; the model may change the
  * title and action on every run without growing the board.
  */
-export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "topicSlug">): string {
-  const asset = proposal.target.url
-    ? proposal.target.url.replace(/\/+$/, "").toLowerCase()
-    : proposal.topicSlug
-      ? `topic:${proposal.topicSlug}`
-      : "site";
+export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "topicSlug" | "kind">): string {
+  // A page that already exists is identified by its URL. A page that does not
+  // exist yet is identified by the topic and the kind of asset, because the
+  // model invents its URL: the same article on two runs must not become two
+  // rows just because the slug moved.
+  const asset =
+    proposal.target.newAsset && proposal.topicSlug
+      ? `new:${proposal.topicSlug}:${proposal.kind}`
+      : proposal.target.url
+        ? proposal.target.url.replace(/\/+$/, "").toLowerCase()
+        : proposal.topicSlug
+          ? `topic:${proposal.topicSlug}`
+          : "site";
   return `phase3:${proposal.lane}:${hash(asset)}`;
 }
 
