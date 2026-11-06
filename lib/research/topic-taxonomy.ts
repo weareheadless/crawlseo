@@ -374,7 +374,7 @@ const SYSTEM = [
   "You receive the business's own facts, the offers it sells with their market scope, its page inventory, and a sample of its measured Search Console queries.",
   "The business's services list is authoritative: every service the owner lists must have at least one topic. If it lists renting, buying, management or advice, the taxonomy contains a topic for it even when its query volume is small.",
   "Define the topics this business can serve. A topic is one need with one kind of page that should own it: a place, a product type, a service, a brand.",
-  "Different places and different property or product types are different topics. Do not collapse a market into one topic: if the queries separate into Tulum houses, Playa del Carmen condos and Akumal rentals, those are three topics.",
+  "Different places and different product or service types are different topics. Do not collapse a market into one topic: if the queries separate into houses in one place, condos in another and rentals in a third, those are three topics.",
   "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
   "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
   "A query may appear in at most two topics, and only when it genuinely serves both.",
@@ -448,18 +448,22 @@ export async function proposeTopicTaxonomy(
       const memberQueries = Array.isArray(row.memberQueries)
         ? [...new Set(row.memberQueries.filter((entry): entry is string => typeof entry === "string").map((entry) => sampleByKey.get(normalizeTerm(entry))).filter((entry): entry is string => Boolean(entry)))]
         : [];
-      if (memberQueries.length < 2) {
-        rejected.push({ title: name, reason: "needs at least two member queries from the sample" });
+      // One cited query is still evidence. Requiring two would delete the
+      // branded demand of a listings site ("ikuku for sale") that has no
+      // sibling query, which is a real topic with a real page.
+      if (memberQueries.length < 1) {
+        rejected.push({ title: name, reason: "cites no query from the sample" });
         continue;
       }
       const slug = slugify(name);
       if (!slug || seen.has(slug)) continue;
       const derived = deriveTerms(memberQueries, (query) => impressions.get(query) ?? 0, pageTexts);
-      // A topic whose own members do not match its derived terms is not usable.
+      // A topic whose members share no term is still a topic: membership then
+      // comes from the cited queries themselves, not from a derived phrase.
+      // Dropping it would delete real demand the model found in the data.
       const selfMatched = memberQueries.filter((query) => derived.requireAny.some((term) => termInText(normalizeTerm(query), term))).length;
-      if (selfMatched < 2) {
-        rejected.push({ title: name, reason: "its member queries share no distinctive term" });
-        continue;
+      if (selfMatched < Math.min(2, memberQueries.length)) {
+        derived.requireAny = memberQueries.map((query) => normalizeTerm(query)).filter(Boolean).slice(0, 8);
       }
       seen.add(slug);
       topics.push({

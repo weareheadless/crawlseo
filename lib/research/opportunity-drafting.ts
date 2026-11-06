@@ -486,7 +486,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
       config,
       system,
       user: JSON.stringify(payload),
-      maxTokens: 12_000,
+      maxTokens: 24_000,
       temperature: 0.2,
       attempts: 2,
       timeoutMs: 180_000,

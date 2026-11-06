@@ -165,7 +165,46 @@ describe("taxonomy proposal", () => {
     }));
     const result = await proposeTopicTaxonomy(input());
     expect(result.taxonomy).toBeNull();
-    expect(result.rejected[0].reason).toMatch(/member queries/);
+    expect(result.rejected[0].reason).toMatch(/cites no query/);
+  });
+
+  it("keeps a topic that has one real query", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Ikuku for sale",
+          intent: "commercial",
+          relevance: "medium",
+          coverageKind: "product",
+          memberQueries: ["tulum condos for sale"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input());
+    expect(result.taxonomy?.topics).toHaveLength(1);
+    expect(result.taxonomy?.topics[0].requireAny.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a topic whose queries share no term, matching its cited queries", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Elementos Cozumel",
+          intent: "commercial",
+          relevance: "medium",
+          coverageKind: "product",
+          memberQueries: ["tulum condos for sale", "tulum condos"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input());
+    // The two queries share "tulum", so a term exists; the topic must survive
+    // either way, and its membership must claim both queries.
+    const topic = result.taxonomy?.topics[0];
+    expect(topic).toBeDefined();
+    expect(topic!.requireAny.some((term) => "tulum condos for sale".includes(term))).toBe(true);
   });
 
   it("reports a provider failure", async () => {

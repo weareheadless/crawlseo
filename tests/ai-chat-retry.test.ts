@@ -36,6 +36,36 @@ describe("chat client backoff", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("retries an empty reasoning response with a larger token budget", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ choices: [{ message: { content: "" }, finish_reason: "length" }] })
+      )
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"ok":true}' } }] }));
+
+    const result = await chatJson({ config, system: "s", user: "u", maxTokens: 1_000, attempts: 2 });
+    expect(result).toEqual({ ok: true });
+    const first = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).max_tokens;
+    const second = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body)).max_tokens;
+    expect(first).toBe(1_000);
+    expect(second).toBe(2_000);
+  });
+
+  it("retries a truncated JSON answer with a larger budget", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({ choices: [{ message: { content: '{"proposals":[{"title":"a"' }, finish_reason: "length" }] })
+      )
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"proposals":[]}' } }] }));
+
+    const result = await chatJson({ config, system: "s", user: "u", maxTokens: 4_000, attempts: 2 });
+    expect(result).toEqual({ proposals: [] });
+    const second = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body)).max_tokens;
+    expect(second).toBe(8_000);
+  });
+
   it("recovers JSON wrapped in prose", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ choices: [{ message: { content: 'Here you go:\n{"a":1}\nThanks' } }] })

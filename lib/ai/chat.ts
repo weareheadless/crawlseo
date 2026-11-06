@@ -82,6 +82,11 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
   let lastError: Error = new ChatError("The model could not be reached");
 
   const deadlineAt = input.deadlineAt;
+  // A reasoning model can spend the whole completion budget before writing a
+  // single character, which arrives as an empty message with
+  // finish_reason "length". Retrying with the same budget repeats the failure,
+  // so the budget doubles when that happens.
+  let tokenBudget = input.maxTokens ?? 3_000;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let attemptRecorded = false;
     const record = (entry: ChatAttemptRecord): void => {
@@ -102,7 +107,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
           body: JSON.stringify({
             model: input.config.model,
             temperature: input.temperature ?? 0.2,
-            max_tokens: input.maxTokens ?? 3_000,
+            max_tokens: tokenBudget,
             ...(input.jsonMode === false ? {} : { response_format: { type: "json_object" } }),
             messages: [
               { role: "system", content: input.system },
@@ -128,24 +133,43 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
           throw new ChatError(`The model returned HTTP ${response.status}`, response.status);
         }
 
-        const body = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
+        const body = (await response.json()) as {
+          choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }>;
+        };
         const content = body.choices?.[0]?.message?.content;
+        const finish = body.choices?.[0]?.finish_reason;
         if (typeof content !== "string" || !content.trim()) {
-          record({ attempt: attempt + 1, status: "error", error: "empty response", responseText: null });
-          throw new ChatError("The model returned an empty response");
+          record({
+            attempt: attempt + 1,
+            status: "error",
+            error: finish ? `empty response (finish_reason: ${finish})` : "empty response",
+            responseText: null,
+          });
+          throw new ChatError(
+            finish === "length"
+              ? "The model returned an empty response: it spent the whole token budget before answering"
+              : "The model returned an empty response"
+          );
         }
         try {
           const parsed = parseJson(content);
           record({ attempt: attempt + 1, status: "ok" });
           return parsed;
         } catch (error) {
+          // A JSON.parse failure inside a truncated completion is not the same
+          // failure as a model that answered prose: the budget, not the answer,
+          // was too small.
+          const truncated = finish === "length";
+          const message = truncated
+            ? `The model returned a truncated JSON response: ${error instanceof Error ? error.message.slice(0, 200) : "unparseable"}`
+            : "The model returned non-JSON content";
           record({
             attempt: attempt + 1,
             status: "error",
-            error: error instanceof Error ? error.message : "non-JSON content",
+            error: message,
             responseText: content.slice(0, 4_000),
           });
-          throw error;
+          throw new ChatError(message);
         }
       }, deadlineAt);
     } catch (error) {
@@ -159,7 +183,11 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       // Malformed JSON is often a truncated or fenced answer; one more attempt is
       // cheaper than failing the whole research run.
       const malformed = /non-JSON/i.test(failure.message);
-      const retryable = timedOut || malformed || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
+      // An empty or cut-off message is not a refusal: it is a truncated
+      // completion, and a larger budget usually answers it.
+      const empty = /empty response|truncated JSON/i.test(failure.message);
+      if (empty) tokenBudget = Math.min(Math.ceil(tokenBudget * 2), 64_000);
+      const retryable = timedOut || malformed || empty || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
       if (!retryable) throw failure;
       const retryAfterMs = failure instanceof ChatError ? failure.retryAfterMs : undefined;
       if (attempt < attempts - 1) {

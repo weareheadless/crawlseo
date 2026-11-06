@@ -850,11 +850,14 @@ export async function synthesizeTopicMap(
         position: query.position == null ? null : Number(query.position.toFixed(1)),
       })),
     })),
-    unmapped: map.unmapped.slice(0, 5).map((query) => query.query),
+    // Every unmapped query: the reviewer's job includes spotting a missing
+    // topic, which it cannot do from a sample of five.
+    unmapped: map.unmapped.map((query) => query.query),
   };
 
   const system = [
-    "You are an SEO reviewer for a small craft business.",
+    "You are an SEO reviewer for the business described in the payload.",
+    "Judge it by the supplied business facts. Do not assume its trade: a craft workshop, a property agency and a dive school need different pages.",
     "Review the supplied topic map. Use only the supplied clusters, slugs and facts; do not invent queries, pages or metrics.",
     "Respect each cluster's marketScope. A local offer is local; a national or international offer is not limited to the business location. Do not assume every offer is local.",
     "For every query in a cluster whose marketScope is local or national, decide whether the place it names is inside the business's market. Use business.location and business.serviceArea as the business's real geography: a place outside them is out of market, however large its demand. A query that names no place is in market.",

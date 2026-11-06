@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "proposedBy": "ai",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "generatedAt": "2026-11-06T19:28:46.850Z",
+  "topics": [
+    {
+      "slug": "oceanicvibes-private-one-to-one-freediving-coaching",
+      "name": "OceanicVibes private one-to-one freediving coaching",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "mixed",
+      "offerKey": "OceanicVibes",
+      "rationale": "Core offer: private, one-to-one coaching shaped around the diver; home is the only page that sells it. The two supplied brand queries are the only query evidence.",
+      "requireAny": [
+        "ocean vibes",
+        "oceanvibes",
+        "ocean",
+        "vibes"
+      ],
+      "terms": [
+        "ocean vibes",
+        "oceanvibes",
+        "ocean",
+        "vibes"
+      ],
+      "strongTerms": [
+        "ocean vibes"
+      ],
+      "coverageRequireAny": [
+        "ocean"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "ocean vibes",
+        "oceanvibes",
+        "ocean",
+        "vibes"
+      ],
+      "actionHint": "Keep home focused on private coaching benefits, safety culture, and booking; add proof and a clear next-step CTA."
+    }
+  ],
+  "pageTypeRules": [],
+  "excludePaths": [],
+  "newsQueries": [
+    "freediving competitions Mexico 2026",
+    "freediving safety regulations Mexico 2026",
+    "AIDA freediving courses Playa del Carmen 2026",
+    "cenote freediving rules Quintana Roo 2026",
+    "freediving depth training Tulum 2026",
+    "freediving events Yucatan 2026"
+  ],
+  "summary": "OceanicVibes topic map for Playa del Carmen freediving coaching: private one-to-one coaching, AIDA 3, depth/line training, equalization, dry prep, safety, local course choice, cenote/ocean, plateau and teacher fit. Query sample only has brand terms."
+}

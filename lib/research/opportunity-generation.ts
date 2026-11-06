@@ -348,7 +348,8 @@ export async function critiqueProposals(
     })),
   };
   const system = [
-    "You are an SEO critic for a small craft business.",
+    "You are an SEO critic for the business described in the payload.",
+    "Judge it by the proposals and the site, not by an assumed trade.",
     "Check each proposal for unsupported claims, duplicates and wrong target pages.",
     "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
     "A low-demand but business-relevant local proposal is valid; do not drop it only because volume is low. Check whether it is a reasonable expansion or small test.",
@@ -362,10 +363,10 @@ export async function critiqueProposals(
       config,
       system,
       user: JSON.stringify(payload),
-      maxTokens: 12_000,
+      maxTokens: 24_000,
       temperature: 0.2,
       attempts: 2,
-      timeoutMs: 120_000,
+      timeoutMs: 180_000,
       // Reasoning models can spend a small completion budget before emitting
       // content; keep enough room for both the reasoning and the JSON answer.
       jsonMode: false,
