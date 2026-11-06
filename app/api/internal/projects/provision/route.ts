@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { provisionProject, type ProvisionProjectInput } from "@/lib/projects/provision-project";
+import { PreviewHostError, provisionProject, type ProvisionProjectInput } from "@/lib/projects/provision-project";
 
 function authorized(req: Request): boolean {
   const configured = process.env.HELLOADA_PROVISIONING_TOKEN;
@@ -48,9 +48,13 @@ export async function POST(req: Request) {
       connector_credential_token: result.connectorCredentialToken,
       connector_credential_reused: result.connectorCredentialReused,
       dataforseo_grant_source: result.dataforseoGrantSource,
+      deduped: result.deduped,
       jobs: result.jobs,
     });
   } catch (error) {
+    if (error instanceof PreviewHostError) {
+      return Response.json({ error: error.message, code: error.code, domain: error.domain }, { status: 409 });
+    }
     console.error("Project provisioning failed:", error instanceof Error ? error.message : "unknown");
     return Response.json({ error: "Project provisioning failed" }, { status: 400 });
   }

@@ -3,7 +3,7 @@ import { hashServiceToken } from "@/lib/auth/service-credentials";
 import { fetchAnalyticsSummary } from "@/lib/integrations/google/ga4";
 import { sourceForJobKind } from "@/lib/jobs/queue";
 import { datesForCalendarPeriod, datesForWeeklySummary } from "@/lib/workers/ga4-sync";
-import { resolveVerificationMethod } from "@/lib/projects/provision-project";
+import { isPreviewHost, resolveVerificationMethod } from "@/lib/projects/provision-project";
 
 vi.mock("@/lib/encryption", () => ({
   decryptCredential: vi.fn(() => JSON.stringify({
@@ -103,14 +103,38 @@ describe("project integrations", () => {
       )
     ).toThrowError("Verified GSC property must match the site domain");
 
-    expect(() =>
+    // The override is an explicit operator decision for any tenant; naming one
+    // tenant in the rule denied the same evidence to every other site.
+    expect(
       resolveVerificationMethod(
         { allowDomainVerificationOverride: true },
         "another-project",
         "https://another-project.example/",
         "another-project.example"
       )
-    ).toThrowError("Operator domain verification override is restricted to OceanicVibes");
+    ).toBe("operator_override");
+    expect(() =>
+      resolveVerificationMethod(
+        { domainVerificationMethod: "operator_override" },
+        "another-project",
+        "https://another-project.example/",
+        "another-project.example"
+      )
+    ).toThrowError("Operator domain verification override requires allowDomainVerificationOverride");
+  });
+
+  it("recognises a configured deployment preview host", () => {
+    const previous = process.env.PROVISIONING_PREVIEW_HOST_SUFFIXES;
+    process.env.PROVISIONING_PREVIEW_HOST_SUFFIXES = "preview.example, staging.example";
+    try {
+      expect(isPreviewHost("site-abc.preview.example")).toBe(true);
+      expect(isPreviewHost("preview.example")).toBe(true);
+      expect(isPreviewHost("client.example")).toBe(false);
+      expect(isPreviewHost("notpreview.example")).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.PROVISIONING_PREVIEW_HOST_SUFFIXES;
+      else process.env.PROVISIONING_PREVIEW_HOST_SUFFIXES = previous;
+    }
   });
 
   it("allows platform service-account authorization for Search Console", async () => {

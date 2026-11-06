@@ -50,6 +50,18 @@ const DOMAIN_VERIFICATION_METHODS = new Set<DomainVerificationMethod>([
   "operator_override",
 ]);
 
+/** A preview deployment is not a site: refuse it instead of creating a tenant. */
+export class PreviewHostError extends Error {
+  readonly code = "PREVIEW_HOST";
+  constructor(readonly domain: string) {
+    super(
+      `${domain} is a deployment preview host, not a site the owner sells from. ` +
+        "Provision the production domain; set PROVISIONING_ALLOW_PREVIEWS=true to provision previews for crawling only."
+    );
+    this.name = "PreviewHostError";
+  }
+}
+
 export type ProvisionProjectResult = {
   workspaceId: string;
   projectId: string;
@@ -64,9 +76,37 @@ export type ProvisionProjectResult = {
   dataforseoGrantSource: "platform" | "operator" | null;
   /** True when the site is retired: it is kept for audit and nothing was queued. */
   retired: boolean;
+  /**
+   * True when the domain already existed in the workspace under another
+   * external project. The existing project and site are returned untouched, so
+   * a rebuild cannot fork a second tenant for the same site.
+   */
+  deduped: boolean;
   /** Null when the site is retired: nothing was queued for it. */
   jobs: { gsc: string | null; ga4: string | null };
 };
+
+/**
+ * Deployment previews are not sites the owner sells from.
+ *
+ * Helloada provisions a project for every build, including the preview host
+ * (`<project>.<platform preview domain>`). Verifying those with the Site
+ * Verification API created a real Search Console property for every build, so
+ * the property list grew with each deploy and never shrank. Previews are
+ * provisioned for crawling only; the suffix list is configuration, because the
+ * platform's own preview domain is a deployment fact, not a tenant fact.
+ */
+export function previewHostSuffixes(): string[] {
+  return (process.env.PROVISIONING_PREVIEW_HOST_SUFFIXES ?? "")
+    .split(",")
+    .map((suffix) => suffix.trim().toLowerCase().replace(/^\./, ""))
+    .filter(Boolean);
+}
+
+export function isPreviewHost(domain: string): boolean {
+  const host = domain.toLowerCase().replace(/\.$/, "");
+  return previewHostSuffixes().some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+}
 
 function canonicalDomain(raw: string): string {
   const candidate = raw.trim();
@@ -121,10 +161,11 @@ export function resolveVerificationMethod(
   }
 
   const resolved = method as DomainVerificationMethod;
-  if (resolved === "operator_override") {
-    if (!allowOverride || externalProjectId !== "oceanicvibes") {
-      throw new Error("Operator domain verification override is restricted to OceanicVibes");
-    }
+  if (resolved === "operator_override" && !allowOverride) {
+    // The override is an explicit operator decision, never a default. It is
+    // gated on the flag alone: naming a tenant here made the rule apply to one
+    // site and silently deny the same evidence to every other.
+    throw new Error("Operator domain verification override requires allowDomainVerificationOverride");
   }
   if (resolved === "verified_gsc" && !gscPropertyCoversDomain(gscProperty, domain)) {
     throw new Error("Verified GSC property must match the site domain");
@@ -201,7 +242,14 @@ export async function provisionProject(
     ? encryptCredential(JSON.stringify(credentials))
     : null;
   const googleOAuthUserEmail = optionalGoogleUserEmail(input.googleOAuthUserEmail);
-  if (!credentials && !googleOAuthUserEmail) {
+  const preview = isPreviewHost(domain);
+  // A preview host gets a new name on every build. Provisioning one created a
+  // project, a site and a verified Search Console property per deploy, which is
+  // what kept refilling the property list. Refuse unless explicitly allowed.
+  if (preview && process.env.PROVISIONING_ALLOW_PREVIEWS !== "true") {
+    throw new PreviewHostError(domain);
+  }
+  if (!preview && !credentials && !googleOAuthUserEmail) {
     throw new Error("A Google service account or OAuth user is required");
   }
   // Platform-managed mode: the service account verifies domain ownership
@@ -222,6 +270,56 @@ export async function provisionProject(
   );
   const ga4PropertyId = input.ga4PropertyId.trim().replace(/^properties\//, "");
   if (!/^\d+$/.test(ga4PropertyId)) throw new Error("GA4 property ID is invalid");
+
+  // One site per domain per workspace. The platform provisions on every build
+  // and sends a new external project id each time, so without this the same
+  // site became a second project, a second site and a second property.
+  const existingWorkspace = await db.workspace.findUnique({
+    where: { externalOrganizationId },
+    select: { id: true },
+  });
+  const sameDomain = existingWorkspace
+    ? await db.site.findFirst({
+        where: {
+          domain,
+          project: { workspaceId: existingWorkspace.id },
+        },
+        select: { id: true, projectId: true, retiredAt: true, project: { select: { externalProjectId: true } } },
+      })
+    : null;
+  if (sameDomain?.projectId && sameDomain.project?.externalProjectId !== externalProjectId) {
+    const credential = await createServiceCredential(sameDomain.projectId, [
+      ...(input.serviceCredentialScopes ?? DEFAULT_PROVISIONING_SERVICE_SCOPES),
+    ], {
+      idempotencyKey: input.serviceCredentialIdempotencyKey,
+      principalName: input.serviceCredentialName?.trim() || "site-agent",
+      reissueIfReused: input.reissueCredential === true,
+    });
+    const connectorCredential = await createServiceCredential(sameDomain.projectId, [
+      "connector:read",
+      "connector:write",
+    ], {
+      idempotencyKey: `provision:${input.serviceCredentialIdempotencyKey}:connector-runtime`,
+      principalName: "helloada-runtime",
+      reissueIfReused: input.reissueCredential === true,
+    });
+    return {
+      workspaceId: existingWorkspace!.id,
+      projectId: sameDomain.projectId,
+      siteId: sameDomain.id,
+      servicePrincipalId: credential.servicePrincipalId,
+      credentialId: credential.credentialId,
+      credentialToken: credential.token,
+      credentialReused: credential.reused,
+      connectorCredentialId: connectorCredential.credentialId,
+      connectorCredentialToken: connectorCredential.token,
+      connectorCredentialReused: connectorCredential.reused,
+      dataforseoGrantSource: null,
+      retired: Boolean(sameDomain.retiredAt),
+      deduped: true,
+      jobs: { gsc: null, ga4: null },
+    };
+  }
 
   const records = await db.$transaction(async (tx) => {
     const workspace = await tx.workspace.upsert({
@@ -331,7 +429,9 @@ export async function provisionProject(
     });
 
     let serviceConnectionId: string | null = null;
-    if (credentials && encryptedCredentials) {
+    // A preview host is provisioned for crawling only: no connection, no
+    // grant, no verification, so it never adds a Search Console property.
+    if (!preview && credentials && encryptedCredentials) {
       const connection = await tx.googleConnection.upsert({
         where: {
           workspaceId_type_label: {
@@ -409,105 +509,105 @@ export async function provisionProject(
       oauthConnectionId = oauthConnection.id;
     }
 
-    const gscConnectionId = oauthConnectionId ?? serviceConnectionId;
-    const ga4ConnectionId = serviceConnectionId ?? oauthConnectionId;
-    if (!gscConnectionId || !ga4ConnectionId) {
+    const gscConnectionId = preview ? null : (oauthConnectionId ?? serviceConnectionId);
+    const ga4ConnectionId = preview ? null : (serviceConnectionId ?? oauthConnectionId);
+    if (!preview && (!gscConnectionId || !ga4ConnectionId)) {
       throw new Error("A Google connection is required for GSC and GA4");
     }
 
-    if (oauthConnectionId) {
-      // Prevent a previous service-account GSC grant from being selected during
-      // the transition to the user OAuth connection.
-      await tx.integrationGrant.updateMany({
-        where: {
-          projectId: project.id,
-          siteId: site.id,
-          provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
-          connectionId: { not: oauthConnectionId },
-          status: { in: ["ACTIVE", "UNVERIFIED"] },
-        },
-        data: { status: "REVOKED", safeErrorCode: "REPLACED_BY_OAUTH" },
-      });
-    }
-    if (!serviceConnectionId && oauthConnectionId) {
-      // The OAuth user is also the GA4 identity when no service account was
-      // supplied for the test project.
-      await tx.integrationGrant.updateMany({
-        where: {
-          projectId: project.id,
-          siteId: site.id,
-          provider: IntegrationProvider.GOOGLE_ANALYTICS,
-          connectionId: { not: oauthConnectionId },
-          status: { in: ["ACTIVE", "UNVERIFIED"] },
-        },
-        data: { status: "REVOKED", safeErrorCode: "REPLACED_BY_OAUTH" },
-      });
-    }
+    if (!preview) {
+      if (oauthConnectionId) {
+        // Prevent a previous service-account GSC grant from being selected during
+        // the transition to the user OAuth connection.
+        await tx.integrationGrant.updateMany({
+          where: {
+            projectId: project.id,
+            siteId: site.id,
+            provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
+            connectionId: { not: oauthConnectionId },
+            status: { in: ["ACTIVE", "UNVERIFIED"] },
+          },
+          data: { status: "REVOKED", safeErrorCode: "REPLACED_BY_OAUTH" },
+        });
+      }
+      if (!serviceConnectionId && oauthConnectionId) {
+        // The OAuth user is also the GA4 identity when no service account was
+        // supplied for the test project.
+        await tx.integrationGrant.updateMany({
+          where: {
+            projectId: project.id,
+            siteId: site.id,
+            provider: IntegrationProvider.GOOGLE_ANALYTICS,
+            connectionId: { not: oauthConnectionId },
+            status: { in: ["ACTIVE", "UNVERIFIED"] },
+          },
+          data: { status: "REVOKED", safeErrorCode: "REPLACED_BY_OAUTH" },
+        });
+      }
 
-    const existingGscGrant = await tx.integrationGrant.findFirst({
-      where: {
-        connectionId: gscConnectionId,
-        projectId: project.id,
-        siteId: site.id,
-        provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
-        externalResourceId: gscProperty,
-      },
-      select: { id: true },
-    });
-    if (existingGscGrant) {
-      await tx.integrationGrant.update({
-        where: { id: existingGscGrant.id },
-        data: {
-          status: "UNVERIFIED",
-          safeErrorCode: null,
-          metadata: { propertyType: "siteUrl" },
-        },
-      });
-    } else {
-      await tx.integrationGrant.create({
-        data: {
-          connectionId: gscConnectionId,
+      // Re-provisioning runs on every build. It must not downgrade a healthy
+      // grant: doing so broke a working Search Console connection until the
+      // next sync, which is why a rebuild looked like a data outage.
+      const keepHealthy = async (grant: { id: string; status: string }, propertyType: string) => {
+        await tx.integrationGrant.update({
+          where: { id: grant.id },
+          data: grant.status === "ACTIVE"
+            ? { metadata: { propertyType } }
+            : { status: "UNVERIFIED", safeErrorCode: null, metadata: { propertyType } },
+        });
+      };
+
+      const existingGscGrant = await tx.integrationGrant.findFirst({
+        where: {
+          connectionId: gscConnectionId!,
           projectId: project.id,
           siteId: site.id,
           provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
           externalResourceId: gscProperty,
-          metadata: { propertyType: "siteUrl" },
-          status: "UNVERIFIED",
         },
+        select: { id: true, status: true },
       });
-    }
+      if (existingGscGrant) {
+        await keepHealthy(existingGscGrant, "siteUrl");
+      } else {
+        await tx.integrationGrant.create({
+          data: {
+            connectionId: gscConnectionId!,
+            projectId: project.id,
+            siteId: site.id,
+            provider: IntegrationProvider.GOOGLE_SEARCH_CONSOLE,
+            externalResourceId: gscProperty,
+            metadata: { propertyType: "siteUrl" },
+            status: "UNVERIFIED",
+          },
+        });
+      }
 
-    const existingGa4Grant = await tx.integrationGrant.findFirst({
-      where: {
-        connectionId: ga4ConnectionId,
-        projectId: project.id,
-        siteId: site.id,
-        provider: IntegrationProvider.GOOGLE_ANALYTICS,
-        externalResourceId: ga4PropertyId,
-      },
-      select: { id: true },
-    });
-    if (existingGa4Grant) {
-      await tx.integrationGrant.update({
-        where: { id: existingGa4Grant.id },
-        data: {
-          status: "UNVERIFIED",
-          safeErrorCode: null,
-          metadata: { propertyType: "propertyId" },
-        },
-      });
-    } else {
-      await tx.integrationGrant.create({
-        data: {
-          connectionId: ga4ConnectionId,
+      const existingGa4Grant = await tx.integrationGrant.findFirst({
+        where: {
+          connectionId: ga4ConnectionId!,
           projectId: project.id,
           siteId: site.id,
           provider: IntegrationProvider.GOOGLE_ANALYTICS,
           externalResourceId: ga4PropertyId,
-          metadata: { propertyType: "propertyId" },
-          status: "UNVERIFIED",
         },
+        select: { id: true, status: true },
       });
+      if (existingGa4Grant) {
+        await keepHealthy(existingGa4Grant, "propertyId");
+      } else {
+        await tx.integrationGrant.create({
+          data: {
+            connectionId: ga4ConnectionId!,
+            projectId: project.id,
+            siteId: site.id,
+            provider: IntegrationProvider.GOOGLE_ANALYTICS,
+            externalResourceId: ga4PropertyId,
+            metadata: { propertyType: "propertyId" },
+            status: "UNVERIFIED",
+          },
+        });
+      }
     }
 
     await tx.seoResearchPolicy.upsert({
@@ -607,14 +707,14 @@ export async function provisionProject(
   // it cannot stick, which is what made the old entries keep coming back.
   const retirement = await db.site.findUnique({ where: { id: records.siteId }, select: { retiredAt: true } });
   const retired = Boolean(retirement?.retiredAt);
-  const gscJob = retired ? null : await enqueueJob({
+  const gscJob = retired || preview ? null : await enqueueJob({
     projectId: records.projectId,
     siteId: records.siteId,
     kind: JobKind.GSC_SYNC,
     payload: { daysBack: 28 },
     idempotencyKey: `provision:${input.serviceCredentialIdempotencyKey}:gsc`,
   });
-  const ga4Job = retired ? null : await enqueueJob({
+  const ga4Job = retired || preview ? null : await enqueueJob({
     projectId: records.projectId,
     siteId: records.siteId,
     kind: JobKind.GA4_SYNC,
@@ -635,6 +735,7 @@ export async function provisionProject(
     connectorCredentialReused: connectorCredential.reused,
     dataforseoGrantSource: records.dataforseoGrantSource,
     retired,
+    deduped: false,
     jobs: { gsc: gscJob?.id ?? null, ga4: ga4Job?.id ?? null },
   };
 }

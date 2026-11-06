@@ -49,7 +49,11 @@ export async function getGoogleGrant(
       provider,
       siteId: options.siteId,
       externalResourceId: options.externalResourceId,
-      status: { in: ["ACTIVE", "UNVERIFIED"] },
+      // ERROR is a report, not a terminal state. Excluding it meant one
+      // transient failure made the grant unselectable, so every later sync
+      // failed with "not connected" and the tenant stayed disconnected until
+      // someone edited the row by hand.
+      status: { in: ["ACTIVE", "UNVERIFIED", "ERROR"] },
       project: {
         status: "ACTIVE",
         workspace: { status: "ACTIVE" },
