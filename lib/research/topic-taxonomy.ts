@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
-import { proposeLexicalClusters, significantTokens } from "@/lib/funnel/cluster-discovery";
+import { significantTokens } from "@/lib/funnel/cluster-discovery";
 
 /**
  * The tenant model for the topic map.
@@ -319,12 +319,13 @@ export function deriveTerms(
   const bigrams = top(bigramScore, 6);
   const tokens = top(tokenScore, 10);
   const terms = [...bigrams, ...tokens].slice(0, 14);
-  // A phrase is more specific than a token, so phrases carry membership first.
+  // Phrases identify a topic, but a query can name the same need with a
+  // different phrase ("tulum real estate" vs "tulum condos"). Membership takes
+  // both; the cross-topic filter later removes the words every topic shares.
   const requireAny = [...bigrams.slice(0, 3), ...tokens.slice(0, 3)].slice(0, 6);
   const text = pageTexts.map(normalizeForMatch).join(" | ");
-  const coverageRequireAny = terms
-    .filter((term) => ` ${text} `.includes(` ${normalizeForMatch(term)} `))
-    .slice(0, 8);
+  const termOnPage = (term: string) => normalizeForMatch(term).split(" ").filter(Boolean).every((token) => ` ${text} `.includes(` ${token} `));
+  const coverageRequireAny = terms.filter(termOnPage).slice(0, 8);
   return {
     terms,
     strongTerms: bigrams,
@@ -333,19 +334,43 @@ export function deriveTerms(
   };
 }
 
+/**
+ * A query sample the model can reason over: the head by impressions, plus a
+ * spread of the long tail, because a topic like "awa playacar" has almost no
+ * volume but is a real page and a real demand. A sample, not clusters: the
+ * lexical discovery merges on shared phrases and collapses a whole market into
+ * one component, which the model can then neither split nor correct.
+ */
+export function sampleQueries(
+  queries: Array<{ query: string; impressions: number; volume: number | null }>,
+  limit = 150
+): Array<{ query: string; impressions: number; volume: number | null }> {
+  const sorted = [...queries].sort((a, b) => b.impressions - a.impressions);
+  const head = sorted.slice(0, Math.min(sorted.length, Math.ceil(limit * 0.7)));
+  const rest = sorted.slice(head.length);
+  const tail: typeof rest = [];
+  const step = Math.max(1, Math.floor(rest.length / Math.max(1, limit - head.length)));
+  for (let index = 0; index < rest.length && tail.length < limit - head.length; index += step) tail.push(rest[index]);
+  return [...head, ...tail];
+}
+
 const SYSTEM = [
   "You are an SEO strategist modelling one business so a topic map can be built.",
-  "You receive clusters that were formed from the business's own measured Search Console queries. Each cluster has an id and its member queries.",
-  "For each cluster decide: keep it as a topic, or drop it because it is off-business, research noise or not something this business can serve.",
-  "Keep every cluster that has measured demand and that the business can serve. Different places, property types or services are different topics: do not collapse them into one. Merge only clusters that are the same need in different words.",
-  "Name each kept topic in the site language, state its intent, relevance, the kind of page that should own it, and the offer key it belongs to. Explain in one sentence why it matters.",
-  "Set preferredPages to the one to three real paths from the supplied inventory that should own the topic. Use only paths that appear in the inventory.",
+  "You receive the business's own facts, the offers it sells with their market scope, its page inventory, and a sample of its measured Search Console queries.",
+  "Define the topics this business can serve. A topic is one need with one kind of page that should own it: a place, a product type, a service, a brand.",
+  "Different places and different property or product types are different topics. Do not collapse a market into one topic: if the queries separate into Tulum houses, Playa del Carmen condos and Akumal rentals, those are three topics.",
+  "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
+  "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
+  "A query may appear in at most two topics, and only when it genuinely serves both.",
+  "Leave out queries that fit no topic, are off-business, or are research noise. Do not invent a topic to cover them.",
+  "Name each topic in the site language, state its intent, relevance and the kind of page that should own it, and explain in one sentence why it matters.",
+  "Set preferredPages to the one to three real paths from the supplied inventory that should own the topic. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic.",
   "offerKey must be one of the supplied offer names, or the topic name when no offer fits.",
-  "Do not invent matching terms: membership comes from the queries. You only name, classify and target.",
-  "pageTypeRules map URL prefixes from the inventory to home, service, category, product, blog or other. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages.",
+  "Do not invent matching terms: membership comes from the queries you cite.",
+  "pageTypeRules map URL prefixes from the inventory to home, service, category, product, blog or other. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages, tag archives, paginated lists and search-result paths.",
   "newsQueries are 4 to 6 search queries in the site language that find current news, events or regulation relevant to this business and its market. Use the current year from today, not a past one.",
-  "Every supplied cluster id must appear exactly once across the decisions: either as a decision's id, or inside another decision's sourceClusters when you merge clusters that are the same need. Never omit a cluster.",
-  "Return exactly one JSON object: { summary, clusters: [{ id, sourceClusters: string[], keep, name, intent, relevance, coverageKind, offerKey, rationale, actionHint, preferredPages, exclusive }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
+  "Return exactly one JSON object, with no prose around it: { summary, topics: [{ name, intent, relevance, coverageKind, offerKey, rationale, actionHint, memberQueries: string[], preferredPages: string[], exclusive }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
+  "Keep summary under 300 characters, each rationale and actionHint under 160, and at most 12 topics.",
   "intent is informational, commercial, transactional, local or mixed. relevance is high, medium or low. coverageKind is service, product, content, local, brand, business or mixed.",
 ].join("\n");
 
@@ -354,18 +379,13 @@ export async function proposeTopicTaxonomy(
 ): Promise<{ taxonomy: TopicTaxonomy | null; rejected: Array<{ title: string; reason: string }>; error: string | null; model: string | null }> {
   const config = contentWriterConfig();
   if (!config) return { taxonomy: null, rejected: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
-
-  const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
-  const discovered = proposeLexicalClusters(
-    input.queries.map((query) => ({ query: query.query, observedAt: new Date() })),
-    { minMembers: 2 }
-  )
-    .sort((a, b) => b.members.reduce((sum, query) => sum + (impressions.get(query) ?? 0), 0) - a.members.reduce((sum, query) => sum + (impressions.get(query) ?? 0), 0))
-    .slice(0, 40);
-  if (discovered.length === 0) {
-    return { taxonomy: null, rejected: [], error: "no query cluster could be formed from the measured demand", model: config.model };
+  if (input.queries.length === 0) {
+    return { taxonomy: null, rejected: [], error: "no measured query to model", model: config.model };
   }
 
+  const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
+  const sample = sampleQueries(input.queries, 150);
+  const sampleByKey = new Map(sample.map((query) => [normalizeTerm(query.query), query.query]));
   const payload = {
     domain: input.domain,
     language: input.language,
@@ -374,11 +394,7 @@ export async function proposeTopicTaxonomy(
     offers: input.marketScope.offers.length > 0 ? input.marketScope.offers : [{ offer: input.business.name ?? input.domain, scope: input.marketScope.default }],
     pages: input.pages.slice(0, 40),
     today: new Date().toISOString().slice(0, 10),
-    clusters: discovered.map((cluster) => ({
-      id: cluster.identityKey,
-      queries: cluster.members.slice(0, 8),
-      members: cluster.members.length,
-    })),
+    queries: sample,
   };
 
   try {
@@ -386,85 +402,85 @@ export async function proposeTopicTaxonomy(
       config,
       system: SYSTEM,
       user: JSON.stringify(payload),
-      maxTokens: 24_000,
+      // A reasoning model spends budget before emitting; 24k produced a
+      // truncated JSON on a 1,000-query site.
+      maxTokens: 32_000,
       temperature: 0.2,
       attempts: 3,
-      timeoutMs: 240_000,
+      timeoutMs: 300_000,
       jsonMode: false,
     });
     const record = asRecord(parsed);
-    const clusterById = new Map(discovered.map((cluster) => [cluster.identityKey, cluster]));
-    const accounted = new Set<string>();
-    const rejected: Array<{ title: string; reason: string }> = [];
-    const decisions: Array<{ row: Record<string, unknown>; members: string[] }> = [];
-    for (const raw of Array.isArray(record.clusters) ? record.clusters : []) {
-      const row = asRecord(raw);
-      const primary = text(row.id);
-      if (!primary || !clusterById.has(primary) || accounted.has(primary)) continue;
-      const sources = Array.isArray(row.sourceClusters)
-        ? row.sourceClusters.filter((entry): entry is string => typeof entry === "string" && clusterById.has(entry))
-        : [];
-      const members = [...new Set([primary, ...sources])].filter((id) => !accounted.has(id));
-      for (const id of members) accounted.add(id);
-      decisions.push({ row, members });
-    }
-    // A cluster the review never mentioned is not silently dropped: it is
-    // reported, so the owner can see what the model skipped.
-    for (const cluster of discovered) {
-      if (!accounted.has(cluster.identityKey)) {
-        rejected.push({ title: cluster.name, reason: "the review did not classify this cluster" });
-      }
-    }
-    const pageTexts = input.pagePaths.map((path) => path);
+    const pageTexts = input.pages.map((page) => `${page.path} ${page.title} ${page.h1}`);
     const topics: TopicDefinition[] = [];
+    const rejected: Array<{ title: string; reason: string }> = [];
     const seen = new Set<string>();
-    for (const { row: decision, members } of decisions) {
-      const merged = members.map((id) => clusterById.get(id)!).filter(Boolean);
-      const cluster = merged[0];
-      if (!cluster) continue;
-      if (decision.keep === false) {
-        for (const entry of merged) rejected.push({ title: entry.name, reason: "the review dropped this cluster" });
+    for (const raw of Array.isArray(record.topics) ? record.topics : []) {
+      const row = asRecord(raw);
+      const name = text(row.name);
+      const intent = text(row.intent) as TopicIntent | null;
+      const relevance = text(row.relevance) as TopicRelevance | null;
+      const coverageKind = text(row.coverageKind) as TopicCoverageKind | null;
+      if (!name) continue;
+      if (!intent || !INTENTS.includes(intent) || !relevance || !RELEVANCES.includes(relevance) || !coverageKind || !COVERAGE_KINDS.includes(coverageKind)) {
+        rejected.push({ title: name, reason: "incomplete classification" });
         continue;
       }
-      const name = text(decision.name);
-      const intent = text(decision.intent) as TopicIntent | null;
-      const relevance = text(decision.relevance) as TopicRelevance | null;
-      const coverageKind = text(decision.coverageKind) as TopicCoverageKind | null;
-      if (!name || !intent || !INTENTS.includes(intent) || !relevance || !RELEVANCES.includes(relevance) || !coverageKind || !COVERAGE_KINDS.includes(coverageKind)) {
-        rejected.push({ title: cluster.name, reason: "the review returned an incomplete classification" });
+      const memberQueries = Array.isArray(row.memberQueries)
+        ? [...new Set(row.memberQueries.filter((entry): entry is string => typeof entry === "string").map((entry) => sampleByKey.get(normalizeTerm(entry))).filter((entry): entry is string => Boolean(entry)))]
+        : [];
+      if (memberQueries.length < 2) {
+        rejected.push({ title: name, reason: "needs at least two member queries from the sample" });
         continue;
       }
       const slug = slugify(name);
       if (!slug || seen.has(slug)) continue;
-      seen.add(slug);
-      const memberQueries = merged.flatMap((entry) => entry.members);
       const derived = deriveTerms(memberQueries, (query) => impressions.get(query) ?? 0, pageTexts);
+      // A topic whose own members do not match its derived terms is not usable.
+      const selfMatched = memberQueries.filter((query) => derived.requireAny.some((term) => termInText(normalizeTerm(query), term))).length;
+      if (selfMatched < 2) {
+        rejected.push({ title: name, reason: "its member queries share no distinctive term" });
+        continue;
+      }
+      seen.add(slug);
       topics.push({
         slug,
         name: name.slice(0, 160),
         intent,
         relevance,
         coverageKind,
-        offerKey: matchOfferKey(text(decision.offerKey) ?? name, input.marketScope.offers.map((entry) => entry.offer)),
-        rationale: text(decision.rationale)?.slice(0, 600) ?? "",
+        offerKey: matchOfferKey(text(row.offerKey) ?? name, input.marketScope.offers.map((entry) => entry.offer)),
+        rationale: text(row.rationale)?.slice(0, 600) ?? "",
         requireAny: derived.requireAny,
         terms: derived.terms,
         strongTerms: derived.strongTerms,
         coverageRequireAny: derived.coverageRequireAny,
-        ...(Array.isArray(decision.preferredPages)
+        ...(Array.isArray(row.preferredPages)
           ? {
-              preferredPages: decision.preferredPages
+              preferredPages: row.preferredPages
                 .filter((entry): entry is string => typeof entry === "string" && entry.startsWith("/"))
+                .filter((path) => !stringList(record.excludePaths, 20).some((excluded) => path.startsWith(excluded.startsWith("/") ? excluded : `/${excluded}`)))
                 .slice(0, 3),
             }
           : {}),
-        ...(decision.exclusive === true ? { exclusive: true } : {}),
+        ...(row.exclusive === true ? { exclusive: true } : {}),
         pageTerms: derived.terms,
-        actionHint: text(decision.actionHint)?.slice(0, 400) ?? "",
+        actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
       });
     }
     if (topics.length === 0) {
-      return { taxonomy: null, rejected, error: "the review kept no cluster", model: config.model };
+      return { taxonomy: null, rejected, error: "the review proposed no usable topic", model: config.model };
+    }
+    // A term shared by most topics ("real estate") does not distinguish any of
+    // them. Keep it for coverage, but do not let it decide membership.
+    const termTopics = new Map<string, number>();
+    for (const topic of topics) {
+      for (const term of new Set(topic.requireAny)) termTopics.set(term, (termTopics.get(term) ?? 0) + 1);
+    }
+    const sharedLimit = Math.max(2, Math.ceil(topics.length * 0.3));
+    for (const topic of topics) {
+      const distinctive = topic.requireAny.filter((term) => (termTopics.get(term) ?? 0) <= sharedLimit);
+      if (distinctive.length > 0) topic.requireAny = distinctive;
     }
     const pageTypeRules: TopicPageTypeRule[] = [];
     for (const raw of Array.isArray(record.pageTypeRules) ? record.pageTypeRules : []) {

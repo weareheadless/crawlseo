@@ -106,58 +106,66 @@ describe("taxonomy validation", () => {
 });
 
 describe("taxonomy proposal", () => {
-  const clusterId = (calls: unknown[]) => {
-    const payload = JSON.parse(String((calls[0] as { user: string }).user)) as { clusters: Array<{ id: string }> };
-    return payload.clusters[0].id;
-  };
-
-  it("derives membership terms from the cluster's own queries", async () => {
+  it("derives membership terms from the queries the model cites", async () => {
     mocks.chatJson.mockReset();
-    mocks.chatJson.mockImplementation(async (args: { user: string }) => {
-      const payload = JSON.parse(args.user) as { clusters: Array<{ id: string }> };
-      return {
-        summary: "One topic.",
-        clusters: [
-          {
-            id: payload.clusters[0].id,
-            keep: true,
-            name: "Tulum condos",
-            intent: "commercial",
-            relevance: "high",
-            coverageKind: "product",
-            offerKey: "Condos",
-            rationale: "Buyers search Tulum condos directly.",
-            actionHint: "Check the listing page.",
-            preferredPages: ["/tulum-condos"],
-          },
-        ],
-        pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
-        excludePaths: ["/terms"],
-        newsQueries: ["tulum real estate news"],
-      };
-    });
+    mocks.chatJson.mockImplementation(async () => ({
+      summary: "One topic.",
+      topics: [
+        {
+          name: "Tulum condos",
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          offerKey: "Condos",
+          rationale: "Buyers search Tulum condos directly.",
+          actionHint: "Check the listing page.",
+          memberQueries: ["tulum condos for sale", "tulum condos"],
+          preferredPages: ["/tulum-condos"],
+        },
+      ],
+      pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
+      excludePaths: ["/terms"],
+      newsQueries: ["tulum real estate news"],
+    }));
     const result = await proposeTopicTaxonomy(input());
     expect(result.error).toBeNull();
     expect(result.taxonomy?.topics).toHaveLength(1);
     const topic = result.taxonomy!.topics[0];
-    // The terms come from "tulum condos for sale", not from the model.
     expect(topic.terms).toContain("tulum");
     expect(topic.terms).toContain("condos");
-    expect(topic.requireAny.length).toBeGreaterThan(0);
     expect(topic.preferredPages).toEqual(["/tulum-condos"]);
     expect(topic.offerKey).toBe("Condos");
     expect(result.taxonomy?.proposedBy).toBe("ai");
   });
 
-  it("drops a cluster the review rejects", async () => {
+  it("sends the queries themselves, not pre-merged clusters", async () => {
     mocks.chatJson.mockReset();
-    mocks.chatJson.mockImplementation(async (args: { user: string }) => {
-      const payload = JSON.parse(args.user) as { clusters: Array<{ id: string }> };
-      return { summary: "Off business.", clusters: [{ id: payload.clusters[0].id, keep: false }] };
-    });
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    await proposeTopicTaxonomy(input());
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      queries: Array<{ query: string }>;
+      clusters?: unknown;
+    };
+    expect(payload.clusters).toBeUndefined();
+    expect(payload.queries.map((row) => row.query)).toContain("tulum condos for sale");
+  });
+
+  it("rejects a topic whose members are not in the supplied sample", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Invented topic",
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          memberQueries: ["a query that was never supplied", "another invented query"],
+        },
+      ],
+    }));
     const result = await proposeTopicTaxonomy(input());
     expect(result.taxonomy).toBeNull();
-    expect(result.error).toMatch(/kept no cluster/);
+    expect(result.rejected[0].reason).toMatch(/member queries/);
   });
 
   it("reports a provider failure", async () => {

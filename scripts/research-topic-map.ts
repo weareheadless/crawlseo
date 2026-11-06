@@ -187,7 +187,13 @@ async function main(): Promise<void> {
         marketScope: rawData.marketScope,
         pagePaths: rawData.pages.map((page) => page.path),
         queries: rawData.queries.slice(0, 80).map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
-        pages: rawData.pages.slice(0, 60).map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
+        // The inventory is sent by substance, not alphabetically: the first 40
+        // paths are all /akumal and /apartments, so the pages that should own
+        // Tulum or Playa never reached the model.
+        pages: [...rawData.pages]
+          .sort((a, b) => b.wordCount - a.wordCount)
+          .slice(0, 120)
+          .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
       });
       if (!proposed.taxonomy) {
         throw new CliError(`could not propose a topic taxonomy for ${site.domain}: ${proposed.error ?? "unknown error"}`, 4);

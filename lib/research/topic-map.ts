@@ -274,10 +274,10 @@ function pageCoverageScore(page: TopicPage, topic: TopicDefinition): number {
   // A brand name is usually appended to every page title. For a brand topic the
   // evidence is the path or the H1, not a title suffix that every page carries.
   const text = topic.coverageKind === "brand" ? normalizeTopicText(`${page.path} ${page.h1}`) : page.text;
-  if (topic.coverageRequireAny && !topic.coverageRequireAny.some((term) => containsTerm(text, term))) {
+  if (topic.coverageRequireAny?.length && !topic.coverageRequireAny.some((term) => containsTerm(text, term))) {
     return 0;
   }
-  if (topic.coverageRequireGroups && !topic.coverageRequireGroups.every((group) => group.some((term) => containsTerm(text, term)))) {
+  if (topic.coverageRequireGroups?.length && !topic.coverageRequireGroups.every((group) => group.some((term) => containsTerm(text, term)))) {
     return 0;
   }
   // A page whose URL names the topic is stronger evidence than a page whose
@@ -314,7 +314,13 @@ function pageAllowed(page: TopicCoveragePage, kind: TopicDefinition["coverageKin
 function coverageLevel(pages: TopicCoveragePage[], topic: TopicDefinition): TopicCluster["coverage"] {
   if (pages.length === 0) return "none";
   const minWords = topic.coverageKind === "content" ? 100 : 200;
-  const allowed = pages.filter((page) => pageAllowed(page, topic.coverageKind));
+  // A page the taxonomy named as the owner counts even when its URL does not
+  // match a page-type rule: the model chose it from the real inventory.
+  const allowed = pages.filter(
+    (page) =>
+      pageAllowed(page, topic.coverageKind) ||
+      (topic.preferredPages ?? []).some((path) => page.url.endsWith(path))
+  );
   if (allowed.some((page) => page.score >= 2 && page.wordCount >= minWords)) return "strong";
   // A blog post or product page can still be real coverage even when it is not
   // the page type that should own the topic.
