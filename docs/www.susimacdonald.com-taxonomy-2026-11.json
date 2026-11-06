@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "proposedBy": "ai",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "generatedAt": "2026-11-06T15:36:06.584Z",
+  "topics": [
+    {
+      "slug": "akumal-real-estate-and-playa-del-carmen-apartment-rentals",
+      "name": "Akumal real estate and Playa del Carmen apartment rentals",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "mixed",
+      "offerKey": "Susana MacDonald",
+      "rationale": "Measured demand exists for Akumal property searches and Playa del Carmen rentals, both inside the agent's Riviera Maya service area; the cluster also contains adjacent Puerto Morelos and assisted-living queries that need separate treatment.",
+      "requireAny": [
+        "condos sale",
+        "playa carmen",
+        "real estate",
+        "sale",
+        "condos",
+        "puerto"
+      ],
+      "terms": [
+        "condos sale",
+        "playa carmen",
+        "real estate",
+        "puerto morelos",
+        "homes sale",
+        "sale puerto",
+        "sale",
+        "condos",
+        "puerto",
+        "playa",
+        "carmen",
+        "real",
+        "estate",
+        "morelos"
+      ],
+      "strongTerms": [
+        "condos sale",
+        "playa carmen",
+        "real estate",
+        "puerto morelos",
+        "homes sale",
+        "sale puerto"
+      ],
+      "coverageRequireAny": [
+        "condos sale",
+        "real estate",
+        "puerto morelos",
+        "sale",
+        "condos",
+        "puerto",
+        "playa",
+        "carmen"
+      ],
+      "preferredPages": [
+        "/akumal-condos-sale",
+        "/apartments-for-rent-in-playa-del-carmen",
+        "/blog/tags/puerto-morelos"
+      ],
+      "pageTerms": [
+        "condos sale",
+        "playa carmen",
+        "real estate",
+        "puerto morelos",
+        "homes sale",
+        "sale puerto",
+        "sale",
+        "condos",
+        "puerto",
+        "playa",
+        "carmen",
+        "real",
+        "estate",
+        "morelos"
+      ],
+      "actionHint": "Use the Akumal condos page for Akumal sale intent and the Playa del Carmen rentals page for rental intent; add separate location/property pages for Puerto Morelos beach houses and treat assisted living only as a relocation-guide mention if covered."
+    }
+  ],
+  "pageTypeRules": [
+    {
+      "type": "category",
+      "pattern": "/akumal-condos-sale"
+    },
+    {
+      "type": "category",
+      "pattern": "/apartments-for-rent-in-playa-del-carmen"
+    },
+    {
+      "type": "category",
+      "pattern": "/bacalar-condos-sale"
+    },
+    {
+      "type": "category",
+      "pattern": "/bacalar-real-estate"
+    },
+    {
+      "type": "category",
+      "pattern": "/cozumel-condos-sale"
+    },
+    {
+      "type": "category",
+      "pattern": "/cozumel-house-sale"
+    },
+    {
+      "type": "category",
+      "pattern": "/blog/categories"
+    },
+    {
+      "type": "category",
+      "pattern": "/blog/tags"
+    },
+    {
+      "type": "blog",
+      "pattern": "/blog/page"
+    },
+    {
+      "type": "blog",
+      "pattern": "/blog"
+    },
+    {
+      "type": "service",
+      "pattern": "/book-online"
+    },
+    {
+      "type": "other",
+      "pattern": "/about"
+    },
+    {
+      "type": "other",
+      "pattern": "/contact"
+    },
+    {
+      "type": "home",
+      "pattern": "/"
+    }
+  ],
+  "excludePaths": [
+    "/es"
+  ],
+  "newsQueries": [
+    "Riviera Maya real estate market news 2026",
+    "Playa del Carmen property market 2026",
+    "Tulum real estate regulations 2026",
+    "Mexico foreign property buyer rules 2026",
+    "Riviera Maya construction delays 2026",
+    "sargassum Riviera Maya 2026"
+  ],
+  "summary": "One kept mixed-demand real-estate cluster covering Akumal sales and Playa del Carmen rentals, plus a merged drop for Cancun hospital searches that are outside the agent's service scope. Spanish mirrored paths are excluded because the site language is English."
+}

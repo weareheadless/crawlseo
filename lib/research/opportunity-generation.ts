@@ -6,7 +6,6 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { assignQuery, type TopicCluster, type TopicMap } from "@/lib/research/topic-map";
-import { taxonomyForDomain } from "@/lib/research/topic-taxonomy";
 
 /**
  * Phase 3: turn the reviewed topic map into board-ready proposals.

@@ -12,7 +12,14 @@ import {
   type MarketScopeConfig,
   type MarketScopeLevel,
 } from "@/lib/site/market-scope";
-import type { TopicDefinition, TopicIntent, TopicRelevance } from "@/lib/research/topic-taxonomy";
+import type {
+  TopicDefinition,
+  TopicIntent,
+  TopicPageType,
+  TopicPageTypeRule,
+  TopicRelevance,
+  TopicTaxonomy,
+} from "@/lib/research/topic-taxonomy";
 
 /**
  * Phase 2 topic map.
@@ -134,6 +141,8 @@ export type TopicMap = {
   generatedAt: string;
   locale: { language: string; country: string | null };
   marketScope: MarketScopeConfig;
+  /** The tenant model this map was built with. */
+  taxonomy: TopicDefinition[];
   business: {
     name: string | null;
     services: string[];
@@ -157,6 +166,9 @@ export type TopicMap = {
 
 export type TopicMapData = {
   site: { id: string; domain: string; projectId: string };
+  taxonomy: TopicDefinition[];
+  pageTypeRules: TopicPageTypeRule[];
+  excludePaths: string[];
   context: Awaited<ReturnType<typeof resolveSiteContext>>;
   fields: Record<string, unknown>;
   marketScope: MarketScopeConfig;
@@ -167,31 +179,22 @@ export type TopicMapData = {
   month: string;
 };
 
-const FRENCH_STOPWORDS = new Set([
-  "le", "la", "les", "un", "une", "des", "du", "de", "et", "ou", "a", "au", "aux", "en", "dans",
-  "pour", "par", "sur", "sous", "avec", "sans", "chez", "que", "qui", "quoi", "dont", "ou", "quand",
-  "comment", "pourquoi", "quel", "quelle", "quels", "quelles", "est", "sont", "etre", "fait", "faire",
-  "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses", "notre", "nos", "votre", "vos", "leur",
-  "leurs", "ce", "cette", "ces", "cet", "plus", "moins", "tres", "tout", "tous", "toute", "toutes",
-  "the", "and", "for", "with", "from", "that", "this", "your", "you", "our", "are", "was", "how",
-  "what", "why", "when", "where", "who", "which", "best", "top", "near", "about", "into", "out",
-]);
-
-const GENERIC_QUERY_TOKENS = new Set([
-  "artisanal", "artisanale", "artisanales", "artisanaux", "artisan", "artisane", "creation", "creer",
-  "cree", "unique", "uniques", "original", "originale", "originales", "francais", "francaise",
-  "prix", "devis", "achat", "acheter", "vente", "boutique", "magasin", "fait", "main", "sur", "mesure",
-  "modele", "collection", "couleur", "style", "idee", "inspiration", "conseil", "guide", "blog",
-]);
-
-const PAGE_EXCLUDE = [
-  /^\/en(\/|$)/,
-  /^\/blog\/tags\//,
-  /^\/conditions-generales/,
-  /^\/politique-de-/,
-  /^\/livraison/,
-  /^\/profile\//,
-];
+/**
+ * Tokens that are generic *for this query set*: they appear in most queries, so
+ * they describe the market rather than a topic. This replaces a hardcoded list
+ * of French craft words that made the map tenant-specific.
+ */
+function genericTokens(queries: string[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const query of queries) {
+    for (const token of new Set(normalizeTopicText(query).split(" "))) {
+      if (token.length < 4) continue;
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+  const threshold = Math.max(2, Math.ceil(queries.length * 0.4));
+  return new Set([...counts.entries()].filter(([, count]) => count >= threshold).map(([token]) => token));
+}
 
 export function normalizeTopicText(value: string): string {
   return value
@@ -256,30 +259,10 @@ export function assignQuery(
   return selected.map(({ topic, score }) => ({ topic, score }));
 }
 
-function pageType(path: string): TopicPage["type"] {
+function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPageType {
   if (path === "/") return "home";
-  if (path.startsWith("/product-page/")) return "product";
-  if (path === "/post/" || path.startsWith("/post/") || path === "/blog" || path.startsWith("/blog/")) return "blog";
-  if (path.startsWith("/category/")) return "category";
-  if (path === "/gift-card") return "product";
-  if (
-    path === "/lampes" ||
-    path.startsWith("/lampes/") ||
-    path === "/objets-deco" ||
-    path === "/sieges"
-  ) {
-    return "category";
-  }
-  if (
-    path === "/tapisserie-restauration" ||
-    path === "/les-ateliers" ||
-    path === "/les-tissus" ||
-    path === "/b2b" ||
-    path === "/devis" ||
-    path === "/shop" ||
-    path === "/a-propos"
-  ) {
-    return "service";
+  for (const rule of rules) {
+    if (path.startsWith(rule.pattern)) return rule.type;
   }
   return "other";
 }
@@ -288,19 +271,23 @@ function pageCoverageScore(page: TopicPage, topic: TopicDefinition): number {
   // The home page mentions every service in its marketing copy. It can carry a
   // brand or local signal, but it must not win a service or product topic.
   if (page.type === "home" && topic.coverageKind !== "brand" && topic.coverageKind !== "local") return 0;
-  // The all-products listing is a shop index, not a topic page.
-  if (page.path === "/category/all-products") return 0;
-  // Every page title ends with "Atelier de l'Harmonie". That is a brand suffix,
-  // not evidence that the page is about the brand.
-  if (topic.slug === "marque" && page.path !== "/" && page.path !== "/a-propos") return 0;
-  if (topic.coverageRequireAny && !topic.coverageRequireAny.some((term) => containsTerm(page.text, term))) {
+  // A brand name is usually appended to every page title. For a brand topic the
+  // evidence is the path or the H1, not a title suffix that every page carries.
+  const text = topic.coverageKind === "brand" ? normalizeTopicText(`${page.path} ${page.h1}`) : page.text;
+  if (topic.coverageRequireAny && !topic.coverageRequireAny.some((term) => containsTerm(text, term))) {
     return 0;
   }
-  if (topic.coverageRequireGroups && !topic.coverageRequireGroups.every((group) => group.some((term) => containsTerm(page.text, term)))) {
+  if (topic.coverageRequireGroups && !topic.coverageRequireGroups.every((group) => group.some((term) => containsTerm(text, term)))) {
     return 0;
   }
+  // A page whose URL names the topic is stronger evidence than a page whose
+  // title happens to mention it: a shop index can list every product name.
+  const pathText = normalizeTopicText(page.path);
   let score = 0;
-  for (const term of topic.pageTerms) score += termWeight(page.text, term);
+  for (const term of topic.pageTerms) {
+    if (containsTerm(pathText, term)) score += 2 * termWeight(pathText, term);
+    else score += termWeight(text, term);
+  }
   if (topic.preferredPages?.includes(page.path)) score += 10;
   return score;
 }
@@ -365,12 +352,13 @@ function weightedPosition(queries: DemandQuery[]): number | null {
 
 export function missingQueryTerms(queries: DemandQuery[], pages: TopicCoveragePage[]): Array<{ term: string; count: number; impressions: number }> {
   const pageText = pages.map((page) => normalizeTopicText(page.title + " " + page.url)).join(" ");
+  const generic = genericTokens(queries.map((query) => query.query));
   const byTerm = new Map<string, { count: number; impressions: number }>();
   for (const query of queries) {
     const tokens = new Set(
       normalizeTopicText(query.query)
         .split(" ")
-        .filter((token) => token.length >= 4 && !FRENCH_STOPWORDS.has(token) && !GENERIC_QUERY_TOKENS.has(token))
+        .filter((token) => token.length >= 4 && !generic.has(token))
     );
     for (const token of tokens) {
       if (containsTerm(pageText, token)) continue;
@@ -453,7 +441,12 @@ function expectedPageLabel(kind: TopicDefinition["coverageKind"]): string {
   }
 }
 
-export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: string): Promise<TopicMapData> {
+export async function loadTopicMapData(
+  db: TopicMapDb,
+  siteId: string,
+  month: string,
+  taxonomy: TopicTaxonomy | null = null
+): Promise<TopicMapData> {
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { id: true, domain: true, projectId: true },
@@ -579,7 +572,7 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
     } catch {
       return [];
     }
-    if (PAGE_EXCLUDE.some((pattern) => pattern.test(path))) return [];
+    if (taxonomy?.excludePaths.some((pattern) => path.startsWith(pattern))) return [];
     if (path.includes("?")) return [];
     const h1s = Array.isArray(page.h1s)
       ? page.h1s.filter((value): value is string => typeof value === "string")
@@ -596,7 +589,7 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
       description: page.description ?? "",
       h1,
       wordCount: page.wordCount,
-      type: pageType(path),
+      type: pageType(path, taxonomy?.pageTypeRules ?? []),
       text,
     }];
   });
@@ -628,6 +621,9 @@ export async function loadTopicMapData(db: TopicMapDb, siteId: string, month: st
 
   return {
     site: { id: site.id, domain: site.domain, projectId },
+    taxonomy: taxonomy?.topics ?? [],
+    pageTypeRules: taxonomy?.pageTypeRules ?? [],
+    excludePaths: taxonomy?.excludePaths ?? [],
     context,
     fields,
     marketScope,
@@ -705,6 +701,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     domain: data.site.domain,
     month: data.month,
     generatedAt: now.toISOString(),
+    taxonomy: data.taxonomy,
     locale: { language: data.context.language, country: data.context.country },
     marketScope: data.marketScope,
     business: {
@@ -958,11 +955,16 @@ export async function storeTopicMap(
   opts: { now?: Date } = {}
 ): Promise<{ created: number; updated: number; superseded: number; memberships: number }> {
   const now = opts.now ?? new Date();
-  const existing = await db.demandMapCluster.findMany({
-    where: { projectId: map.projectId, supersededAt: null },
-    select: { id: true, slug: true, identityKey: true, tracked: true },
+  // Slugs are unique per project, including superseded rows: a topic that comes
+  // back after being superseded must reuse its row, not collide with it.
+  const allRows = await db.demandMapCluster.findMany({
+    where: { projectId: map.projectId },
+    select: { id: true, slug: true, identityKey: true, tracked: true, supersededAt: true },
+    orderBy: { supersededAt: "desc" },
   });
-  const existingBySlug = new Map(existing.map((row) => [row.slug, row]));
+  const existing = allRows.filter((row) => row.supersededAt === null);
+  const existingBySlug = new Map(allRows.map((row) => [row.slug, row]));
+  const activeBySlug = new Map(existing.map((row) => [row.slug, row]));
   const newSlugs = new Set(map.clusters.map((cluster) => cluster.slug));
   let created = 0;
   let updated = 0;
@@ -995,7 +997,7 @@ export async function storeTopicMap(
     };
     let clusterId: string;
     if (current) {
-      await db.demandMapCluster.update({ where: { id: current.id }, data });
+      await db.demandMapCluster.update({ where: { id: current.id }, data: { ...data, supersededAt: null } });
       clusterId = current.id;
       updated += 1;
     } else {
@@ -1045,7 +1047,7 @@ export async function storeTopicMap(
       const score = jaccard(oldMembers, members);
       if (!best || score > best.score) best = { slug, score };
     }
-    const successor = best && best.score >= 0.2 ? existingBySlug.get(best.slug) : null;
+    const successor = best && best.score >= 0.2 ? activeBySlug.get(best.slug) : null;
     await db.demandMapCluster.update({
       where: { id: row.id },
       data: { supersededAt: now, supersededById: successor?.id ?? null },
@@ -1118,6 +1120,13 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push(`- Location: ${map.business.location ?? "unknown"}`);
   lines.push(`- Service area: ${map.business.serviceArea.join("; ") || "unknown"}`);
   lines.push(`- Audience: ${map.business.audience ?? "unknown"}`);
+  lines.push("");
+  lines.push("## Tenant model");
+  lines.push("");
+  lines.push(`- Topics: ${map.taxonomy.length}`);
+  for (const topic of map.taxonomy) {
+    lines.push(`  - \`${topic.slug}\` — ${topic.name} (${topic.intent}, ${topic.coverageKind}, ${topic.relevance}); ${topic.terms.length} matching terms`);
+  }
   lines.push("");
   lines.push("## Method");
   lines.push("");

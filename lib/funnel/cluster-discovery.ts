@@ -45,7 +45,11 @@ const STOPWORDS = new Set([
   "the", "and", "for", "with", "from", "that", "this", "your", "you", "our", "are", "was", "how", "what", "why",
   "when", "where", "who", "which", "best", "top", "vs", "near", "about", "into", "out", "not", "but", "all", "can",
   "does", "do", "is", "it", "to", "of", "in", "on", "at", "by", "a", "an",
-  // Spanish (the sites in this workspace are ES/MX)
+  // French
+  "le", "la", "les", "un", "une", "des", "du", "de", "et", "ou", "pour", "avec", "dans", "sur",
+  "au", "aux", "en", "est", "que", "qui", "quoi", "dont", "ce", "cette", "ces", "mon", "ma", "mes",
+  "son", "sa", "ses", "notre", "nos", "votre", "vos", "leur", "leurs", "plus", "moins", "tres",
+  // Spanish
   "el", "la", "los", "las", "de", "del", "en", "y", "o", "un", "una", "unos", "unas", "por", "para", "con", "sin",
   "que", "como", "donde", "cuando", "cual", "cuales", "es", "son", "al", "se", "su", "sus", "mi", "tu", "lo",
   "mas", "muy", "ya", "si", "no",
@@ -166,7 +170,8 @@ export function proposeLexicalClusters(
  */
 function inferIntent(queries: string[]): ClusterProposal["intent"] {
   const text = queries.join(" ").toLowerCase();
-  if (/\b(near me|cerca|playa|bacalar|tulum|cancun|city|local)\b/.test(text)) return "local";
+  // Generic local markers only: place names are the tenant's data, not a rule.
+  if (/\b(near me|around me|cerca de|pres de|proche|local|city)\b/.test(text)) return "local";
   if (/\b(price|prices|cost|cheap|buy|book|booking|reserve|precio|comprar|reservar)\b/.test(text)) return "transactional";
   if (/\b(vs|best|review|compare|alternative|mejor)\b/.test(text)) return "commercial";
   if (/\b(how|what|why|guide|learn|que|cual)\b/.test(text)) return "informational";

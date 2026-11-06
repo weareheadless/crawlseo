@@ -20,6 +20,7 @@ import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-r
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
 import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
+import { loadTopicTaxonomy } from "@/lib/research/topic-taxonomy";
 import { businessKnowledgeFields, resolveSiteContext } from "@/lib/site/context";
 
 /**
@@ -124,6 +125,9 @@ export function buildWeeklyNewsQueries(input: {
   serviceArea: string[];
   domain: string;
   year: number;
+  /** Searches proposed for this tenant by the taxonomy; replaces the old
+   *  hardcoded craft-event phrases. */
+  taxonomyQueries?: string[];
 }): string[] {
   const base = buildNewsQueries(
     {
@@ -135,13 +139,7 @@ export function buildWeeklyNewsQueries(input: {
     },
     6
   );
-  const area = input.serviceArea[0] ?? input.location ?? "";
-  const extra = [
-    area ? `"${area}" salon artisanat ${input.year}` : null,
-    area ? `"${area}" exposition tapisserie ${input.year}` : null,
-    area ? `"${area}" portes ouvertes atelier ${input.year}` : null,
-    input.location ? `"${input.location}" marché artisanal ${input.year}` : null,
-  ].filter((query): query is string => Boolean(query));
+  const extra = (input.taxonomyQueries ?? []).map((query) => query.trim()).filter(Boolean);
   const seen = new Set<string>();
   return [...base, ...extra].filter((query) => {
     const key = query.toLowerCase().replace(/\s+/g, " ").trim();
@@ -176,6 +174,7 @@ export async function runWeeklyRefresh(
 
   const context = await resolveSiteContext(db, site.id);
   const fields = await businessKnowledgeFields(db, site.projectId);
+  const taxonomy = await loadTopicTaxonomy(db, site.id);
   const queries = buildWeeklyNewsQueries({
     businessName: fieldText(fields, "businessName"),
     services: fieldList(fields, "services"),
@@ -183,6 +182,7 @@ export async function runWeeklyRefresh(
     serviceArea: fieldList(fields, "serviceArea"),
     domain: site.domain,
     year: now.getUTCFullYear(),
+    taxonomyQueries: taxonomy?.newsQueries,
   });
 
   const existing = await db.researchRun.findFirst({

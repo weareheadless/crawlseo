@@ -10,9 +10,9 @@ import {
   storeTopicMap,
   type TopicMapData,
 } from "@/lib/research/topic-map";
-import { ATELIER_TOPIC_TAXONOMY } from "@/lib/research/topic-taxonomy";
+import { ATELIER_TAXONOMY } from "./fixtures/atelier-taxonomy";
 
-const taxonomy = ATELIER_TOPIC_TAXONOMY;
+const taxonomy = ATELIER_TAXONOMY;
 
 function page(path: string, title: string, type: TopicMapData["pages"][number]["type"], wordCount = 400) {
   const text = normalizeTopicText(`${path} ${title}`);
@@ -31,6 +31,14 @@ function page(path: string, title: string, type: TopicMapData["pages"][number]["
 function data(overrides: Partial<TopicMapData> = {}): TopicMapData {
   return {
     site: { id: "site-1", domain: "atelier.example", projectId: "proj-1" },
+    taxonomy,
+    pageTypeRules: [
+      { type: "product", pattern: "/product-page/" },
+      { type: "blog", pattern: "/post/" },
+      { type: "category", pattern: "/lampes" },
+      { type: "service", pattern: "/tapisserie-restauration" },
+    ],
+    excludePaths: ["/conditions-generales", "/livraison"],
     marketScope: { default: "local", offers: [] },
     context: { language: "fr", country: "FR" } as never,
     fields: {

@@ -435,8 +435,6 @@ export function buildNewsQueries(
   for (const service of services) {
     if (area && area !== place) add(`"${service}" ${area}`);
   }
-  if (area) add(`"${area}" artisanat d'art`);
-  if (place) add(`"${place}" artisanat`);
   if (queries.length === 0) add(input.domain.replace(/^www\./, ""));
   return queries.slice(0, cap);
 }

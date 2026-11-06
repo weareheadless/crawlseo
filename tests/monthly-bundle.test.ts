@@ -300,11 +300,12 @@ describe("monthly bundle selection", () => {
       location: "Saint-Pierre-en-Port, France",
       domain: "atelier-harmonie.com",
     });
+    // News searches come from the business's own facts, not from a tenant's
+    // trade vocabulary.
     expect(queries).toEqual([
       '"Atelier de l\'harmonie"',
       '"Restauration de siège" Saint-Pierre-en-Port, France',
       '"Restauration d\'abat-jour" Saint-Pierre-en-Port, France',
-      '"Saint-Pierre-en-Port, France" artisanat',
     ]);
   });
 
@@ -347,7 +348,7 @@ describe("monthly bundle run", () => {
     expect(result.plan.selected.keywordQueries).toHaveLength(30);
     expect(result.plan.selected.serpQueries).toHaveLength(10);
     expect(result.plan.selected.aeoQuestions).toHaveLength(12);
-    expect(result.plan.selected.newsQueries).toHaveLength(4);
+    expect(result.plan.selected.newsQueries).toHaveLength(3);
     expect(result.plan.estimatedMicros).toBeGreaterThan(0);
     expect(result.paidCalls).toBe(0);
     expect(state.creates).toBe(0);

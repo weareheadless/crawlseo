@@ -1,6 +1,6 @@
 # Topic map — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-05T21:23:06.393Z. Locale fr/FR.
+Generated 2026-11-06T15:29:39.712Z. Locale fr/FR.
 
 ## Business
 
@@ -10,6 +10,22 @@ Generated 2026-11-05T21:23:06.393Z. Locale fr/FR.
 - Service area: Normandie
 - Audience: Redonner vie à un abat-jour; Conserver l'histoire et le pied d'origine d'une lampe; Créer son propre luminaire; Réaliser une lampe unique aux finitions professionnelles; Apprendre à créer de ses propres mains; Illuminer son intérieur avec style
 
+## Tenant model
+
+- Topics: 12
+  - `restauration-siege` — Restauration de sièges & tapisserie d'ameublement (commercial, service, high); 22 matching terms
+  - `creation-abat-jour` — Création d'abat-jours artisanaux & sur mesure (commercial, product, high); 17 matching terms
+  - `restauration-abat-jour` — Restauration d'abat-jour (commercial, service, high); 14 matching terms
+  - `luminaires` — Lampes & luminaires artisanaux (commercial, product, high); 27 matching terms
+  - `kits-ateliers` — Kits DIY & ateliers créatifs (transactional, mixed, high); 15 matching terms
+  - `carte-cadeau` — Cartes cadeaux (transactional, product, medium); 5 matching terms
+  - `objets-deco` — Objets déco & coussins (transactional, product, medium); 8 matching terms
+  - `tissus-matieres` — Tissus & matières (informational, content, medium); 11 matching terms
+  - `local-normandie` — Tapissier & atelier en Normandie (local, local, high); 13 matching terms
+  - `marque` — Marque Atelier de l'harmonie (mixed, brand, high); 9 matching terms
+  - `b2b` — Projets professionnels & hôtels (commercial, business, medium); 12 matching terms
+  - `blog-artisanat` — Blog & culture artisanat (informational, content, low); 7 matching terms
+
 ## Method
 
 Deterministic taxonomy over stored Search Console queries, DataForSEO keyword metrics, SERP snapshots and the latest crawl. Every membership and page match comes from a stated term. The AI call, when enabled, only reviews and names the clusters; it cannot add queries or pages.
@@ -18,11 +34,11 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Nine clusters: four international offers (création d'abat-jours, luminaires, marque, objets déco), four Normandie-local services (sièges, restauration d'abat-jour, kits/ateliers, local), one national fabrics topic. Measured demand spans 51,140 monthly volume on abat-jour pagode terms down to 0 on local and fabric queries; luminaires carries the most impressions (996), restauration-abat-jour the best positions.
+Nine clusters: high-demand/high-relevance services (restauration abat-jour, luminaires, restauration siège, création abat-jour, kits/ateliers), brand, and weaker deco/tissus/local. Scopes mix international offers (création, luminaires, marque, objets) with local Normandie services; local-normandie includes several out-of-area place queries.
 
-Start with the Normandie services already ranking: restauration-abat-jour (284 impressions, positions 5–10, but no service page) and restauration-siege, which needs 'tapissier' and 'chaises' wording. Luminaires holds the most impressions (996) yet ranks 40–60, so it is a content build; création d'abat-jours has large volume on a 150-word page; kits' 'kit lampe' (pos 5) is a quick win. Weak: objets déco, tissus and local-normandie (0 volume, and Le Mans, Sarthe, Saint-Germain-en-Laye sit outside Normandie). Test one Normandie 'autour de moi'/Fécamp page and one fabric-plus-cushion page.
+Prioritize service/category pages: restauration-abat-jour (missing page; 'réparer' gap), luminaires (plafonnier; thin suspensions), restauration-siege (tapissier/chaises), creation-abat-jour (thin abat-jour page), and marque (no brand page). Kits-ateliers is a solid follow-up. Weak: objets-deco and tissus-matieres have low measured demand; local-normandie has local intent but 0 volume and off-area Le Mans/Sarthe/Saint-Germain-en-Laye queries. Validate weak topics with a small deco/cushion page, a fabric guide, and a Normandie 'tapissier autour de moi' landing/GBP test.
 
-Priority topics: restauration-abat-jour, restauration-siege, luminaires, creation-abat-jour, kits-ateliers.
+Priority topics: restauration-abat-jour, luminaires, restauration-siege, creation-abat-jour, marque.
 Weak topics: objets-deco, tissus-matieres, local-normandie.
 Out-of-market queries excluded from demand and evidence: 3.
 
@@ -32,13 +48,13 @@ Out-of-market queries excluded from demand and evidence: 3.
 |---|---|---|---|---:|---:|---:|---|---|---|
 | Lampes & luminaires artisanaux | commercial | high | international (France, Europe, International) | 40 | 996 | 500 | strong | /lampes | Thin coverage: https://www.atelier-harmonie.com/lampes/suspensions has 152 words. |
 | Restauration d'abat-jour | commercial | high | local (Normandie) | 14 | 284 | 230 | partial | /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | Coverage exists, but there is no service or category page for this topic. |
-| Kits DIY & ateliers créatifs | transactional | high | local (Normandie) | 11 | 195 | 140 | strong | /les-ateliers | Queries mention “fabrication” (2 querys, 40 impressions) but no matched page does. |
-| Restauration de sièges & tapisserie d'ameublement | commercial | high | local (Normandie, Saint-Pierre-en-Port) | 26 | 186 | 2360 | strong | /tapisserie-restauration | Queries mention “tapissier” (7 querys, 34 impressions) but no matched page does. |
-| Marque Atelier de l'harmonie | mixed | high | international (France, International) | 13 | 179 | 1940 | strong | / | Queries mention “harmony” (2 querys, 23 impressions) but no matched page does. |
+| Kits DIY & ateliers créatifs | transactional | high | local (Normandie) | 11 | 195 | 140 | strong | /les-ateliers | Queries mention “fabrication” (2 queries, 40 impressions) but no matched page does. |
+| Restauration de sièges & tapisserie d'ameublement | commercial | high | local (Normandie, Saint-Pierre-en-Port) | 26 | 186 | 2360 | strong | /tapisserie-restauration | Queries mention “tapissier” (7 queries, 34 impressions) but no matched page does. |
+| Marque Atelier de l'harmonie | mixed | high | international (France, International) | 13 | 179 | 1940 | partial | /gift-card | Coverage exists, but there is no brand page for this topic. |
 | Création d'abat-jours artisanaux & sur mesure | commercial | high | international (France, Europe, International) | 16 | 123 | 51140 | strong | /lampes/abat-jours | Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words. |
-| Tapissier & atelier en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 6 | 26 | 0 | strong | / | Queries mention “tapissier” (3 querys, 18 impressions) but no matched page does. |
+| Tapissier & atelier en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 6 | 26 | 0 | strong | / | Queries mention “tapissier” (3 queries, 18 impressions) but no matched page does. |
 | Objets déco & coussins | transactional | medium | international (France, Europe, International) | 7 | 36 | 50 | strong | /objets-deco | — |
-| Cartes cadeaux | transactional | medium | international (France, International) | 5 | 35 | 0 | strong | /gift-card | Queries mention “decoration” (2 querys, 16 impressions) but no matched page does. |
+| Cartes cadeaux | transactional | medium | international (France, International) | 5 | 35 | 0 | strong | /gift-card | Queries mention “mans” (1 query, 12 impressions) but no matched page does. |
 | Tissus & matières | informational | medium | national (France) | 7 | 22 | 0 | strong | /les-tissus | Thin coverage: https://www.atelier-harmonie.com/les-tissus has 146 words. |
 | Projets professionnels & hôtels | commercial | medium | national (France) | 0 | 0 | 0 | strong | /b2b | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
 | Blog & culture artisanat | informational | low | international (France, International) | 7 | 57 | 3600 | strong | /blog | Queries mention “blogging” (1 query, 39 impressions) but no matched page does. |
@@ -78,10 +94,10 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /lampes | category | 342 | 13 |
-| /lampes/suspensions | category | 152 | 4 |
-| /lampes/lampes-baladeuses | category | 152 | 3 |
-| /lampes/lampes-upcycling | category | 255 | 3 |
+| /lampes | category | 342 | 15 |
+| /lampes/suspensions | category | 152 | 7 |
+| /lampes/lampes-baladeuses | category | 152 | 6 |
+| /lampes/lampes-upcycling | category | 255 | 5 |
 
 Gaps:
 
@@ -122,15 +138,15 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | blog | 854 | 7 |
+| /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | blog | 854 | 12 |
 
 Gaps:
 
 - Coverage exists, but there is no service or category page for this topic.
-- Queries mention “reparer” (4 querys, 85 impressions) but no matched page does.
-- Queries mention “reparation” (2 querys, 72 impressions) but no matched page does.
-- Queries mention “renover” (3 querys, 48 impressions) but no matched page does.
-- Queries mention “restaurer” (2 querys, 48 impressions) but no matched page does.
+- Queries mention “reparer” (4 queries, 85 impressions) but no matched page does.
+- Queries mention “reparation” (2 queries, 72 impressions) but no matched page does.
+- Queries mention “renover” (3 queries, 48 impressions) but no matched page does.
+- Queries mention “restaurer” (2 queries, 48 impressions) but no matched page does.
 
 ### Kits DIY & ateliers créatifs
 
@@ -161,12 +177,12 @@ Coverage pages:
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
 | /les-ateliers | service | 721 | 13 |
-| /post/nouveaut%C3%A9-%C3%A0-l-atelier-d%C3%A9couvrez-nos-3-nouveaux-ateliers-diy | blog | 855 | 3 |
-| /product-page/kit-diy-ma-lampe-%C3%A0-poser | product | 569 | 2 |
+| /post/nouveaut%C3%A9-%C3%A0-l-atelier-d%C3%A9couvrez-nos-3-nouveaux-ateliers-diy | blog | 855 | 6 |
+| /product-page/kit-diy-ma-lampe-%C3%A0-poser | product | 569 | 4 |
 
 Gaps:
 
-- Queries mention “fabrication” (2 querys, 40 impressions) but no matched page does.
+- Queries mention “fabrication” (2 queries, 40 impressions) but no matched page does.
 - Queries mention “luminaire” (1 query, 36 impressions) but no matched page does.
 
 ### Restauration de sièges & tapisserie d'ameublement
@@ -202,16 +218,16 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /tapisserie-restauration | service | 712 | 13 |
-| /post/r%C3%A9fection-d-un-fauteuil-bridge-en-tapisserie-traditionnelle | blog | 636 | 3 |
-| /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | blog | 854 | 1 |
-| /post/la-tapisserie-traditionnelle-qu-est-ce-que-c-est | blog | 945 | 1 |
+| /tapisserie-restauration | service | 712 | 15 |
+| /post/r%C3%A9fection-d-un-fauteuil-bridge-en-tapisserie-traditionnelle | blog | 636 | 5 |
+| /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | blog | 854 | 2 |
+| /post/la-tapisserie-traditionnelle-qu-est-ce-que-c-est | blog | 945 | 2 |
 
 Gaps:
 
-- Queries mention “tapissier” (7 querys, 34 impressions) but no matched page does.
-- Queries mention “chaises” (2 querys, 24 impressions) but no matched page does.
-- Queries mention “autour” (3 querys, 18 impressions) but no matched page does.
+- Queries mention “tapissier” (7 queries, 34 impressions) but no matched page does.
+- Queries mention “chaises” (2 queries, 24 impressions) but no matched page does.
+- Queries mention “autour” (3 queries, 18 impressions) but no matched page does.
 - Queries mention “tapisser” (1 query, 18 impressions) but no matched page does.
 
 ### Marque Atelier de l'harmonie
@@ -244,12 +260,13 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| / | home | 698 | 11 |
-| /a-propos | service | 431 | 1 |
+| /gift-card | product | 334 | 1 |
 
 Gaps:
 
-- Queries mention “harmony” (2 querys, 23 impressions) but no matched page does.
+- Coverage exists, but there is no brand page for this topic.
+- Queries mention “harmony” (2 queries, 23 impressions) but no matched page does.
+- Queries mention “boutique” (2 queries, 14 impressions) but no matched page does.
 
 ### Création d'abat-jours artisanaux & sur mesure
 
@@ -284,10 +301,10 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /lampes/abat-jours | category | 150 | 16 |
-| /product-page/abat-jour-tambour-escale-collection-flowers | product | 668 | 8 |
-| /product-page/abat-jour-tambour-l-escale-collection-bauhaus | product | 677 | 8 |
-| /product-page/abat-jour-tambour-l-escale-collection-bauhaus?utm_source=google&utm_medium=wix_google_channel&utm_campaign=freelistings | product | 677 | 8 |
+| /lampes/abat-jours | category | 150 | 22 |
+| /product-page/abat-jour-tambour-escale-collection-flowers | product | 668 | 16 |
+| /product-page/abat-jour-tambour-l-escale-collection-bauhaus | product | 677 | 16 |
+| /product-page/abat-jour-tambour-l-escale-collection-bauhaus?utm_source=google&utm_medium=wix_google_channel&utm_campaign=freelistings | product | 677 | 16 |
 
 Gaps:
 
@@ -316,9 +333,9 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| carte cadeau décoration le mans | 12 | Le Mans is in Sarthe, outside the Normandie service area. |
-| restauration fauteuil saint-germain-en-laye | 10 | Saint-Germain-en-Laye is in Yvelines/Île-de-France, outside Normandie. |
-| carte cadeau décoration sarthe | 4 | Sarthe is outside the Normandie service area. |
+| carte cadeau décoration le mans | 12 | Le Mans is in Sarthe/Pays de la Loire, outside Normandie service area. |
+| restauration fauteuil saint-germain-en-laye | 10 | Saint-Germain-en-Laye is in Île-de-France, outside Normandie service area. |
+| carte cadeau décoration sarthe | 4 | Sarthe is outside Normandie service area. |
 
 Coverage pages:
 
@@ -331,10 +348,10 @@ Coverage pages:
 
 Gaps:
 
-- Queries mention “tapissier” (3 querys, 18 impressions) but no matched page does.
-- Queries mention “autour” (3 querys, 18 impressions) but no matched page does.
-- Queries mention “carte” (2 querys, 16 impressions) but no matched page does.
-- Queries mention “cadeau” (2 querys, 16 impressions) but no matched page does.
+- Queries mention “tapissier” (3 queries, 18 impressions) but no matched page does.
+- Queries mention “autour” (3 queries, 18 impressions) but no matched page does.
+- Queries mention “carte” (2 queries, 16 impressions) but no matched page does.
+- Queries mention “cadeau” (2 queries, 16 impressions) but no matched page does.
 
 ### Objets déco & coussins
 
@@ -360,7 +377,7 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /objets-deco | category | 299 | 14 |
+| /objets-deco | category | 299 | 17 |
 
 ### Cartes cadeaux
 
@@ -384,11 +401,10 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /gift-card | product | 334 | 16 |
+| /gift-card | product | 334 | 18 |
 
 Gaps:
 
-- Queries mention “decoration” (2 querys, 16 impressions) but no matched page does.
 - Queries mention “mans” (1 query, 12 impressions) but no matched page does.
 
 ### Tissus & matières
@@ -415,7 +431,7 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /les-tissus | service | 146 | 12 |
+| /les-tissus | service | 146 | 14 |
 | /lampes/abat-jours | category | 150 | 2 |
 
 Gaps:
@@ -436,7 +452,7 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /b2b | service | 582 | 14 |
+| /b2b | service | 582 | 15 |
 
 Gaps:
 
@@ -466,7 +482,7 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /blog | blog | 583 | 14 |
+| /blog | blog | 583 | 15 |
 | /gift-card | product | 334 | 1 |
 
 Gaps:
@@ -506,7 +522,7 @@ Gaps:
 ## Counts
 
 - Queries: 160; clustered: 149; unmapped: 11.
-- Pages considered: 57; news sources: 20.
+- Pages considered: 58; news sources: 20.
 
 ## Limits
 

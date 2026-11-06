@@ -192,8 +192,10 @@ describe("weekly refresh", () => {
       serviceArea: ["Normandie"],
       domain: "atelier-harmonie.example",
       year: 2026,
+      taxonomyQueries: ["Normandie salon artisanat 2026", "Normandie portes ouvertes atelier 2026"],
     });
     expect(queries[0]).toContain("Atelier de l'harmonie");
+    // Tenant-specific event searches now come from the approved taxonomy.
     expect(queries.join(" ")).toContain("salon artisanat 2026");
     expect(queries.join(" ")).toContain("portes ouvertes atelier 2026");
     expect(new Set(queries).size).toBe(queries.length);
