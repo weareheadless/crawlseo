@@ -8,6 +8,7 @@ vi.mock("@/lib/encryption", () => ({
 }));
 
 import { evaluateGoogleAiOverviewQuestion } from "@/lib/aeo/google-ai-overview";
+import { normalizeSerpKeyword } from "@/lib/dataforseo/serp";
 
 const input = {
   projectId: "project-1",
@@ -27,6 +28,19 @@ function ok(payload: unknown) {
 function serp(items: unknown[]) {
   return { status_code: 20000, tasks: [{ id: "task-abc", status_code: 20000, cost: 0.001, result: [{ items }] }] };
 }
+
+describe("SERP keyword normalisation", () => {
+  it("removes the punctuation the provider rejects", () => {
+    expect(normalizeSerpKeyword("Is OceanicVibes trustworthy, and what should I know?")).toBe(
+      "Is OceanicVibes trustworthy and what should I know"
+    );
+    expect(normalizeSerpKeyword("  freediving   course  ")).toBe("freediving course");
+  });
+
+  it("keeps a phrase that needs no cleaning", () => {
+    expect(normalizeSerpKeyword("freediving playa del carmen")).toBe("freediving playa del carmen");
+  });
+});
 
 describe("Google AI Overview evaluation", () => {
   const fetchMock = vi.fn();
@@ -48,7 +62,9 @@ describe("Google AI Overview evaluation", () => {
     expect(result.referencedDomains).toEqual(["example.com", "other.test"]);
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/serp/google/organic/live/advanced");
-    expect(JSON.parse(String(options.body))[0]).toMatchObject({ keyword: input.question, language_code: "fr", location_code: 2250, device: "mobile", os: "android" });
+    // The trailing question mark is removed: the provider's search engine
+    // returns 40101 for some punctuated queries.
+    expect(JSON.parse(String(options.body))[0]).toMatchObject({ keyword: "Best artisan bakery in Paris", language_code: "fr", location_code: 2250, device: "mobile", os: "android" });
   });
 
   it("returns overview_absent distinctly from brand absence", async () => {

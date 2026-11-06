@@ -111,6 +111,11 @@ export async function collectGoogleAiOverviews(
 
     const dimensions = {
       question,
+      // A punctuated question is sent cleaned; the evidence says which phrase
+      // was actually searched so the observation can be reproduced.
+      ...(result.searchedKeyword && result.searchedKeyword !== question
+        ? { searchedKeyword: result.searchedKeyword }
+        : {}),
       surface: "google_ai_overview",
       model: null,
       locale,

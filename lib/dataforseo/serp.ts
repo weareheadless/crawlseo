@@ -12,14 +12,47 @@ export type GoogleSerpInput = {
   locationCode: number;
   device: "desktop" | "mobile";
 };
-export type GoogleSerpResponse = { payload: unknown; taskId: string | null; costMicros: number | null };
+export type GoogleSerpResponse = {
+  payload: unknown;
+  taskId: string | null;
+  costMicros: number | null;
+  /** The phrase actually sent; differs from the question when it needed cleaning. */
+  searchedKeyword: string;
+};
+
+/**
+ * The provider's search engine returns 40101 on some punctuated queries - a
+ * question mark or a comma is enough - while the same words without punctuation
+ * answer normally. The question is still the identity of the observation; the
+ * cleaned phrase is what was searched.
+ */
+export function normalizeSerpKeyword(value: string): string {
+  const cleaned = value
+    .replace(/[?!,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return cleaned || value.trim().slice(0, 120);
+}
 
 export class DataForSeoRequestError extends Error {
-  constructor(readonly kind: "rate_limited" | "request_failed" | "configuration_error", message: string) {
+  constructor(
+    readonly kind: "rate_limited" | "request_failed" | "configuration_error",
+    message: string,
+    /** DataForSEO's own task status code, when the failure came from the task. */
+    readonly providerCode: number | null = null
+  ) {
     super(message);
     this.name = "DataForSeoRequestError";
   }
 }
+
+/**
+ * Provider-side search engine failures. They are transient and the task is not
+ * billed, so the same request is worth sending again; a rejected payload (40501)
+ * or a credentials problem is not.
+ */
+const RETRYABLE_TASK_CODES = new Set([40101, 40102, 50000]);
 
 async function projectCredentials(projectId: string) {
   const grant = await db.projectApiKeyGrant.findFirst({
@@ -74,8 +107,7 @@ async function readBoundedBody(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-/** One bounded live SERP call; deliberately no retries because each call may incur spend. */
-export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSerpResponse> {
+async function requestGoogleSerp(input: GoogleSerpInput): Promise<GoogleSerpResponse> {
   const credentials = await projectCredentials(input.projectId);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -88,7 +120,7 @@ export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSer
         "Content-Type": "application/json",
       },
       body: JSON.stringify([{
-        keyword: input.question,
+        keyword: normalizeSerpKeyword(input.question),
         language_code: input.languageCode,
         location_code: input.locationCode,
         device: input.device,
@@ -112,12 +144,21 @@ export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSer
     }
     const task = object(root.tasks[0]);
     if (!task || Number(task.status_code) !== 20000 || !Array.isArray(task.result)) {
-      throw new DataForSeoRequestError("request_failed", "DataForSEO returned an invalid SERP task");
+      // The task status carries the provider's own reason; without it the only
+      // thing a caller can say is "invalid task", which is not diagnosable.
+      const code = task ? Number(task.status_code) : null;
+      const message = task && typeof task.status_message === "string" ? task.status_message.slice(0, 200) : null;
+      throw new DataForSeoRequestError(
+        "request_failed",
+        `DataForSEO rejected the SERP task${code ? ` (${code})` : ""}${message ? `: ${message}` : ""}`,
+        code
+      );
     }
     return {
       payload: root,
       taskId: typeof task.id === "string" ? task.id.slice(0, 160) : null,
       costMicros: costMicros(task.cost ?? root.cost),
+      searchedKeyword: normalizeSerpKeyword(input.question),
     };
   } catch (error) {
     if (error instanceof DataForSeoRequestError) throw error;
@@ -127,5 +168,27 @@ export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSer
     throw new DataForSeoRequestError("request_failed", "DataForSEO SERP request failed");
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * One bounded live SERP call.
+ *
+ * A provider-side search engine error (40101) is retried once: it is transient,
+ * the failed task is not billed, and without the retry a random third of the AEO
+ * questions silently disappears from the bundle. Every other failure is final,
+ * so a bad payload or bad credentials never spends twice.
+ */
+export async function fetchGoogleSerp(input: GoogleSerpInput): Promise<GoogleSerpResponse> {
+  try {
+    return await requestGoogleSerp(input);
+  } catch (error) {
+    const retryable = error instanceof DataForSeoRequestError
+      && error.kind === "request_failed"
+      && error.providerCode !== null
+      && RETRYABLE_TASK_CODES.has(error.providerCode);
+    if (!retryable) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    return requestGoogleSerp(input);
   }
 }

@@ -13,6 +13,8 @@ export type GoogleAiOverviewResult = {
   citations: string[] | null;
   referencedDomains: string[] | null;
   brandPresent: boolean | null;
+  /** The phrase sent to the provider; null when nothing was sent. */
+  searchedKeyword: string | null;
   error: string | null;
 };
 export type EvaluateGoogleAiOverviewInput = {
@@ -66,7 +68,7 @@ function resultBase(input: EvaluateGoogleAiOverviewInput, state: GoogleAiOvervie
   return {
     state, provider: "google_ai_overview", question: input.question,
     locale: input.locale, device: input.device, costMicros: null, taskId: null,
-    answerText: null, citations: null, referencedDomains: null, brandPresent: null, error,
+    answerText: null, citations: null, referencedDomains: null, brandPresent: null, searchedKeyword: null, error,
   };
 }
 
@@ -105,7 +107,8 @@ export async function evaluateGoogleAiOverviewQuestion(input: EvaluateGoogleAiOv
     return {
       state: "succeeded", provider: "google_ai_overview", question: input.question,
       locale: input.locale, device: input.device, costMicros: response.costMicros,
-      taskId: response.taskId, answerText, citations, referencedDomains, brandPresent, error: null,
+      taskId: response.taskId, answerText, citations, referencedDomains, brandPresent,
+      searchedKeyword: response.searchedKeyword, error: null,
     };
   } catch (error) {
     if (error instanceof DataForSeoRequestError) {
