@@ -2,33 +2,52 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-06T19:28:46.850Z",
+  "generatedAt": "2026-11-06T21:45:53.559Z",
   "topics": [
     {
-      "slug": "oceanicvibes-private-one-to-one-freediving-coaching",
-      "name": "OceanicVibes private one-to-one freediving coaching",
-      "intent": "commercial",
+      "slug": "oceanicvibes-brand-and-playa-del-carmen-freediving",
+      "name": "OceanicVibes brand and Playa del Carmen freediving",
+      "intent": "mixed",
       "relevance": "high",
-      "coverageKind": "mixed",
+      "coverageKind": "brand",
       "offerKey": "OceanicVibes",
-      "rationale": "Core offer: private, one-to-one coaching shaped around the diver; home is the only page that sells it. The two supplied brand queries are the only query evidence.",
+      "rationale": "Brand and Playa del Carmen navigational queries should land on the home page, which states the Yucatán coaching offer.",
       "requireAny": [
         "ocean vibes",
+        "playa carmen",
+        "freediving mexico",
         "oceanvibes",
-        "ocean",
-        "vibes"
+        "ocean"
       ],
       "terms": [
         "ocean vibes",
+        "playa carmen",
+        "freediving mexico",
+        "freediving playa",
+        "carmen freediving",
+        "freediving",
         "oceanvibes",
         "ocean",
-        "vibes"
+        "vibes",
+        "playa",
+        "carmen",
+        "mexico"
       ],
       "strongTerms": [
-        "ocean vibes"
+        "ocean vibes",
+        "playa carmen",
+        "freediving mexico",
+        "freediving playa",
+        "carmen freediving"
       ],
       "coverageRequireAny": [
-        "ocean"
+        "playa carmen",
+        "freediving playa",
+        "carmen freediving",
+        "freediving",
+        "ocean",
+        "playa",
+        "carmen"
       ],
       "preferredPages": [
         "/"
@@ -36,22 +55,396 @@
       "exclusive": true,
       "pageTerms": [
         "ocean vibes",
+        "playa carmen",
+        "freediving mexico",
+        "freediving playa",
+        "carmen freediving",
+        "freediving",
         "oceanvibes",
         "ocean",
-        "vibes"
+        "vibes",
+        "playa",
+        "carmen",
+        "mexico"
       ],
-      "actionHint": "Keep home focused on private coaching benefits, safety culture, and booking; add proof and a clear next-step CTA."
+      "actionHint": "Keep the home title and intro focused on OceanicVibes, Playa del Carmen and Yucatán freediving coaching."
+    },
+    {
+      "slug": "private-one-to-one-freediving-coaching",
+      "name": "Private one-to-one freediving coaching",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "OceanicVibes",
+      "rationale": "The teacher-selection article explains adaptive one-to-one coaching and is the best current owner for this need.",
+      "requireAny": [
+        "freediving course",
+        "course mexico",
+        "mexico"
+      ],
+      "terms": [
+        "freediving course",
+        "course mexico",
+        "freediving",
+        "course",
+        "mexico"
+      ],
+      "strongTerms": [
+        "freediving course",
+        "course mexico"
+      ],
+      "coverageRequireAny": [
+        "freediving course",
+        "freediving",
+        "course"
+      ],
+      "preferredPages": [
+        "/blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving course",
+        "course mexico",
+        "freediving",
+        "course",
+        "mexico"
+      ],
+      "actionHint": "Add a private-coaching service block, booking CTA and skill-focus options to this article."
+    },
+    {
+      "slug": "aida-3-and-freediving-course-selection-in-playa-del-carmen",
+      "name": "AIDA 3 and freediving course selection in Playa del Carmen",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "OceanicVibes",
+      "rationale": "The local course-choice guide is the closest owner for AIDA 3 and certification-course searches.",
+      "requireAny": [
+        "freediving course",
+        "course mexico",
+        "freediving courses",
+        "mexico"
+      ],
+      "terms": [
+        "freediving course",
+        "course mexico",
+        "freediving courses",
+        "aida freediving",
+        "course beginners",
+        "level freediving",
+        "freediving",
+        "course",
+        "mexico",
+        "courses",
+        "aida",
+        "beginners",
+        "level"
+      ],
+      "strongTerms": [
+        "freediving course",
+        "course mexico",
+        "freediving courses",
+        "aida freediving",
+        "course beginners",
+        "level freediving"
+      ],
+      "coverageRequireAny": [
+        "freediving course",
+        "freediving",
+        "course"
+      ],
+      "preferredPages": [
+        "/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving course",
+        "course mexico",
+        "freediving courses",
+        "aida freediving",
+        "course beginners",
+        "level freediving",
+        "freediving",
+        "course",
+        "mexico",
+        "courses",
+        "aida",
+        "beginners",
+        "level"
+      ],
+      "actionHint": "Add AIDA 3 prerequisites, outcomes and course comparison details to the guide."
+    },
+    {
+      "slug": "depth-training-advanced-depth-and-line-training-with-30m-saf",
+      "name": "Depth training, advanced depth and line training with 30m safety",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "OceanicVibes",
+      "rationale": "The plateau article addresses depth barriers and progression, the core of advanced depth and line training.",
+      "requireAny": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "deep"
+      ],
+      "terms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course",
+        "freediving",
+        "course",
+        "deep",
+        "training"
+      ],
+      "strongTerms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course"
+      ],
+      "coverageRequireAny": [
+        "freediving course",
+        "freediving",
+        "course"
+      ],
+      "preferredPages": [
+        "/blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course",
+        "freediving",
+        "course",
+        "deep",
+        "training"
+      ],
+      "actionHint": "Add a depth-training syllabus, line drills and 30m safety protocol section to this article."
+    },
+    {
+      "slug": "deep-equalization-coaching",
+      "name": "Deep equalization coaching",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "OceanicVibes",
+      "rationale": "The equalization-stall article directly owns the problem; broad depth and training queries support this coaching need.",
+      "requireAny": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "deep"
+      ],
+      "terms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course",
+        "freediving",
+        "course",
+        "deep",
+        "training"
+      ],
+      "strongTerms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course"
+      ],
+      "coverageRequireAny": [
+        "freediving course",
+        "freediving",
+        "course"
+      ],
+      "preferredPages": [
+        "/blog/frenzel-works-on-land-not-underwater-what-to-do-when-equalization-stalls-on-the-depth-line-and-wheth"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving deep",
+        "freediving training",
+        "training course",
+        "freediving course",
+        "freediving",
+        "course",
+        "deep",
+        "training"
+      ],
+      "actionHint": "Add a diagnostic checklist and a private equalization-coaching CTA to the article."
+    },
+    {
+      "slug": "breathwork-relaxation-co-o-efficiency-and-physical-preparati",
+      "name": "Breathwork, relaxation, CO₂/O₂ efficiency and physical preparation",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "OceanicVibes",
+      "rationale": "The land-practice article covers CO₂ tables, breathwork and preparation, matching this training need.",
+      "requireAny": [
+        "freediving course",
+        "freediving beginners",
+        "course beginners",
+        "beginners"
+      ],
+      "terms": [
+        "freediving course",
+        "freediving beginners",
+        "course beginners",
+        "level freediving",
+        "freediving",
+        "beginners",
+        "course",
+        "level"
+      ],
+      "strongTerms": [
+        "freediving course",
+        "freediving beginners",
+        "course beginners",
+        "level freediving"
+      ],
+      "coverageRequireAny": [
+        "freediving course",
+        "freediving",
+        "course"
+      ],
+      "preferredPages": [
+        "/blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving course",
+        "freediving beginners",
+        "course beginners",
+        "level freediving",
+        "freediving",
+        "beginners",
+        "course",
+        "level"
+      ],
+      "actionHint": "Expand it with relaxation drills, O₂ tables and a physical-preparation progression."
+    },
+    {
+      "slug": "freediving-in-tulum",
+      "name": "Freediving in Tulum",
+      "intent": "local",
+      "relevance": "medium",
+      "coverageKind": "local",
+      "offerKey": "OceanicVibes",
+      "rationale": "Tulum is a distinct local market with its own searches, but the site has no Tulum page yet.",
+      "requireAny": [
+        "freediving tulum",
+        "tulum freediving",
+        "cenote freediving",
+        "tulum",
+        "cenote"
+      ],
+      "terms": [
+        "freediving tulum",
+        "tulum freediving",
+        "cenote freediving",
+        "tulum",
+        "freediving",
+        "cenote"
+      ],
+      "strongTerms": [
+        "freediving tulum",
+        "tulum freediving",
+        "cenote freediving"
+      ],
+      "coverageRequireAny": [
+        "cenote freediving",
+        "freediving",
+        "cenote"
+      ],
+      "preferredPages": [
+        "/blog/cenote-or-ocean-first-freediving-course"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "freediving tulum",
+        "tulum freediving",
+        "cenote freediving",
+        "tulum",
+        "freediving",
+        "cenote"
+      ],
+      "actionHint": "Create a Tulum freediving page linking cenote sessions and private coaching."
+    },
+    {
+      "slug": "freediving-in-the-cenotes-of-yucatan",
+      "name": "Freediving in the cenotes of Yucatán",
+      "intent": "local",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "OceanicVibes",
+      "rationale": "The cenote-vs-ocean article is the only page explaining cenote freediving conditions and choices.",
+      "requireAny": [
+        "cenote freediving",
+        "freediving cenotes",
+        "cenotes freediving",
+        "cenotes",
+        "cenote"
+      ],
+      "terms": [
+        "cenote freediving",
+        "freediving cenotes",
+        "cenotes freediving",
+        "freediving tulum",
+        "freediving",
+        "cenotes",
+        "cenote",
+        "tulum"
+      ],
+      "strongTerms": [
+        "cenote freediving",
+        "freediving cenotes",
+        "cenotes freediving",
+        "freediving tulum"
+      ],
+      "coverageRequireAny": [
+        "cenote freediving",
+        "freediving",
+        "cenote"
+      ],
+      "preferredPages": [
+        "/blog/cenote-or-ocean-first-freediving-course"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "cenote freediving",
+        "freediving cenotes",
+        "cenotes freediving",
+        "freediving tulum",
+        "freediving",
+        "cenotes",
+        "cenote",
+        "tulum"
+      ],
+      "actionHint": "Add Cenote Azul and Bacalar details plus a cenote-session CTA to this article."
     }
   ],
-  "pageTypeRules": [],
+  "pageTypeRules": [
+    {
+      "type": "blog",
+      "pattern": "/blog"
+    },
+    {
+      "type": "home",
+      "pattern": "/"
+    }
+  ],
   "excludePaths": [],
   "newsQueries": [
-    "freediving competitions Mexico 2026",
-    "freediving safety regulations Mexico 2026",
-    "AIDA freediving courses Playa del Carmen 2026",
-    "cenote freediving rules Quintana Roo 2026",
-    "freediving depth training Tulum 2026",
-    "freediving events Yucatan 2026"
+    "freediving Playa del Carmen 2026",
+    "freediving Tulum 2026",
+    "cenote freediving Yucatan 2026",
+    "AIDA freediving rules 2026",
+    "freediving safety standards Mexico 2026",
+    "Playa del Carmen freediving events 2026"
   ],
-  "summary": "OceanicVibes topic map for Playa del Carmen freediving coaching: private one-to-one coaching, AIDA 3, depth/line training, equalization, dry prep, safety, local course choice, cenote/ocean, plateau and teacher fit. Query sample only has brand terms."
+  "summary": "Topic map for OceanicVibes, a Playa del Carmen freediving coaching business. It separates brand/local discovery, private coaching, AIDA 3 courses, depth and line training, equalization, land preparation, Tulum and cenote markets."
 }

@@ -121,6 +121,12 @@ function makeDb(state: State, options: { coverage?: unknown[] } = {}) {
     researchBudgetReservation: {
       findMany: async () => state.reservations,
     },
+    crawl: {
+      findFirst: async () => null,
+    },
+    auditPage: {
+      findMany: async () => [],
+    },
     projectApiKeyGrant: {
       findFirst: async () => ({
         apiKeyId: "key-1",
@@ -167,8 +173,14 @@ function makeDb(state: State, options: { coverage?: unknown[] } = {}) {
 }
 
 function makeDeps(state: State, overrides: Partial<BundleDeps> = {}): BundleDeps {
-  const calls = { keyword: 0, serp: 0, aeo: 0, news: 0, save: 0 };
+  const calls = { keyword: 0, discovery: 0, serp: 0, aeo: 0, news: 0, save: 0 };
   const deps: BundleDeps = {
+    proposeDiscoverySeeds: async () => ({
+      seeds: ["freediving Playa del Carmen", "AIDA 3 Playa del Carmen", "freediving course Playa del Carmen"],
+      source: "model" as const,
+      model: "test-model",
+      error: null,
+    }),
     collectKeywordMetrics: async (_db, input) => {
       calls.keyword += 1;
       return {
@@ -180,6 +192,19 @@ function makeDeps(state: State, overrides: Partial<BundleDeps> = {}): BundleDeps
           metrics: {},
         })),
         spentMicros: input.queries.length * 1_400,
+      };
+    },
+    collectKeywordDiscovery: async (_db, input) => {
+      calls.discovery = (calls.discovery ?? 0) + 1;
+      return {
+        evidence: input.queries.flatMap((seed) => ({
+          id: `discovery-${seed}`,
+          kind: "keyword_metrics",
+          observedAt: new Date("2026-11-05T10:00:00Z"),
+          dimensions: { query: `${seed} idea`, seed, product: "keyword_related" },
+          metrics: {},
+        })),
+        spentMicros: input.queries.length * 24_000,
       };
     },
     collectSerpSnapshots: async (_db, input) => {
@@ -397,6 +422,7 @@ describe("monthly bundle run", () => {
     expect(state.creates).toBe(0);
     expect((deps as unknown as { calls: Record<string, number> }).calls).toEqual({
       keyword: 0,
+      discovery: 0,
       serp: 0,
       aeo: 0,
       news: 0,
@@ -417,7 +443,8 @@ describe("monthly bundle run", () => {
 
     expect(first.status).toBe("completed");
     expect(first.exitCode).toBe(0);
-    expect(first.paidCalls).toBe(2 + 10 + 12);
+    // keyword batches + SERP + AI Overviews + discovery seeds (two Labs calls each).
+    expect(first.paidCalls).toBe(2 + 10 + 12 + first.plan.selected.discoverySeeds.length * 2);
     expect(first.totalCostMicros).toBeGreaterThan(0);
     expect(state.runs).toHaveLength(1);
     expect(state.runs[0]).toMatchObject({
@@ -435,6 +462,7 @@ describe("monthly bundle run", () => {
       "crawl",
       "gsc",
       "keyword_metrics",
+      "keyword_discovery",
       "serp_snapshots",
       "aeo_geo",
       "news_events",

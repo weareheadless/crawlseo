@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   executeDataForSeoKeywordOverview,
   executeDataForSeoKeywordSuggestions,
+  executeDataForSeoRelatedKeywords,
   executeDataForSeoOrganicSerp,
   performDataForSeoOperation,
 } from "@/lib/dataforseo/client";
@@ -173,6 +174,100 @@ export async function collectKeywordMetrics(db: CollectionDb, input: CollectionI
       dimensions: { query: metric.keyword, locale: `${input.languageCode}:${input.locationCode}`, product: "keyword_overview" },
       metrics,
     });
+  }
+  return { evidence, spentMicros: spent };
+}
+
+/**
+ * Discovery: ask the provider which keywords exist around a seed, when Search
+ * Console has nothing to expand from.
+ *
+ * A site with two measured queries has no query universe, so buying volume for
+ * those two answers nothing. This reads the market's own vocabulary around the
+ * business's services and places, and stores it as ordinary keyword evidence -
+ * the topic map already treats a provider-only keyword as real demand with zero
+ * first-party impressions.
+ */
+export async function collectKeywordDiscovery(
+  db: CollectionDb,
+  input: CollectionInput
+): Promise<CollectionOutput> {
+  const evidence: CollectedEvidence[] = [];
+  let spent = 0;
+  const locale = `${input.languageCode}:${input.locationCode}`;
+  const sources = [
+    {
+      product: "keyword_related" as const,
+      endpoint: "related_keywords/live",
+      run: (seed: string) =>
+        executeDataForSeoRelatedKeywords({
+          projectId: input.projectId,
+          seed,
+          languageCode: input.languageCode,
+          locationCode: input.locationCode,
+        }),
+    },
+    {
+      product: "keyword_suggestions" as const,
+      endpoint: "keyword_suggestions/live",
+      run: (seed: string) =>
+        executeDataForSeoKeywordSuggestions({
+          projectId: input.projectId,
+          keyword: seed,
+          languageCode: input.languageCode,
+          locationCode: input.locationCode,
+          limit: 20,
+        }),
+    },
+  ];
+
+  for (const seed of input.queries) {
+    for (const source of sources) {
+      const { result, spentMicros } = await withResearchBudget(input.projectId, {
+        operation: `dataforseo:${source.product}`,
+        detail: { seed, locale, attempt: input.attempt ?? null },
+        expectedMicros: 12_000,
+        run: () => source.run(seed),
+        costOf: (value) => microsOf(value.costMicros),
+      });
+      spent += spentMicros;
+      const raw = await db.rawProviderResponse.create({
+        data: {
+          provider: "dataforseo",
+          product: "dataforseo_labs",
+          endpoint: source.endpoint,
+          providerTaskId: result.providerTaskId,
+          locale,
+          requestedAt: new Date(),
+          deliveredAt: new Date(),
+          costMicros: BigInt(spentMicros),
+          status: "succeeded",
+          payload: result.result as never,
+        },
+        select: { id: true },
+      });
+      for (const metric of result.result) {
+        if (!metric.keyword) continue;
+        const metrics: Record<string, { value: number | null; unit: string; source: "provider" }> = {};
+        if (typeof metric.volume === "number") metrics["provider:volume"] = { value: metric.volume, unit: "searches/month", source: "provider" };
+        if (typeof metric.difficulty === "number") metrics["provider:difficulty"] = { value: metric.difficulty, unit: "score", source: "provider" };
+        if (typeof metric.cpc === "number") metrics["provider:cpc"] = { value: metric.cpc, unit: "currency", source: "provider" };
+        if (typeof metric.competition === "number") metrics["provider:competition"] = { value: metric.competition, unit: "score", source: "provider" };
+        if (Object.keys(metrics).length === 0) continue;
+        const dimensions = { query: metric.keyword, seed, locale, product: source.product };
+        const stored = await storeEvidenceRecord(db, {
+          projectId: input.projectId,
+          siteId: input.siteId,
+          kind: "keyword_metrics",
+          observedAt: new Date(),
+          producer: "dataforseo",
+          rawResponseId: raw.id,
+          dimensions,
+          metrics,
+        });
+        evidence.push({ id: stored.id, kind: "keyword_metrics", observedAt: new Date(), dimensions, metrics });
+      }
+    }
   }
   return { evidence, spentMicros: spent };
 }

@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { resolveDataForSeoLocale } from "@/lib/dataforseo/client";
 import {
+  collectKeywordDiscovery,
   collectKeywordMetrics,
   collectSerpSnapshots,
   type CollectionInput,
@@ -27,6 +28,11 @@ import { saveResearchSources } from "@/lib/research/service";
 import type { ResearchSourceInput } from "@/lib/research/types";
 import { effectiveMonthlyAllowance, usesDefaultAllowance } from "@/lib/billing/budget-defaults";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext, type SiteContext } from "@/lib/site/context";
+import {
+  proposeDiscoverySeeds,
+  type DiscoverySeedInput,
+  type DiscoverySeedResult,
+} from "@/lib/research/discovery-seeds";
 import { loadTopicTaxonomy, queryMatchesTaxonomy } from "@/lib/research/topic-taxonomy";
 import { TIMELY_WINDOW_DAYS as TIMELY_NEWS_DAYS } from "@/lib/research/opportunity-drafting";
 
@@ -46,6 +52,8 @@ export type BundleDb = PrismaClient;
 export type BundleCaps = {
   /** Target 20–40. */
   keywordQueries: number;
+  /** Seeds for keyword discovery; each seed buys two Labs calls. */
+  discoverySeeds: number;
   /** Target 10. */
   serpQueries: number;
   /** Target 10–20. */
@@ -58,10 +66,15 @@ export type BundleCaps = {
 
 export const DEFAULT_BUNDLE_CAPS: BundleCaps = {
   keywordQueries: 30,
+  // Discovery is the part that lets a site with no Search Console history get a
+  // query universe at all. Two Labs calls per seed, so six seeds is about $0.14.
+  discoverySeeds: 6,
   serpQueries: 10,
   aeoQuestions: 12,
   newsItems: 20,
-  capMicros: 100_000,
+  // $0.30 covers a full bundle: 30 keyword queries, 6 discovery seeds, 10 SERPs
+  // and 12 AI Overviews. The monthly allowance ($1 default) still governs.
+  capMicros: 300_000,
 };
 
 /** Conservative unit prices; the provider receipt is the source of truth. */
@@ -71,6 +84,7 @@ export const BUNDLE_COST_ESTIMATES = {
   keywordMinBatchMicros: 12_000,
   serpPerQueryMicros: 2_000,
   aiOverviewPerQuestionMicros: 2_500,
+  discoveryPerSeedMicros: 24_000,
 } as const;
 
 export type BundleLocale = {
@@ -104,7 +118,7 @@ export type BundleBudget = {
 };
 
 export type PlannedPaidCall = {
-  section: "keyword_metrics" | "serp_snapshots" | "aeo_geo";
+  section: "keyword_metrics" | "keyword_discovery" | "serp_snapshots" | "aeo_geo";
   operation: string;
   units: string[];
   estimatedMicros: number;
@@ -121,26 +135,32 @@ export type BundlePlan = {
   brand: string | null;
   selected: {
     keywordQueries: string[];
+    discoverySeeds: string[];
     serpQueries: string[];
     aeoQuestions: string[];
     newsQueries: string[];
   };
   reuse: {
     keywordQueries: string[];
+    discoverySeeds: string[];
     serpQueries: string[];
     aeoQuestions: string[];
   };
   missing: {
     keywordQueries: string[];
+    discoverySeeds: string[];
     serpQueries: string[];
     aeoQuestions: string[];
   };
+  /** Who chose the discovery seeds, and why the fallback was used if it was. */
+  discovery: { source: "model" | "fallback"; model: string | null; error: string | null };
   /** What the paid caps left out, counted rather than dropped in silence. */
   coverage: {
     keywordQueriesAvailable: number;
     unmeasuredKeywordQueries: number;
     keywordQueriesOmitted: number;
     serpQueriesOmitted: number;
+    discoverySeedsOmitted: number;
     queriesDroppedTooLong: number;
     /** Audience markets the owner declared that this bundle did not measure. */
     unmeasuredMarkets: string[];
@@ -163,6 +183,7 @@ export type BundleSectionName =
   | "crawl"
   | "gsc"
   | "keyword_metrics"
+  | "keyword_discovery"
   | "serp_snapshots"
   | "aeo_geo"
   | "news_events";
@@ -204,7 +225,9 @@ export type BundleResult = {
 };
 
 export type BundleDeps = {
+  proposeDiscoverySeeds: (input: DiscoverySeedInput) => Promise<DiscoverySeedResult>;
   collectKeywordMetrics: (db: BundleDb, input: CollectionInput) => Promise<CollectionOutput>;
+  collectKeywordDiscovery: (db: BundleDb, input: CollectionInput) => Promise<CollectionOutput>;
   collectSerpSnapshots: (db: BundleDb, input: CollectionInput) => Promise<CollectionOutput>;
   collectAiOverviews: (
     db: BundleDb,
@@ -238,7 +261,9 @@ export type BundleDeps = {
 };
 
 export const defaultBundleDeps: BundleDeps = {
+  proposeDiscoverySeeds,
   collectKeywordMetrics,
+  collectKeywordDiscovery,
   collectSerpSnapshots,
   collectAiOverviews: collectGoogleAiOverviews,
   backfill: backfillSiteEvidence,
@@ -284,11 +309,13 @@ export function resolveBundleCaps(input: Partial<BundleCaps> = {}): BundleCaps {
     if (!Number.isFinite(value) || value <= 0) throw new BundleError(`cap ${name} must be a positive number`, 2);
   }
   if (caps.keywordQueries > 40) throw new BundleError("keywordQueries cap cannot exceed 40", 2);
+  if (caps.discoverySeeds > 20) throw new BundleError("discoverySeeds cap cannot exceed 20", 2);
   if (caps.serpQueries > 10) throw new BundleError("serpQueries cap cannot exceed 10", 2);
   if (caps.aeoQuestions > 20) throw new BundleError("aeoQuestions cap cannot exceed 20", 2);
   if (caps.newsItems > 20) throw new BundleError("newsItems cap cannot exceed 20", 2);
   return {
     keywordQueries: Math.floor(caps.keywordQueries),
+    discoverySeeds: Math.floor(caps.discoverySeeds),
     serpQueries: Math.floor(caps.serpQueries),
     aeoQuestions: Math.floor(caps.aeoQuestions),
     newsItems: Math.floor(caps.newsItems),
@@ -334,6 +361,7 @@ export function estimateKeywordBatchMicros(count: number): number {
 
 export function planPaidCalls(input: {
   keywordQueries: string[];
+  discoverySeeds?: string[];
   serpQueries: string[];
   aeoQuestions: string[];
 }): PlannedPaidCall[] {
@@ -344,6 +372,14 @@ export function planPaidCalls(input: {
       operation: "dataforseo:keyword_metrics",
       units: batch,
       estimatedMicros: estimateKeywordBatchMicros(batch.length),
+    });
+  }
+  for (const seed of input.discoverySeeds ?? []) {
+    calls.push({
+      section: "keyword_discovery",
+      operation: "dataforseo:keyword_discovery",
+      units: [seed],
+      estimatedMicros: BUNDLE_COST_ESTIMATES.discoveryPerSeedMicros,
     });
   }
   for (const query of input.serpQueries) {
@@ -534,6 +570,29 @@ export function buildNewsQueriesForSite(input: {
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * The words the site already uses for its work: page titles and H1s from the
+ * latest crawl. They are closer to how buyers search than the navigation labels
+ * the owner's services come from.
+ */
+async function discoveryPageVocabulary(db: BundleDb, siteId: string): Promise<string[]> {
+  const crawl = await db.crawl.findFirst({
+    where: { siteId, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { id: true },
+  });
+  if (!crawl) return [];
+  const pages = await db.auditPage.findMany({
+    where: { crawlId: crawl.id, statusCode: 200 },
+    select: { title: true, h1s: true },
+    orderBy: { wordCount: "desc" },
+    take: 60,
+  });
+  const h1s = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+  return pages.flatMap((page) => [page.title, ...h1s(page.h1s)]).filter((value): value is string => Boolean(value));
 }
 
 export async function hasDataForSeoCredentials(db: BundleDb, projectId: string): Promise<boolean> {
@@ -741,6 +800,38 @@ export async function buildBundlePlan(input: {
   );
 
   const fields = await businessKnowledgeFields(db, site.projectId);
+  // Seeds are a judgement about the business, so the model proposes them from
+  // the owner's services and the site's own page titles. Ask for a few more than
+  // the cap so the cap is a choice between seeds, and report what it left out.
+  const discoveryPageTitles = await discoveryPageVocabulary(db, site.id);
+  const proposed = await input.deps.proposeDiscoverySeeds({
+    domain: site.domain,
+    language: locale.language,
+    businessName: fieldText(fields, "businessName"),
+    services: fieldList(fields, "services"),
+    location: fieldText(fields, "location"),
+    serviceArea: fieldList(fields, "serviceArea"),
+    audience: fieldText(fields, "audienceMotivations"),
+    pageTitles: discoveryPageTitles,
+    knownQueries: rankedQueries,
+    limit: Math.min(20, caps.discoverySeeds + 4),
+  });
+  const discovery = {
+    seeds: proposed.seeds.slice(0, caps.discoverySeeds),
+    available: proposed.seeds.length,
+    omitted: Math.max(0, proposed.seeds.length - caps.discoverySeeds),
+  };
+  const reusedSeeds = await reusableValues(db, {
+    projectId: site.projectId,
+    siteId: site.id,
+    kind: "keyword_metrics",
+    since: monthStart,
+    key: "seed",
+    match: (dimensions) => dimensions.product === "keyword_related" && dimensions.locale === localeKey,
+  });
+  const discoveryReuse = discovery.seeds.filter((seed) => reusedSeeds.has(normalizePhrase(seed)));
+  const missingSeeds = discovery.seeds.filter((seed) => !reusedSeeds.has(normalizePhrase(seed)));
+
   const newsQueries = buildNewsQueriesForSite({
     businessName: fieldText(fields, "businessName"),
     services: fieldList(fields, "services"),
@@ -770,6 +861,21 @@ export async function buildBundlePlan(input: {
   if (droppedTooLong > 0) {
     warnings.push(
       `${droppedTooLong} queries longer than ${MAX_KEYWORD_QUERY_LENGTH} characters were not sent to the keyword API`
+    );
+  }
+  if (discovery.omitted > 0) {
+    warnings.push(
+      `${discovery.omitted} of ${discovery.available} discovery seeds were not sent (cap ${caps.discoverySeeds})`
+    );
+  }
+  if (proposed.source === "fallback") {
+    warnings.push(
+      `discovery seeds came from the service labels, not the model${proposed.error ? ` (${proposed.error})` : ""}: long labels often return no keywords`
+    );
+  }
+  if (discovery.available === 0) {
+    warnings.push(
+      "no discovery seeds: the business knowledge has no services, so only measured queries can be measured"
     );
   }
   if (!taxonomy) {
@@ -830,6 +936,7 @@ export async function buildBundlePlan(input: {
 
   const paidCalls = planPaidCalls({
     keywordQueries: missingKeywords,
+    discoverySeeds: missingSeeds,
     serpQueries: missingSerp,
     aeoQuestions: missingAeo,
   });
@@ -861,14 +968,16 @@ export async function buildBundlePlan(input: {
     locale,
     caps,
     brand: fieldText(fields, "businessName"),
-    selected: { keywordQueries, serpQueries, aeoQuestions, newsQueries },
-    reuse: { keywordQueries: keywordReuse, serpQueries: serpReuse, aeoQuestions: aeoReuse },
-    missing: { keywordQueries: missingKeywords, serpQueries: missingSerp, aeoQuestions: missingAeo },
+    selected: { keywordQueries, discoverySeeds: discovery.seeds, serpQueries, aeoQuestions, newsQueries },
+    reuse: { keywordQueries: keywordReuse, discoverySeeds: discoveryReuse, serpQueries: serpReuse, aeoQuestions: aeoReuse },
+    missing: { keywordQueries: missingKeywords, discoverySeeds: missingSeeds, serpQueries: missingSerp, aeoQuestions: missingAeo },
+    discovery: { source: proposed.source, model: proposed.model, error: proposed.error },
     coverage: {
       keywordQueriesAvailable: rankedQueries.length,
       unmeasuredKeywordQueries: keywordSelection.unmeasuredBefore,
       keywordQueriesOmitted: keywordSelection.omitted,
       serpQueriesOmitted: serpSelection.omitted,
+      discoverySeedsOmitted: discovery.omitted,
       queriesDroppedTooLong: droppedTooLong,
       unmeasuredMarkets: (input.contextMarkets ?? []).filter((code) => code !== locale.country),
       offTopicQueries: offTopic.length,
@@ -1138,6 +1247,16 @@ export async function runMonthlyBundle(
     errors,
   });
   sections.push(keywordSection);
+
+  const discoverySection = await collectDiscoverySection(db, {
+    plan,
+    attemptToken,
+    spend,
+    canSpend,
+    deps,
+    errors,
+  });
+  sections.push(discoverySection);
 
   const serpSection = await collectSerpSection(db, {
     plan,
@@ -1491,6 +1610,77 @@ async function collectKeywordSection(
   };
 }
 
+async function collectDiscoverySection(
+  db: BundleDb,
+  input: {
+    plan: BundlePlan;
+    attemptToken: string;
+    spend: { totalMicros: number; calls: number };
+    canSpend: (estimateMicros: number) => boolean;
+    deps: BundleDeps;
+    errors: string[];
+  }
+): Promise<BundleSectionResult> {
+  const missing = input.plan.missing.discoverySeeds;
+  const reused = input.plan.reuse.discoverySeeds.length;
+  if (missing.length === 0) {
+    return {
+      name: "keyword_discovery",
+      status: reused > 0 ? "reused" : "skipped",
+      stored: 0,
+      reused,
+      costMicros: 0,
+      evidenceIds: [],
+    };
+  }
+
+  let stored = 0;
+  let costMicros = 0;
+  const evidenceIds: string[] = [];
+  let error: string | undefined;
+  let capReached = false;
+
+  for (const seed of missing) {
+    const estimate = BUNDLE_COST_ESTIMATES.discoveryPerSeedMicros;
+    if (!input.canSpend(estimate)) {
+      capReached = true;
+      error = "bundle cap reached before a discovery seed";
+      break;
+    }
+    try {
+      const result = await input.deps.collectKeywordDiscovery(db, {
+        projectId: input.plan.projectId,
+        siteId: input.plan.siteId,
+        queries: [seed],
+        languageCode: input.plan.locale.languageCode,
+        locationCode: input.plan.locale.locationCode,
+        attempt: input.attemptToken,
+      });
+      input.spend.totalMicros += result.spentMicros;
+      input.spend.calls += 2;
+      costMicros += result.spentMicros;
+      stored += result.evidence.length;
+      evidenceIds.push(...result.evidence.map((row) => row.id));
+    } catch (caught) {
+      error = errorMessage(caught);
+      input.errors.push(`keyword_discovery: ${error}`);
+      break;
+    }
+  }
+
+  return {
+    name: "keyword_discovery",
+    status: error && stored === 0 ? "failed" : stored > 0 ? "stored" : "skipped",
+    stored,
+    reused,
+    costMicros,
+    evidenceIds,
+    partial: Boolean(error) || capReached,
+    detail: { capReached, requested: missing.length },
+    error,
+  };
+}
+
 async function collectSerpSection(
   db: BundleDb,
   input: {
@@ -1765,7 +1955,7 @@ async function reusableValues(
     siteId: string;
     kind: "keyword_metrics" | "serp_snapshot" | "ai_visibility_observation";
     since: Date;
-    key: "query" | "question";
+    key: "query" | "question" | "seed";
     match: (dimensions: Record<string, unknown>) => boolean;
   }
 ): Promise<Set<string>> {

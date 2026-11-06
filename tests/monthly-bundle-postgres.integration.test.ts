@@ -51,6 +51,12 @@ function depsFor(run: { projectId: string; siteId: string }): BundleDeps {
   };
 
   return {
+    proposeDiscoverySeeds: async () => ({
+      seeds: ["freediving Playa del Carmen", "AIDA 3 Playa del Carmen"],
+      source: "model" as const,
+      model: "test-model",
+      error: null,
+    }),
     collectKeywordMetrics: async (_db, input) => {
       const rawResponseId = await storeRaw("keyword_overview/live", input.queries.length * 1_400);
       const evidence = [];
@@ -76,6 +82,25 @@ function depsFor(run: { projectId: string; siteId: string }): BundleDeps {
         });
       }
       return { evidence, spentMicros: input.queries.length * 1_400 };
+    },
+    collectKeywordDiscovery: async (_db, input) => {
+      const rawResponseId = await storeRaw("related_keywords/live", 1_400);
+      const evidence = [];
+      for (const seed of input.queries) {
+        const query = `${seed} condos`;
+        const stored = await storeEvidenceRecord(db, {
+          projectId: run.projectId,
+          siteId: run.siteId,
+          kind: "keyword_metrics",
+          observedAt,
+          producer: "dataforseo",
+          rawResponseId,
+          dimensions: { query, seed, locale: "fr:2250", product: "keyword_related" },
+          metrics: { "provider:volume": { value: 90, unit: "searches/month", source: "provider" } },
+        });
+        evidence.push({ id: stored.id, kind: "keyword_metrics", observedAt, dimensions: { query }, metrics: {} });
+      }
+      return { evidence, spentMicros: 1_400 };
     },
     collectSerpSnapshots: async (_db, input) => {
       const rawResponseId = await storeRaw("google/organic/live/advanced", 2_000);

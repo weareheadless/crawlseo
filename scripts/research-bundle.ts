@@ -118,14 +118,15 @@ function printPlan(plan: BundlePlan): void {
     } · committed ${usd(budget.committedMicros)} · remaining ${usd(budget.remainingMicros)}\n`
   );
   process.stdout.write(
-    `caps: keywords ${plan.caps.keywordQueries} · serp ${plan.caps.serpQueries} · aeo ${plan.caps.aeoQuestions} · news ${plan.caps.newsItems} · bundle ${usd(plan.caps.capMicros)}\n`
+    `caps: keywords ${plan.caps.keywordQueries} · discovery ${plan.caps.discoverySeeds} · serp ${plan.caps.serpQueries} · aeo ${plan.caps.aeoQuestions} · news ${plan.caps.newsItems} · bundle ${usd(plan.caps.capMicros)}\n`
   );
 
   process.stdout.write(
-    `coverage: ${plan.coverage.keywordQueriesAvailable} queries · ${plan.coverage.unmeasuredKeywordQueries} never measured · ${plan.coverage.keywordQueriesOmitted} get no volume this month · ${plan.coverage.serpQueriesOmitted} get no SERP snapshot · ${plan.coverage.queriesDroppedTooLong} too long for the keyword API\n`
+    `coverage: ${plan.coverage.keywordQueriesAvailable} queries · ${plan.coverage.unmeasuredKeywordQueries} never measured · ${plan.coverage.keywordQueriesOmitted} get no volume this month · ${plan.coverage.serpQueriesOmitted} get no SERP snapshot · ${plan.coverage.discoverySeedsOmitted} discovery seeds not sent · ${plan.coverage.queriesDroppedTooLong} too long for the keyword API\n`
   );
 
   printList("keyword queries", plan.selected.keywordQueries);
+  printList("discovery seeds", plan.selected.discoverySeeds);
   printList("serp queries", plan.selected.serpQueries);
   printList("aeo questions", plan.selected.aeoQuestions);
   printList("news queries", plan.selected.newsQueries);

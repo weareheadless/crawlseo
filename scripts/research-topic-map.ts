@@ -186,7 +186,10 @@ async function main(): Promise<void> {
         },
         marketScope: rawData.marketScope,
         pagePaths: rawData.pages.map((page) => page.path),
-        queries: rawData.queries.slice(0, 80).map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
+        // Every query the site has: measured, plus the ones discovery bought.
+        // Sampling for the model happens once, in proposeTopicTaxonomy, which
+        // reports how many fell outside it.
+        queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
         // The whole inventory: a page that exists must be visible to the model
         // that is choosing owners. A cap here silently drops real pages and
         // produces "no page covers this topic" for a page that does.
