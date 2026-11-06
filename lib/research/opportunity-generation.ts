@@ -544,6 +544,8 @@ export function renderProposalBoard(input: {
   proposals: Proposal[];
   dropped: Array<{ title: string; reason: string }>;
   critique: { available: boolean; model: string | null; summary: string | null; error: string | null };
+  /** The drafting call's own note, including why it proposed nothing. */
+  drafting?: { model: string | null; summary: string | null; errors: string[] } | null;
   technical: ProposalInputs["technical"];
   generatedAt: string;
 }): string {
@@ -564,14 +566,6 @@ export function renderProposalBoard(input: {
     const laneProposals = input.proposals.filter((proposal) => proposal.lane === lane.lane);
     lines.push(`### ${lane.title}`);
     lines.push("");
-    if (lane.lane === "technical") {
-      if (input.technical.length === 0) lines.push("No existing technical opportunity in the current board.");
-      for (const row of input.technical) {
-        lines.push(`- **${row.title}** (${row.type}, score ${row.scoreValue ?? "—"}) — ${row.summary}`);
-      }
-      lines.push("");
-      continue;
-    }
     if (laneProposals.length === 0) {
       lines.push("No proposal in this lane.");
       lines.push("");
@@ -594,6 +588,13 @@ export function renderProposalBoard(input: {
       if (proposal.critique) lines.push(`- Critique: ${proposal.critique.verdict} — ${proposal.critique.reason}`);
       lines.push("");
     }
+  }
+  if (input.drafting?.summary || (input.drafting?.errors.length ?? 0) > 0) {
+    lines.push("## Drafting note");
+    lines.push("");
+    if (input.drafting?.summary) lines.push(input.drafting.summary);
+    for (const error of input.drafting?.errors ?? []) lines.push(`\n- ${error}`);
+    lines.push("");
   }
   lines.push("## Critique");
   lines.push("");

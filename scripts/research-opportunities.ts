@@ -390,7 +390,7 @@ async function main(): Promise<void> {
     // The group becomes one board row; the absorbed rows are closed with a
     // pointer, so the audit trail keeps what was proposed.
     const merged = mergeGroups(proposals, critique.groups);
-    const dropped: Array<{ title: string; reason: string }> = [...merged.merged];
+    const dropped: Array<{ title: string; reason: string }> = [...merged.merged, ...draft.rejected];
     const kept: Proposal[] = merged.kept.map((proposal) => {
       const decision = critique.decisions.get(proposal.dedupKey);
       // A critique drop is advice, not an automatic removal. The proposal stays
@@ -474,6 +474,11 @@ async function main(): Promise<void> {
       map: { siteId: map.siteId, domain: map.domain, month: map.month },
       proposals: kept,
       dropped,
+      drafting: {
+        model: draft.model,
+        summary: draft.summary,
+        errors: draft.errors,
+      },
       critique: {
         available: critique.available,
         model: critique.model,
@@ -532,6 +537,7 @@ async function main(): Promise<void> {
         proposals: kept,
         dropped,
         critique: report.critique,
+        drafting: report.drafting,
         technical,
         generatedAt: report.generatedAt,
       }),

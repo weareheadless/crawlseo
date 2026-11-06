@@ -81,7 +81,9 @@ export type DraftResult = {
 
 /** Product rule: a story older than this is not timely. */
 const TIMELY_WINDOW_DAYS = 21;
-const CLUSTER_BATCH = 6;
+// Smaller batches and a larger completion budget: the drafting model is a
+// reasoning model, and a long batch spent its budget before emitting JSON.
+const CLUSTER_BATCH = 4;
 const MAX_CLUSTERS = 24;
 const MAX_PROPOSALS_PER_BATCH = 6;
 
@@ -190,6 +192,7 @@ function businessPayload(input: DraftInput) {
 
 const SYSTEM = [
   "You are an SEO strategist drafting a proposal board for one business.",
+  "Write in the business's language, given in locale.language. Do not mix languages in one board.",
   "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, and the evidence rows the map cites.",
   "Decide for each cluster whether there is work worth proposing. It is correct to propose nothing for a cluster: say why in the batch summary.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
@@ -343,10 +346,10 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
         config,
         system: SYSTEM,
         user: JSON.stringify(payload),
-        maxTokens: 16_000,
+        maxTokens: 24_000,
         temperature: 0.2,
         attempts: 2,
-        timeoutMs: 180_000,
+        timeoutMs: 240_000,
         jsonMode: false,
       });
       const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch);
@@ -421,6 +424,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
   };
   const system = [
     "You are an SEO strategist reviewing this week's news for one business.",
+    "Write in the business's language, given in locale.language.",
     "If your summary says there is an opportunity, you must return it as a proposal. If you return no proposals, the summary must say why there is no opportunity.",
     "Decide whether any item is a real, current opportunity for this business. A local news item that does not concern the business's market, trade or customers is not an opportunity: propose nothing.",
     "Use the business location and service area to judge whether the story is in the business's market. Judge the place the story names; do not use a fixed list of cities.",
@@ -478,14 +482,97 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
   }
 }
 
+/**
+ * Technical findings get their own call. In the cluster batch the model
+ * consistently spent its proposal budget on content, so crawl defects were
+ * never proposed even when they were the cheapest work on the board.
+ */
+export async function draftTechnicalProposals(input: DraftInput): Promise<DraftResult> {
+  const config = contentWriterConfig();
+  if (!config) {
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+  }
+  const findings = input.technicalEvidence ?? [];
+  if (findings.length === 0) {
+    return { proposals: [], errors: [], rejected: [], summary: null, model: config.model };
+  }
+  const allowedEvidence = new Map(findings.map((row) => [row.id, row]));
+  const payload = {
+    ...businessPayload(input),
+    findings: findings.slice(0, 8).map((row) => ({
+      evidenceId: row.id,
+      issue: row.issue ?? row.kind,
+      url: row.url,
+      pages: row.pages ?? 1,
+    })),
+  };
+  const system = [
+    "You are an SEO engineer reviewing crawl findings for one site.",
+    "Write in the business's language, given in locale.language.",
+    "Each finding is a defect with an evidence id, a sample URL and how many pages share it. A defect on many pages is one delivery, not many.",
+    "Decide which findings are worth a proposal. A defect that blocks indexing, wastes crawl budget, splits signals or breaks navigation is worth proposing; a cosmetic one is not. It is correct to propose nothing, but say why in the summary.",
+    "Use only the supplied evidence ids. Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[] }] }.",
+    "lane must be technical and kind must be technical. target.url is the affected URL, newAsset is false. effort is small, medium, large or unknown. confidence is high, medium or low with a reason.",
+    "Do not invent a defect that is not in the findings, and do not turn a crawl defect into a content brief.",
+  ].join("\n");
+  try {
+    const parsed = await chatJson({
+      config,
+      system,
+      user: JSON.stringify(payload),
+      maxTokens: 16_000,
+      temperature: 0.2,
+      attempts: 2,
+      timeoutMs: 180_000,
+      jsonMode: false,
+    });
+    const parsedBatch = parseProposals(parsed, input, allowedEvidence, input.map.clusters);
+    // This call only reviews crawl findings, so its output is technical work by
+    // construction. A model that labels it "update" is still proposing a fix.
+    const proposals = parsedBatch.proposals.map((proposal) => {
+      const url = proposal.target.url ?? allowedEvidence.get(proposal.evidenceRefs[0])?.url ?? null;
+      const technical = {
+        ...proposal,
+        lane: "technical" as const,
+        kind: "technical" as const,
+        target: { url, newAsset: false, section: proposal.target.section ?? "crawl fix" },
+      };
+      return { ...technical, dedupKey: proposalIdentity(technical) };
+    });
+    return {
+      proposals,
+      errors: [],
+      rejected: parsedBatch.rejected,
+      summary: text(asRecord(parsed).summary)?.slice(0, 400) ?? null,
+      model: config.model,
+    };
+  } catch (error) {
+    return {
+      proposals: [],
+      errors: [`technical: ${error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)}`],
+      rejected: [],
+      summary: null,
+      model: config.model,
+    };
+  }
+}
+
 export async function draftProposals(input: DraftInput): Promise<DraftResult> {
   const clusters = await draftClusterProposals(input);
+  const technical = await draftTechnicalProposals(input);
   const timely = await draftTimelyProposals(input);
   return {
-    proposals: [...clusters.proposals, ...timely.proposals],
-    errors: [...clusters.errors, ...timely.errors],
-    rejected: [...clusters.rejected, ...timely.rejected],
-    summary: [clusters.summary, timely.summary].filter(Boolean).join(" ") || null,
-    model: clusters.model ?? timely.model,
+    proposals: [...clusters.proposals, ...technical.proposals, ...timely.proposals],
+    errors: [...clusters.errors, ...technical.errors, ...timely.errors],
+    rejected: [...clusters.rejected, ...technical.rejected, ...timely.rejected],
+    summary:
+      [
+        clusters.summary ? `Content and AEO: ${clusters.summary}` : null,
+        technical.summary ? `Technical: ${technical.summary}` : null,
+        timely.summary ? `Timely: ${timely.summary}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n\n") || null,
+    model: clusters.model ?? technical.model ?? timely.model,
   };
 }

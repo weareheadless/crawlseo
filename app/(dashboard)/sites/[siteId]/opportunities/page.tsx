@@ -107,9 +107,32 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   // detector that has ever written to this project. "All sources" is explicit.
   const PROPOSAL_SOURCES = ["phase3:topic-map", "phase5:weekly"];
   const source = query.source ?? "proposals";
-  const proposalCount = await db.opportunity.count({
-    where: { projectId: site.projectId, detectedBy: { in: PROPOSAL_SOURCES }, status: "detected" },
+  // Counts must describe the view the chips switch between, not every row the
+  // project has ever produced. Closed and superseded rows are audit history.
+  const openRows = await db.opportunity.findMany({
+    where: { projectId: site.projectId, status: { in: tab.statuses } },
+    select: { detectedBy: true, recommendationDecision: true },
   });
+  const proposalRows = openRows.filter((row) => PROPOSAL_SOURCES.includes(row.detectedBy));
+  const proposalCount = proposalRows.length;
+  const proposalLaneCounts: Record<string, number> = {};
+  for (const row of proposalRows) {
+    const lane = (row.recommendationDecision as { lane?: string } | null)?.lane;
+    if (lane) proposalLaneCounts[lane] = (proposalLaneCounts[lane] ?? 0) + 1;
+  }
+  const allSourcesCount = openRows.length;
+  // The funnel strip describes the proposal board, not every row the project
+  // has ever produced.
+  const proposalState = await db.opportunity.findMany({
+    where: { projectId: site.projectId, detectedBy: { in: PROPOSAL_SOURCES } },
+    select: { status: true, evidenceCompleteness: true },
+  });
+  const proposalStateCounts = {
+    detected: proposalState.filter((row) => row.status === "detected").length,
+    accepted: proposalState.filter((row) => row.status === "accepted" || row.status === "in_progress").length,
+    bothLegs: proposalState.filter((row) => row.evidenceCompleteness === "both").length,
+    parked: proposalState.filter((row) => row.status === "parked").length,
+  };
   const [rows, counts] = await Promise.all([
     listOpportunities(db, {
       projectId: site.projectId,
@@ -140,10 +163,10 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       {/* Stage strip: the funnel in one line, every number a link. */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Detected", value: counts.detected, href: `/sites/${siteId}/opportunities?status=detected`, tone: "info" },
-          { label: "Accepted", value: counts.accepted + counts.inProgress, href: `/sites/${siteId}/opportunities?status=accepted`, tone: "primary" },
-          { label: "Both legs", value: counts.bothLegs, href: `/sites/${siteId}/opportunities?status=all&leg=both`, tone: "success" },
-          { label: "Parked", value: counts.parked, href: `/sites/${siteId}/opportunities?status=parked`, tone: "warning" },
+          { label: "Detected", value: proposalStateCounts.detected, href: `/sites/${siteId}/opportunities?status=detected`, tone: "info" },
+          { label: "Accepted", value: proposalStateCounts.accepted, href: `/sites/${siteId}/opportunities?status=accepted`, tone: "primary" },
+          { label: "Both legs", value: proposalStateCounts.bothLegs, href: `/sites/${siteId}/opportunities?status=all&leg=both`, tone: "success" },
+          { label: "Parked", value: proposalStateCounts.parked, href: `/sites/${siteId}/opportunities?status=parked`, tone: "warning" },
         ].map((cell) => (
           <Link
             key={cell.label}
@@ -167,7 +190,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
               !query.lane ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            All sources · {counts.total}
+            All sources · {allSourcesCount}
           </Link>
           <Link
             href={`/sites/${siteId}/opportunities?status=${tab.key}&source=proposals${query.leg ? `&leg=${query.leg}` : ""}`}
@@ -190,7 +213,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
                 query.lane === lane.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {lane.label} · {counts.byLane[lane.key] ?? 0}
+              {lane.label} · {proposalLaneCounts[lane.key] ?? 0}
             </Link>
           ))}
         </nav>
@@ -277,13 +300,6 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             .map((entry) => `${OPPORTUNITY_LABELS[entry.type as keyof typeof OPPORTUNITY_LABELS]?.code ?? entry.type} needs ${entry.missing.join(" + ")}`)
             .join(" · ")}
           . An empty type above means “not collected yet”, not “nothing found”.
-        </p>
-      )}
-
-      {counts.bothLegs === 0 && counts.total > 0 && (
-        <p className="mb-4 rounded-lg border border-[var(--a-warning-300)] bg-[var(--a-warning-50)] px-3 py-2 text-xs text-[var(--a-warning-800)]">
-          No opportunity has the <strong>why</strong> leg yet. Business knowledge and research findings are empty for
-          this project, so only technical work can be proposed. Demand-led ideas need that evidence first.
         </p>
       )}
 
