@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { effectiveMaxOperation, effectiveMonthlyAllowance, usesDefaultAllowance } from "@/lib/billing/budget-defaults";
 import { Prisma } from "@prisma/client";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 import type { ConnectorResearchProfileInput } from "@/lib/connectors/types";
@@ -1070,12 +1071,14 @@ export async function connectorBudget(principal: ServicePrincipalContext, siteId
     if (row.status === "RESERVED" || row.status === "UNCERTAIN") reserved += row.amountMicros;
     if (["RESERVED", "UNCERTAIN", "SETTLED"].includes(row.status)) committed += amount;
   }
-  const allowance = project.monthlyResearchAllowanceMicros;
+  const allowance = effectiveMonthlyAllowance(project.monthlyResearchAllowanceMicros);
+  const maxOperation = effectiveMaxOperation(project.maxResearchOperationMicros);
   return { projectId: principal.projectId, siteId: site.id, policyRevision: project.researchBudgetRevision,
     period, timeZone: project.researchBudgetTimeZone, currency: project.researchBudgetCurrency,
-    allowanceMicros: allowance?.toString() ?? null, committedMicros: committed.toString(), reservedMicros: reserved.toString(),
-    remainingMicros: allowance === null ? null : (allowance - committed).toString(), configured: allowance !== null,
-    maxOperationMicros: project.maxResearchOperationMicros?.toString() ?? null };
+    allowanceMicros: allowance.toString(), committedMicros: committed.toString(), reservedMicros: reserved.toString(),
+    remainingMicros: (allowance - committed).toString(), configured: true,
+    defaulted: usesDefaultAllowance(project.monthlyResearchAllowanceMicros),
+    maxOperationMicros: maxOperation.toString() };
 }
 
 export async function projectConnectorBudget(principal: ServicePrincipalContext) {
@@ -1087,11 +1090,12 @@ export async function projectConnectorBudget(principal: ServicePrincipalContext)
   const period = periodInTimeZone(project.researchBudgetTimeZone);
   const rows = await db.researchBudgetReservation.findMany({ where: { projectId: principal.projectId, period }, select: { status: true, amountMicros: true, actualCostMicros: true } });
   const committed = rows.reduce((sum, row) => sum + (row.status === "SETTLED" ? row.actualCostMicros ?? row.amountMicros : ["RESERVED", "UNCERTAIN"].includes(row.status) ? row.amountMicros : BigInt(0)), BigInt(0));
-  const allowance = project.monthlyResearchAllowanceMicros;
+  const allowance = effectiveMonthlyAllowance(project.monthlyResearchAllowanceMicros);
   return { projectId: principal.projectId, siteId: null, policyRevision: project.researchBudgetRevision, period, timeZone: project.researchBudgetTimeZone,
-    currency: project.researchBudgetCurrency, allowanceMicros: allowance?.toString() ?? null, committedMicros: committed.toString(),
-    remainingMicros: allowance === null ? null : (allowance - committed).toString(), configured: allowance !== null,
-    maxOperationMicros: project.maxResearchOperationMicros?.toString() ?? null };
+    currency: project.researchBudgetCurrency, allowanceMicros: allowance.toString(), committedMicros: committed.toString(),
+    remainingMicros: (allowance - committed).toString(), configured: true,
+    defaulted: usesDefaultAllowance(project.monthlyResearchAllowanceMicros),
+    maxOperationMicros: effectiveMaxOperation(project.maxResearchOperationMicros).toString() };
 }
 
 export async function updateConnectorBudgetPolicy(principal: ServicePrincipalContext, input: {
@@ -1161,15 +1165,17 @@ export async function reserveConnectorBudget(principal: ServicePrincipalContext,
         if (prior.status !== "RELEASED") return prior;
         throw new ConnectorError("A released budget idempotency key cannot be reused for a new dispatch", 409);
       }
-      if (!policy || policy.monthlyResearchAllowanceMicros === null) throw new ConnectorError("Monetary research allowance is not configured", 409);
-      if (policy.maxResearchOperationMicros === null || amount > policy.maxResearchOperationMicros) throw new ConnectorError("Research reservation exceeds the configured per-operation ceiling", 429);
+      if (!policy) throw new ConnectorError("Research budget policy is not configured", 409);
+      // An unset allowance or per-operation ceiling means the default, not a
+      // refusal: the connector and the monthly bundle must answer the same way.
+      if (amount > effectiveMaxOperation(policy.maxResearchOperationMicros)) throw new ConnectorError("Research reservation exceeds the configured per-operation ceiling", 429);
       if (policy.researchBudgetRevision !== input.policyRevision) throw new ConnectorError("Research budget policy changed; refresh before reserving", 409);
       if (policy.researchBudgetCurrency.toUpperCase() !== input.currency) throw new ConnectorError("Research reservation currency does not match policy", 409);
       if (periodInTimeZone(policy.researchBudgetTimeZone) !== input.period) throw new ConnectorError("Research reservation period is not current in the policy timezone", 409);
       const rows = await tx.researchBudgetReservation.findMany({ where: { projectId: principal.projectId, period: input.period,
         status: { in: ["RESERVED", "UNCERTAIN", "SETTLED"] } }, select: { status: true, amountMicros: true, actualCostMicros: true } });
       const committed = rows.reduce<bigint>((sum, row) => sum + (row.status === "SETTLED" ? row.actualCostMicros ?? row.amountMicros : row.amountMicros), BigInt(0));
-      if (committed + amount > policy.monthlyResearchAllowanceMicros) throw new ConnectorError("Monetary research allowance is exhausted for this period", 429);
+      if (committed + amount > effectiveMonthlyAllowance(policy.monthlyResearchAllowanceMicros)) throw new ConnectorError("Monetary research allowance is exhausted for this period", 429);
       const value = { projectId: principal.projectId, siteId: site.id, idempotencyKey: input.idempotencyKey,
         period: input.period, timeZone: policy.researchBudgetTimeZone, policyRevision: policy.researchBudgetRevision, amountMicros: amount, currency: input.currency,
         operation: input.operation, status: "RESERVED" as const, detail: input.detail === undefined ? undefined : json(input.detail) };
@@ -1199,14 +1205,14 @@ export async function reserveProjectConnectorBudget(principal: ServicePrincipalC
       if (prior.status !== "RELEASED") return prior;
       throw new ConnectorError("A released budget idempotency key cannot be reused for a new dispatch", 409);
     }
-    if (!policy || policy.monthlyResearchAllowanceMicros === null) throw new ConnectorError("Monetary research allowance is not configured", 409);
-    if (policy.maxResearchOperationMicros === null || amount > policy.maxResearchOperationMicros) throw new ConnectorError("Research reservation exceeds the configured per-operation ceiling", 429);
+    if (!policy) throw new ConnectorError("Research budget policy is not configured", 409);
+    if (amount > effectiveMaxOperation(policy.maxResearchOperationMicros)) throw new ConnectorError("Research reservation exceeds the configured per-operation ceiling", 429);
     if (policy.researchBudgetRevision !== input.policyRevision) throw new ConnectorError("Research budget policy changed; refresh before reserving", 409);
     if (policy.researchBudgetCurrency.toUpperCase() !== input.currency) throw new ConnectorError("Research reservation currency does not match policy", 409);
     if (periodInTimeZone(policy.researchBudgetTimeZone) !== input.period) throw new ConnectorError("Research reservation period is not current in the policy timezone", 409);
     const rows = await tx.researchBudgetReservation.findMany({ where: { projectId: principal.projectId, period: input.period, status: { in: ["RESERVED", "UNCERTAIN", "SETTLED"] } }, select: { status: true, amountMicros: true, actualCostMicros: true } });
     const committed = rows.reduce((sum, row) => sum + (row.status === "SETTLED" ? row.actualCostMicros ?? row.amountMicros : row.amountMicros), BigInt(0));
-    if (committed + amount > policy.monthlyResearchAllowanceMicros) throw new ConnectorError("Monetary research allowance is exhausted for this period", 429);
+    if (committed + amount > effectiveMonthlyAllowance(policy.monthlyResearchAllowanceMicros)) throw new ConnectorError("Monetary research allowance is exhausted for this period", 429);
     return tx.researchBudgetReservation.create({ data: { projectId: principal.projectId, siteId: null, idempotencyKey: input.idempotencyKey, period: input.period, timeZone: policy.researchBudgetTimeZone, policyRevision: policy.researchBudgetRevision, amountMicros: amount, currency: input.currency, operation: input.operation, status: "RESERVED", detail: input.detail === undefined ? undefined : json(input.detail) } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }); }
   catch (error) { if (error instanceof ConnectorError) throw error; if ((error as { code?: string }).code === "P2002" || (error as { code?: string }).code === "P2034") throw new ConnectorError("Budget reservation raced another request; reconcile before retrying", 409); throw error; }

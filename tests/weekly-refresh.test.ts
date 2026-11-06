@@ -1,7 +1,8 @@
+import { buildNewsQueriesForSite } from "@/lib/research/monthly-bundle";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildWeeklyNewsQueries,
+
   isoWeekKey,
   runWeeklyRefresh,
   type WeeklyDeps,
@@ -186,13 +187,12 @@ describe("weekly refresh", () => {
   });
 
   it("builds business and event news queries", () => {
-    const queries = buildWeeklyNewsQueries({
+    const queries = buildNewsQueriesForSite({
       businessName: "Atelier de l'harmonie",
       services: ["Restauration de siège", "Restauration d'abat-jour"],
       location: "Saint-Pierre-en-Port, France",
       serviceArea: ["Normandie"],
       domain: "atelier-harmonie.example",
-      year: 2026,
       taxonomyQueries: ["Normandie salon artisanat 2026", "Normandie portes ouvertes atelier 2026"],
     });
     expect(queries[0]).toContain("Atelier de l'harmonie");

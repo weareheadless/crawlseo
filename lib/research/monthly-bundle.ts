@@ -25,6 +25,7 @@ import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-r
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
 import type { ResearchSourceInput } from "@/lib/research/types";
+import { effectiveMonthlyAllowance, usesDefaultAllowance } from "@/lib/billing/budget-defaults";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext, type SiteContext } from "@/lib/site/context";
 import { loadTopicTaxonomy, queryMatchesTaxonomy } from "@/lib/research/topic-taxonomy";
 import { TIMELY_WINDOW_DAYS as TIMELY_NEWS_DAYS } from "@/lib/research/opportunity-drafting";
@@ -95,9 +96,11 @@ export type BundleBudget = {
   period: string;
   currency: string;
   timeZone: string;
-  allowanceMicros: number | null;
+  allowanceMicros: number;
   committedMicros: number;
-  remainingMicros: number | null;
+  remainingMicros: number;
+  /** True when the project sets no allowance and the default applies. */
+  defaulted: boolean;
 };
 
 export type PlannedPaidCall = {
@@ -502,6 +505,37 @@ export function buildNewsQueries(
   return queries;
 }
 
+export function buildNewsQueriesForSite(input: {
+  businessName: string | null;
+  services: string[];
+  location: string | null;
+  serviceArea: string[];
+  domain: string;
+  /** Searches proposed for this tenant by the taxonomy; replaces the old
+   *  hardcoded craft-event phrases. */
+  taxonomyQueries?: string[];
+}): string[] {
+  // The approved taxonomy already says which searches find this business's
+  // current news; service labels scraped from navigation produce noise. Fall
+  // back to the business's own facts only when the taxonomy has none.
+  const curated = (input.taxonomyQueries ?? []).map((query) => query.trim()).filter(Boolean);
+  const base = buildNewsQueries({
+    businessName: input.businessName,
+    services: curated.length > 0 ? [] : input.services,
+    location: input.location,
+    serviceArea: input.serviceArea,
+    domain: input.domain,
+  });
+  const seen = new Set<string>();
+  // Free searches, so nothing is dropped to save a budget.
+  return [...base, ...curated].filter((query) => {
+    const key = query.toLowerCase().replace(/\s+/g, " ").trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export async function hasDataForSeoCredentials(db: BundleDb, projectId: string): Promise<boolean> {
   const grant = await db.projectApiKeyGrant.findFirst({
     where: { projectId, provider: "dataforseo", status: "ACTIVE" },
@@ -540,16 +574,17 @@ export async function readBundleBudget(
     if (row.status === "RESERVED" || row.status === "UNCERTAIN") return sum + Number(row.amountMicros);
     return sum;
   }, 0);
-  const allowance = project.monthlyResearchAllowanceMicros === null
-    ? null
-    : Number(project.monthlyResearchAllowanceMicros);
+  // An unset allowance is unconfigured, not unlimited: every project has the
+  // default budget, and the plan says when it is the default.
+  const allowance = Number(effectiveMonthlyAllowance(project.monthlyResearchAllowanceMicros));
   return {
     period,
     currency: project.researchBudgetCurrency,
     timeZone: project.researchBudgetTimeZone,
     allowanceMicros: allowance,
     committedMicros: committed,
-    remainingMicros: allowance === null ? null : allowance - committed,
+    remainingMicros: allowance - committed,
+    defaulted: usesDefaultAllowance(project.monthlyResearchAllowanceMicros),
   };
 }
 
@@ -706,15 +741,16 @@ export async function buildBundlePlan(input: {
   );
 
   const fields = await businessKnowledgeFields(db, site.projectId);
-  const newsQueries = buildNewsQueries(
-    {
-      businessName: fieldText(fields, "businessName"),
-      services: fieldList(fields, "services"),
-      location: fieldText(fields, "location"),
-      serviceArea: fieldList(fields, "serviceArea"),
-      domain: site.domain,
-    }
-  );
+  const newsQueries = buildNewsQueriesForSite({
+    businessName: fieldText(fields, "businessName"),
+    services: fieldList(fields, "services"),
+    location: fieldText(fields, "location"),
+    serviceArea: fieldList(fields, "serviceArea"),
+    domain: site.domain,
+    // The same searches the weekly sweep uses: one answer for "where does this
+    // business's news appear", whether it is a bundle or a weekly run.
+    taxonomyQueries: taxonomy?.newsQueries ?? [],
+  });
 
   if (keywordQueries.length < caps.keywordQueries) {
     warnings.push(
@@ -810,7 +846,7 @@ export async function buildBundlePlan(input: {
       `estimated $${(estimatedMicros / 1_000_000).toFixed(4)} exceeds the bundle cap $${(caps.capMicros / 1_000_000).toFixed(4)}`
     );
   }
-  if (budget.remainingMicros !== null && estimatedMicros > budget.remainingMicros) {
+  if (estimatedMicros > budget.remainingMicros) {
     warnings.push(
       `estimated $${(estimatedMicros / 1_000_000).toFixed(4)} exceeds the remaining monthly allowance $${(budget.remainingMicros / 1_000_000).toFixed(4)}`
     );
@@ -1052,7 +1088,7 @@ export async function runMonthlyBundle(
       `estimated $${(plan.estimatedMicros / 1_000_000).toFixed(4)} exceeds the bundle cap $${(caps.capMicros / 1_000_000).toFixed(4)}`
     );
   }
-  if (plan.budget.remainingMicros !== null && plan.estimatedMicros > plan.budget.remainingMicros) {
+  if (plan.estimatedMicros > plan.budget.remainingMicros) {
     throw new BundleCapError(
       `estimated $${(plan.estimatedMicros / 1_000_000).toFixed(4)} exceeds the remaining monthly allowance $${(plan.budget.remainingMicros / 1_000_000).toFixed(4)}`
     );

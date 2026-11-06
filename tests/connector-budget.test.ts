@@ -72,6 +72,22 @@ describe("project research budget ledger", () => {
     expect(mockDb.researchBudgetReservation.create).not.toHaveBeenCalled();
   });
 
+  it("gives a project with no policy the default allowance instead of refusing", async () => {
+    mockDb.project.findUnique.mockResolvedValue({ monthlyResearchAllowanceMicros: null, maxResearchOperationMicros: null,
+      researchBudgetCurrency: "USD", researchBudgetTimeZone: "UTC", researchBudgetRevision: 4 });
+    const result = await reserveConnectorBudget(principal, input({ amountMicros: "25000" }));
+    expect(result.id).toBe("reservation-1");
+    const budget = await projectConnectorBudget(principal);
+    expect(budget).toMatchObject({ allowanceMicros: "1000000", configured: true, defaulted: true, maxOperationMicros: "100000" });
+  });
+
+  it("still enforces the default ceiling for a project with no policy", async () => {
+    mockDb.project.findUnique.mockResolvedValue({ monthlyResearchAllowanceMicros: null, maxResearchOperationMicros: null,
+      researchBudgetCurrency: "USD", researchBudgetTimeZone: "UTC", researchBudgetRevision: 4 });
+    await expect(reserveConnectorBudget(principal, input({ amountMicros: "100001" })))
+      .rejects.toMatchObject({ status: 429 });
+  });
+
   it("rejects a reservation above the configured operation ceiling", async () => {
     await expect(reserveConnectorBudget(principal, input({ amountMicros: "100001" })))
       .rejects.toMatchObject({ status: 429 });

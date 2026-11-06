@@ -455,6 +455,34 @@ describe("monthly bundle run", () => {
     expect((deps as unknown as { calls: Record<string, number> }).calls).toEqual(callsBefore);
   });
 
+  it("gives a project with no allowance the $1 default, and says so", async () => {
+    const state = makeState();
+    const db = makeDb(state) as unknown as { project: { findUnique: () => Promise<unknown> } };
+    db.project.findUnique = async () => ({
+      monthlyResearchAllowanceMicros: null,
+      researchBudgetCurrency: "USD",
+      researchBudgetTimeZone: "UTC",
+    });
+    const result = await runMonthlyBundle(db as never, { siteId: "site-1", month: "2026-11", mode: "dry-run" }, makeDeps(state));
+    expect(result.plan.budget.allowanceMicros).toBe(1_000_000);
+    expect(result.plan.budget.defaulted).toBe(true);
+    expect(result.plan.budget.remainingMicros).toBe(1_000_000);
+  });
+
+  it("refuses a bundle that would exceed the default allowance", async () => {
+    const state = makeState();
+    state.reservations.push({ status: "SETTLED", amountMicros: BigInt(990_000), actualCostMicros: BigInt(990_000) });
+    const db = makeDb(state) as unknown as { project: { findUnique: () => Promise<unknown> } };
+    db.project.findUnique = async () => ({
+      monthlyResearchAllowanceMicros: null,
+      researchBudgetCurrency: "USD",
+      researchBudgetTimeZone: "UTC",
+    });
+    await expect(
+      runMonthlyBundle(db as never, { siteId: "site-1", month: "2026-11", mode: "execute", approval: "owner-2026-11" }, makeDeps(state))
+    ).rejects.toBeInstanceOf(BundleCapError);
+  });
+
   it("refuses a bundle whose estimate exceeds the cap before any paid call", async () => {
     const state = makeState();
     const db = makeDb(state);

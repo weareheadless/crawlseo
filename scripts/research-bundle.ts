@@ -113,11 +113,9 @@ function printPlan(plan: BundlePlan): void {
   process.stdout.write(`credentials: ${plan.credentials ? "configured" : "missing"}\n`);
   const budget = plan.budget;
   process.stdout.write(
-    `budget: period ${budget.period} · allowance ${
-      budget.allowanceMicros === null ? "unset" : usd(budget.allowanceMicros)
-    } · committed ${usd(budget.committedMicros)} · remaining ${
-      budget.remainingMicros === null ? "unset" : usd(budget.remainingMicros)
-    }\n`
+    `budget: period ${budget.period} · allowance ${usd(budget.allowanceMicros)}${
+      budget.defaulted ? " (default)" : ""
+    } · committed ${usd(budget.committedMicros)} · remaining ${usd(budget.remainingMicros)}\n`
   );
   process.stdout.write(
     `caps: keywords ${plan.caps.keywordQueries} · serp ${plan.caps.serpQueries} · aeo ${plan.caps.aeoQuestions} · news ${plan.caps.newsItems} · bundle ${usd(plan.caps.capMicros)}\n`

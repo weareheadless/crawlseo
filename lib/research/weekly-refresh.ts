@@ -12,7 +12,7 @@ import {
   bridgeQuestionCoverageToEvidence,
   type QuestionCoverageResult,
 } from "@/lib/research/question-coverage-evidence";
-import { buildNewsQueries } from "@/lib/research/monthly-bundle";
+import { buildNewsQueriesForSite } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
 import { buildClusterEvidenceCatalogue, buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
 import { draftTimelyProposals, TIMELY_WINDOW_DAYS } from "@/lib/research/opportunity-drafting";
@@ -119,37 +119,6 @@ export function weeklyKey(siteId: string, week: string): string {
   return `weekly:${siteId}:${week}`;
 }
 
-export function buildWeeklyNewsQueries(input: {
-  businessName: string | null;
-  services: string[];
-  location: string | null;
-  serviceArea: string[];
-  domain: string;
-  year: number;
-  /** Searches proposed for this tenant by the taxonomy; replaces the old
-   *  hardcoded craft-event phrases. */
-  taxonomyQueries?: string[];
-}): string[] {
-  // The approved taxonomy already says which searches find this business's
-  // current news; service labels scraped from navigation produce noise. Fall
-  // back to the business's own facts only when the taxonomy has none.
-  const curated = (input.taxonomyQueries ?? []).map((query) => query.trim()).filter(Boolean);
-  const base = buildNewsQueries({
-    businessName: input.businessName,
-    services: curated.length > 0 ? [] : input.services,
-    location: input.location,
-    serviceArea: input.serviceArea,
-    domain: input.domain,
-  });
-  const seen = new Set<string>();
-  // Free searches, so nothing is dropped to save a budget.
-  return [...base, ...curated].filter((query) => {
-    const key = query.toLowerCase().replace(/\s+/g, " ").trim();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
 
 export async function runWeeklyRefresh(
   db: WeeklyRefreshDb,
@@ -177,13 +146,12 @@ export async function runWeeklyRefresh(
   const context = await resolveSiteContext(db, site.id);
   const fields = await businessKnowledgeFields(db, site.projectId);
   const taxonomy = await loadTopicTaxonomy(db, site.id);
-  const queries = buildWeeklyNewsQueries({
+  const queries = buildNewsQueriesForSite({
     businessName: fieldText(fields, "businessName"),
     services: fieldList(fields, "services"),
     location: fieldText(fields, "location"),
     serviceArea: fieldList(fields, "serviceArea"),
     domain: site.domain,
-    year: now.getUTCFullYear(),
     taxonomyQueries: taxonomy?.newsQueries,
   });
 
