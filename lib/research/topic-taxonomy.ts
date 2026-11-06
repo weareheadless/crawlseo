@@ -343,9 +343,10 @@ export function deriveTerms(
  */
 export function sampleQueries(
   queries: Array<{ query: string; impressions: number; volume: number | null }>,
-  limit = 150
+  limit = 400
 ): Array<{ query: string; impressions: number; volume: number | null }> {
   const sorted = [...queries].sort((a, b) => b.impressions - a.impressions);
+  if (sorted.length <= limit) return sorted;
   const head = sorted.slice(0, Math.min(sorted.length, Math.ceil(limit * 0.7)));
   const rest = sorted.slice(head.length);
   const tail: typeof rest = [];
@@ -357,6 +358,7 @@ export function sampleQueries(
 const SYSTEM = [
   "You are an SEO strategist modelling one business so a topic map can be built.",
   "You receive the business's own facts, the offers it sells with their market scope, its page inventory, and a sample of its measured Search Console queries.",
+  "The business's services list is authoritative: every service the owner lists must have at least one topic. If it lists renting, buying, management or advice, the taxonomy contains a topic for it even when its query volume is small.",
   "Define the topics this business can serve. A topic is one need with one kind of page that should own it: a place, a product type, a service, a brand.",
   "Different places and different property or product types are different topics. Do not collapse a market into one topic: if the queries separate into Tulum houses, Playa del Carmen condos and Akumal rentals, those are three topics.",
   "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
@@ -364,7 +366,7 @@ const SYSTEM = [
   "A query may appear in at most two topics, and only when it genuinely serves both.",
   "Leave out queries that fit no topic, are off-business, or are research noise. Do not invent a topic to cover them.",
   "Name each topic in the site language, state its intent, relevance and the kind of page that should own it, and explain in one sentence why it matters.",
-  "Set preferredPages to the one to three real paths from the supplied inventory that should own the topic. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic.",
+  "Set preferredPages to the one to three real paths from the supplied inventory that should own the topic. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Leave it empty only when the site truly has no page for the topic, and say so in the rationale.",
   "offerKey must be one of the supplied offer names, or the topic name when no offer fits.",
   "Do not invent matching terms: membership comes from the queries you cite.",
   "pageTypeRules map URL prefixes from the inventory to home, service, category, product, blog or other. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages, tag archives, paginated lists and search-result paths.",
@@ -384,7 +386,7 @@ export async function proposeTopicTaxonomy(
   }
 
   const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
-  const sample = sampleQueries(input.queries, 150);
+  const sample = sampleQueries(input.queries);
   const sampleByKey = new Map(sample.map((query) => [normalizeTerm(query.query), query.query]));
   const payload = {
     domain: input.domain,
@@ -392,7 +394,9 @@ export async function proposeTopicTaxonomy(
     country: input.country,
     business: input.business,
     offers: input.marketScope.offers.length > 0 ? input.marketScope.offers : [{ offer: input.business.name ?? input.domain, scope: input.marketScope.default }],
-    pages: input.pages.slice(0, 40),
+    // The whole inventory. A cap here is invisible to the model and to the
+    // reader: it silently removes the page that should own a topic.
+    pages: input.pages,
     today: new Date().toISOString().slice(0, 10),
     queries: sample,
   };
@@ -471,6 +475,21 @@ export async function proposeTopicTaxonomy(
     if (topics.length === 0) {
       return { taxonomy: null, rejected, error: "the review proposed no usable topic", model: config.model };
     }
+    // An owner the model left empty is filled from the real inventory: the page
+    // whose path shares the most distinctive terms with the topic. A topic with
+    // no owner would otherwise read as "no page covers this" while a page does.
+    for (const topic of topics) {
+      if (topic.preferredPages && topic.preferredPages.length > 0) continue;
+      const topicTokens = new Set([...significantTokens(topic.name), ...topic.terms.flatMap((term) => significantTokens(term))]);
+      let best: { path: string; score: number } | null = null;
+      for (const page of input.pages) {
+        const pathTokens = new Set(significantTokens(page.path.replace(/[-/]/g, " ")));
+        const score = [...topicTokens].filter((token) => pathTokens.has(token)).length;
+        if (score >= 2 && (!best || score > best.score)) best = { path: page.path, score };
+      }
+      if (best) topic.preferredPages = [best.path];
+    }
+
     // A term shared by most topics ("real estate") does not distinguish any of
     // them. Keep it for coverage, but do not let it decide membership.
     const termTopics = new Map<string, number>();

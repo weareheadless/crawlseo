@@ -152,6 +152,36 @@ describe("cluster drafting", () => {
     expect(result.proposals[0].confidenceReason).toBeNull();
   });
 
+  it("rejects a new page whose path already exists on the site", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockResolvedValue({
+      summary: "Rentals hub.",
+      proposals: [
+        {
+          lane: "content_business",
+          kind: "cluster_hub",
+          title: "Rentals hub",
+          summary: "One page for rentals.",
+          whyNow: "Rental queries are close to page one.",
+          topicSlug: "luminaires",
+          target: { url: "/apartments-for-rent-in-playa-del-carmen", newAsset: true, section: "hub" },
+          action: "Create the page.",
+          expectedOutcome: "Rank for rentals.",
+          effort: "small",
+          confidence: "low",
+          confidenceReason: "Thin demand.",
+          evidenceIds: ["ev-1"],
+          expiresAt: null,
+        },
+      ],
+    });
+    const result = await draftClusterProposals(
+      input({ existingPaths: ["/apartments-for-rent-in-playa-del-carmen"] })
+    );
+    expect(result.proposals).toHaveLength(0);
+    expect(result.rejected[0].reason).toMatch(/already exists/);
+  });
+
   it("rejects a proposal for a cluster that was not in the batch", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockResolvedValue(draft({ topicSlug: "unknown-cluster" }));

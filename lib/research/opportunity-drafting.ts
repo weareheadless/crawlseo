@@ -62,6 +62,9 @@ export type DraftInput = {
   news: DraftNews[];
   /** Evidence that describes the business itself, used as the "why" leg. */
   knowledgeEvidenceIds: string[];
+  /** Every indexable path the site already has, so the model never proposes
+   *  creating a page that exists. */
+  existingPaths?: string[];
   /** Business facts the model may cite as the proposal's "why". */
   knowledgeFacts?: DraftEvidence[];
   /** Site-level crawl defects the model can turn into technical proposals. */
@@ -209,6 +212,7 @@ const SYSTEM = [
   "A low-demand cluster can still deserve a small test when it is business-relevant. Say so and set confidence accordingly.",
   "Set confidence from the strength of the cited evidence: high only when first-party search data supports the action directly, medium when the data is directional, low for a test or an owner decision. Give a confidenceReason that describes the evidence in plain words for the owner; do not paste evidence ids into it.",
   "Target an existing page URL from the supplied pages when the work updates a page. Use newAsset true and a path only when a new page is genuinely required.",
+  "The site's existing paths are listed in existingPaths. Never propose creating a page whose path already exists: propose an update to that page instead.",
   "Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, topicSlug, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[], expiresAt }] }.",
   "lane is one of timely, content_business, aeo_geo. kind is article, update, cluster_hub, business or aeo. effort is small, medium, large or unknown. confidence is high, medium or low.",
   "kind business is an owner decision about the offer with no page to build. When the work creates a page, use article for a new content page and cluster_hub for a hub or category page.",
@@ -265,6 +269,23 @@ function parseProposals(
     const technical = lane === "technical";
     if (technical && topicSlug && !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
     if (!technical && (!topicSlug || !slugs.has(topicSlug))) { reject(title, "unknown topic"); continue; }
+    const requestedUrl = text(target.url);
+    const normalizedPath = requestedUrl
+      ? (() => {
+          try {
+            return new URL(requestedUrl, "https://example.invalid").pathname.replace(/\/+$/, "") || "/";
+          } catch {
+            return requestedUrl;
+          }
+        })()
+      : null;
+    if (bool(target.newAsset) === true && normalizedPath) {
+      const exists = (input.existingPaths ?? []).some((path) => path.replace(/\/+$/, "") === normalizedPath);
+      if (exists) {
+        reject(title, `target ${normalizedPath} already exists; this is an update, not a new page`);
+        continue;
+      }
+    }
     const known = evidenceIds.filter((id) => allowedEvidence.has(id));
     if (known.length === 0) {
       reject(title, evidenceIds.length === 0 ? "no evidence ids" : "evidence ids not in the supplied catalogue");
@@ -339,6 +360,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
         evidenceId: row.id,
         fact: row.text,
       })),
+      existingPaths: input.existingPaths ?? [],
       technicalFindings: (input.technicalEvidence ?? []).slice(0, 6).map((row) => ({
         evidenceId: row.id,
         issue: row.issue ?? row.kind,

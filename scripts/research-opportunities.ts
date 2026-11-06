@@ -298,6 +298,27 @@ async function main(): Promise<void> {
         pages: entry.pages,
       }));
 
+    // Every indexable path the site already has. The drafting call uses it to
+    // tell "create this page" from "this page already exists, update it".
+    const latestCrawlForPages = await db.crawl.findFirst({
+      where: { siteId: site.id, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      select: { id: true },
+    });
+    const auditPages = latestCrawlForPages
+      ? await db.auditPage.findMany({
+          where: { crawlId: latestCrawlForPages.id, statusCode: 200 },
+          select: { url: true },
+        })
+      : [];
+    const existingPaths = [...new Set(auditPages.flatMap((page) => {
+      try {
+        return [new URL(page.url).pathname.replace(/\/+$/, "") || "/"];
+      } catch {
+        return [];
+      }
+    }))];
+
     const evidenceCatalogue = buildClusterEvidenceCatalogue(map.clusters, evidenceRows, evidenceByCluster);
     const draft = await draftProposals({
       map,
@@ -317,6 +338,7 @@ async function main(): Promise<void> {
         excerpt: row.excerpt,
       })),
       knowledgeEvidenceIds: knowledge.map((row) => row.id),
+      existingPaths,
       knowledgeFacts: knowledge.map((row) => {
         const dimensions = row.dimensions as { field?: string; value?: string } | null;
         const field = dimensions?.field ?? "business fact";

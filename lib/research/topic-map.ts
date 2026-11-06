@@ -875,7 +875,8 @@ export async function synthesizeTopicMap(
       maxTokens: 16_000,
       temperature: 0.2,
       attempts: 2,
-      timeoutMs: 120_000,
+      // A 1,000-query site produces a payload that a 120s budget aborts.
+      timeoutMs: 240_000,
       // This provider is a reasoning model: a small completion budget can be
       // spent on reasoning before any content is emitted, which looked like an
       // empty response. Keep a generous completion budget.
