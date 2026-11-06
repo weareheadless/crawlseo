@@ -27,3 +27,21 @@ On the shared coding host, the GitHub key is in `/SOCIAL/configs/github.env`: lo
 `docs/architecture/centralized-intelligence/agent-workflow.md` for commands. Never
 print or commit the key. UI-001/UI-013 bootstrap uses `contract: null`; claims
 are exclusive per issue, not across unrelated tasks.
+
+## No silent truncation
+
+Every bound in the research pipeline either processes the whole input (batching
+is fine, it is transport) or reports what it dropped. A cap that hides data is a
+bug, not a tuning choice: `pages.slice(0, 40)` once hid a real page from the
+taxonomy and produced a proposal to create a page that already existed.
+
+- Do not cap a list that decides which topics, pages or evidence the model sees.
+  Batch it, or send it whole.
+- When a payload bound is unavoidable (model context), name it in a constant,
+  and push the dropped count into the run result (`truncations`) so the report
+  shows "N items were not sent".
+- Selection by relevance (top impressions, latest crawl) is not truncation, but
+  it must be stated in the code comment.
+- No tenant names, domains, cities, page paths or service words in `lib/`. If a
+  value describes one business, it belongs in the database (taxonomy, market
+  scope, business knowledge) or in a test fixture.

@@ -549,7 +549,7 @@ export function renderProposalBoard(input: {
   dropped: Array<{ title: string; reason: string }>;
   critique: { available: boolean; model: string | null; summary: string | null; error: string | null };
   /** The drafting call's own note, including why it proposed nothing. */
-  drafting?: { model: string | null; summary: string | null; errors: string[] } | null;
+  drafting?: { model: string | null; summary: string | null; errors: string[]; truncations?: string[] } | null;
   /** What changed against the previous run of this month. */
   changes?: { updated: number; added: string[]; closed: string[] } | null;
   technical: ProposalInputs["technical"];
@@ -608,6 +608,12 @@ export function renderProposalBoard(input: {
     lines.push("");
     if (input.drafting?.summary) lines.push(input.drafting.summary);
     for (const error of input.drafting?.errors ?? []) lines.push(`\n- ${error}`);
+    lines.push("");
+  }
+  if ((input.drafting?.truncations?.length ?? 0) > 0) {
+    lines.push("## Data omitted from the drafting call");
+    lines.push("");
+    for (const row of input.drafting?.truncations ?? []) lines.push(`- ${row}`);
     lines.push("");
   }
   lines.push("## Critique");

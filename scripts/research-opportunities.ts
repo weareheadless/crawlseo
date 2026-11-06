@@ -261,7 +261,7 @@ async function main(): Promise<void> {
           },
           select: { id: true, kind: true, dimensions: true, observedAt: true },
           orderBy: { observedAt: "desc" },
-          take: 300,
+          take: 2000,
         })
       : [];
     // Group by defect: "duplicate description on 59 pages" is one delivery, and
@@ -526,6 +526,7 @@ async function main(): Promise<void> {
         model: draft.model,
         summary: draft.summary,
         errors: draft.errors,
+        truncations: draft.truncations,
       },
       critique: {
         available: critique.available,

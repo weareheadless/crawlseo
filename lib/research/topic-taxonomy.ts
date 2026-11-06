@@ -387,6 +387,7 @@ export async function proposeTopicTaxonomy(
 
   const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
   const sample = sampleQueries(input.queries);
+  const omittedQueries = Math.max(0, input.queries.length - sample.length);
   const sampleByKey = new Map(sample.map((query) => [normalizeTerm(query.query), query.query]));
   const payload = {
     domain: input.domain,
@@ -521,7 +522,12 @@ export async function proposeTopicTaxonomy(
         newsQueries: Array.isArray(record.newsQueries)
           ? record.newsQueries.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim()).slice(0, 10)
           : [],
-        summary: text(record.summary)?.slice(0, 800) ?? null,
+        summary: [
+          text(record.summary)?.slice(0, 800) ?? null,
+          omittedQueries > 0 ? `${omittedQueries} of ${input.queries.length} queries were outside the sample the model saw.` : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || null,
       },
       rejected,
       error: null,

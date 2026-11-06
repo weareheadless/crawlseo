@@ -77,6 +77,8 @@ export type DraftResult = {
   errors: string[];
   /** Proposals the model returned that could not be stored, and why. */
   rejected: Array<{ title: string; reason: string }>;
+  /** Input the payload bound omitted, named so it is never invisible. */
+  truncations: string[];
   /** The model's own note on the batch, including why it proposed nothing. */
   summary: string | null;
   model: string | null;
@@ -87,7 +89,7 @@ const TIMELY_WINDOW_DAYS = 21;
 // Smaller batches and a larger completion budget: the drafting model is a
 // reasoning model, and a long batch spent its budget before emitting JSON.
 const CLUSTER_BATCH = 4;
-const MAX_CLUSTERS = 24;
+/** A per-call output bound. Exceeding it is reported, never silent. */
 const MAX_PROPOSALS_PER_BATCH = 6;
 
 function hash(value: string): string {
@@ -174,7 +176,7 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
     demand: cluster.metrics,
     gaps: cluster.gaps.slice(0, 5),
     outOfMarket: cluster.excludedQueries.slice(0, 5),
-    queries: cluster.queries.slice(0, 6).map((query) => ({
+    queries: cluster.queries.slice(0, 10).map((query) => ({
       query: query.query,
       impressions: query.impressions,
       position: query.position == null ? null : Number(query.position.toFixed(1)),
@@ -186,7 +188,7 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
       words: page.wordCount,
       title: page.title,
     })),
-    evidence: evidence.slice(0, 8),
+    evidence: evidence.slice(0, 12),
   };
 }
 
@@ -226,7 +228,7 @@ function parseProposals(
   input: DraftInput,
   allowedEvidence: Map<string, DraftEvidence>,
   batchClusters: TopicCluster[]
-): { proposals: Proposal[]; rejected: Array<{ title: string; reason: string }> } {
+): { proposals: Proposal[]; rejected: Array<{ title: string; reason: string }>; truncations: string[] } {
   const record = asRecord(parsed);
   // Accept a list or a single object: a model that returns one proposal often
   // uses the singular key, and losing the proposal over a key name is not a
@@ -239,6 +241,10 @@ function parseProposals(
         ? [record.proposal]
         : [];
   const rows = rawRows.slice(0, MAX_PROPOSALS_PER_BATCH);
+  const truncations: string[] = [];
+  if (rawRows.length > MAX_PROPOSALS_PER_BATCH) {
+    truncations.push(`${rawRows.length - MAX_PROPOSALS_PER_BATCH} proposals from one batch were not stored`);
+  }
   const slugs = new Set(batchClusters.map((cluster) => cluster.slug));
   const proposals: Proposal[] = [];
   const rejected: Array<{ title: string; reason: string }> = [];
@@ -328,18 +334,20 @@ function parseProposals(
     proposal.dedupKey = proposalIdentity(proposal);
     proposals.push(proposal);
   }
-  return { proposals, rejected };
+  return { proposals, rejected, truncations };
 }
 
 export async function draftClusterProposals(input: DraftInput): Promise<DraftResult> {
   const config = contentWriterConfig();
   if (!config) {
-    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], truncations: [], summary: null, model: null };
   }
 
-  const clusters = input.map.clusters
-    .filter((cluster) => cluster.queries.length > 0 || cluster.coverage !== "none")
-    .slice(0, MAX_CLUSTERS);
+  // Every cluster with demand or coverage is drafted. Batching is a transport
+  // detail; it must not decide which topics the owner gets to see.
+  const clusters = input.map.clusters.filter(
+    (cluster) => cluster.queries.length > 0 || cluster.coverage !== "none"
+  );
   const allowedEvidence = new Map<string, DraftEvidence>();
   for (const cluster of clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) allowedEvidence.set(row.id, row);
@@ -351,6 +359,10 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   const errors: string[] = [];
   const rejected: Array<{ title: string; reason: string }> = [];
   const summaries: string[] = [];
+  const truncations: string[] = [];
+  if (input.aeoQuestions.length > 12) truncations.push(`${input.aeoQuestions.length - 12} AEO questions were not sent to the drafting call`);
+  if ((input.technicalEvidence ?? []).length > 6) truncations.push(`${(input.technicalEvidence ?? []).length - 6} technical findings were not sent to the drafting call`);
+  if ((input.knowledgeFacts ?? []).length > 6) truncations.push(`${(input.knowledgeFacts ?? []).length - 6} business facts were not sent to the drafting call`);
   for (let index = 0; index < clusters.length; index += CLUSTER_BATCH) {
     const batch = clusters.slice(index, index + CLUSTER_BATCH);
     const payload = {
@@ -385,6 +397,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch);
       proposals.push(...parsedBatch.proposals);
       rejected.push(...parsedBatch.rejected);
+      truncations.push(...parsedBatch.truncations);
       const note = text(asRecord(parsed).summary);
       if (note) summaries.push(note.slice(0, 300));
     } catch (error) {
@@ -399,6 +412,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
     proposals,
     errors,
     rejected,
+    truncations,
     summary: summaries.length > 0 ? summaries.join(" ") : null,
     model: config.model,
   };
@@ -407,7 +421,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
 export async function draftTimelyProposals(input: DraftInput): Promise<DraftResult> {
   const config = contentWriterConfig();
   if (!config) {
-    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], truncations: [], summary: null, model: null };
   }
   const current = input.news.filter(
     (item) => item.publishedAt && input.now.getTime() - Date.parse(item.publishedAt) <= TIMELY_WINDOW_DAYS * 86_400_000
@@ -417,6 +431,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
       proposals: [],
       errors: input.news.length > 0 ? [`no news source within ${TIMELY_WINDOW_DAYS} days`] : [],
       rejected: [],
+      truncations: [],
       summary: null,
       model: config.model,
     };
@@ -442,14 +457,14 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
 
   const payload = {
     ...businessPayload(input),
-    news: current.slice(0, 8),
+    news: current,
     knowledgeEvidence: input.knowledgeEvidenceIds,
     localClusters: evidenceClusters.slice(0, 3).map((cluster) => ({
       slug: cluster.slug,
       name: cluster.name,
       marketScope: cluster.marketScope,
       demand: cluster.metrics,
-      evidence: (input.evidenceByCluster.get(cluster.slug) ?? []).slice(0, 6),
+      evidence: (input.evidenceByCluster.get(cluster.slug) ?? []).slice(0, 12),
     })),
   };
   const system = [
@@ -496,6 +511,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
       proposals: timely,
       errors: [],
       rejected: parsedBatch.rejected,
+      truncations: parsedBatch.truncations,
       summary: text(asRecord(parsed).summary)?.slice(0, 400) ?? null,
       model: config.model,
     };
@@ -506,6 +522,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
         `timely: ${error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)}`,
       ],
       rejected: [],
+      truncations: [],
       summary: null,
       model: config.model,
     };
@@ -520,11 +537,11 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
 export async function draftTechnicalProposals(input: DraftInput): Promise<DraftResult> {
   const config = contentWriterConfig();
   if (!config) {
-    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], summary: null, model: null };
+    return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], truncations: [], summary: null, model: null };
   }
   const findings = input.technicalEvidence ?? [];
   if (findings.length === 0) {
-    return { proposals: [], errors: [], rejected: [], summary: null, model: config.model };
+    return { proposals: [], errors: [], rejected: [], truncations: [], summary: null, model: config.model };
   }
   const allowedEvidence = new Map(findings.map((row) => [row.id, row]));
   const payload = {
@@ -573,6 +590,7 @@ export async function draftTechnicalProposals(input: DraftInput): Promise<DraftR
       proposals,
       errors: [],
       rejected: parsedBatch.rejected,
+      truncations: parsedBatch.truncations,
       summary: text(asRecord(parsed).summary)?.slice(0, 400) ?? null,
       model: config.model,
     };
@@ -581,6 +599,7 @@ export async function draftTechnicalProposals(input: DraftInput): Promise<DraftR
       proposals: [],
       errors: [`technical: ${error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)}`],
       rejected: [],
+      truncations: [],
       summary: null,
       model: config.model,
     };
@@ -599,6 +618,7 @@ export async function draftProposals(input: DraftInput): Promise<DraftResult> {
     proposals: [...clusters.proposals, ...technical.proposals],
     errors: [...clusters.errors, ...technical.errors],
     rejected: [...clusters.rejected, ...technical.rejected],
+    truncations: [...clusters.truncations, ...technical.truncations],
     summary:
       [
         clusters.summary ? `Content and AEO: ${clusters.summary}` : null,

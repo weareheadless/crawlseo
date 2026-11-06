@@ -152,6 +152,40 @@ describe("cluster drafting", () => {
     expect(result.proposals[0].confidenceReason).toBeNull();
   });
 
+  it("drafts every cluster, not the first N", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockResolvedValue({ proposals: [] });
+    const base = input();
+    const clusters = Array.from({ length: 30 }, (_, index) => ({
+      ...base.map.clusters[0],
+      slug: `topic-${index}`,
+      name: `Topic ${index}`,
+    }));
+    await draftClusterProposals({
+      ...base,
+      map: { ...base.map, clusters } as never,
+      evidenceByCluster: new Map(clusters.map((cluster) => [cluster.slug, []])),
+    });
+    // 30 clusters / batch of 4 = 8 calls. A cap at 24 would stop at 6.
+    expect(mocks.chatJson).toHaveBeenCalledTimes(8);
+  });
+
+  it("reports proposals a batch bound dropped instead of hiding them", async () => {
+    mocks.chatJson.mockReset();
+    const base = draft();
+    mocks.chatJson.mockResolvedValue({
+      summary: "Many.",
+      proposals: Array.from({ length: 8 }, (_, index) => ({
+        ...base.proposals[0],
+        title: `Proposal ${index}`,
+        evidenceIds: ["ev-1"],
+      })),
+    });
+    const result = await draftClusterProposals(input());
+    expect(result.proposals).toHaveLength(6);
+    expect(result.truncations.join(" ")).toMatch(/2 proposals/);
+  });
+
   it("rejects a new page whose path already exists on the site", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockResolvedValue({
