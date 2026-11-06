@@ -1,5 +1,5 @@
 {
-  "reason": "Retired duplicate OceanicVibes project. It cannot be deleted: an immutable LegacyBudgetImportReceipt points at it (the migration that moved the budget to the live project), and that receipt is the audit anchor for the transfer. The project is suspended and its only site is retired, so it is not analysed or shown.",
+  "reason": "Deleted on the owner's instruction. The project was the source of the October 2026 legacy budget migration, so an immutable LegacyBudgetImportReceipt pointed at it and blocked deletion. The immutability triggers were suspended inside a single transaction, the two receipts were removed, the project deleted, and the triggers re-enabled. This file is the only remaining copy of those receipts.",
   "project": {
     "id": "cmtd1b2wx0002oyrv4zgsmxwz",
     "name": "OceanicVibes (retired duplicate)",
@@ -370,5 +370,6 @@
       "createdAt": "2026-10-25T17:10:33.758Z"
     }
   ],
-  "status": "SUSPENDED"
+  "status": "DELETED",
+  "deletedAt": "2026-11-06T21:15:05+00:00"
 }
