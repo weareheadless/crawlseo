@@ -1,14 +1,12 @@
 # Opportunity board — oceanicvibes.com — 2026-11
 
-Generated 2026-11-06T21:51:48.156Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-06T23:36:29.409Z. Proposals only; no task is created until a human accepts one.
 
-Since the previous run: 0 updated in place, 6 new, 0 closed.
-- new: One homepage pass: offer-led copy plus unique metadata
-- new: Answer-block additions on existing articles
-- new: Add an AIDA 3 decision section to the Playa del Carmen course guide
-- new: Add schema markup to the nine pages that are missing it
-- new: New coached-session service pages on one template
-- new: Publish and submit an XML sitemap for the blog
+Since the previous run: 5 updated in place, 3 new, 1 closed.
+- new: Add a beginner breathwork section to the land-practice guide
+- new: Refocus the cenote-or-ocean article on cenote freediving in Yucatán
+- new: Resolve duplicate title tags on the homepage and one other page
+- closed: Answer-block additions on existing articles
 
 ## Lanes
 
@@ -18,93 +16,101 @@ No proposal in this lane.
 
 ### Content & business
 
-#### One homepage pass: offer-led copy plus unique metadata
+#### Rebuild the OceanicVibes homepage to win the brand query
 
-- Kind: update; effort: medium; confidence: medium (The rankings of 66 and 83 for your own name are your own Search Console data, but they rest on a single impression each; the 1,300 figures come from third-party keyword data.)
-- Summary: Searches for 'oceanvibes' and 'ocean vibes' carry about 1,300 each, yet the homepage ranks 66 and 83 with a single impression. It should say plainly who teaches, that coaching is one-to-one, where you operate and what a session can cover.
-- Why now: The brand demand already exists and you are not visible for it; the homepage is also the page search engines and AI answers read when asked what OceanicVibes is.
-- Target: https://oceanicvibes.com/ (hero, intro and service blocks)
-- Action: Do both in a single edit of the homepage: write the offer-led hero, intro, coaching and safety blocks, and give the homepage a unique title and description while updating the competing page to its own intent. Then run a rich-results and snippet check.
-- Expected outcome: The homepage becomes the page that answers a brand search and an AI question about who you are, instead of a blog post doing that job indirectly.
-- Evidence: 5 reference(s)
-- Critique: revise — 'ocean vibes' at ~1,300 is a generic phrase, not brand demand for a freediving school. Keep the offer-led rewrite but drop that volume as justification, and merge it with the homepage metadata fix into one pass.
+- Kind: update; effort: small; confidence: medium (First-party rank data shows the homepage at 66 and 83 for the two brand spellings, each around 1,300 monthly searches, but total impressions so far are only a handful.)
+- Summary: Both brand spellings carry about 1,300 searches a month, yet the homepage sits at positions 66 and 83 with a single impression each, and it shares its title and description with a second page. One homepage pass: brand-led title, a clear one-to-one coaching offer, the service area and schema.
+- Why now: The name is searched more than anything else you could rank for, and the homepage is currently invisible for it. Fixing the title, H1 and offer copy is the cheapest visibility available.
+- Target: https://oceanicvibes.com/ (title tag, meta description, hero and first screen)
+- Action: Rewrite the homepage as both brand page and offer page: title and H1 built around OceanicVibes and freediving coaching in Playa del Carmen; a first screen stating one-to-one coaching, small groups, safety protocols up to 30 m and the service area (Playa del Carmen, Tulum, Bacalar, the cenotes); links to the course guide, the teacher article and the plateau article; Organization or LocalBusiness schema; a unique title and description, since the current pair is duplicated on a second page.
+- Expected outcome: The homepage starts ranking for the two brand spellings instead of sitting at 66 and 83, and every visitor lands on a clear next step towards a private session.
+- Evidence: 4 reference(s)
 
-#### Add an AIDA 3 decision section to the Playa del Carmen course guide
+#### Strengthen the Playa del Carmen course guide for AIDA 3 searchers
 
-- Kind: update; effort: medium; confidence: medium (The search volumes are third-party keyword data and your Search Console shows no impressions for these course queries yet, so the direction is plausible but not yet proven on your site.)
-- Summary: Course choice is your biggest in-market cluster, with 'freediving course' and 'padi freediving course' at roughly 1,300 searches each. The local guide is the right page to answer level questions, and AIDA 3 is the level you actually teach.
-- Why now: Your site shows no impressions for these course queries yet, so the level-specific answers are still open before other schools claim them.
-- Target: https://oceanicvibes.com/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide (new section on AIDA 3, after the course-choice guidance)
-- Action: Add a section to the local guide that answers, for AIDA 3 specifically: who it is for, what a diver should already be able to do before starting, what the course covers, and how it differs from a first course. Link it to the one-to-one coaching and depth-training options so a reader can see the next step. Leave PADI and SSI out of the copy unless you decide to teach those agencies — that demand exists but you cannot honestly claim it today.
-- Expected outcome: The guide can answer a level-specific course question instead of only a general one, giving it a reason to appear for course-selection searches in your service area.
-- Evidence: 3 reference(s)
-- Critique: keep — The local course-choice guide is the right target for a level question, and AIDA 3 is what you teach. Keep the agency caveat; do not use PADI/SSI query volume as support for AIDA-only copy.
+- Kind: update; effort: medium; confidence: medium (The 1,300-search course terms are real but generic and mostly outside your service area; the local share of that demand is not yet measured.)
+- Summary: Course-selection demand is 3,490 searches across 23 queries, but the biggest terms are generic or come from Florida and San Diego, outside your service area. The local guide is the right page; it needs AIDA 3 specifics, what a course day looks like, safety limits and a clear next step.
+- Why now: The guide already exists and already speaks to local course choice, but it never answers the level question a searcher is actually asking. Adding that costs one edit, not a new page.
+- Target: https://oceanicvibes.com/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide (course comparison, course-day walkthrough and FAQ)
+- Action: Rework the local guide: add a short section on what AIDA 3 requires and who it suits, a what-happens-on-the-day walkthrough, the safety limits you work to, and an FAQ answering whether a course in Playa del Carmen is worth it and how to pick between levels. Keep every example local to Playa del Carmen, Bacalar and the cenotes; do not chase Florida or San Diego searches. Whether the page should also address PADI-branded searches is your call — PADI is not in your service list, so I have not assumed it.
+- Expected outcome: The guide begins earning impressions for local course-selection queries and routes readers to the AIDA 3 and depth-training offers.
+- Evidence: 2 reference(s)
 
-#### New coached-session service pages on one template
+#### Build a depth-training page around the 30 m safety offer
 
-- Kind: article; effort: medium; confidence: low (The 1,600 figure is third-party volume for a broad, mostly informational query and your site shows no impressions for it; whether to sell depth training as its own offer is your decision.)
-- Summary: 'freediving deep' carries about 1,600 searches a month and 'freediving training course' about 90, but the site explains around depth work rather than offering it. Depth training, advanced depth and line training are services you already list.
-- Why now: This is the one cluster where the closest asset is a blog post about plateaus, not an offer; a page that sells the session is missing from a service you already run.
+- Kind: article; effort: medium; confidence: low (The demand is broad and not tied to Playa del Carmen, and no page currently measures for these terms, so this is a test of whether depth training earns local searches.)
+- Summary: Depth and training terms carry 2,430 searches. The site explains plateaus but never presents structured depth training, line work or the 30 m safety protocols as something a diver can book. One page, written for Playa del Carmen and the cenotes.
+- Why now: 'freediving deep' at 1,600 and 'freediving training' at 590 are the largest measured terms in this plan, and nothing on the site answers them with your actual offer.
 - Target: https://oceanicvibes.com/depth-training-playa-del-carmen (new service page)
-- Action: Build both new pages on the same service-page template with shared blocks: what a session involves, skills targeted (equalization, CO₂/O₂, relaxation, physical prep), safety and the 30 m ceiling, service area and booking. Sequence the cenote page first since it is confirmed; publish the depth-training page only once standalone availability is confirmed.
-- Expected outcome: A page that can be shown to a diver searching for deep or advanced training, instead of relying on a plateau article to imply the service exists.
-- Evidence: 6 reference(s)
-- Critique: revise — 'freediving deep' is mostly informational, not a booking query, and the proposal itself is unsure the service is sold standalone. Confirm the offer and cut overlap with the cenote page before building.
+- Action: Create one page covering advanced depth, line training and safety protocols up to 30 m: who it is for, how a session runs, what a diver should be able to do before booking, where you dive (Playa del Carmen, the cenotes, Cenote Azul), and how depth work connects to equalization, relaxation and CO₂/O₂ sessions. Link to it from the plateau article and from the homepage, and link back to the private coaching offer.
+- Expected outcome: A bookable page for depth training that can compete for 'freediving deep' and 'freediving training', and a natural internal link target for the plateau article.
+- Evidence: 2 reference(s)
+
+#### Add a beginner breathwork section to the land-practice guide
+
+- Kind: update; effort: small; confidence: low (Only one low-volume query with no Search Console impressions; this is a small test, not a proven demand signal.)
+- Summary: The cluster has strong coverage but only 20 monthly searches for 'freediving for beginners' and no impressions. A small update to the existing land-practice page can test whether beginner breathwork and CO₂ preparation attracts local course enquiries.
+- Why now: Demand is low but business-relevant: breathwork and relaxation are core differentiators, and the page already covers preparation topics.
+- Target: https://oceanicvibes.com/blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t (Beginner breathwork and relaxation)
+- Action: Update the existing land-practice article with a short beginner-focused section: what breathwork and relaxation to practise before a course, how CO₂ tables fit, and a clear next step to private coaching. Keep the page local to Playa del Carmen and Bacalar.
+- Expected outcome: A clearer entry point for beginners; measure impressions and enquiries for 'freediving for beginners' over the next quarter.
+- Evidence: 2 reference(s)
+
+#### Refocus the cenote-or-ocean article on cenote freediving in Yucatán
+
+- Kind: update; effort: medium; confidence: medium (First-party keyword data shows 180 monthly searches across six local queries, but there are no impressions yet, so the action is directional.)
+- Summary: Six local queries total 180 monthly searches for cenote and Tulum freediving. The existing comparison page is the closest match; update it to answer cenote-specific questions and link to local service-area pages.
+- Why now: The cluster has measurable local demand but zero impressions, so the current page is not capturing the cenote query set.
+- Target: https://oceanicvibes.com/blog/cenote-or-ocean-first-freediving-course (Cenote freediving in Yucatán)
+- Action: Rework the page to lead with cenote freediving in the Yucatán: what a cenote session involves, safety and line setup, Cenote Azul and other local cenotes, and when to choose ocean vs cenote. Add internal links to the local course guide and teacher-fit article.
+- Expected outcome: Capture the 180 monthly searches around cenote and Tulum freediving; track impressions and clicks for the six listed queries.
+- Evidence: 3 reference(s)
 
 ### AEO/GEO
 
-#### Answer-block additions on existing articles
-
-- Kind: aeo; effort: small; confidence: low (AI answer tracking shows competitors cited for these two questions and none for you, but the cluster's own search demand is thin at about 20 searches, so treat it as a small, cheap test.)
-- Summary: AI answers for 'What makes OceanicVibes different for Private freediving coaching?' and 'Is private freediving coaching right for my needs?' cite 3 and 10 competitors and never your site. The teacher page is the natural place for short, direct answers.
-- Why now: Measured AI answers cite other providers for questions your own page already argues in essay form; a few self-contained sentences can be quoted where long paragraphs cannot.
-- Target: https://oceanicvibes.com/blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you (answer blocks near the top of the article)
-- Action: Use one answer-block pattern for both articles: question-shaped heading, three or four plain sentences, and a single next step towards one-to-one coaching. Apply it at the top of the teacher article and as a short beginner block above the existing CO₂ table, leaving the rest of each piece untouched.
-- Expected outcome: The page becomes quotable for the two comparison questions where competitors are currently cited and you are not.
-- Evidence: 3 reference(s)
-- Critique: revise — Title says teacher page, target is a blog article. Fix the naming and place the 'what makes us different' answer block on the page meant to rank for it, or state plainly why the article stands in.
+No proposal in this lane.
 
 ### Technical
 
-#### Add schema markup to the nine pages that are missing it
+#### Fix missing canonicals and schema on blog pages
 
-- Kind: technical; effort: small; confidence: high (A crawl of your site counted nine pages missing schema and named the affected pages; the defect and its extent are measured, not estimated.)
-- Summary: A crawl found nine pages without structured data, with the cenote-versus-ocean article as a sample. Without it, search engines and AI answers have to guess your business name, location and services.
-- Why now: The brand and answer-block work both depend on machines reading your business as a known entity; schema is the cheapest way to make that explicit.
-- Target: https://oceanicvibes.com/blog/cenote-or-ocean-first-freediving-course (site-wide template, sample affected page)
-- Action: Add Article schema to blog posts and Organization/LocalBusiness schema site-wide, carrying the business name, the Playa del Carmen location, the service area (Playa del Carmen, Tulum, Bacalar, the Yucatán cenotes, Cenote Azul) and the services you list. One template change covers all nine affected pages. Validate with a rich-results test and confirm the pages still render correctly afterwards.
-- Expected outcome: All nine pages carry machine-readable business facts, which supports brand clarity and the answer blocks being quoted correctly.
+- Kind: technical; effort: small; confidence: high (Crawl findings directly identify the missing canonicals and schema on the target blog template.)
+- Summary: Five blog pages lack canonical tags and nine lack schema, including the cenote-or-ocean article. A template-level fix addresses both crawl defects in one delivery.
+- Why now: The cenote page is the proposed content target, and it currently has both defects; fixing the template clears the path before content updates.
+- Target: https://oceanicvibes.com/blog/cenote-or-ocean-first-freediving-course (Head)
+- Action: Add self-referencing canonical tags to the five blog pages missing them and schema markup to the nine blog pages missing it. Fix both at the blog template level so new posts inherit the tags.
+- Expected outcome: Remove duplicate-indexing risk and add structured data across the blog before content updates.
+- Evidence: 3 reference(s)
+
+#### Resolve duplicate title tags on the homepage and one other page
+
+- Kind: technical; effort: small; confidence: high (The finding directly identifies a duplicate title on the homepage across 2 pages.)
+- Summary: Two pages share the same title tag, including the homepage. Duplicate titles weaken SERP differentiation and can cause the pages to compete for the same query intent.
+- Why now: The crawl confirms a duplicate title across 2 pages. Correcting it now improves clarity before further content or campaign work.
+- Target: https://oceanicvibes.com/ (head)
+- Action: Identify the two pages sharing the title, then rewrite each title so it is unique, descriptive of that page's intent and aligned with the page's primary topic. Keep the homepage title focused on the brand and core freediving coaching offer.
+- Expected outcome: Each page has a distinct title, improving SERP differentiation and reducing keyword cannibalization between the two URLs.
 - Evidence: 1 reference(s)
-- Critique: keep — Nine pages lack structured data and one template change covers them. Business name, location, service area and services are already defined on site, so the markup claims are supported.
 
 #### Publish and submit an XML sitemap for the blog
 
-- Kind: technical; effort: small; confidence: high (The finding explicitly reports MISSING_SITEMAP for the /blog section.)
-- Summary: The /blog section has no sitemap. Search engines must rely on internal links to discover blog URLs, which is slower and less complete.
-- Why now: Blog content supports course-intent discovery; a sitemap gives crawlers a direct inventory and reduces wasted crawl on the section.
-- Target: https://oceanicvibes.com/blog (blog)
-- Action: Generate an XML sitemap including the blog index and published posts, reference it in robots.txt, and submit it in Google Search Console and Bing Webmaster Tools.
-- Expected outcome: Faster, more complete discovery of blog URLs and more predictable crawl coverage.
+- Kind: technical; effort: medium; confidence: high (The finding directly reports a missing sitemap for the blog URL.)
+- Summary: The blog has no sitemap detected. A sitemap improves discovery of blog URLs and helps search engines allocate crawl attention to indexable content.
+- Why now: The crawl found the blog missing a sitemap. Publishing one now supports indexing of existing posts and prevents future posts from relying only on internal links.
+- Target: https://oceanicvibes.com/blog (site)
+- Action: Generate an XML sitemap that includes all indexable blog URLs, reference it in robots.txt, and submit it in Google Search Console. Exclude non-indexable or duplicate URLs.
+- Expected outcome: Search engines can discover and crawl blog content more reliably, reducing crawl waste and improving index coverage for the blog.
 - Evidence: 1 reference(s)
-- Critique: keep — A missing blog sitemap is a concrete, verifiable gap; generating, referencing in robots.txt and submitting is a single standard task.
 
 ## Drafting note
 
-Content and AEO: Four clusters, five proposals. The brand cluster's real gap is the homepage, not more articles: 'oceanvibes' and 'ocean vibes' carry roughly 1,300 searches each while the site sits at position 66 and 83 with one impression. Course selection holds the largest in-market demand, so the local guide gets Four of the five clusters are worth acting on; deep equalization is not. That cluster has no measured query demand, no impressions and no evidence rows to cite, and the existing Frenzel article already covers the topic in depth — revisit it when Search Console shows any signal. The cenote cluster ho
+Content and AEO: Three of the four clusters get work; one does not. The brand cluster is the clearest win: both spellings of the name carry about 1,300 searches a month and the homepage sits at positions 66 and 83 with a single impression each, so the homepage is the asset to fix. Course selection gets a rewrite of  Two clusters have actionable work: a small breathwork test and a cenote content update. Deep equalization coaching has zero measured demand and no evidence rows, so no proposal. I also include one technical delivery for missing canonicals and schema on the blog template, which affects the cenote tar
 
-Technical: Reviewed five crawl findings on oceanicvibes.com. I would action three technical deliveries: missing canonicals on 5 pages, duplicate title/description metadata on 2 pages, and missing sitemap discovery for /blog. These affect signal consolidation and crawl efficiency. I would not propose MISSING_SCHEMA (9 pages) in this batch because it does not block indexing, waste crawl budget, split signals o
+Technical: The crawl surfaced five findings. I would act on three: missing canonical tags on 5 blog pages, duplicate title tags across 2 pages including the homepage, and the absence of a sitemap for the blog. These affect signal consolidation, SERP differentiation and content discovery. I would not propose changes for the missing schema on 9 blog pages or the duplicate meta description on 2 pages: missing s
 
 ## Critique
 
-Model: deepseek/deepseek-v4.1-flash-1017.
-
-Scope is respected and the low-volume cenote and beginner tests are justified. Fixes needed: the homepage rationale leans on a generic 'ocean vibes' query, the AEO item names a teacher page but targets a blog post, and the depth-training page needs its offer confirmed first.
-
-Merged or not stored:
-
-- Create a cenote freediving page for Playa del Carmen, Tulum and the Yucatán cenotes — merged into “New coached-session service pages on one template”
-- Add a beginner entry section to the land-preparation and CO₂ article — merged into “Answer-block additions on existing articles”
-- Resolve duplicate title and meta description on the homepage pair — merged into “One homepage pass: offer-led copy plus unique metadata”
+Critique unavailable: unknown error. The proposals are shown as generated.
 
 ## Limits
 

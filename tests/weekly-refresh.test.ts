@@ -135,7 +135,7 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
       skipped: [],
     }),
     bridgeKnowledge: async () => ({ document: true, revision: 1, stored: 2, skipped: [] }),
-    bridgeCoverage: async () => ({ document: true, questions: 3, stored: 3 }),
+    bridgeCoverage: async () => ({ document: true, questions: 3, stored: 3, keywords: 0, omitted: 0 }),
     fetchNews: async () => [recentNews()],
     saveNews: async () => [{ id: "source-1" }],
     storeProposals: async () => ({ stored: [{ id: "opp-1", dedupKey: "phase5:timely" }], dropped: [] }),

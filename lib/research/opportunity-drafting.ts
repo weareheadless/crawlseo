@@ -171,7 +171,10 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
     name: cluster.name,
     intent: cluster.intent,
     relevance: cluster.relevance,
+    // Coverage is a page match; visibility is whether the site earns anything.
+    // A "strong" page with no impressions is unproven, not finished.
     coverage: cluster.coverage,
+    visibility: cluster.visibility,
     marketScope: cluster.marketScope,
     demand: cluster.metrics,
     gaps: cluster.gaps.slice(0, 5),

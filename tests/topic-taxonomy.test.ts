@@ -12,7 +12,9 @@ import {
   parseTopicTaxonomy,
   proposeTopicTaxonomy,
   saveTopicTaxonomy,
+  stabilizeTopicTaxonomy,
   validateTopic,
+  type TopicDefinition,
   type TopicTaxonomyInput,
 } from "@/lib/research/topic-taxonomy";
 
@@ -261,5 +263,86 @@ describe("taxonomy storage", () => {
   it("returns null when the stored profile has no taxonomy", async () => {
     const db = { siteProfile: { findUnique: async () => ({ constraints: {} }) } };
     expect(await loadTopicTaxonomy(db as never, "site-1")).toBeNull();
+  });
+});
+
+describe("taxonomy stabilization", () => {
+  function definition(overrides: Record<string, unknown>): TopicDefinition {
+    const { topic: parsed } = validateTopic(topic(overrides));
+    if (!parsed) throw new Error("invalid fixture");
+    return parsed;
+  }
+
+  const topics = [
+    definition({
+      slug: "brand",
+      name: "Brand",
+      coverageKind: "brand",
+      requireAny: ["ocean vibes"],
+      terms: ["ocean vibes", "oceanvibes", "freediving"],
+      strongTerms: ["ocean vibes"],
+      preferredPages: ["/"],
+    }),
+    definition({
+      slug: "courses",
+      name: "Courses",
+      coverageKind: "service",
+      requireAny: ["course"],
+      terms: ["freediving", "course"],
+      strongTerms: ["course"],
+      preferredPages: ["/blog/course"],
+    }),
+    definition({
+      slug: "tulum",
+      name: "Tulum",
+      coverageKind: "local",
+      requireAny: ["tulum"],
+      terms: ["freediving", "tulum"],
+      strongTerms: ["tulum"],
+      preferredPages: ["/blog/cenote"],
+    }),
+    definition({
+      slug: "cenotes",
+      name: "Cenotes",
+      coverageKind: "local",
+      requireAny: ["cenote", "freediving"],
+      terms: ["freediving", "cenote"],
+      strongTerms: ["cenote"],
+      preferredPages: ["/blog/cenote"],
+    }),
+  ];
+  const queries = [
+    { query: "freediving", impressions: 0, volume: 12100 },
+    { query: "freediving course", impressions: 0, volume: 1300 },
+    { query: "freediving tulum", impressions: 0, volume: 30 },
+    { query: "cenote freediving", impressions: 0, volume: 20 },
+    { query: "ocean vibes", impressions: 2, volume: 1300 },
+    { query: "oceanvibes", impressions: 2, volume: 1300 },
+  ];
+
+  it("merges two topics that share a specific owner, but not the homepage", () => {
+    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    expect(result.merges).toHaveLength(1);
+    expect(result.merges[0].page).toBe("/blog/cenote");
+    expect(result.topics.map((entry) => entry.slug)).not.toContain("tulum");
+    // Both the brand and the course topic point at pages, so nothing else merges.
+    expect(result.topics.map((entry) => entry.slug)).toContain("brand");
+    expect(result.topics.map((entry) => entry.slug)).toContain("courses");
+  });
+
+  it("gives the bare market head term one owner and removes it from every requireAny", () => {
+    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    const head = result.headTerms.find((entry) => entry.term === "freediving");
+    expect(head?.owner).toBe("Brand");
+    const brand = result.topics.find((entry) => entry.slug === "brand")!;
+    expect(brand.headTerms).toContain("freediving");
+    for (const entry of result.topics) {
+      expect(entry.requireAny).not.toContain("freediving");
+    }
+  });
+
+  it("does not claim a generic modifier that is not the market head", () => {
+    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    expect(result.headTerms.map((entry) => entry.term)).not.toContain("course");
   });
 });

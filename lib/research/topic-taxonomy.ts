@@ -43,6 +43,12 @@ export type TopicDefinition = {
   terms: string[];
   /** Extra weight for terms that identify the topic rather than modify it. */
   strongTerms?: string[];
+  /**
+   * A head term the owning topic claims, matched only when it is the whole
+   * query. Shared terms are dropped so they do not blur every topic, but the
+   * term that is the entire market must still belong somewhere.
+   */
+  headTerms?: string[];
   /** At least one of these must appear on a page for it to count as coverage. */
   coverageRequireAny?: string[];
   /** Every group must match on a page; used to keep restoration pages from matching a generic "restauration" mention. */
@@ -96,6 +102,12 @@ export type TopicTaxonomyInput = {
   marketScope: { default: string; offers: Array<{ offer: string; scope: string }> };
   queries: Array<{ query: string; impressions: number; volume: number | null }>;
   pages: Array<{ path: string; title: string; h1: string; wordCount: number }>;
+  /**
+   * Terms that identify the business by name, carried over from an approved
+   * taxonomy. Brand demand must survive a re-proposal even when the model
+   * treats two impressions as noise.
+   */
+  brandTerms?: string[];
 };
 
 export type TopicTaxonomyDb = Pick<PrismaClient, "siteProfile">;
@@ -124,10 +136,20 @@ function termInText(text: string, term: string): boolean {
  * not sell into (a hospital query on a property site) should not spend its paid
  * cap measuring them.
  */
+export function queryMatchesTopics(topics: TopicDefinition[], query: string): boolean {
+  if (topics.length === 0) return false;
+  const text = normalizeTerm(query);
+  return topics.some(
+    (topic) =>
+      topic.requireAny.some((term) => termInText(text, term)) ||
+      // A head term matches the bare query only; see TopicDefinition.headTerms.
+      (topic.headTerms ?? []).some((term) => normalizeTerm(term) === text)
+  );
+}
+
 export function queryMatchesTaxonomy(taxonomy: TopicTaxonomy | null, query: string): boolean {
   if (!taxonomy || taxonomy.topics.length === 0) return false;
-  const text = normalizeTerm(query);
-  return taxonomy.topics.some((topic) => topic.requireAny.some((term) => termInText(text, term)));
+  return queryMatchesTopics(taxonomy.topics, query);
 }
 
 /**
@@ -143,7 +165,11 @@ export function pruneTopicsToQueries(
   const texts = queries.map(normalizeTerm);
   const dropped: Array<{ title: string; reason: string }> = [];
   const kept = topics.filter((topic) => {
-    const matches = texts.some((text) => topic.requireAny.some((term) => termInText(text, term)));
+    const matches = texts.some(
+      (text) =>
+        topic.requireAny.some((term) => termInText(text, term)) ||
+        (topic.headTerms ?? []).some((term) => normalizeTerm(term) === text)
+    );
     if (!matches) dropped.push({ title: topic.name, reason: "no measured query matches its terms" });
     return matches;
   });
@@ -238,6 +264,7 @@ export function validateTopic(raw: unknown): { topic: TopicDefinition | null; re
       ...(row.exclusive === true ? { exclusive: true } : {}),
       terms,
       strongTerms: stringList(row.strongTerms),
+      ...(Array.isArray(row.headTerms) ? { headTerms: stringList(row.headTerms, 10) } : {}),
       coverageRequireAny: stringList(row.coverageRequireAny),
       ...(Array.isArray(row.coverageRequireGroups)
         ? { coverageRequireGroups: (row.coverageRequireGroups as unknown[]).flatMap((group) => (Array.isArray(group) ? [stringList(group, 10)].filter((entry) => entry.length > 0) : [])) }
@@ -392,11 +419,18 @@ const SYSTEM = [
 
 export async function proposeTopicTaxonomy(
   input: TopicTaxonomyInput
-): Promise<{ taxonomy: TopicTaxonomy | null; rejected: Array<{ title: string; reason: string }>; error: string | null; model: string | null }> {
+): Promise<{
+  taxonomy: TopicTaxonomy | null;
+  rejected: Array<{ title: string; reason: string }>;
+  /** Topics the model gave the same owning page, merged into one. */
+  merges: Array<{ into: string; merged: string[]; page: string }>;
+  error: string | null;
+  model: string | null;
+}> {
   const config = contentWriterConfig();
-  if (!config) return { taxonomy: null, rejected: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
+  if (!config) return { taxonomy: null, rejected: [], merges: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
   if (input.queries.length === 0) {
-    return { taxonomy: null, rejected: [], error: "no measured query to model", model: config.model };
+    return { taxonomy: null, rejected: [], merges: [], error: "no measured query to model", model: config.model };
   }
 
   const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
@@ -434,6 +468,10 @@ export async function proposeTopicTaxonomy(
     const topics: TopicDefinition[] = [];
     const rejected: Array<{ title: string; reason: string }> = [];
     const seen = new Set<string>();
+    // Volume per query, used to decide whether a dropped shared term is the
+    // topic's actual demand rather than a word every topic happens to contain.
+    const volumeByQuery = new Map(input.queries.map((query) => [query.query, query.volume ?? query.impressions]));
+    const membersBySlug = new Map<string, string[]>();
     for (const raw of Array.isArray(record.topics) ? record.topics : []) {
       const row = asRecord(raw);
       const name = text(row.name);
@@ -466,6 +504,7 @@ export async function proposeTopicTaxonomy(
         derived.requireAny = memberQueries.map((query) => normalizeTerm(query)).filter(Boolean).slice(0, 8);
       }
       seen.add(slug);
+      membersBySlug.set(slug, memberQueries);
       topics.push({
         slug,
         name: name.slice(0, 160),
@@ -491,8 +530,44 @@ export async function proposeTopicTaxonomy(
         actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
       });
     }
+    // Brand demand is a topic even when the model treats it as noise: it is the
+    // one query set where the owner's own name is the subject, and dropping it
+    // leaves the brand volume unmapped on every re-proposal.
+    const brandTerms = [...new Set((input.brandTerms ?? []).map(normalizeTerm).filter(Boolean))];
+    if (brandTerms.length > 0 && !topics.some((topic) => topic.coverageKind === "brand")) {
+      const brandMembers = input.queries
+        .map((query) => query.query)
+        .filter((query) => brandTerms.some((term) => termInText(normalizeTerm(query), term)));
+      if (brandMembers.length > 0) {
+        const slug = slugify(`${input.business.name ?? input.domain} brand`);
+        if (slug && !seen.has(slug)) {
+          const derived = deriveTerms(brandMembers, (query) => impressions.get(query) ?? 0, pageTexts);
+          topics.push({
+            slug,
+            name: `${input.business.name ?? input.domain} brand`,
+            intent: "mixed",
+            relevance: "high",
+            coverageKind: "brand",
+            offerKey: input.marketScope.offers[0]?.offer ?? input.business.name ?? input.domain,
+            rationale: "Searches for the business name are its own demand; the homepage should answer them.",
+            // Membership is the brand terms themselves, not tokens derived from
+            // them: "ocean" would otherwise pull every ocean query into brand.
+            requireAny: brandTerms,
+            terms: [...new Set([...brandTerms, ...derived.terms])],
+            strongTerms: brandTerms,
+            coverageRequireAny: brandTerms,
+            pageTerms: derived.terms,
+            preferredPages: ["/"],
+            exclusive: true,
+            actionHint: "Make the homepage say who teaches, what is sold and where, so the brand query lands on it.",
+          });
+          seen.add(slug);
+          membersBySlug.set(slug, brandMembers);
+        }
+      }
+    }
     if (topics.length === 0) {
-      return { taxonomy: null, rejected, error: "the review proposed no usable topic", model: config.model };
+      return { taxonomy: null, rejected, merges: [], error: "the review proposed no usable topic", model: config.model };
     }
     // An owner the model left empty is filled from the real inventory: the page
     // whose path shares the most distinctive terms with the topic. A topic with
@@ -509,6 +584,53 @@ export async function proposeTopicTaxonomy(
       if (best) topic.preferredPages = [best.path];
     }
 
+    // One topic has one owning page. When the model gives two topics the same
+    // owner, they are one topic: merging keeps both query sets instead of
+    // leaving two rows that fight over a page and split its demand.
+    const merges: Array<{ into: string; merged: string[]; page: string }> = [];
+    const byOwner = new Map<string, TopicDefinition[]>();
+    for (const topic of topics) {
+      const owner = topic.preferredPages?.[0];
+      // The homepage can own several broad topics; a specific page cannot.
+      if (!owner || owner === "/") continue;
+      byOwner.set(owner, [...(byOwner.get(owner) ?? []), topic]);
+    }
+    const removed = new Set<string>();
+    for (const [page, group] of byOwner) {
+      if (group.length < 2) continue;
+      const relevanceRank = (topic: TopicDefinition) => RELEVANCES.indexOf(topic.relevance);
+      const survivor = [...group].sort(
+        (a, b) => relevanceRank(a) - relevanceRank(b) || (membersBySlug.get(b.slug)?.length ?? 0) - (membersBySlug.get(a.slug)?.length ?? 0)
+      )[0];
+      const memberQueries = [...new Set(group.flatMap((topic) => membersBySlug.get(topic.slug) ?? []))];
+      const derived = deriveTerms(memberQueries, (query) => impressions.get(query) ?? 0, pageTexts);
+      const selfMatched = memberQueries.filter((query) => derived.requireAny.some((term) => termInText(normalizeTerm(query), term))).length;
+      if (selfMatched < Math.min(2, memberQueries.length)) {
+        derived.requireAny = memberQueries.map((query) => normalizeTerm(query)).filter(Boolean).slice(0, 8);
+      }
+      survivor.requireAny = derived.requireAny;
+      survivor.terms = derived.terms;
+      survivor.strongTerms = derived.strongTerms;
+      survivor.coverageRequireAny = derived.coverageRequireAny;
+      survivor.pageTerms = derived.terms;
+      survivor.headTerms = [...new Set(group.flatMap((topic) => topic.headTerms ?? []))];
+      if (group.some((topic) => topic.exclusive)) survivor.exclusive = true;
+      const mergedNames = group.filter((topic) => topic !== survivor).map((topic) => topic.name);
+      survivor.rationale = [survivor.rationale, `Merged with ${mergedNames.join(", ")}: the same page owns both topics.`]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 600);
+      membersBySlug.set(survivor.slug, memberQueries);
+      for (const topic of group) if (topic !== survivor) removed.add(topic.slug);
+      merges.push({ into: survivor.name, merged: mergedNames, page });
+    }
+    if (removed.size > 0) {
+      for (const slug of removed) {
+        const index = topics.findIndex((topic) => topic.slug === slug);
+        if (index >= 0) topics.splice(index, 1);
+      }
+    }
+
     // A term shared by most topics ("real estate") does not distinguish any of
     // them. Keep it for coverage, but do not let it decide membership.
     const termTopics = new Map<string, number>();
@@ -516,9 +638,80 @@ export async function proposeTopicTaxonomy(
       for (const term of new Set(topic.requireAny)) termTopics.set(term, (termTopics.get(term) ?? 0) + 1);
     }
     const sharedLimit = Math.max(2, Math.ceil(topics.length * 0.3));
+    const droppedShared = new Set<string>();
     for (const topic of topics) {
       const distinctive = topic.requireAny.filter((term) => (termTopics.get(term) ?? 0) <= sharedLimit);
-      if (distinctive.length > 0) topic.requireAny = distinctive;
+      if (distinctive.length > 0) {
+        for (const term of topic.requireAny) {
+          if (!distinctive.includes(term)) droppedShared.add(term);
+        }
+        topic.requireAny = distinctive;
+      }
+    }
+    // Dropping every shared term deletes the one word the whole market searches
+    // for: "freediving" is in most topics, so it distinguished none and belonged
+    // to no cluster. A market head term is kept, and one topic claims it - the
+    // brand or mixed topic when there is one, because the homepage should answer
+    // the bare head term, otherwise the topic whose queries use it most.
+    const termTopicsAll = new Map<string, number>();
+    for (const topic of topics) {
+      for (const term of new Set(topic.terms)) termTopicsAll.set(term, (termTopicsAll.get(term) ?? 0) + 1);
+    }
+    // The head term is the word at least half the topics contain. A 30% share
+    // lets generic modifiers ("training", "course") qualify; half does not.
+    const headShare = Math.max(2, Math.ceil(topics.length * 0.5));
+    const headCandidates = new Set([
+      ...[...droppedShared].filter((term) => !term.includes(" ")),
+      ...[...termTopicsAll.entries()]
+        .filter(([term, count]) => count >= headShare && !term.includes(" "))
+        .map(([term]) => term),
+    ]);
+    const termVolume = new Map(
+      [...headCandidates].map((term) => [
+        term,
+        Math.max(
+          0,
+          ...[...volumeByQuery.entries()].filter(([query]) => termInText(normalizeTerm(query), term)).map(([, volume]) => volume)
+        ),
+      ])
+    );
+    const maxHeadVolume = Math.max(0, ...termVolume.values());
+    const memberHits = (topic: TopicDefinition, term: string) =>
+      (membersBySlug.get(topic.slug) ?? []).filter((query) => termInText(normalizeTerm(query), term)).length;
+    const claimed = new Map<string, { owner: string; volume: number }>();
+    for (const term of headCandidates) {
+      const marketVolume = termVolume.get(term) ?? 0;
+      // A head term is the market's head, not merely a large word next to a
+      // small topic: at least half the volume of the largest candidate.
+      if (marketVolume <= 0 || marketVolume < maxHeadVolume * 0.5) continue;
+      const candidates = topics.filter(
+        (topic) =>
+          memberHits(topic, term) > 0 ||
+          // The homepage/brand topic is the natural owner of the bare market
+          // term even when its own members are the brand queries - but only a
+          // term its own vocabulary contains, never an unrelated modifier.
+          ((topic.coverageKind === "brand" || topic.coverageKind === "mixed") &&
+            topic.terms.some((entry) => entry === term))
+      );
+      if (candidates.length === 0) continue;
+      const brandFirst = candidates.filter((topic) => topic.coverageKind === "brand" || topic.coverageKind === "mixed");
+      const pool = brandFirst.length > 0 ? brandFirst : candidates;
+      const owner = pool.reduce(
+        (best, topic) => (memberHits(topic, term) > memberHits(best, term) ? topic : best),
+        pool[0]
+      );
+      const current = claimed.get(term);
+      if (!current || marketVolume > current.volume) claimed.set(term, { owner: owner.slug, volume: marketVolume });
+    }
+    // The head term matches the bare query only, so it must not widen any
+    // topic's requireAny and pull every modifier query into the owner.
+    for (const topic of topics) {
+      topic.requireAny = topic.requireAny.filter((entry) => !claimed.has(entry));
+    }
+    for (const [term, { owner }] of claimed) {
+      const topic = topics.find((entry) => entry.slug === owner);
+      if (!topic) continue;
+      topic.headTerms = [...new Set([...(topic.headTerms ?? []), term])];
     }
     const pageTypeRules: TopicPageTypeRule[] = [];
     for (const raw of Array.isArray(record.pageTypeRules) ? record.pageTypeRules : []) {
@@ -543,11 +736,13 @@ export async function proposeTopicTaxonomy(
         summary: [
           text(record.summary)?.slice(0, 800) ?? null,
           omittedQueries > 0 ? `${omittedQueries} of ${input.queries.length} queries were outside the sample the model saw.` : null,
+          merges.length > 0 ? `${merges.length} topic pair${merges.length === 1 ? "" : "s"} shared an owning page and were merged.` : null,
         ]
           .filter(Boolean)
           .join(" ") || null,
       },
       rejected,
+      merges,
       error: null,
       model: config.model,
     };
@@ -555,6 +750,7 @@ export async function proposeTopicTaxonomy(
     return {
       taxonomy: null,
       rejected: [],
+      merges: [],
       error: error instanceof Error ? error.message.slice(0, 400) : String(error).slice(0, 400),
       model: config.model,
     };
@@ -581,4 +777,144 @@ export async function saveTopicTaxonomy(db: TopicTaxonomyDb, siteId: string, tax
   } else {
     await db.siteProfile.create({ data: { siteId, constraints: constraints as never } });
   }
+}
+
+export type TaxonomyStabilization = {
+  topics: TopicDefinition[];
+  merges: Array<{ into: string; merged: string[]; page: string }>;
+  headTerms: Array<{ term: string; owner: string; volume: number }>;
+};
+
+/**
+ * Deterministic ownership rules applied to an approved taxonomy.
+ *
+ * The model proposes topics; these two rules keep the map honest without
+ * another model call:
+ *
+ * - one owning page per topic: two topics the proposal gave the same specific
+ *   page are one topic. The homepage is exempt because it legitimately owns
+ *   several broad topics.
+ * - the market head term belongs somewhere: a term most topics contain is
+ *   dropped from membership so it does not blur them, but the one word the
+ *   whole market searches for is claimed by a single owner (brand or mixed
+ *   first, then the largest topic) and matches only the bare query.
+ */
+export function stabilizeTopicTaxonomy(input: {
+  topics: TopicDefinition[];
+  queries: Array<{ query: string; impressions: number; volume: number | null }>;
+  pageTexts: string[];
+}): TaxonomyStabilization {
+  const topics = input.topics.map((topic) => ({
+    ...topic,
+    requireAny: [...topic.requireAny],
+    terms: [...topic.terms],
+    strongTerms: [...(topic.strongTerms ?? [])],
+    coverageRequireAny: [...(topic.coverageRequireAny ?? [])],
+    headTerms: [...(topic.headTerms ?? [])],
+  }));
+  const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
+  const volumeByQuery = new Map(input.queries.map((query) => [query.query, query.volume ?? 0]));
+  const queryByText = new Map(input.queries.map((query) => [query.query, query]));
+
+  const members = new Map<string, string[]>();
+  for (const topic of topics) {
+    members.set(
+      topic.slug,
+      input.queries.filter((query) => queryMatchesTopics([topic], query.query)).map((query) => query.query)
+    );
+  }
+
+  const merges: TaxonomyStabilization["merges"] = [];
+  const byOwner = new Map<string, TopicDefinition[]>();
+  for (const topic of topics) {
+    const owner = topic.preferredPages?.[0];
+    // The homepage can own several broad topics; a specific page cannot.
+    if (!owner || owner === "/") continue;
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), topic]);
+  }
+  const removed = new Set<string>();
+  for (const [page, group] of byOwner) {
+    if (group.length < 2) continue;
+    const relevanceRank = (topic: TopicDefinition) => RELEVANCES.indexOf(topic.relevance);
+    const survivor = [...group].sort(
+      (a, b) => relevanceRank(a) - relevanceRank(b) || (members.get(b.slug)?.length ?? 0) - (members.get(a.slug)?.length ?? 0)
+    )[0];
+    const union = [...new Set(group.flatMap((topic) => members.get(topic.slug) ?? []))];
+    if (union.length > 0) {
+      const derived = deriveTerms(union, (query) => impressions.get(query) ?? 0, input.pageTexts);
+      const selfMatched = union.filter((query) => derived.requireAny.some((term) => termInText(normalizeTerm(query), term))).length;
+      if (selfMatched < Math.min(2, union.length)) {
+        derived.requireAny = union.map((query) => normalizeTerm(query)).filter(Boolean).slice(0, 8);
+      }
+      survivor.requireAny = derived.requireAny;
+      survivor.terms = derived.terms;
+      survivor.strongTerms = derived.strongTerms;
+      survivor.coverageRequireAny = derived.coverageRequireAny;
+      survivor.pageTerms = derived.terms;
+    }
+    if (group.some((topic) => topic.exclusive)) survivor.exclusive = true;
+    survivor.headTerms = [...new Set(group.flatMap((topic) => topic.headTerms ?? []))];
+    const mergedNames = group.filter((topic) => topic !== survivor).map((topic) => topic.name);
+    survivor.rationale = [survivor.rationale, `Merged with ${mergedNames.join(", ")}: the same page owns both topics.`]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 600);
+    members.set(survivor.slug, union);
+    for (const topic of group) if (topic !== survivor) removed.add(topic.slug);
+    merges.push({ into: survivor.name, merged: mergedNames, page });
+  }
+  const kept = removed.size > 0 ? topics.filter((topic) => !removed.has(topic.slug)) : topics;
+
+  const termTopics = new Map<string, number>();
+  for (const topic of kept) {
+    for (const term of new Set(topic.terms)) termTopics.set(term, (termTopics.get(term) ?? 0) + 1);
+  }
+  const headShare = Math.max(2, Math.ceil(kept.length * 0.5));
+  const headCandidates = [...termTopics.entries()]
+    .filter(([term, count]) => count >= headShare && !term.includes(" "))
+    .map(([term]) => term);
+  const headTerms: TaxonomyStabilization["headTerms"] = [];
+  const termVolume = new Map(
+    headCandidates.map((term) => [
+      term,
+      Math.max(
+        0,
+        ...input.queries.filter((query) => termInText(normalizeTerm(query.query), term)).map((query) => query.volume ?? 0)
+      ),
+    ])
+  );
+  const maxHeadVolume = Math.max(0, ...termVolume.values());
+  const memberHits = (topic: TopicDefinition, term: string) =>
+    (members.get(topic.slug) ?? []).filter((query) => termInText(normalizeTerm(query), term)).length;
+  const claimed = new Map<string, { owner: string; volume: number }>();
+  for (const term of headCandidates) {
+    const marketVolume = termVolume.get(term) ?? 0;
+    if (marketVolume <= 0 || marketVolume < maxHeadVolume * 0.5) continue;
+    const candidates = kept.filter(
+      (topic) =>
+        memberHits(topic, term) > 0 ||
+        ((topic.coverageKind === "brand" || topic.coverageKind === "mixed") &&
+          topic.terms.some((entry) => entry === term))
+    );
+    if (candidates.length === 0) continue;
+    const brandFirst = candidates.filter((topic) => topic.coverageKind === "brand" || topic.coverageKind === "mixed");
+    const pool = brandFirst.length > 0 ? brandFirst : candidates;
+    const owner = pool.reduce(
+      (best, topic) => (memberHits(topic, term) > memberHits(best, term) ? topic : best),
+      pool[0]
+    );
+    const current = claimed.get(term);
+    if (!current || marketVolume > current.volume) claimed.set(term, { owner: owner.slug, volume: marketVolume });
+  }
+  for (const topic of kept) {
+    topic.requireAny = topic.requireAny.filter((entry) => !claimed.has(entry));
+  }
+  for (const [term, { owner, volume }] of claimed) {
+    const topic = kept.find((entry) => entry.slug === owner);
+    if (!topic) continue;
+    topic.headTerms = [...new Set([...(topic.headTerms ?? []), term])];
+    headTerms.push({ term, owner: topic.name, volume });
+  }
+
+  return { topics: kept, merges, headTerms };
 }

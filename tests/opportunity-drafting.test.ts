@@ -33,6 +33,7 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
       impressions: 100,
       clicks: 1,
       volume: 200,
+      volumeSum: 200,
       difficulty: null,
       position: 12,
       aeoQuestions: 0,
@@ -52,6 +53,7 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
     excludedQueries: [],
     pages: [],
     coverage: "partial",
+    visibility: "proven",
     gaps: [],
     ...overrides,
   };

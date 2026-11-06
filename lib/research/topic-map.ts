@@ -6,19 +6,21 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
+import { canonicalKeyword, distinctVolume } from "@/lib/research/keyword-identity";
 import {
   parseMarketScope,
   marketScopeForTopic,
   type MarketScopeConfig,
   type MarketScopeLevel,
 } from "@/lib/site/market-scope";
-import type {
-  TopicDefinition,
-  TopicIntent,
-  TopicPageType,
-  TopicPageTypeRule,
-  TopicRelevance,
-  TopicTaxonomy,
+import {
+  stabilizeTopicTaxonomy,
+  type TopicDefinition,
+  type TopicIntent,
+  type TopicPageType,
+  type TopicPageTypeRule,
+  type TopicRelevance,
+  type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
 
 /**
@@ -91,7 +93,10 @@ export type TopicCluster = {
     queries: number;
     impressions: number;
     clicks: number;
+    /** Distinct demand: near-duplicate keywords count once, at their own volume. */
     volume: number;
+    /** Raw sum of every keyword's reported volume, kept so the difference is visible. */
+    volumeSum: number;
     difficulty: number | null;
     position: number | null;
     aeoQuestions: number;
@@ -101,7 +106,10 @@ export type TopicCluster = {
   /** Queries the review placed outside the configured market, kept for audit. */
   excludedQueries: ExcludedQuery[];
   pages: TopicCoveragePage[];
+  /** Does a page cover the topic's terms? That is coverage, not visibility. */
   coverage: "strong" | "partial" | "none";
+  /** Does the site actually earn impressions for it? */
+  visibility: "proven" | "unproven";
   gaps: string[];
 };
 
@@ -224,11 +232,16 @@ function termWeight(text: string, term: string): number {
 
 export function scoreTopicForQuery(query: string, topic: TopicDefinition): number {
   const text = normalizeTopicText(query);
-  if (!topic.requireAny.some((term) => containsTerm(text, term))) return 0;
+  // A head term is claimed by one topic and matches only the bare query. It is
+  // deliberately not part of requireAny, or every "freediving <modifier>" query
+  // would join the owner as well.
+  const headMatch = (topic.headTerms ?? []).some((term) => normalizeTopicText(term) === text);
+  if (!headMatch && !topic.requireAny.some((term) => containsTerm(text, term))) return 0;
   if (topic.requireGroups && !topic.requireGroups.every((group) => group.some((term) => containsTerm(text, term)))) return 0;
   let score = 0;
   for (const term of topic.terms) score += termWeight(text, term);
   for (const term of topic.strongTerms ?? []) score += termWeight(text, term);
+  for (const term of topic.headTerms ?? []) score += termWeight(text, term);
   return score;
 }
 
@@ -332,6 +345,8 @@ function average(values: number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+export { canonicalKeyword, distinctVolume } from "@/lib/research/keyword-identity";
+
 export function clusterMetrics(
   queries: DemandQuery[],
   aeo: { questions: number; cited: number } = { questions: 0, cited: 0 }
@@ -340,7 +355,8 @@ export function clusterMetrics(
     queries: queries.length,
     impressions: queries.reduce((sum, query) => sum + query.impressions, 0),
     clicks: queries.reduce((sum, query) => sum + query.clicks, 0),
-    volume: queries.reduce((sum, query) => sum + (query.volume ?? 0), 0),
+    volume: distinctVolume(queries),
+    volumeSum: queries.reduce((sum, query) => sum + (query.volume ?? 0), 0),
     difficulty: average(queries.flatMap((query) => (query.difficulty == null ? [] : [query.difficulty]))),
     position: weightedPosition(queries),
     aeoQuestions: aeo.questions,
@@ -642,13 +658,22 @@ export async function loadTopicMapData(
 }
 
 export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], now = new Date()): TopicMap {
+  // The approved taxonomy is normalised here, not by another model call: two
+  // topics with one specific owner are merged, and the market head term gets a
+  // single owner. The stored taxonomy stays the human-approved draft.
+  const stabilized = stabilizeTopicTaxonomy({
+    topics: taxonomy,
+    queries: data.queries,
+    pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
+  });
+  const topics = stabilized.topics;
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();
   for (const query of data.queries) {
-    const assigned = assignQuery(query.query, taxonomy);
+    const assigned = assignQuery(query.query, topics);
     if (assigned.length > 0) assignments.set(query.query, assigned);
   }
 
-  const clusters: TopicCluster[] = taxonomy.map((topic) => {
+  const clusters: TopicCluster[] = topics.map((topic) => {
     const queries = data.queries.filter((query) => assignments.get(query.query)?.some((entry) => entry.topic.slug === topic.slug));
     const allPages = data.pages
       .map((page) => ({
@@ -668,13 +693,17 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       cited: aeo.reduce((sum, row) => sum + row.cited, 0),
     });
     const gaps = buildGaps({ topic, queries, pages, allPages, coverage });
+    // Coverage says a page matches the topic's terms; it says nothing about the
+    // site earning anything for them. A page that matches and earns nothing is
+    // unproven, and calling it "strong" tells the owner to leave it alone.
+    const visibility: TopicCluster["visibility"] = metrics.impressions > 0 || metrics.clicks > 0 ? "proven" : "unproven";
     const scope = marketScopeForTopic(data.marketScope, topic.offerKey);
     const demandScore = Math.log10(metrics.impressions + metrics.volume + 1) / 4;
     const confidence = Math.min(1, 0.35 + demandScore + (coverage === "strong" ? 0.15 : coverage === "partial" ? 0.05 : 0));
     return {
       slug: topic.slug,
       name: topic.name,
-      topicSummary: `${metrics.queries} queries, ${metrics.impressions} impressions; coverage ${coverage}; ${gaps.length} gap${gaps.length === 1 ? "" : "s"}.`,
+      topicSummary: `${metrics.queries} queries, ${metrics.impressions} impressions; coverage ${coverage}, visibility ${visibility}; ${gaps.length} gap${gaps.length === 1 ? "" : "s"}.`,
       intent: topic.intent,
       relevance: topic.relevance,
       rationale: topic.rationale,
@@ -686,6 +715,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       excludedQueries: [],
       pages,
       coverage,
+      visibility,
       gaps,
     };
   });
@@ -707,7 +737,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     domain: data.site.domain,
     month: data.month,
     generatedAt: now.toISOString(),
-    taxonomy: data.taxonomy,
+    taxonomy: topics,
     locale: { language: data.context.language, country: providerCountry(data.context) },
     marketScope: data.marketScope,
     business: {
@@ -790,7 +820,7 @@ export function applyMarketVerdicts(map: TopicMap, verdicts: MarketVerdict[]): n
       questions: cluster.metrics.aeoQuestions,
       cited: cluster.metrics.aeoCited,
     });
-    cluster.topicSummary = `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions; coverage ${cluster.coverage}; ${cluster.gaps.length} gap${cluster.gaps.length === 1 ? "" : "s"}; ${cluster.excludedQueries.length} out-of-market ${cluster.excludedQueries.length === 1 ? "query" : "queries"}.`;
+    cluster.topicSummary = `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions; coverage ${cluster.coverage}, visibility ${cluster.visibility}; ${cluster.gaps.length} gap${cluster.gaps.length === 1 ? "" : "s"}; ${cluster.excludedQueries.length} out-of-market ${cluster.excludedQueries.length === 1 ? "query" : "queries"}.`;
   }
   return excluded;
 }
@@ -842,7 +872,7 @@ export async function synthesizeTopicMap(
       relevance: cluster.relevance,
       coverage: cluster.coverage,
       marketScope: cluster.marketScope,
-      demand: `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.volume} monthly volume`,
+      demand: `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.volume} distinct monthly demand (${cluster.metrics.volumeSum} summed across keyword variants)`,
       gaps: cluster.gaps.slice(0, 2),
       queries: cluster.queries.slice(0, 10).map((query) => ({
         query: query.query,
@@ -995,6 +1025,7 @@ export async function storeTopicMap(
         proposed: true,
         source: "topic-map-v1",
         coverage: cluster.coverage,
+        visibility: cluster.visibility,
         pages: cluster.pages,
         gaps: cluster.gaps,
         excludedQueries: cluster.excludedQueries,
@@ -1135,7 +1166,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push(`- Topics: ${map.taxonomy.length}`);
   for (const topic of map.taxonomy) {
-    lines.push(`  - \`${topic.slug}\` — ${topic.name} (${topic.intent}, ${topic.coverageKind}, ${topic.relevance}); ${topic.terms.length} matching terms`);
+    lines.push(`  - \`${topic.slug}\` — ${topic.name} (${topic.intent}, ${topic.coverageKind}, ${topic.relevance}); ${topic.terms.length} matching terms${topic.headTerms?.length ? `; head term${topic.headTerms.length === 1 ? "" : "s"} ${topic.headTerms.map((term) => `\`${term}\``).join(", ")}` : ""}`);
   }
   lines.push("");
   lines.push("## Method");
@@ -1158,13 +1189,13 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Topic table");
   lines.push("");
-  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Volume | Coverage | Main page | Main gap |");
-  lines.push("|---|---|---|---|---:|---:|---:|---|---|---|");
+  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Coverage | Visibility | Main page | Main gap |");
+  lines.push("|---|---|---|---|---:|---:|---:|---:|---|---|---|---|");
   for (const cluster of map.clusters) {
     const mainPage = cluster.pages[0]?.url.replace(/^https?:\/\/[^/]+/, "") ?? "—";
     const mainGap = cluster.gaps[0] ?? "—";
     lines.push(
-      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.coverage} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
+      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.metrics.volumeSum} | ${cluster.coverage} | ${cluster.visibility} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
     );
   }
   lines.push("");
@@ -1177,7 +1208,8 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     lines.push(`- Intent: ${cluster.intent}; relevance: ${cluster.relevance}; confidence: ${cluster.confidence.toFixed(2)}`);
     lines.push(`- Market scope: ${formatScope(cluster.marketScope)}`);
     lines.push(`- Rationale: ${cluster.rationale}`);
-    lines.push(`- Demand: ${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.clicks} clicks, ${cluster.metrics.volume} measured monthly volume; average position ${cluster.metrics.position?.toFixed(1) ?? "unknown"}.`);
+    lines.push(`- Demand: ${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.clicks} clicks, ${cluster.metrics.volume} distinct monthly demand (${cluster.metrics.volumeSum} summed across keyword variants); average position ${cluster.metrics.position?.toFixed(1) ?? "unknown"}.`);
+    lines.push(`- Coverage: ${cluster.coverage} (a page matches the terms); visibility: ${cluster.visibility} (${cluster.visibility === "proven" ? "the site earns impressions" : "the site earns no impressions yet"}).`);
     lines.push(`- AEO: ${cluster.metrics.aeoQuestions} measured questions, ${cluster.metrics.aeoCited} citations of the site.`);
     lines.push(`- Action hint: ${cluster.actionHint}`);
     lines.push("");

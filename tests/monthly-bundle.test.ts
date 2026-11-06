@@ -10,6 +10,8 @@ import {
   resolveBundleCaps,
   resolveBundleLocale,
   selectQueriesForBundle,
+  selectSerpQueries,
+  commercialIntentScore,
   runMonthlyBundle,
   selectAeoQuestions,
   withinBundleCap,
@@ -302,6 +304,49 @@ describe("monthly bundle selection", () => {
     const second = selectQueriesForBundle(ranked, new Set(["a", "b"]), 2);
     expect(second.selected).toEqual(["c", "d"]);
     expect(second.unmeasuredBefore).toBe(3);
+  });
+
+  it("buys SERP snapshots for commercial market queries, not brand terms", () => {
+    const ranked = ["brand name", "brand name official", "generic topic", "generic topic price", "generic topic near me"];
+    const volume = new Map([
+      ["brand name", 5000],
+      ["brand name official", 4000],
+      ["generic topic", 1200],
+      ["generic topic price", 300],
+      ["generic topic near me", 200],
+    ]);
+    const selection = selectSerpQueries({
+      ranked,
+      measured: new Set(),
+      cap: 2,
+      volume: (query) => volume.get(query) ?? 0,
+      impressions: () => 0,
+      isBrand: (query) => query.startsWith("brand name"),
+    });
+    // Commercial intent outranks raw volume: "price" before the bare head
+    // term, and the brand terms are not bought at all. "near me" is a location
+    // modifier, not a buying signal, so it does not outrank the larger term.
+    expect(selection.selected).toEqual(["generic topic price", "generic topic"]);
+    expect(selection.brandSkipped).toBe(2);
+  });
+
+  it("buys one snapshot for two variants of the same query", () => {
+    const selection = selectSerpQueries({
+      ranked: ["freediving course", "freediving courses", "freediving course near me"],
+      measured: new Set(),
+      cap: 2,
+      volume: () => 0,
+      impressions: () => 0,
+      isBrand: () => false,
+    });
+    // Same intent and volume, so the shorter query is the one bought first.
+    expect(selection.selected).toEqual(["freediving course", "freediving course near me"]);
+  });
+
+  it("counts buying signals, not location modifiers", () => {
+    expect(commercialIntentScore("freediving course price")).toBeGreaterThan(commercialIntentScore("freediving course"));
+    expect(commercialIntentScore("freediving course near me")).toBe(commercialIntentScore("freediving course"));
+    expect(commercialIntentScore("freediving")).toBe(0);
   });
 
   it("measures the audience market, not the business address", async () => {

@@ -163,6 +163,20 @@ async function main(): Promise<void> {
       for (const row of parsed.rejected) process.stderr.write(`taxonomy topic skipped: ${row.title} — ${row.reason}\n`);
       if (args.mode === "execute") await saveTopicTaxonomy(db, site.id, taxonomy);
     }
+    // A re-proposal must not lose brand demand the owner already approved. The
+    // prior brand topic's terms are the tenant's own memory, not a hardcoded
+    // name in the pipeline.
+    const brandKey = site.domain.replace(/^www\./, "").split(".")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Keep the name-like terms of the approved brand topic, not its broad
+    // location terms: "ocean vibes" belongs, "playa carmen" does not.
+    const sharesBrandName = (term: string): boolean => {
+      const compact = term.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (compact.length < 8 && !term.trim().includes(" ")) return false;
+      let shared = 0;
+      while (shared < compact.length && shared < brandKey.length && compact[shared] === brandKey[shared]) shared += 1;
+      return shared >= 4;
+    };
+    const priorBrandTerms = (taxonomy?.topics.find((topic) => topic.coverageKind === "brand")?.requireAny ?? []).filter(sharesBrandName);
     if (!taxonomy || args.refreshTaxonomy) {
       if (!args.ai) {
         throw new CliError(
@@ -196,11 +210,13 @@ async function main(): Promise<void> {
         pages: [...rawData.pages]
           .sort((a, b) => b.wordCount - a.wordCount)
           .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
+        brandTerms: priorBrandTerms,
       });
       if (!proposed.taxonomy) {
         throw new CliError(`could not propose a topic taxonomy for ${site.domain}: ${proposed.error ?? "unknown error"}`, 4);
       }
       for (const row of proposed.rejected) process.stderr.write(`taxonomy topic skipped: ${row.title} — ${row.reason}\n`);
+      for (const merge of proposed.merges) process.stderr.write(`taxonomy topics merged into "${merge.into}": ${merge.merged.join(", ")} (shared owner ${merge.page})\n`);
       taxonomy = proposed.taxonomy;
       // A proposed taxonomy is a draft until a person approves it: it is
       // written next to the report and only stored with --approve-taxonomy (or

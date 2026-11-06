@@ -4,6 +4,7 @@ export type QuestionProvenance =
   | { kind: "research_run"; id: string }
   | { kind: "research_finding"; id: string; runId?: string }
   | { kind: "profile" }
+  | { kind: "keyword_evidence"; query: string }
   | { kind: "not_recorded" };
 export type GeneratedQuestion = { id: string; text: string; intent: QuestionIntent; provenance: QuestionProvenance[] };
 export type QuestionSet = {
@@ -12,5 +13,7 @@ export type QuestionSet = {
   locale: { country: string | null; language: string | null };
   questions: GeneratedQuestion[];
   provenance: QuestionProvenance[];
+  /** Candidates the limit cut, so a short set is never mistaken for a full one. */
+  omitted?: number;
   emptyReason?: "no_business_data";
 };

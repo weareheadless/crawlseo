@@ -4,10 +4,14 @@ import {
   applyMarketVerdicts,
   assignQuery,
   buildTopicMap,
+  canonicalKeyword,
+  clusterMetrics,
+  distinctVolume,
   normalizeTopicText,
   renderTopicMapMarkdown,
   scoreTopicForQuery,
   storeTopicMap,
+  type DemandQuery,
   type TopicMapData,
 } from "@/lib/research/topic-map";
 import { ATELIER_TAXONOMY } from "./fixtures/atelier-taxonomy";
@@ -304,5 +308,40 @@ describe("topic map storage", () => {
     expect(state.clusters).toHaveLength(taxonomy.length);
     expect(state.evidence.some((row) => row.kind === "keyword_universe_membership")).toBe(true);
     expect(state.evidence.some((row) => (row.dimensions as Record<string, unknown>).cluster === "restauration-siege")).toBe(true);
+  });
+});
+
+describe("distinct demand", () => {
+  const q = (query: string, volume: number): DemandQuery => ({
+    query,
+    impressions: 0,
+    clicks: 0,
+    position: null,
+    volume,
+    difficulty: null,
+    observedAt: new Date("2026-11-01T00:00:00Z"),
+  });
+
+  it("treats plural and spacing variants as one query", () => {
+    expect(canonicalKeyword("freediving course")).toBe(canonicalKeyword("freediving courses"));
+    expect(canonicalKeyword("ocean vibes")).toBe(canonicalKeyword("oceanvibes"));
+    expect(canonicalKeyword("Ocean Vibes")).toBe(canonicalKeyword("ocean-vibes"));
+  });
+
+  it("counts near-duplicates once at their own volume", () => {
+    const queries = [
+      q("freediving course", 1300),
+      q("freediving courses", 1300),
+      q("padi freediving course", 1300),
+      q("freediving course near me", 390),
+    ];
+    // Four reported rows sum to 4,290; there are three distinct phrases.
+    expect(distinctVolume(queries)).toBe(1300 + 1300 + 390);
+  });
+
+  it("reports the summed volume beside the distinct demand", () => {
+    const metrics = clusterMetrics([q("ocean vibes", 1300), q("oceanvibes", 1300)]);
+    expect(metrics.volume).toBe(1300);
+    expect(metrics.volumeSum).toBe(2600);
   });
 });

@@ -48,4 +48,39 @@ describe("generateQuestionSet", () => {
     const right = { profile: { language: "en", country: "GB" }, businessKnowledge: { fields: { businessName: { value: "North" }, services: { value: ["consulting"] } }, acceptedRevision: 2 }, ignored: "extra" };
     expect(generateQuestionSet(left).version).toBe(generateQuestionSet(right).version);
   });
+
+  it("turns measured query patterns into buyer questions in the site language", () => {
+    const result = generateQuestionSet(
+      {
+        businessKnowledge: { fields: { businessName: { value: "Escuela Azul" }, services: { value: ["curso de apnea"] } } },
+        profile: { language: "es", country: "MX" },
+        keywordEvidence: {
+          queries: [
+            { query: "curso de apnea", volume: 1200 },
+            { query: "apnea precio", volume: 300 },
+          ],
+        },
+      },
+      { limit: 20 }
+    );
+    const texts = result.questions.map((question) => question.text);
+    expect(texts).toContain("¿Cuánto cuesta curso de apnea?");
+    expect(texts).toContain("¿Vale la pena curso de apnea?");
+    expect(texts).toContain("¿Cuánto cuesta apnea?");
+    // The question is grounded in a measured query, not invented prose.
+    expect(result.questions.some((q) => q.provenance.some((p) => p.kind === "keyword_evidence" && p.query === "curso de apnea"))).toBe(true);
+  });
+
+  it("reports how many candidates the limit cut", () => {
+    const result = generateQuestionSet(
+      {
+        businessKnowledge: { fields: { businessName: { value: "North" }, services: { value: ["consulting"] } } },
+        profile: { language: "en" },
+        keywordEvidence: ["alpha", "beta", "gamma", "delta"],
+      },
+      { limit: 2 }
+    );
+    expect(result.questions).toHaveLength(2);
+    expect(result.omitted).toBeGreaterThan(0);
+  });
 });

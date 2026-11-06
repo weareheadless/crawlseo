@@ -122,7 +122,7 @@ function printPlan(plan: BundlePlan): void {
   );
 
   process.stdout.write(
-    `coverage: ${plan.coverage.keywordQueriesAvailable} queries · ${plan.coverage.unmeasuredKeywordQueries} never measured · ${plan.coverage.keywordQueriesOmitted} get no volume this month · ${plan.coverage.serpQueriesOmitted} get no SERP snapshot · ${plan.coverage.discoverySeedsOmitted} discovery seeds not sent · ${plan.coverage.queriesDroppedTooLong} too long for the keyword API\n`
+    `coverage: ${plan.coverage.keywordQueriesAvailable} queries · ${plan.coverage.unmeasuredKeywordQueries} never measured · ${plan.coverage.keywordQueriesOmitted} get no paid call this month · ${plan.coverage.serpQueriesOmitted} get no SERP snapshot · ${plan.coverage.discoverySeedsOmitted} discovery seeds not sent · ${plan.coverage.queriesDroppedTooLong} too long for the keyword API\n`
   );
 
   printList("keyword queries", plan.selected.keywordQueries);

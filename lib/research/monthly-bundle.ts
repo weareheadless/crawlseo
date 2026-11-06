@@ -33,7 +33,14 @@ import {
   type DiscoverySeedInput,
   type DiscoverySeedResult,
 } from "@/lib/research/discovery-seeds";
-import { loadTopicTaxonomy, queryMatchesTaxonomy } from "@/lib/research/topic-taxonomy";
+import {
+  loadTopicTaxonomy,
+  queryMatchesTaxonomy,
+  queryMatchesTopics,
+  stabilizeTopicTaxonomy,
+  type TopicTaxonomy,
+} from "@/lib/research/topic-taxonomy";
+import { canonicalKeyword } from "@/lib/research/keyword-identity";
 import { TIMELY_WINDOW_DAYS as TIMELY_NEWS_DAYS } from "@/lib/research/opportunity-drafting";
 
 /**
@@ -467,6 +474,90 @@ export function selectQueriesForBundle(
   };
 }
 
+/**
+ * Words that mark a query as someone trying to buy, not to read. Deliberately
+ * domain-neutral: this module cannot know one business's services, so the
+ * markers are generic buying signals ("price", "hire", "vs"). "near me" is a
+ * location modifier, not a buying signal, and the taxonomy already decides
+ * whether a query is in-market.
+ */
+const COMMERCIAL_INTENT_MARKERS = [
+  "buy", "price", "prices", "cost", "costs", "cheap", "hire",
+  "rent", "rental", "book", "booking", "quote", "service", "services", "review",
+  "reviews", "vs", "alternative", "alternatives", "comparison", "deal", "deals",
+  "discount", "package", "packages",
+];
+
+export function commercialIntentScore(query: string): number {
+  const text = query
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  let score = 0;
+  for (const marker of COMMERCIAL_INTENT_MARKERS) {
+    if (new RegExp(`(^| )${marker}( |$)`).test(text)) score += 1;
+  }
+  return score;
+}
+
+/**
+ * Which queries deserve a paid SERP snapshot.
+ *
+ * The old order was Search Console impressions, which bought the brand terms:
+ * a brand SERP says who outranks the owner for their own name, not who owns the
+ * market. Snapshots now go to in-market queries with commercial intent, then to
+ * the largest demand, and two variants of one query buy one snapshot, not two.
+ */
+export function selectSerpQueries(input: {
+  ranked: string[];
+  measured: Set<string>;
+  cap: number;
+  volume: (query: string) => number;
+  impressions: (query: string) => number;
+  isBrand: (query: string) => boolean;
+}): { selected: string[]; omitted: number; brandSkipped: number; unmeasuredBefore: number } {
+  const nonBrand = input.ranked.filter((query) => !input.isBrand(query));
+  // A site with no market queries yet still needs its brand SERP; the fallback
+  // is explicit rather than silently buying nothing.
+  const candidates = nonBrand.length > 0 ? nonBrand : input.ranked;
+  const scored = candidates
+    .map((query) => ({
+      query,
+      commercial: commercialIntentScore(query),
+      volume: input.volume(query),
+      impressions: input.impressions(query),
+    }))
+    .sort(
+      (a, b) =>
+        b.commercial - a.commercial ||
+        b.volume - a.volume ||
+        b.impressions - a.impressions ||
+        a.query.length - b.query.length ||
+        a.query.localeCompare(b.query)
+    );
+  const unmeasured = scored.filter((entry) => !input.measured.has(normalizePhrase(entry.query)));
+  const alreadyMeasured = scored.filter((entry) => input.measured.has(normalizePhrase(entry.query)));
+  const selected: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of [...unmeasured, ...alreadyMeasured]) {
+    if (selected.length >= input.cap) break;
+    // "freediving course" and "freediving courses" are one SERP; paying twice
+    // buys the same answer.
+    const key = canonicalKeyword(entry.query);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    selected.push(entry.query);
+  }
+  return {
+    selected,
+    omitted: Math.max(0, candidates.length - selected.length),
+    brandSkipped: input.ranked.length - candidates.length,
+    unmeasuredBefore: unmeasured.length,
+  };
+}
+
 export function selectAeoQuestions(
   coverageQuestions: string[],
   fallbackQueries: string[],
@@ -731,7 +822,7 @@ export async function buildBundlePlan(input: {
         kind: "keyword_metrics",
         supersededById: null,
       },
-      select: { dimensions: true },
+      select: { dimensions: true, metrics: true },
     }),
     db.evidenceRecord.findMany({
       where: {
@@ -757,21 +848,77 @@ export async function buildBundlePlan(input: {
       .filter((query): query is string => Boolean(query))
       .map((query) => normalizePhrase(query))
   );
+  const volumeByQuery = new Map<string, number>();
+  for (const row of measuredKeywords) {
+    const dimensions = asRecord(row.dimensions);
+    const query = stringValue(dimensions.query);
+    if (!query) continue;
+    const volume = Number(asRecord(asRecord(row.metrics)["provider:volume"]).value ?? 0);
+    if (!Number.isFinite(volume) || volume <= 0) continue;
+    const key = normalizePhrase(query);
+    volumeByQuery.set(key, Math.max(volumeByQuery.get(key) ?? 0, volume));
+  }
+  const impressionsByQuery = new Map<string, number>();
+  for (const row of ranks) {
+    const query = stringValue(asRecord(row.dimensions).query);
+    if (!query) continue;
+    const impressions = Number(asRecord(asRecord(row.metrics)["first_party:impressions"]).value ?? 0);
+    if (!Number.isFinite(impressions) || impressions <= 0) continue;
+    const key = normalizePhrase(query);
+    impressionsByQuery.set(key, (impressionsByQuery.get(key) ?? 0) + impressions);
+  }
   // Relevance decides order, not existence: queries the approved taxonomy
   // claims are bought first, and queries it does not claim still fill the cap
   // when the site has fewer in-market queries than the cap allows. This is why
   // a property site no longer spends its paid cap on "hospital near me".
-  const taxonomy = await loadTopicTaxonomy(db, site.id);
+  const storedTaxonomy = await loadTopicTaxonomy(db, site.id);
+  // The candidate pool is every query the site has demand for, not only the
+  // Search Console rows: a site with two GSC queries still discovered 62
+  // market keywords, and a SERP snapshot on "freediving course" teaches more
+  // than a second snapshot on its own brand name.
+  const measuredKeywordQueries = measuredKeywords
+    .map((row) => stringValue(asRecord(row.dimensions).query))
+    .filter((query): query is string => Boolean(query));
+  const candidateQueries = [...new Set([...rankedQueries, ...measuredKeywordQueries])];
+  // The bundle must see the same taxonomy the map shows: merged owners and the
+  // head term claimed by one topic. Without this, "freediving record" still
+  // looks in-market because the stored topic still lists "freediving".
+  const taxonomy: TopicTaxonomy | null = storedTaxonomy
+    ? {
+        ...storedTaxonomy,
+        topics: stabilizeTopicTaxonomy({
+          topics: storedTaxonomy.topics,
+          queries: candidateQueries.map((query) => ({
+            query,
+            impressions: impressionsByQuery.get(normalizePhrase(query)) ?? 0,
+            volume: volumeByQuery.get(normalizePhrase(query)) ?? 0,
+          })),
+          pageTexts: [],
+        }).topics,
+      }
+    : null;
   const inMarket = taxonomy
-    ? rankedQueries.filter((query) => queryMatchesTaxonomy(taxonomy, query))
-    : rankedQueries;
+    ? candidateQueries.filter((query) => queryMatchesTaxonomy(taxonomy, query))
+    : candidateQueries;
   const offTopic = taxonomy
-    ? rankedQueries.filter((query) => !queryMatchesTaxonomy(taxonomy, query))
+    ? candidateQueries.filter((query) => !queryMatchesTaxonomy(taxonomy, query))
     : [];
   const orderedQueries = [...inMarket, ...offTopic];
 
   const keywordSelection = selectQueriesForBundle(orderedQueries, measuredKeywordSet, caps.keywordQueries);
-  const serpSelection = selectQueriesForBundle(orderedQueries, measuredSerpSet, caps.serpQueries);
+  const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => topic.coverageKind === "brand") : [];
+  // Off-topic queries do not fill the SERP cap: a snapshot of "freediving
+  // record" is paid-for research noise, not market intelligence. The fallback
+  // keeps a brand-new site from buying nothing.
+  const serpCandidates = inMarket.length > 0 ? inMarket : orderedQueries;
+  const serpSelection = selectSerpQueries({
+    ranked: serpCandidates,
+    measured: measuredSerpSet,
+    cap: caps.serpQueries,
+    volume: (query) => volumeByQuery.get(normalizePhrase(query)) ?? 0,
+    impressions: (query) => impressionsByQuery.get(normalizePhrase(query)) ?? 0,
+    isBrand: (query) => queryMatchesTopics(brandTopics, query),
+  });
   const keywordQueries = keywordSelection.selected;
   const serpQueries = serpSelection.selected;
   const allCoverageQuestions = coverage
@@ -850,7 +997,12 @@ export async function buildBundlePlan(input: {
   }
   if (keywordSelection.omitted > 0) {
     warnings.push(
-      `${keywordSelection.omitted} of ${rankedQueries.length} queries get no volume data this month (cap ${caps.keywordQueries}); the bundle takes unmeasured queries first, so the rest rotate in over following months`
+      `${keywordSelection.omitted} of ${candidateQueries.length} queries get no paid call this month (cap ${caps.keywordQueries}); the bundle takes unmeasured queries first, so the rest rotate in over following months`
+    );
+  }
+  if (serpSelection.brandSkipped > 0) {
+    warnings.push(
+      `${serpSelection.brandSkipped} brand ${serpSelection.brandSkipped === 1 ? "query was" : "queries were"} not bought as SERP snapshots: a brand SERP says who ranks for the name, not who owns the market`
     );
   }
   if (serpSelection.omitted > 0) {
@@ -884,7 +1036,7 @@ export async function buildBundlePlan(input: {
     );
   } else if (offTopic.length > 0) {
     warnings.push(
-      `${offTopic.length} of ${rankedQueries.length} queries match no approved topic and were ranked behind in-market ones`
+      `${offTopic.length} of ${candidateQueries.length} queries match no approved topic and were ranked behind in-market ones`
     );
   }
   const unmeasuredMarkets = (input.contextMarkets ?? []).filter((code) => code !== locale.country);
