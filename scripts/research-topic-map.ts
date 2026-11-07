@@ -293,11 +293,11 @@ async function main(): Promise<void> {
       title: `Topic map — ${month}`,
       brief: {
         month,
-        taxonomy: "atelier-v1",
+        taxonomy: "stored-v1",
         ai: args.ai,
         approvalReference: approval,
       } as never,
-      topics: map.clusters.map((cluster) => cluster.name).slice(0, 12) as never,
+      topics: map.clusters.map((cluster) => cluster.name) as never,
       recencyDays: 31,
       promptVersion: "topic-map-v1",
       idempotencyKey: key,

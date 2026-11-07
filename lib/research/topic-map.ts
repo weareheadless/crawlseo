@@ -6,6 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
+import { significantTokens } from "@/lib/funnel/cluster-discovery";
 import { canonicalKeyword, distinctVolume } from "@/lib/research/keyword-identity";
 import {
   parseMarketScope,
@@ -36,6 +37,13 @@ import {
  */
 
 export type TopicMapDb = PrismaClient;
+
+/**
+ * How many unmapped queries the markdown report lists. The map data keeps all
+ * of them and the reviewer reads all of them; this only keeps the report
+ * readable, and the report says how many it left out.
+ */
+const UNMAPPED_TABLE_LIMIT = 25;
 
 export type DemandQuery = {
   query: string;
@@ -657,6 +665,38 @@ export async function loadTopicMapData(
   };
 }
 
+/**
+ * The words that make a topic that topic, rather than the place it happens in
+ * or the brand that owns the site.
+ *
+ * A topic named "Riviera Maya beachfront, luxury properties and penthouses" is
+ * about beachfront/luxury/penthouses; "Riviera Maya" is where. Without this
+ * distinction every query containing the place joined the topic: "riviera maya
+ * things to do" became luxury demand. The same rule removes brand words from
+ * other topics, so a brand-split token ("casa") cannot create a second topic
+ * that swallows "casas".
+ *
+ * The source is the topic's whole vocabulary, not just its title: a seat
+ * restoration topic is also "fauteuil", "chaise" and "canape", and those are
+ * its demand. Only the place and brand words are stripped.
+ */
+export function distinctiveTopicTerms(
+  topic: TopicDefinition,
+  contextTerms: Set<string>,
+  brandTerms: Set<string>
+): string[] {
+  const vocabulary = [
+    topic.name,
+    ...topic.requireAny,
+    ...topic.terms,
+    ...(topic.strongTerms ?? []),
+  ];
+  const terms = new Set(vocabulary.flatMap((term) => significantTokens(term)));
+  for (const term of contextTerms) terms.delete(term);
+  for (const term of brandTerms) terms.delete(term);
+  return [...terms];
+}
+
 export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], now = new Date()): TopicMap {
   // The approved taxonomy is normalised here, not by another model call: two
   // topics with one specific owner are merged, and the market head term gets a
@@ -667,7 +707,35 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
     brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
-  const topics = stabilized.topics;
+  // A topic is its own vocabulary, not every query that mentions its place.
+  // The anchor group makes membership require one distinctive word from that
+  // vocabulary; place and brand words are context, not topics.
+  const contextTerms = new Set(
+    significantTokens(
+      [
+        fieldText(data.fields, "location") ?? "",
+        ...fieldList(data.fields, "serviceArea"),
+        ...data.marketScope.offers.flatMap((offer) => offer.markets),
+        data.context.market ?? "",
+        data.context.audienceMarket ?? "",
+      ].join(" ")
+    )
+  );
+  const brandTerms = new Set(
+    stabilized.topics
+      .filter((topic) => topic.coverageKind === "brand")
+      .flatMap((topic) => topic.requireAny)
+      .flatMap((term) => significantTokens(term))
+  );
+  const topics = stabilized.topics.map((topic) => {
+    if (topic.coverageKind === "brand") return topic;
+    const anchor = distinctiveTopicTerms(topic, contextTerms, brandTerms);
+    if (anchor.length === 0) return topic;
+    // The anchor restricts membership; it never adds a term to requireAny.
+    // Adding "freediving" from a topic name would make a coaching topic claim
+    // the whole freediving market.
+    return { ...topic, requireGroups: [...(topic.requireGroups ?? []), anchor] };
+  });
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();
   for (const query of data.queries) {
     const assigned = assignQuery(query.query, topics);
@@ -721,10 +789,12 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     };
   });
 
+  // Every unmapped query stays in the map: the reviewer's job includes spotting
+  // a missing topic, and the report states how many rows it shows. A slice here
+  // once hid real demand from both the report and the review.
   const unmapped = data.queries
     .filter((query) => !assignments.has(query.query))
     .sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0))
-    .slice(0, 25)
     .map((query) => ({
       query: query.query,
       impressions: query.impressions,
@@ -1260,10 +1330,17 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   if (map.unmapped.length === 0) {
     lines.push("Every query with demand matched a topic.");
   } else {
+    // A display bound, not a data bound: the map keeps every unmapped query and
+    // the reviewer reads them all. The remainder is stated, never hidden.
+    const shown = map.unmapped.slice(0, UNMAPPED_TABLE_LIMIT);
     lines.push("| Query | Impressions | Volume | Why it is unmapped |");
     lines.push("|---|---:|---:|---|");
-    for (const query of map.unmapped) {
+    for (const query of shown) {
       lines.push(`| ${escapePipe(query.query)} | ${query.impressions} | ${query.volume ?? "—"} | ${escapePipe(query.reason)} |`);
+    }
+    if (map.unmapped.length > shown.length) {
+      lines.push("");
+      lines.push(`- Showing the ${shown.length} unmapped queries with the most impressions; ${map.unmapped.length - shown.length} more are in the map data.`);
     }
   }
   lines.push("");
@@ -1286,7 +1363,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("- This is a topic map, not an opportunity list. No article, business or technical proposal is created here.");
   lines.push("- Page coverage uses URL, title, description and H1 because the latest crawl stored no body text.");
-  lines.push("- The taxonomy is a pilot taxonomy for Atelier; a different site needs its own terms or a reviewed taxonomy.");
+  lines.push("- The taxonomy is proposed for this site; another site needs its own terms or a reviewed taxonomy.");
   lines.push("- Search Console query rows are privacy-limited and do not sum to the page total.");
   lines.push("");
   return lines.join("\n");

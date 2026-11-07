@@ -7,6 +7,7 @@ import {
   canonicalKeyword,
   clusterMetrics,
   distinctVolume,
+  distinctiveTopicTerms,
   normalizeTopicText,
   renderTopicMapMarkdown,
   scoreTopicForQuery,
@@ -343,5 +344,72 @@ describe("distinct demand", () => {
     const metrics = clusterMetrics([q("ocean vibes", 1300), q("oceanvibes", 1300)]);
     expect(metrics.volume).toBe(1300);
     expect(metrics.volumeSum).toBe(2600);
+  });
+});
+
+describe("topic anchor", () => {
+  const base = {
+    slug: "topic",
+    intent: "commercial" as const,
+    relevance: "high" as const,
+    coverageKind: "product" as const,
+    offerKey: "offer",
+    rationale: "",
+    requireAny: ["riviera maya"],
+    terms: ["riviera maya", "luxury"],
+    strongTerms: ["riviera maya", "luxury real"],
+    pageTerms: ["riviera maya"],
+    actionHint: "",
+  };
+
+  it("keeps the place and the brand out of the topic's own words", () => {
+    const luxury = {
+      ...base,
+      name: "Riviera Maya beachfront, luxury properties and penthouses",
+    };
+    const terms = distinctiveTopicTerms(luxury, new Set(["riviera", "maya"]), new Set());
+    expect(terms).toEqual(expect.arrayContaining(["beachfront", "luxury", "properties", "penthouses"]));
+    expect(terms).not.toContain("riviera");
+    expect(terms).not.toContain("maya");
+  });
+
+  it("requires a distinctive word, so a place-only query does not join", () => {
+    const luxury = {
+      ...base,
+      name: "Riviera Maya beachfront, luxury properties and penthouses",
+      requireGroups: [distinctiveTopicTerms(
+        { ...base, name: "Riviera Maya beachfront, luxury properties and penthouses" },
+        new Set(["riviera", "maya"]),
+        new Set()
+      )],
+    };
+    expect(scoreTopicForQuery("riviera maya things to do", luxury)).toBe(0);
+    expect(scoreTopicForQuery("is riviera maya safe", luxury)).toBe(0);
+    expect(scoreTopicForQuery("riviera maya luxury real estate", luxury)).toBeGreaterThan(0);
+  });
+
+  it("removes brand words from a non-brand topic", () => {
+    const lead = {
+      ...base,
+      name: "Riviera Maya investment specialist lead generation",
+      requireAny: ["casa", "investment"],
+      terms: ["casa", "investment"],
+      strongTerms: ["casa migo", "investment"],
+    };
+    const terms = distinctiveTopicTerms(lead, new Set(["riviera", "maya"]), new Set(["casa", "migo", "casamigo"]));
+    expect(terms).toContain("investment");
+    expect(terms).not.toContain("casa");
+  });
+
+  it("keeps the topic's own service words, not only its title", () => {
+    const seats = {
+      ...base,
+      name: "Restauration de sièges & tapisserie d'ameublement",
+      requireAny: ["fauteuil", "chaise", "siege", "tapissier", "tapisserie"],
+      terms: ["restauration", "fauteuil", "chaise", "siege", "tapissier"],
+      strongTerms: ["tapissier", "tapisserie"],
+    };
+    const terms = distinctiveTopicTerms(seats, new Set(["normandie"]), new Set());
+    expect(terms).toEqual(expect.arrayContaining(["fauteuil", "chaise", "tapissier"]));
   });
 });

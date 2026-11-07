@@ -1,6 +1,6 @@
 # Topic map — oceanicvibes.com — 2026-11
 
-Generated 2026-11-07T01:08:30.691Z. Locale en/US.
+Generated 2026-11-07T02:17:02.733Z. Locale en/US.
 
 ## Business
 
@@ -29,20 +29,20 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Seven high-relevance local clusters cover Playa del Carmen and nearby cenotes. Course selection (3,490 demand) and depth/line training (2,430) carry commercial demand; brand/PDC has large generic demand but only 4 impressions and no brand page. Cenote/Tulum is on-area but small; private coaching and breathwork are low-demand; deep equalization has no measured queries. Off-area queries include Florida, San Diego and Dahab.
+Seven local-scope clusters: brand/Playa del Carmen (partial), AIDA 3 course selection, depth/line training, Yucatán cenotes, private coaching, breathwork, deep equalization. Six have queries; deep equalization has none. Course/depth demand is largest but includes Florida, San Diego and Dahab noise. Cenotes/Tulum fit the service area; unmapped terms are mostly generic, record, gear or out-of-area.
 
-Prioritise AIDA 3/course selection and depth/line training: strongest measured commercial demand and strong coverage. Then build the missing OceanicVibes/Playa brand page, using generic 'freediving' demand as supporting context. Cenote/Tulum content is on-area and worth a local cluster, though demand is small. Private coaching, breathwork and deep equalization are weak by measured demand; validate with one small page or client-question test, not a full build. Florida, San Diego and Dahab queries are off-area for Playa/Tulum/Bacalar; do not create local pages for them.
+Start with brand/Playa del Carmen, then AIDA 3 course selection and depth/line training; they carry measurable demand and match core offers. Build the cenotes page around Tulum/Bacalar/Cenote Azul and the 30 m safety limit. Exclude Florida, San Diego and Dahab from local targeting. AIDA is the listed certification, so PADI/SSI queries need comparison content, not implied accreditation. Weak: private coaching and breathwork have thin demand; validate with small Playa/Tulum tests. Deep equalization has no measured demand; keep as a business-knowledge test, not an SEO priority.
 
 Priority topics: oceanicvibes-brand-and-playa-del-carmen-freediving, aida-3-and-freediving-course-selection-in-playa-del-carmen, depth-training-advanced-depth-and-line-training-with-30m-saf, freediving-in-the-cenotes-of-yucatan.
 Weak topics: private-one-to-one-freediving-coaching, breathwork-relaxation-co-o-efficiency-and-physical-preparati, deep-equalization-coaching.
-Out-of-market queries excluded from demand and evidence: 8.
+Out-of-market queries excluded from demand and evidence: 5.
 
 ## Topic table
 
 | Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Coverage | Visibility | Main page | Main gap |
 |---|---|---|---|---:|---:|---:|---:|---|---|---|---|
 | OceanicVibes brand and Playa del Carmen freediving | mixed | high | local · default | 3 | 4 | 13400 | 14700 | partial | proven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | Coverage exists, but there is no brand page for this topic. |
-| Private one-to-one freediving coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
+| Private one-to-one freediving coaching | commercial | high | local · default | 3 | 0 | 40 | 40 | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
 | AIDA 3 and freediving course selection in Playa del Carmen | commercial | high | local · default | 19 | 0 | 3290 | 5890 | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
 | Depth training, advanced depth and line training with 30m safety | commercial | high | local · default | 10 | 0 | 2420 | 2420 | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | — |
 | Deep equalization coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | strong | unproven | /blog/frenzel-works-on-land-not-underwater-what-to-do-when-equalization-stalls-on-the-depth-line-and-wheth | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
@@ -87,18 +87,16 @@ Gaps:
 - Intent: commercial; relevance: high; confidence: 0.90
 - Market scope: local · default
 - Rationale: The teacher-selection article explains adaptive one-to-one coaching and is the best current owner for this need.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Demand: 3 queries, 0 impressions, 0 clicks, 40 distinct monthly demand (40 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Add a private-coaching service block, booking CTA and skill-focus options to this article.
 
-Out-of-market queries (excluded from demand and evidence):
-
-| Query | Impressions | Reason |
-|---|---:|---|
-| freediving mexico | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
-| mexico freediving | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
-| freediving in mexico | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| freediving mexico | 0 | 0 | — | 20 | 0 |
+| mexico freediving | 0 | 0 | — | 20 | 0 |
+| freediving in mexico | 0 | 0 | — | — | 0 |
 
 Coverage pages:
 
@@ -143,10 +141,10 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| florida freediving course | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar service area. |
-| san diego freediving course | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar service area. |
-| freediving course san diego | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar service area. |
-| freediving course florida | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar service area. |
+| florida freediving course | 0 | Florida is outside Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| san diego freediving course | 0 | San Diego is outside the Mexican service area. |
+| freediving course san diego | 0 | San Diego is outside the Mexican service area. |
+| freediving course florida | 0 | Florida is outside the Mexican service area. |
 
 Coverage pages:
 
@@ -185,7 +183,7 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| freediving training center dahab | 0 | Dahab is outside the Playa del Carmen/Tulum/Bacalar service area. |
+| freediving training center dahab | 0 | Dahab is in Egypt, outside the service area. |
 
 Coverage pages:
 
@@ -303,6 +301,8 @@ Coverage pages:
 | pranamaya freediving | 0 | 70 | No taxonomy topic matched “pranamaya freediving”; review for a missing topic or an off-business query. |
 | is freediving dangerous | 0 | 50 | No taxonomy topic matched “is freediving dangerous”; review for a missing topic or an off-business query. |
 
+- Showing the 25 unmapped queries with the most impressions; 13 more are in the map data.
+
 ## Timely signals from the bundle
 
 - Good Music, Sea Views and a Warm Welcome at This Puerto del Carmen Pub - Gazette Life (2026-11-06) — https://news.google.com/rss/articles/CBMioAFBVV95cUxQVmNjTmczWnhZdVBwLVlqdVczUHlYd283NF9ULThKQW9FajZxRm8xNDlTcFY5anFUQmRJbGI3VDI3b1NzeFhIZno4WlF2MDFoMFVzdlpWeGQwLWpQZlhDMEtYRExFVW83VTkxM2VGR1FmWHRNaDY4amJPWERuZS02MzB3ZjI0dU02SkFkZnJDZWlCMG1UU1Nud0tHeDY0ZzNV?oc=5
@@ -321,5 +321,5 @@ Coverage pages:
 
 - This is a topic map, not an opportunity list. No article, business or technical proposal is created here.
 - Page coverage uses URL, title, description and H1 because the latest crawl stored no body text.
-- The taxonomy is a pilot taxonomy for Atelier; a different site needs its own terms or a reviewed taxonomy.
+- The taxonomy is proposed for this site; another site needs its own terms or a reviewed taxonomy.
 - Search Console query rows are privacy-limited and do not sum to the page total.
