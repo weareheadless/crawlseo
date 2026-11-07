@@ -113,7 +113,6 @@ export async function bridgeQuestionCoverageToEvidence(
         topics: stabilizeTopicTaxonomy({
           topics: storedTaxonomy.topics,
           queries: [...keywords.values()],
-          pageTexts: [],
         }).topics,
       }
     : null;

@@ -240,11 +240,9 @@ export function normalizeTopicText(value: string): string {
 function containsTerm(text: string, term: string): boolean {
   const normalized = normalizeTopicText(term);
   if (!normalized) return false;
-  // French plurals are the common case ("lampe"/"lampes", "fauteuil"/"fauteuils",
-  // "hôtel"/"hôtels"). A plural variant is enough; broad prefix matching would
-  // make "mer" match "merci".
-  const variants = new Set([normalized, normalized.replace(/s$/, ""), `${normalized}s`]);
-  return [...variants].some((variant) => variant.length > 0 && ` ${text} `.includes(` ${variant} `));
+  // The model proposes the forms buyers search. Matching is a normalized
+  // word-boundary containment, not a morphology engine.
+  return ` ${text} `.includes(` ${normalized} `);
 }
 
 function termWeight(text: string, term: string): number {
@@ -294,34 +292,6 @@ export function assignQuery(
   return selected.map(({ topic, score }) => ({ topic, score }));
 }
 
-// Page-structure words, not tenant words: the first path segment tells the
-// page's type when the taxonomy supplies no override. The model's rules win;
-// this is the deterministic default that keeps a missing rule from classifying
-// the whole site as "other" and reporting every topic as uncovered.
-const BLOG_SEGMENTS = new Set(["blog", "blogs", "post", "posts", "article", "articles", "news", "guide", "guides", "magazine", "journal"]);
-const PRODUCT_SEGMENTS = new Set([
-  "product", "products", "produit", "produits", "producto", "productos", "item", "items",
-  "property", "properties", "listing", "listings", "propiedad", "propiedades",
-]);
-const CATEGORY_SEGMENTS = new Set([
-  "category", "categories", "categorie", "categories", "categoria", "categorias",
-  "collection", "collections", "shop", "boutique", "store", "tienda",
-  "catalog", "catalogue", "catalogo", "city", "cities", "location", "locations", "area", "areas",
-]);
-const SERVICE_SEGMENTS = new Set(["service", "services", "prestation", "prestations", "servicio", "servicios"]);
-
-function classifyPath(path: string): TopicPageType {
-  const segments = path.toLowerCase().split("/").filter(Boolean);
-  // A language prefix ("/es/...", "/fr/...") is not the page type; classify the
-  // path behind it.
-  const first = segments.length > 1 && /^[a-z]{2}$/.test(segments[0]) ? segments[1] : segments[0] ?? "";
-  if (BLOG_SEGMENTS.has(first)) return "blog";
-  if (PRODUCT_SEGMENTS.has(first)) return "product";
-  if (CATEGORY_SEGMENTS.has(first)) return "category";
-  if (SERVICE_SEGMENTS.has(first)) return "service";
-  return "other";
-}
-
 export function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPageType {
   if (path === "/") return "home";
   for (const rule of rules) {
@@ -331,7 +301,9 @@ export function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPa
     if (rule.pattern === "/") continue;
     if (path.startsWith(rule.pattern)) return rule.type;
   }
-  return classifyPath(path);
+  // The model classifies the inventory. A page it did not classify is
+  // "other": the map treats an unknown type as unknown, not as a guess.
+  return "other";
 }
 
 function pageAllowed(page: TopicCoveragePage, kind: TopicDefinition["coverageKind"]): boolean {
@@ -697,7 +669,6 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
   const stabilized = stabilizeTopicTaxonomy({
     topics: taxonomy,
     queries: data.queries,
-    pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
     brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
   const topics = stabilized.topics;

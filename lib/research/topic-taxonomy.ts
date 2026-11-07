@@ -2,7 +2,6 @@ import type { PrismaClient } from "@prisma/client";
 
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
-import { significantTokens } from "@/lib/funnel/cluster-discovery";
 
 /**
  * The tenant model for the topic map.
@@ -181,10 +180,10 @@ function normalizeTerm(value: string): string {
 function termInText(text: string, term: string): boolean {
   const normalized = normalizeTerm(term);
   if (!normalized) return false;
-  // A plural is the same term: "lampe"/"lampes", "fauteuil"/"fauteuils",
-  // "condo"/"condos". Prefix matching would make "mer" match "merci".
-  const variants = new Set([normalized, normalized.replace(/s$/, ""), `${normalized}s`]);
-  return [...variants].some((variant) => variant.length > 0 && ` ${text} `.includes(` ${variant} `));
+  // The model proposes the forms buyers search. Matching is a normalized
+  // word-boundary containment, not a morphology engine: no plural or
+  // word-order variants live in code.
+  return ` ${text} `.includes(` ${normalized} `);
 }
 
 /**
@@ -328,26 +327,6 @@ export function pruneTopicsToQueries(
     return matches;
   });
   return { topics: kept, dropped };
-}
-
-/**
- * Map a proposed offer key onto the offers the owner actually configured. The
- * model paraphrases ("Lampes et luminaires artisanaux" for "Lampes & luminaires"),
- * and an unmatched key silently falls back to the default market scope.
- */
-export function matchOfferKey(proposed: string, offers: string[]): string {
-  if (offers.length === 0) return proposed;
-  const normalized = normalizeTerm(proposed);
-  const exact = offers.find((offer) => normalizeTerm(offer) === normalized);
-  if (exact) return exact;
-  const tokens = new Set(normalized.split(" ").filter((token) => token.length >= 4));
-  let best: { offer: string; score: number } | null = null;
-  for (const offer of offers) {
-    const offerTokens = normalizeTerm(offer).split(" ").filter((token) => token.length >= 4);
-    const score = offerTokens.filter((token) => tokens.has(token)).length;
-    if (score > 0 && (!best || score > best.score)) best = { offer, score };
-  }
-  return best?.offer ?? proposed;
 }
 
 const INTENTS: TopicIntent[] = ["informational", "commercial", "transactional", "local", "mixed"];
@@ -512,58 +491,6 @@ export function parseTopicTaxonomy(
   };
 }
 
-function normalizeForMatch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Derive the matching terms from the cluster's own queries. The model names the
- * cluster and decides what it means; it does not invent the words that decide
- * membership, because a synonym the data does not contain produces a cluster
- * that matches nothing.
- */
-export function deriveTerms(
-  members: string[],
-  impressions: (query: string) => number,
-  pageTexts: string[]
-): { terms: string[]; strongTerms: string[]; requireAny: string[]; coverageRequireAny: string[] } {
-  const tokenScore = new Map<string, number>();
-  const bigramScore = new Map<string, number>();
-  for (const query of members) {
-    const tokens = significantTokens(query);
-    const weight = Math.max(1, impressions(query));
-    for (const token of new Set(tokens)) tokenScore.set(token, (tokenScore.get(token) ?? 0) + weight);
-    for (let index = 0; index < tokens.length - 1; index += 1) {
-      const gram = `${tokens[index]} ${tokens[index + 1]}`;
-      bigramScore.set(gram, (bigramScore.get(gram) ?? 0) + weight);
-    }
-  }
-  const top = (map: Map<string, number>, limit: number) =>
-    [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([value]) => value);
-  const bigrams = top(bigramScore, 6);
-  const tokens = top(tokenScore, 10);
-  const terms = [...bigrams, ...tokens].slice(0, 14);
-  // Phrases identify a topic, but a query can name the same need with a
-  // different phrase ("tulum real estate" vs "tulum condos"). Membership takes
-  // both; the cross-topic filter later removes the words every topic shares.
-  const requireAny = [...bigrams.slice(0, 3), ...tokens.slice(0, 3)].slice(0, 6);
-  const text = pageTexts.map(normalizeForMatch).join(" | ");
-  const termOnPage = (term: string) => normalizeForMatch(term).split(" ").filter(Boolean).every((token) => ` ${text} `.includes(` ${token} `));
-  const coverageRequireAny = terms.filter(termOnPage).slice(0, 8);
-  return {
-    terms,
-    strongTerms: bigrams,
-    requireAny: requireAny.length > 0 ? requireAny : terms.slice(0, 3),
-    coverageRequireAny,
-  };
-}
-
 /**
  * A query sample the model can reason over: the head by impressions, plus a
  * spread of the long tail, because a topic like "awa playacar" has almost no
@@ -597,9 +524,11 @@ const SYSTEM = [
   "The audience market is where the business sells and where its buyers search. It governs the market and the language of the topics; the business address is context, not the audience.",
   "Define the topics this business can serve. A topic is one need with one kind of page that should own it.",
   "Every topic is either a brand topic or a market topic. A brand topic is the business's own name and matches only that name. A market topic must say where it applies and what it is about, and a query belongs to it only when both match.",
+  "If the query set contains searches for the business's own name, include a brand topic. The brand topic is the name and nothing else; do not split the name into generic words.",
   "For a market topic set marketScope to local, national or international. A local or national topic must list the places it serves in marketPlaces, and the phrases that signal local intent without naming a place in localIntent, in the audience's language (for example 'near me', 'autour de moi', 'cerca de mí'). An international topic has no place requirement.",
   "Use local or national only when the demand itself names the place or has local intent. A service a buyer can search without naming the town is international, even when the business is local; otherwise the topic cannot match the service query.",
   "needTerms are the words that make a query about this topic rather than about the place, the brand or another topic. Name the need in the language buyers search, not necessarily the site language. A market topic with no need term is not a topic.",
+  "Include the forms buyers actually search: singular and plural, both word orders, and the common synonyms in the audience language. If the same need appears as 'lampe artisanale' and 'lampes artisanales', or as 'fauteuil restauration' and 'restauration fauteuil', include both. The matcher does not generate variants.",
   "A need term must distinguish this topic from the others: a word every topic in the same market uses belongs to none of them, and a generic word that also names the brand is not a need.",
   "Never put the business's location, service area or brand name in needTerms. The place belongs in marketPlaces; the brand is its own topic.",
   "headTerms are bare terms this topic should own on their own, such as the service name. If the query set contains a bare service term the whole market searches, give it to the topic that should own it as a headTerm. Only add one when the whole term belongs to this topic, and give it to at most one topic.",
@@ -607,11 +536,11 @@ const SYSTEM = [
   "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
   "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
   "A query may appear in at most two topics, and only when it genuinely serves both.",
-  "Leave out queries that fit no topic, are off-business, or are research noise. Do not invent a topic to cover them.",
+  "Every distinct place or need with measured demand must have a topic. Leave out only queries that are off-business or research noise, and say why in the summary. Do not invent a topic to cover noise.",
   "If audienceMarket is empty, infer the audience from the site, the audience facts and the query mix, and say so in the summary.",
-  "Set ownerPages to the one to three real paths from the supplied inventory that should own the topic. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Leave it empty only when the site truly has no page for the topic, and say so in the rationale.",
-  "offerKey must be one of the supplied offer names, or the topic name when no offer fits.",
-  "pageTypeRules map URL prefixes from the inventory to home, service, category, product, blog or other. They are optional overrides: the map classifies a page from its path when you omit them. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages, tag archives, paginated lists and search-result paths.",
+  "Set ownerPages to the one to three real paths from the supplied inventory that should own the topic. The field must be present. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Return an empty list only when the site truly has no page for the topic, and say so in the rationale.",
+  "offerKey must be copied exactly from the supplied offer names, or be the topic name when no offer fits. Do not paraphrase an offer name.",
+  "pageTypeRules are required: map the inventory's URL prefixes to home, service, category, product, blog or other. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages, tag archives, paginated lists and search-result paths.",
   "newsQueries are 4 to 6 search queries in the site language that find current news, events or regulation relevant to this business and its market. Use the current year from today, not a past one.",
   "Return exactly one JSON object, with no prose around it: { summary, topics: [{ name, kind, marketScope, marketPlaces: string[], localIntent: string[], needTerms: string[], headTerms: string[], intent, relevance, coverageKind, offerKey, rationale, actionHint, memberQueries: string[], ownerPages: string[], exclusive }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
   "Keep summary under 300 characters, each rationale and actionHint under 160, and at most 12 topics.",
@@ -671,12 +600,10 @@ export async function proposeTopicTaxonomy(
     return { taxonomy: null, rejected: [], merges: [], error: "no measured query to model", model: config.model };
   }
 
-  const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
   const sample = sampleQueries(input.queries);
   const omittedQueries = Math.max(0, input.queries.length - sample.length);
   const sampleByKey = new Map(sample.map((query) => [normalizeTerm(query.query), query.query]));
   const baseBrandTerms = [...new Set((input.brandTerms ?? []).map(normalizeTerm).filter(Boolean))];
-  const businessPlaces = [...new Set([input.business.location, ...input.business.serviceArea].filter((value): value is string => Boolean(value)))];
   const payload = {
     domain: input.domain,
     language: input.language,
@@ -697,17 +624,16 @@ export async function proposeTopicTaxonomy(
     queries: sample,
   };
 
-  const pageTexts = input.pages.map((page) => `${page.path} ${page.title} ${page.h1}`);
   const brandKey = input.business.name ?? input.domain.replace(/^www\./, "").split(".")[0];
 
   /**
    * Turn one model response into a taxonomy. The model proposes the market and
    * the need; the deterministic layer only enforces the contract: a market
    * topic needs a need, a local topic needs a place, one page owns one topic.
-   * `fallback` is true on the single re-proposal, when a still-missing field is
-   * filled from the business facts and recorded rather than dropped.
+   * The code never fills a semantic field: a missing need, place or owner is a
+   * contract rejection, and the single re-proposal asks the model again.
    */
-  function build(record: Record<string, unknown>, fallback: boolean): {
+  function build(record: Record<string, unknown>): {
     topics: TopicDefinition[];
     rejected: Array<{ title: string; reason: string }>;
     merges: Array<{ into: string; merged: string[]; page: string }>;
@@ -748,28 +674,37 @@ export async function proposeTopicTaxonomy(
       if (!slug || seen.has(slug)) continue;
 
       const kind: TopicKind = text(row.kind) === "brand" || coverageKind === "brand" ? "brand" : "market";
-      const offerKey = matchOfferKey(text(row.offerKey) ?? name, input.marketScope.offers.map((entry) => entry.offer));
-      const derived = deriveTerms(memberQueries, (query) => impressions.get(query) ?? 0, pageTexts);
-      const ownerPages = (Array.isArray(row.ownerPages) ? row.ownerPages : Array.isArray(row.preferredPages) ? row.preferredPages : [])
+      const proposedOffer = text(row.offerKey);
+      const offerKey = proposedOffer && input.marketScope.offers.some((offer) => offer.offer === proposedOffer)
+        ? proposedOffer
+        : name;
+      if (proposedOffer && offerKey !== proposedOffer) {
+        filled.push(`${name}: offerKey "${proposedOffer}" is not a supplied offer; using the topic name`);
+      }
+      const ownerField = Array.isArray(row.ownerPages) ? row.ownerPages : Array.isArray(row.preferredPages) ? row.preferredPages : null;
+      if (ownerField === null) {
+        rejected.push({ title: name, reason: "no ownerPages field" });
+        continue;
+      }
+      const ownerPages = ownerField
         .filter((entry): entry is string => typeof entry === "string" && entry.startsWith("/"))
         .filter((path) => !stringList(record.excludePaths, 20).some((excluded) => path.startsWith(excluded.startsWith("/") ? excluded : `/${excluded}`)))
         .slice(0, 3);
+      if (ownerPages.length === 0) filled.push(`${name}: no owner page proposed`);
       const headTerms = stringList(row.headTerms, 10);
 
-      let needTerms = stringList(row.needTerms, 30);
+      const needTerms = stringList(row.needTerms, 30);
       let marketScope = text(row.marketScope) as TopicMarketScope | null;
-      let places = stringList(row.marketPlaces, 20);
+      const places = stringList(row.marketPlaces, 20);
       const localIntent = stringList(row.localIntent, 20);
       const exclusive = row.exclusive === true;
 
       if (kind === "brand") {
-        // A brand topic is the name and nothing else. Any generic token the
-        // model split it into is discarded; the site's own name is the topic.
+        // A brand topic is the name and nothing else. The model supplies the
+        // name; the site's own name is used only when the model gave no
+        // name-like term at all.
         const supplied = [...stringList(row.brandTerms), ...needTerms, ...stringList(row.requireAny)]
           .filter((term) => brandTermMatches(term, brandKey));
-        needTerms = [];
-        places = [];
-        marketScope = "international";
         const brandTerms = supplied.length > 0 ? [...new Set(supplied)] : baseBrandTerms;
         if (brandTerms.length === 0) {
           rejected.push({ title: name, reason: "brand topic names no brand term" });
@@ -787,12 +722,11 @@ export async function proposeTopicTaxonomy(
           offerKey,
           rationale: text(row.rationale)?.slice(0, 600) ?? "",
           requireAny: brandTerms,
-          terms: [...new Set([...brandTerms, ...derived.terms])],
+          terms: brandTerms,
           strongTerms: brandTerms,
           ...(headTerms.length > 0 ? { headTerms } : {}),
-          coverageRequireAny: brandTerms,
-          pageTerms: derived.terms,
-          ...(ownerPages.length > 0 ? { preferredPages: ownerPages } : { preferredPages: ["/"] }),
+          pageTerms: brandTerms,
+          ...(ownerPages.length > 0 ? { preferredPages: ownerPages } : {}),
           exclusive: true,
           actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
         });
@@ -804,37 +738,25 @@ export async function proposeTopicTaxonomy(
         marketScope = offerScope && MARKET_SCOPES.includes(offerScope as TopicMarketScope) ? (offerScope as TopicMarketScope) : "international";
       }
       if (needTerms.length === 0) {
-        // The model cited queries but named no need. An absent field is an
-        // older or partial response: derive the need from the cited queries so
-        // the topic is not lost. An explicit empty list is a claim that the
-        // topic has no need, which is a taxonomy defect: ask for a correction
-        // and derive only on the single retry.
-        const explicitEmpty = Array.isArray(row.needTerms);
-        if (explicitEmpty && !fallback) {
-          rejected.push({ title: name, reason: "no need terms" });
-          continue;
-        }
-        needTerms = derived.requireAny;
-        filled.push(`${name}: need terms derived from its cited queries`);
-      } else {
-        // A need term the query set never uses is unmeasured, not wrong: the
-        // business may serve demand the current window does not show. Keep it
-        // and record it, so the taxonomy is not silently narrowed to the
-        // queries that happen to be measured this month.
-        const sampleTexts = sample.map((query) => normalizeTerm(query.query));
-        const unmeasured = needTerms.filter((term) => !sampleTexts.some((text) => termInText(text, term)));
-        if (unmeasured.length > 0 && unmeasured.length < needTerms.length) {
-          filled.push(`${name}: need terms not measured in this query set (${unmeasured.join(", ")})`);
-        }
+        // A market topic without a need cannot match anything. The model must
+        // supply the need; the re-proposal asks again, and a topic that still
+        // has none is dropped rather than guessed.
+        rejected.push({ title: name, reason: "no need terms" });
+        continue;
+      }
+      // A need term the query set never uses is unmeasured, not wrong: the
+      // business may serve demand the current window does not show. Keep it
+      // and record it, so the taxonomy is not silently narrowed.
+      const sampleTexts = sample.map((query) => normalizeTerm(query.query));
+      const unmeasured = needTerms.filter((term) => !sampleTexts.some((text) => termInText(text, term)));
+      if (unmeasured.length > 0 && unmeasured.length < needTerms.length) {
+        filled.push(`${name}: need terms not measured in this query set (${unmeasured.join(", ")})`);
       }
       if (marketScope !== "international" && places.length === 0 && localIntent.length === 0) {
-        const explicitEmpty = Array.isArray(row.marketPlaces);
-        if (explicitEmpty && !fallback) {
-          rejected.push({ title: name, reason: "no market places for a local or national topic" });
-          continue;
-        }
-        places = businessPlaces;
-        filled.push(`${name}: market places taken from the business facts`);
+        // A place-scoped topic must say where. The model decides the scope;
+        // the contract only checks that the scope has a place.
+        rejected.push({ title: name, reason: "no market places for a local or national topic" });
+        continue;
       }
 
       seen.add(slug);
@@ -854,49 +776,26 @@ export async function proposeTopicTaxonomy(
         },
         need: { terms: needTerms },
         rationale: text(row.rationale)?.slice(0, 600) ?? "",
-        requireAny: [...new Set([...needTerms, ...(marketScope === "international" ? [] : places), ...localIntent])],
-        terms: [...new Set([...needTerms, ...derived.terms])],
-        strongTerms: [...new Set([...needTerms.filter((term) => term.includes(" ")), ...derived.strongTerms])],
+        requireAny: needTerms,
+        terms: needTerms,
+        strongTerms: needTerms.filter((term) => term.includes(" ")),
         ...(headTerms.length > 0 ? { headTerms } : {}),
-        coverageRequireAny: derived.coverageRequireAny,
-        pageTerms: derived.terms,
+        pageTerms: needTerms,
         ...(ownerPages.length > 0 ? { preferredPages: ownerPages } : {}),
         ...(exclusive ? { exclusive: true } : {}),
         actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
       });
     }
 
-    // Brand demand is a topic even when the model treats it as noise: it is the
-    // one query set where the owner's own name is the subject, and dropping it
-    // leaves the brand volume unmapped on every re-proposal.
+    // Brand demand is the site's own name. The model must propose the brand
+    // topic; if it does not, the contract rejects the proposal and the one
+    // re-proposal asks again. The code never creates a topic.
     if (baseBrandTerms.length > 0 && !topics.some((topic) => isBrandTopic(topic))) {
       const brandMembers = input.queries
         .map((query) => query.query)
         .filter((query) => baseBrandTerms.some((term) => termInText(normalizeTerm(query), term)));
       if (brandMembers.length > 0) {
-        const slug = slugify(`${brandKey} brand`);
-        if (slug && !seen.has(slug)) {
-          topics.push({
-            slug,
-            name: `${brandKey} brand`,
-            kind: "brand",
-            intent: "mixed",
-            relevance: "high",
-            coverageKind: "brand",
-            offerKey: input.marketScope.offers[0]?.offer ?? brandKey,
-            rationale: "Searches for the business name are its own demand; the homepage should answer them.",
-            requireAny: baseBrandTerms,
-            terms: baseBrandTerms,
-            strongTerms: baseBrandTerms,
-            coverageRequireAny: baseBrandTerms,
-            pageTerms: baseBrandTerms,
-            preferredPages: ["/"],
-            exclusive: true,
-            actionHint: "Make the homepage say who teaches, what is sold and where, so the brand query lands on it.",
-          });
-          seen.add(slug);
-          membersBySlug.set(slug, brandMembers);
-        }
+        rejected.push({ title: `${brandKey} brand`, reason: "brand demand exists but the proposal has no brand topic" });
       }
     }
     if (topics.length === 0) {
@@ -911,20 +810,6 @@ export async function proposeTopicTaxonomy(
         membersBySlug,
         filled,
       };
-    }
-    // An owner the model left empty is filled from the real inventory: the page
-    // whose path shares the most distinctive terms with the topic. A topic with
-    // no owner would otherwise read as "no page covers this" while a page does.
-    for (const topic of topics) {
-      if (topic.preferredPages && topic.preferredPages.length > 0) continue;
-      const topicTokens = new Set([...significantTokens(topic.name), ...topic.terms.flatMap((term) => significantTokens(term))]);
-      let best: { path: string; score: number } | null = null;
-      for (const page of input.pages) {
-        const pathTokens = new Set(significantTokens(page.path.replace(/[-/]/g, " ")));
-        const score = [...topicTokens].filter((token) => pathTokens.has(token)).length;
-        if (score >= 2 && (!best || score > best.score)) best = { path: page.path, score };
-      }
-      if (best) topic.preferredPages = [best.path];
     }
 
     // One topic has one owning page. When the model gives two topics the same
@@ -948,16 +833,14 @@ export async function proposeTopicTaxonomy(
         (a, b) => relevanceRank(a) - relevanceRank(b) || (membersBySlug.get(b.slug)?.length ?? 0) - (membersBySlug.get(a.slug)?.length ?? 0)
       )[0];
       const memberQueries = [...new Set(group.flatMap((topic) => membersBySlug.get(topic.slug) ?? []))];
-      const derived = deriveTerms(memberQueries, (query) => impressions.get(query) ?? 0, pageTexts);
-      // The merged topic keeps the union of both need lists. The derived terms
-      // are only a fallback when neither side had a structured need.
+      // The merged topic keeps the union of both need lists. No derived terms:
+      // the model's need terms are the vocabulary.
       const mergedNeed = [...new Set(group.flatMap((topic) => topic.need?.terms ?? []))];
-      survivor.need = { terms: mergedNeed.length > 0 ? mergedNeed : derived.requireAny };
-      survivor.requireAny = [...new Set([...(survivor.requireAny ?? []), ...derived.requireAny])];
-      survivor.terms = [...new Set([...survivor.terms, ...derived.terms])];
-      survivor.strongTerms = [...new Set([...(survivor.strongTerms ?? []), ...derived.strongTerms])];
-      survivor.coverageRequireAny = derived.coverageRequireAny;
-      survivor.pageTerms = derived.terms;
+      survivor.need = { terms: mergedNeed };
+      survivor.requireAny = mergedNeed;
+      survivor.terms = mergedNeed;
+      survivor.strongTerms = mergedNeed.filter((term) => term.includes(" "));
+      survivor.pageTerms = mergedNeed;
       survivor.headTerms = [...new Set(group.flatMap((topic) => topic.headTerms ?? []))];
       if (group.some((topic) => topic.exclusive)) survivor.exclusive = true;
       const mergedNames = group.filter((topic) => topic !== survivor).map((topic) => topic.name);
@@ -1012,7 +895,7 @@ export async function proposeTopicTaxonomy(
       timeoutMs: 300_000,
       jsonMode: false,
     });
-    let result = build(asRecord(first), false);
+    let result = build(asRecord(first));
     let correctionNote: string | null = null;
     // The first proposal can leave demand that names a topic's place but not
     // its need, or reject a topic for an incomplete contract. Both are
@@ -1020,7 +903,19 @@ export async function proposeTopicTaxonomy(
     // the exact unowned queries and the rejected topics, for a correction.
     const gaps = contextGaps(result.topics, sample);
     const material = gaps.filter((gap) => gap.queries.length >= 2 || gap.volume >= 100 || gap.impressions >= 10);
-    const needsCorrection = material.length > 0 || (result.topics.length === 0 && result.rejected.length > 0);
+    // The other half of the fact: queries that match no topic at all. The code
+    // computes the list; the model decides whether they are a missing topic, a
+    // missing term, or off-business.
+    const owned = new Set<string>();
+    for (const query of sample) {
+      if (result.topics.some((topic) => topicMatchesQuery(topic, query.query))) owned.add(query.query);
+    }
+    const unowned = sample.filter((query) => !owned.has(query.query)).map((query) => query.query);
+    const unownedQueries = unowned.slice(0, 60);
+    const needsCorrection =
+      material.length > 0 ||
+      unowned.length > 0 ||
+      (result.topics.length === 0 && result.rejected.length > 0);
     if (needsCorrection) {
       try {
         const corrected = await chatJson({
@@ -1031,10 +926,14 @@ export async function proposeTopicTaxonomy(
             correction: {
               reason: material.length > 0
                 ? "The first proposal left measured queries that name a topic's market but not its need, and no other topic owns them."
-                : "The first proposal contained topics that do not satisfy the topic contract.",
+                : unowned.length > 0
+                  ? "The first proposal left measured queries that no topic owns."
+                  : "The first proposal contained topics that do not satisfy the topic contract.",
               unownedContext: material,
+              unownedQueries,
+              unownedCount: unowned.length,
               rejected: result.rejected,
-              instruction: "Correct the taxonomy. Add the missing need term to the topic, split the topic when the queries are a different need, or add a topic that owns them. Never put the place or brand in needTerms. Return the complete corrected taxonomy, not a diff.",
+              instruction: "Correct the taxonomy. Add the missing need term to the topic, split the topic when the queries are a different need, or add a topic that owns the unowned queries. If a query is off-business or research noise, leave it out and say why in the summary. Never put the place or brand in needTerms. Return the complete corrected taxonomy, not a diff.",
             },
           }),
           maxTokens: 32_000,
@@ -1043,13 +942,15 @@ export async function proposeTopicTaxonomy(
           timeoutMs: 300_000,
           jsonMode: false,
         });
-        const second = build(asRecord(corrected), true);
+        const second = build(asRecord(corrected));
         if (second.topics.length > 0) {
           const firstRejected = result.rejected.length;
           result = second;
           correctionNote = material.length > 0
             ? `Re-proposed once after ${material.length} topic${material.length === 1 ? "" : "s"} left unowned market demand.`
-            : `Re-proposed once after ${firstRejected} incomplete topic${firstRejected === 1 ? "" : "s"}.`;
+            : unowned.length > 0
+              ? `Re-proposed once after ${unowned.length} queries matched no topic.`
+              : `Re-proposed once after ${firstRejected} incomplete topic${firstRejected === 1 ? "" : "s"}.`;
         }
       } catch {
         // A failed correction keeps the first proposal; the map still reports
@@ -1142,7 +1043,6 @@ export type TaxonomyStabilization = {
 export function stabilizeTopicTaxonomy(input: {
   topics: TopicDefinition[];
   queries: Array<{ query: string; impressions: number; volume: number | null }>;
-  pageTexts: string[];
   /** The site's own name key (domain label or business name), for brand membership. */
   brandKey?: string;
 }): TaxonomyStabilization {
@@ -1202,22 +1102,19 @@ export function stabilizeTopicTaxonomy(input: {
     )[0];
     const union = [...new Set(group.flatMap((topic) => members.get(topic.slug) ?? []))];
     if (union.length > 0) {
-      const derived = deriveTerms(union, (query) => input.queries.find((entry) => entry.query === query)?.impressions ?? 0, input.pageTexts);
-      // The merged topic keeps every need term from both sides. It never takes
-      // the place or brand as a need, and it does not widen the need with
-      // derived terms when both sides already had one.
+      // The merged topic keeps every need term from both sides. No derived
+      // terms: the model's need terms are the vocabulary.
       const needTerms = [...new Set(group.flatMap((topic) => topic.need?.terms ?? []))];
-      survivor.need = { terms: needTerms.length > 0 ? needTerms : derived.requireAny };
+      survivor.need = { terms: needTerms };
       survivor.market = {
         scope: survivor.market?.scope ?? "international",
         places: [...new Set(group.flatMap((topic) => topic.market?.places ?? []))],
         localIntent: [...new Set(group.flatMap((topic) => topic.market?.localIntent ?? []))],
       };
-      survivor.requireAny = [...new Set([...survivor.need.terms, ...survivor.market.places, ...survivor.market.localIntent])];
-      survivor.terms = [...new Set([...group.flatMap((topic) => topic.terms), ...derived.terms])];
-      survivor.strongTerms = [...new Set([...group.flatMap((topic) => topic.strongTerms ?? []), ...derived.strongTerms])];
-      survivor.coverageRequireAny = derived.coverageRequireAny;
-      survivor.pageTerms = derived.terms;
+      survivor.requireAny = needTerms;
+      survivor.terms = needTerms;
+      survivor.strongTerms = needTerms.filter((term) => term.includes(" "));
+      survivor.pageTerms = needTerms;
     }
     if (group.some((topic) => topic.exclusive)) survivor.exclusive = true;
     survivor.headTerms = [...new Set(group.flatMap((topic) => topic.headTerms ?? []))];

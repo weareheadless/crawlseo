@@ -894,7 +894,6 @@ export async function buildBundlePlan(input: {
             impressions: impressionsByQuery.get(normalizePhrase(query)) ?? 0,
             volume: volumeByQuery.get(normalizePhrase(query)) ?? 0,
           })),
-          pageTexts: [],
           brandKey: site.domain.replace(/^www\./, "").split(".")[0],
         }).topics,
       }

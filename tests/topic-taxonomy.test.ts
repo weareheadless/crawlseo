@@ -112,13 +112,18 @@ describe("taxonomy validation", () => {
 });
 
 describe("taxonomy proposal", () => {
-  it("derives membership terms from the queries the model cites", async () => {
+  it("stores the need terms the model proposes", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({
       summary: "One topic.",
       topics: [
         {
           name: "Tulum condos",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: [],
+          needTerms: ["tulum condos", "condos"],
           intent: "commercial",
           relevance: "high",
           coverageKind: "product",
@@ -126,7 +131,7 @@ describe("taxonomy proposal", () => {
           rationale: "Buyers search Tulum condos directly.",
           actionHint: "Check the listing page.",
           memberQueries: ["tulum condos for sale", "tulum condos"],
-          preferredPages: ["/tulum-condos"],
+          ownerPages: ["/tulum-condos"],
         },
       ],
       pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
@@ -137,8 +142,8 @@ describe("taxonomy proposal", () => {
     expect(result.error).toBeNull();
     expect(result.taxonomy?.topics).toHaveLength(1);
     const topic = result.taxonomy!.topics[0];
-    expect(topic.terms).toContain("tulum");
-    expect(topic.terms).toContain("condos");
+    expect(topic.need?.terms).toEqual(["tulum condos", "condos"]);
+    expect(topic.terms).toEqual(["tulum condos", "condos"]);
     expect(topic.preferredPages).toEqual(["/tulum-condos"]);
     expect(topic.offerKey).toBe("Condos");
     expect(result.taxonomy?.proposedBy).toBe("ai");
@@ -180,37 +185,49 @@ describe("taxonomy proposal", () => {
       topics: [
         {
           name: "Ikuku for sale",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: [],
+          needTerms: ["ikuku"],
           intent: "commercial",
           relevance: "medium",
           coverageKind: "product",
           memberQueries: ["tulum condos for sale"],
+          ownerPages: ["/tulum-condos"],
         },
       ],
+      pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
     }));
     const result = await proposeTopicTaxonomy(input());
     expect(result.taxonomy?.topics).toHaveLength(1);
     expect(result.taxonomy?.topics[0].requireAny.length).toBeGreaterThan(0);
   });
 
-  it("keeps a topic whose queries share no term, matching its cited queries", async () => {
+  it("does not derive need terms when the model omits them", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({
       topics: [
         {
           name: "Elementos Cozumel",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Cozumel"],
+          localIntent: [],
           intent: "commercial",
           relevance: "medium",
           coverageKind: "product",
           memberQueries: ["tulum condos for sale", "tulum condos"],
+          ownerPages: ["/tulum-condos"],
         },
       ],
+      pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
     }));
     const result = await proposeTopicTaxonomy(input());
-    // The two queries share "tulum", so a term exists; the topic must survive
-    // either way, and its membership must claim both queries.
-    const topic = result.taxonomy?.topics[0];
-    expect(topic).toBeDefined();
-    expect(topic!.requireAny.some((term) => "tulum condos for sale".includes(term))).toBe(true);
+    // The need is the model's semantic choice. Without it the topic is a
+    // contract rejection, not a topic whose terms are guessed from queries.
+    expect(result.taxonomy).toBeNull();
+    expect(result.rejected.some((row) => /no need terms/.test(row.reason))).toBe(true);
   });
 
   it("reports a provider failure", async () => {
@@ -326,7 +343,7 @@ describe("taxonomy stabilization", () => {
   ];
 
   it("merges two topics that share a specific owner, but not the homepage", () => {
-    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    const result = stabilizeTopicTaxonomy({ topics, queries });
     expect(result.merges).toHaveLength(1);
     expect(result.merges[0].page).toBe("/blog/cenote");
     expect(result.topics.map((entry) => entry.slug)).not.toContain("tulum");
@@ -336,7 +353,7 @@ describe("taxonomy stabilization", () => {
   });
 
   it("reports the head term the model proposed and keeps it on its owner", () => {
-    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    const result = stabilizeTopicTaxonomy({ topics, queries });
     const head = result.headTerms.find((entry) => entry.term === "freediving");
     expect(head?.owner).toBe("Brand");
     const brand = result.topics.find((entry) => entry.slug === "brand")!;
@@ -344,7 +361,7 @@ describe("taxonomy stabilization", () => {
   });
 
   it("does not invent a head term the taxonomy did not propose", () => {
-    const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
+    const result = stabilizeTopicTaxonomy({ topics, queries });
     expect(result.headTerms.map((entry) => entry.term)).not.toContain("course");
   });
 
@@ -365,7 +382,6 @@ describe("taxonomy stabilization", () => {
         { query: "ocean vibes", impressions: 2, volume: 1300 },
         { query: "oceanvibes", impressions: 2, volume: 1300 },
       ],
-      pageTexts: [],
       brandKey: "oceanicvibes",
     });
     const kept = result.topics[0];
@@ -402,7 +418,6 @@ describe("taxonomy stabilization", () => {
         { query: "casamigo homes", impressions: 1, volume: 5 },
         { query: "casas", impressions: 0, volume: 550000 },
       ],
-      pageTexts: [],
     });
     const kept = result.topics[0];
     expect(kept.requireAny).not.toContain("casa");
