@@ -509,4 +509,25 @@ describe("page type and owner coverage", () => {
     );
     expect(map.clusters[0].coverage).not.toBe("none");
   });
+
+  it("finds the owner when only the percent-encoding case differs", () => {
+    const abatJour = {
+      ...taxonomy[0],
+      slug: "abat-jour",
+      name: "Abat-jour",
+      requireAny: ["abat jour"],
+      terms: ["abat jour"],
+      strongTerms: ["abat jour"],
+      preferredPages: ["/post/l-art-%c3%a0-un-abat-jour"],
+      coverageKind: "product" as const,
+    };
+    const map = buildTopicMap(
+      data({
+        queries: [query("abat jour", 10)],
+        pages: [page("/post/l-art-%C3%A0-un-abat-jour", "L'art de l'abat-jour", "blog", 400)],
+      }),
+      [abatJour]
+    );
+    expect(map.clusters[0].coverage).not.toBe("none");
+  });
 });

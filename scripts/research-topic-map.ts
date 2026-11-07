@@ -71,6 +71,36 @@ function asStringList(value: unknown): string[] {
   return text.split(/[;,]/).map((entry) => entry.trim()).filter(Boolean);
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * The previous map's unmapped queries, restricted to those still measured in
+ * this window. The map computes which queries no topic owned; the next
+ * proposal decides why. A query that dropped out of the window is not sent,
+ * because the model cannot cite it as evidence.
+ */
+function previousUnmappedQueries(
+  report: unknown,
+  queries: Array<{ query: string; impressions: number; volume: number | null }>
+): Array<{ query: string; impressions: number; volume: number | null }> {
+  const rows = asRecord(asRecord(report).map).unmapped;
+  if (!Array.isArray(rows)) return [];
+  const byQuery = new Map(queries.map((query) => [query.query, query]));
+  const seen = new Set<string>();
+  const out: Array<{ query: string; impressions: number; volume: number | null }> = [];
+  for (const row of rows) {
+    const query = asRecord(row).query;
+    if (typeof query !== "string" || seen.has(query)) continue;
+    const current = byQuery.get(query);
+    if (!current) continue;
+    seen.add(query);
+    out.push(current);
+  }
+  return out;
+}
+
 class CliError extends Error {
   constructor(message: string, readonly exitCode: number) {
     super(message);
@@ -175,6 +205,18 @@ async function main(): Promise<void> {
     const priorBrandTerms = (taxonomy?.topics.find((topic) => isBrandTopic(topic))?.requireAny ?? []).filter(
       (term) => brandTermMatches(term, brandKey)
     );
+    // The taxonomy in use is the base of a revision, not a suggestion. Without
+    // it every pass re-invents the taxonomy and can drop a topic that owns
+    // real demand.
+    const currentTaxonomy = (taxonomy?.topics ?? []).map((topic) => ({
+      name: topic.name,
+      kind: topic.kind ?? (isBrandTopic(topic) ? "brand" : "market"),
+      marketScope: topic.market?.scope ?? null,
+      marketPlaces: topic.market?.places ?? [],
+      localIntent: topic.market?.localIntent ?? [],
+      needTerms: topic.need?.terms ?? [],
+      ownerPages: topic.preferredPages ?? [],
+    }));
     if (!taxonomy || args.refreshTaxonomy) {
       if (!args.ai) {
         throw new CliError(
@@ -183,6 +225,14 @@ async function main(): Promise<void> {
         );
       }
       const rawData = await loadTopicMapData(db, site.id, month, null);
+      // The previous map is the feedback loop: the code lists the measured
+      // queries no topic owned, and the model decides the reason and the fix.
+      const previousRun = await db.researchRun.findFirst({
+        where: { siteId: site.id, idempotencyKey: topicMapKey(site.id, month), status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        select: { report: true },
+      });
+      const previousUnmapped = previousUnmappedQueries(previousRun?.report, rawData.queries);
       const proposed = await proposeTopicTaxonomy({
         domain: site.domain,
         language: rawData.context.language,
@@ -217,6 +267,8 @@ async function main(): Promise<void> {
           .sort((a, b) => b.wordCount - a.wordCount)
           .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
         brandTerms: priorBrandTerms,
+        previousUnmapped,
+        currentTaxonomy,
       });
       if (!proposed.taxonomy) {
         throw new CliError(`could not propose a topic taxonomy for ${site.domain}: ${proposed.error ?? "unknown error"}`, 4);

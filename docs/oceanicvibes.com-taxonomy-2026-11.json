@@ -2,17 +2,17 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-07T20:17:43.768Z",
+  "generatedAt": "2026-11-07T22:16:14.392Z",
   "topics": [
     {
       "slug": "oceanicvibes",
       "name": "OceanicVibes",
       "kind": "brand",
-      "intent": "mixed",
+      "intent": "commercial",
       "relevance": "high",
       "coverageKind": "brand",
       "offerKey": "OceanicVibes",
-      "rationale": "Only two measured searches, both the business name spelled closed or open; the home page is the single page that can own it.",
+      "rationale": "Brand queries exist; home is the only brand owner.",
       "requireAny": [
         "ocean vibes",
         "oceanvibes"
@@ -25,6 +25,11 @@
         "ocean vibes",
         "oceanvibes"
       ],
+      "headTerms": [
+        "oceanicvibes",
+        "oceanvibes",
+        "ocean vibes"
+      ],
       "pageTerms": [
         "ocean vibes",
         "oceanvibes"
@@ -33,13 +38,13 @@
         "/"
       ],
       "exclusive": true,
-      "actionHint": "Keep the exact brand name in the home title, H1 and schema so both spellings resolve there."
+      "actionHint": "Keep the brand name consistent in title tags and schema."
     },
     {
       "slug": "freediving-courses-and-certification",
       "name": "Freediving courses and certification",
       "kind": "market",
-      "intent": "commercial",
+      "intent": "transactional",
       "relevance": "high",
       "coverageKind": "service",
       "offerKey": "Freediving courses and certification",
@@ -54,116 +59,139 @@
           "freediving courses",
           "freediving certification",
           "freediving certification levels",
-          "level 1 freediving course",
           "freediving course for beginners",
           "freediving for beginners",
-          "aida freediving course",
+          "level 1 freediving course",
           "aida 3",
+          "aida freediving course",
           "padi freediving course",
+          "padi freediving courses",
+          "padi freediving certification",
           "ssi freediving course",
           "freediving course online",
-          "freediving",
+          "freediving training course",
+          "learn to freedive",
           "freediving school",
+          "freediving",
           "freediving training",
           "freediving coaching",
-          "learn to freedive"
+          "cenote diving"
         ]
       },
-      "rationale": "AIDA 3 is the certification sold; buyers search course and certification words without naming a town, so the scope is international. Merged with Freediving in Playa del Carmen: the same page owns both topics.",
+      "rationale": "Course and certification demand is broad and agency-led; the local course guide can own it with home. Merged with Freediving in Playa del Carmen: the same page owns both topics.",
       "requireAny": [
         "freediving course",
         "freediving courses",
         "freediving certification",
         "freediving certification levels",
-        "level 1 freediving course",
         "freediving course for beginners",
         "freediving for beginners",
-        "aida freediving course",
+        "level 1 freediving course",
         "aida 3",
+        "aida freediving course",
         "padi freediving course",
+        "padi freediving courses",
+        "padi freediving certification",
         "ssi freediving course",
         "freediving course online",
-        "freediving",
+        "freediving training course",
+        "learn to freedive",
         "freediving school",
+        "freediving",
         "freediving training",
         "freediving coaching",
-        "learn to freedive"
+        "cenote diving"
       ],
       "terms": [
         "freediving course",
         "freediving courses",
         "freediving certification",
         "freediving certification levels",
-        "level 1 freediving course",
         "freediving course for beginners",
         "freediving for beginners",
-        "aida freediving course",
+        "level 1 freediving course",
         "aida 3",
+        "aida freediving course",
         "padi freediving course",
+        "padi freediving courses",
+        "padi freediving certification",
         "ssi freediving course",
         "freediving course online",
-        "freediving",
+        "freediving training course",
+        "learn to freedive",
         "freediving school",
+        "freediving",
         "freediving training",
         "freediving coaching",
-        "learn to freedive"
+        "cenote diving"
       ],
       "strongTerms": [
         "freediving course",
         "freediving courses",
         "freediving certification",
         "freediving certification levels",
-        "level 1 freediving course",
         "freediving course for beginners",
         "freediving for beginners",
-        "aida freediving course",
+        "level 1 freediving course",
         "aida 3",
+        "aida freediving course",
         "padi freediving course",
+        "padi freediving courses",
+        "padi freediving certification",
         "ssi freediving course",
         "freediving course online",
+        "freediving training course",
+        "learn to freedive",
         "freediving school",
         "freediving training",
         "freediving coaching",
-        "learn to freedive"
+        "cenote diving"
       ],
       "headTerms": [
         "freediving course",
-        "freediving courses"
+        "freediving courses",
+        "freediving certification",
+        "aida 3",
+        "freediving playa del carmen",
+        "playa del carmen freediving"
       ],
       "pageTerms": [
         "freediving course",
         "freediving courses",
         "freediving certification",
         "freediving certification levels",
-        "level 1 freediving course",
         "freediving course for beginners",
         "freediving for beginners",
-        "aida freediving course",
+        "level 1 freediving course",
         "aida 3",
+        "aida freediving course",
         "padi freediving course",
+        "padi freediving courses",
+        "padi freediving certification",
         "ssi freediving course",
         "freediving course online",
-        "freediving",
+        "freediving training course",
+        "learn to freedive",
         "freediving school",
+        "freediving",
         "freediving training",
         "freediving coaching",
-        "learn to freedive"
+        "cenote diving"
       ],
       "preferredPages": [
         "/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide",
         "/"
       ],
-      "exclusive": true,
-      "actionHint": "Build an AIDA 3 course page with prerequisites, depth outcomes, price, dates and booking."
+      "actionHint": "Add a course/certification page and link the local course guide."
     },
     {
-      "slug": "private-freediving-coaching",
-      "name": "Private freediving coaching",
+      "slug": "private-freediving-coaching-and-one-to-one-training",
+      "name": "Private freediving coaching and one-to-one training",
       "kind": "market",
       "intent": "commercial",
       "relevance": "high",
       "coverageKind": "service",
-      "offerKey": "Private freediving coaching",
+      "offerKey": "Private freediving coaching and one-to-one training",
       "market": {
         "scope": "international",
         "places": [],
@@ -171,85 +199,109 @@
       },
       "need": {
         "terms": [
-          "freediving coaching",
           "private freediving coaching",
+          "one-to-one coaching",
           "one-to-one freediving coaching",
           "personal freediving coaching",
+          "freediving coaching",
           "freediving coach",
           "freediving teacher",
           "freediving training",
+          "training freediving",
           "training for freediving",
           "freediving training program",
-          "freediving training course"
+          "freediving training for beginners",
+          "safety protocols",
+          "safety diver",
+          "buddy"
         ]
       },
-      "rationale": "One-to-one coaching is the core differentiator; 'freediving training' and 'training for freediving' are the searches that express it.",
+      "rationale": "Training and coaching queries fit the one-to-one offer; teacher-fit post plus home own it.",
       "requireAny": [
-        "freediving coaching",
         "private freediving coaching",
+        "one-to-one coaching",
         "one-to-one freediving coaching",
         "personal freediving coaching",
+        "freediving coaching",
         "freediving coach",
         "freediving teacher",
         "freediving training",
+        "training freediving",
         "training for freediving",
         "freediving training program",
-        "freediving training course"
+        "freediving training for beginners",
+        "safety protocols",
+        "safety diver",
+        "buddy"
       ],
       "terms": [
-        "freediving coaching",
         "private freediving coaching",
+        "one-to-one coaching",
         "one-to-one freediving coaching",
         "personal freediving coaching",
+        "freediving coaching",
         "freediving coach",
         "freediving teacher",
         "freediving training",
+        "training freediving",
         "training for freediving",
         "freediving training program",
-        "freediving training course"
+        "freediving training for beginners",
+        "safety protocols",
+        "safety diver",
+        "buddy"
       ],
       "strongTerms": [
-        "freediving coaching",
         "private freediving coaching",
+        "one-to-one coaching",
         "one-to-one freediving coaching",
         "personal freediving coaching",
+        "freediving coaching",
         "freediving coach",
         "freediving teacher",
         "freediving training",
+        "training freediving",
         "training for freediving",
         "freediving training program",
-        "freediving training course"
+        "freediving training for beginners",
+        "safety protocols",
+        "safety diver"
       ],
       "headTerms": [
         "freediving training",
         "freediving coaching"
       ],
       "pageTerms": [
-        "freediving coaching",
         "private freediving coaching",
+        "one-to-one coaching",
         "one-to-one freediving coaching",
         "personal freediving coaching",
+        "freediving coaching",
         "freediving coach",
         "freediving teacher",
         "freediving training",
+        "training freediving",
         "training for freediving",
         "freediving training program",
-        "freediving training course"
+        "freediving training for beginners",
+        "safety protocols",
+        "safety diver",
+        "buddy"
       ],
       "preferredPages": [
         "/blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you",
         "/"
       ],
-      "actionHint": "Publish a private coaching page contrasting it with group courses and linking to booking."
+      "actionHint": "Create a private coaching page; link teacher-fit and plateau posts."
     },
     {
-      "slug": "depth-and-line-training",
-      "name": "Depth and line training",
+      "slug": "depth-line-and-equalization-training",
+      "name": "Depth, line and equalization training",
       "kind": "market",
       "intent": "commercial",
       "relevance": "high",
       "coverageKind": "service",
-      "offerKey": "Depth and line training",
+      "offerKey": "Depth, line and equalization training",
       "market": {
         "scope": "international",
         "places": [],
@@ -263,10 +315,17 @@
           "line training",
           "freediving line training",
           "depth coaching",
-          "deep freediving"
+          "deep freediving",
+          "freediving deep",
+          "deep equalization",
+          "equalization",
+          "frenzel",
+          "safety protocols up to 30 meters",
+          "safety protocols",
+          "safety diver"
         ]
       },
-      "rationale": "Depth Training, Advanced Depth and Line training are sold as one progression on the line; demand shows only in 'line training freediving' and 'freediving deep'.",
+      "rationale": "Line, depth and equalization demand is distinct; plateau and Frenzel posts own it with home.",
       "requireAny": [
         "depth training",
         "freediving depth training",
@@ -274,7 +333,14 @@
         "line training",
         "freediving line training",
         "depth coaching",
-        "deep freediving"
+        "deep freediving",
+        "freediving deep",
+        "deep equalization",
+        "equalization",
+        "frenzel",
+        "safety protocols up to 30 meters",
+        "safety protocols",
+        "safety diver"
       ],
       "terms": [
         "depth training",
@@ -283,7 +349,14 @@
         "line training",
         "freediving line training",
         "depth coaching",
-        "deep freediving"
+        "deep freediving",
+        "freediving deep",
+        "deep equalization",
+        "equalization",
+        "frenzel",
+        "safety protocols up to 30 meters",
+        "safety protocols",
+        "safety diver"
       ],
       "strongTerms": [
         "depth training",
@@ -292,11 +365,16 @@
         "line training",
         "freediving line training",
         "depth coaching",
-        "deep freediving"
+        "deep freediving",
+        "freediving deep",
+        "deep equalization",
+        "safety protocols up to 30 meters",
+        "safety protocols",
+        "safety diver"
       ],
       "headTerms": [
-        "depth training",
-        "line training"
+        "line training",
+        "depth training"
       ],
       "pageTerms": [
         "depth training",
@@ -305,22 +383,30 @@
         "line training",
         "freediving line training",
         "depth coaching",
-        "deep freediving"
+        "deep freediving",
+        "freediving deep",
+        "deep equalization",
+        "equalization",
+        "frenzel",
+        "safety protocols up to 30 meters",
+        "safety protocols",
+        "safety diver"
       ],
       "preferredPages": [
-        "/blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal",
+        "/blog/why-your-freediving-progress-has-plateaued-and-why-that-s-normal",
+        "/blog/frenzel-works-on-land-not-underwater-what-to-do-when-equalization-stalls-on-the-depth-line-and-wheth",
         "/"
       ],
-      "actionHint": "Add a depth and line training page with the 10-30 m progression, session format and safety."
+      "actionHint": "Create a depth/line/equalization service page; link plateau and Frenzel posts."
     },
     {
-      "slug": "freediving-breathwork-and-co2-o2-training",
-      "name": "Freediving breathwork and CO2/O2 training",
+      "slug": "freediving-breathwork-co2-o2-and-physical-preparation",
+      "name": "Freediving breathwork, CO2/O2 and physical preparation",
       "kind": "market",
       "intent": "mixed",
       "relevance": "high",
       "coverageKind": "service",
-      "offerKey": "Freediving breathwork and CO2/O2 training",
+      "offerKey": "Freediving breathwork, CO2/O2 and physical preparation",
       "market": {
         "scope": "international",
         "places": [],
@@ -336,82 +422,9 @@
           "co2 tables",
           "co2 training",
           "o2 tables",
+          "co2/o2 efficiency",
           "breathwork",
-          "relaxation"
-        ]
-      },
-      "rationale": "Breathwork, relaxation and CO2/O2 efficiency are one sold skill set and the best-measured service need in the query set.",
-      "requireAny": [
-        "breath training",
-        "breathing training",
-        "breath hold training",
-        "breath holding training",
-        "apnea training",
-        "co2 tables",
-        "co2 training",
-        "o2 tables",
-        "breathwork",
-        "relaxation"
-      ],
-      "terms": [
-        "breath training",
-        "breathing training",
-        "breath hold training",
-        "breath holding training",
-        "apnea training",
-        "co2 tables",
-        "co2 training",
-        "o2 tables",
-        "breathwork",
-        "relaxation"
-      ],
-      "strongTerms": [
-        "breath training",
-        "breathing training",
-        "breath hold training",
-        "breath holding training",
-        "apnea training",
-        "co2 tables",
-        "co2 training",
-        "o2 tables"
-      ],
-      "headTerms": [
-        "breathwork"
-      ],
-      "pageTerms": [
-        "breath training",
-        "breathing training",
-        "breath hold training",
-        "breath holding training",
-        "apnea training",
-        "co2 tables",
-        "co2 training",
-        "o2 tables",
-        "breathwork",
-        "relaxation"
-      ],
-      "preferredPages": [
-        "/blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t",
-        "/"
-      ],
-      "exclusive": true,
-      "actionHint": "Create a breathwork and CO2 table coaching page with a downloadable table and booking."
-    },
-    {
-      "slug": "freediving-physical-preparation-and-pool-training",
-      "name": "Freediving physical preparation and pool training",
-      "kind": "market",
-      "intent": "informational",
-      "relevance": "medium",
-      "coverageKind": "service",
-      "offerKey": "Freediving physical preparation and pool training",
-      "market": {
-        "scope": "international",
-        "places": [],
-        "localIntent": []
-      },
-      "need": {
-        "terms": [
+          "relaxation",
           "pool training",
           "freediving pool training",
           "pool training exercises",
@@ -422,8 +435,19 @@
           "freediving workout"
         ]
       },
-      "rationale": "Physical preparation is sold as dry and pool work; four pool-training queries measure the need. The site has no dedicated page yet.",
+      "rationale": "Breath, CO2/O2 and pool prep share the land-practice post and home; merged to avoid duplicate owners.",
       "requireAny": [
+        "breath training",
+        "breathing training",
+        "breath hold training",
+        "breath holding training",
+        "apnea training",
+        "co2 tables",
+        "co2 training",
+        "o2 tables",
+        "co2/o2 efficiency",
+        "breathwork",
+        "relaxation",
         "pool training",
         "freediving pool training",
         "pool training exercises",
@@ -434,6 +458,17 @@
         "freediving workout"
       ],
       "terms": [
+        "breath training",
+        "breathing training",
+        "breath hold training",
+        "breath holding training",
+        "apnea training",
+        "co2 tables",
+        "co2 training",
+        "o2 tables",
+        "co2/o2 efficiency",
+        "breathwork",
+        "relaxation",
         "pool training",
         "freediving pool training",
         "pool training exercises",
@@ -444,6 +479,15 @@
         "freediving workout"
       ],
       "strongTerms": [
+        "breath training",
+        "breathing training",
+        "breath hold training",
+        "breath holding training",
+        "apnea training",
+        "co2 tables",
+        "co2 training",
+        "o2 tables",
+        "co2/o2 efficiency",
         "pool training",
         "freediving pool training",
         "pool training exercises",
@@ -454,9 +498,24 @@
         "freediving workout"
       ],
       "headTerms": [
+        "breath training",
+        "breath hold training",
+        "apnea training",
+        "pool training",
         "freediving pool training"
       ],
       "pageTerms": [
+        "breath training",
+        "breathing training",
+        "breath hold training",
+        "breath holding training",
+        "apnea training",
+        "co2 tables",
+        "co2 training",
+        "o2 tables",
+        "co2/o2 efficiency",
+        "breathwork",
+        "relaxation",
         "pool training",
         "freediving pool training",
         "pool training exercises",
@@ -467,93 +526,16 @@
         "freediving workout"
       ],
       "preferredPages": [
+        "/blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t",
         "/"
       ],
-      "exclusive": true,
-      "actionHint": "Add a dry and pool training page with weekly drills for certified freedivers."
-    },
-    {
-      "slug": "freediving-safety-and-safety-protocols",
-      "name": "Freediving safety and safety protocols",
-      "kind": "market",
-      "intent": "informational",
-      "relevance": "high",
-      "coverageKind": "content",
-      "offerKey": "Freediving safety and safety protocols",
-      "market": {
-        "scope": "international",
-        "places": [],
-        "localIntent": []
-      },
-      "need": {
-        "terms": [
-          "freediving safety",
-          "safety protocols",
-          "safety diver",
-          "buddy",
-          "is freediving dangerous",
-          "freediving dangers",
-          "freediving deaths",
-          "blackout",
-          "samba"
-        ]
-      },
-      "rationale": "Safety protocols to 30 m are a sold service and the audience's top concern; only two danger queries measure it today.",
-      "requireAny": [
-        "freediving safety",
-        "safety protocols",
-        "safety diver",
-        "buddy",
-        "is freediving dangerous",
-        "freediving dangers",
-        "freediving deaths",
-        "blackout",
-        "samba"
-      ],
-      "terms": [
-        "freediving safety",
-        "safety protocols",
-        "safety diver",
-        "buddy",
-        "is freediving dangerous",
-        "freediving dangers",
-        "freediving deaths",
-        "blackout",
-        "samba"
-      ],
-      "strongTerms": [
-        "freediving safety",
-        "safety protocols",
-        "safety diver",
-        "is freediving dangerous",
-        "freediving dangers",
-        "freediving deaths"
-      ],
-      "headTerms": [
-        "freediving safety"
-      ],
-      "pageTerms": [
-        "freediving safety",
-        "safety protocols",
-        "safety diver",
-        "buddy",
-        "is freediving dangerous",
-        "freediving dangers",
-        "freediving deaths",
-        "blackout",
-        "samba"
-      ],
-      "preferredPages": [
-        "/"
-      ],
-      "exclusive": true,
-      "actionHint": "Write a safety protocol page: buddy roles, 30 m limits, rescue drills and waivers."
+      "actionHint": "Create a breathwork and pool-prep page; link the land-practice post."
     },
     {
       "slug": "cenote-freediving",
       "name": "Cenote freediving",
       "kind": "market",
-      "intent": "commercial",
+      "intent": "local",
       "relevance": "high",
       "coverageKind": "local",
       "offerKey": "Cenote freediving",
@@ -580,7 +562,7 @@
           "cenote"
         ]
       },
-      "rationale": "Cenotes are the signature training environment and the site already compares cenote with ocean; four cenote queries measure it.",
+      "rationale": "Cenote freediving is a distinct local need; the cenote-vs-ocean post and home own it.",
       "requireAny": [
         "cenote freediving",
         "cenote diving",
@@ -600,6 +582,10 @@
         "cenote diving",
         "freediving cenotes"
       ],
+      "headTerms": [
+        "cenote freediving",
+        "cenotes freediving"
+      ],
       "pageTerms": [
         "cenote freediving",
         "cenote diving",
@@ -611,21 +597,84 @@
         "/blog/cenote-or-ocean-first-freediving-course",
         "/"
       ],
-      "actionHint": "Add a cenote freediving page listing the cenotes used, depths, access and rules."
+      "actionHint": "Create a cenote freediving landing page; link the cenote-vs-ocean post."
     },
     {
       "slug": "freediving-in-tulum",
       "name": "Freediving in Tulum",
       "kind": "market",
       "intent": "local",
-      "relevance": "medium",
+      "relevance": "high",
       "coverageKind": "local",
       "offerKey": "Freediving in Tulum",
       "market": {
         "scope": "local",
         "places": [
-          "tulum",
-          "playa del carmen"
+          "tulum"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "freediving",
+          "freediving course",
+          "freediving training",
+          "freediving school",
+          "cenote diving"
+        ]
+      },
+      "rationale": "Tulum queries name a separate destination; no Tulum page exists, so home owns it.",
+      "requireAny": [
+        "freediving",
+        "freediving course",
+        "freediving training",
+        "freediving school",
+        "cenote diving"
+      ],
+      "terms": [
+        "freediving",
+        "freediving course",
+        "freediving training",
+        "freediving school",
+        "cenote diving"
+      ],
+      "strongTerms": [
+        "freediving course",
+        "freediving training",
+        "freediving school",
+        "cenote diving"
+      ],
+      "headTerms": [
+        "freediving tulum",
+        "tulum freediving"
+      ],
+      "pageTerms": [
+        "freediving",
+        "freediving course",
+        "freediving training",
+        "freediving school",
+        "cenote diving"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "actionHint": "Create a Tulum freediving page targeting Tulum and cenote queries."
+    },
+    {
+      "slug": "freediving-in-mexico",
+      "name": "Freediving in Mexico",
+      "kind": "market",
+      "intent": "local",
+      "relevance": "medium",
+      "coverageKind": "local",
+      "offerKey": "Freediving in Mexico",
+      "market": {
+        "scope": "national",
+        "places": [
+          "mexico"
         ],
         "localIntent": [
           "near me",
@@ -638,126 +687,56 @@
           "freediving course",
           "freediving school",
           "freediving training",
-          "cenote diving"
+          "freediving certification"
         ]
       },
-      "rationale": "Tulum sits inside the service area and is searched separately from Playa del Carmen; three queries name it.",
+      "rationale": "Country-level Mexico demand is broad; home is the only national owner.",
       "requireAny": [
         "freediving",
         "freediving course",
         "freediving school",
         "freediving training",
-        "cenote diving"
+        "freediving certification"
       ],
       "terms": [
         "freediving",
         "freediving course",
         "freediving school",
         "freediving training",
-        "cenote diving"
+        "freediving certification"
       ],
       "strongTerms": [
         "freediving course",
         "freediving school",
         "freediving training",
-        "cenote diving"
+        "freediving certification"
+      ],
+      "headTerms": [
+        "freediving mexico",
+        "mexico freediving"
       ],
       "pageTerms": [
         "freediving",
         "freediving course",
         "freediving school",
         "freediving training",
-        "cenote diving"
+        "freediving certification"
       ],
       "preferredPages": [
         "/"
       ],
-      "actionHint": "Add a Tulum page covering travel time from Playa del Carmen and cenote sessions."
-    },
-    {
-      "slug": "freediving-in-mexico",
-      "name": "Freediving in Mexico",
-      "kind": "market",
-      "intent": "mixed",
-      "relevance": "medium",
-      "coverageKind": "local",
-      "offerKey": "Freediving in Mexico",
-      "market": {
-        "scope": "national",
-        "places": [
-          "mexico"
-        ],
-        "localIntent": []
-      },
-      "need": {
-        "terms": [
-          "freediving",
-          "freediving course",
-          "freediving school",
-          "freediving training",
-          "freediving certification",
-          "learn to freedive"
-        ]
-      },
-      "rationale": "Country-level searches exist apart from the town ones and Mexico is the national frame for the Yucatan service area.",
-      "requireAny": [
-        "freediving",
-        "freediving course",
-        "freediving school",
-        "freediving training",
-        "freediving certification",
-        "learn to freedive"
-      ],
-      "terms": [
-        "freediving",
-        "freediving course",
-        "freediving school",
-        "freediving training",
-        "freediving certification",
-        "learn to freedive"
-      ],
-      "strongTerms": [
-        "freediving course",
-        "freediving school",
-        "freediving training",
-        "freediving certification",
-        "learn to freedive"
-      ],
-      "pageTerms": [
-        "freediving",
-        "freediving course",
-        "freediving school",
-        "freediving training",
-        "freediving certification",
-        "learn to freedive"
-      ],
-      "preferredPages": [
-        "/"
-      ],
-      "exclusive": true,
-      "actionHint": "Add a Mexico freediving page linking the Playa del Carmen, Tulum and Bacalar options."
+      "actionHint": "Create a Mexico destination page; home only broadly covers Yucatan."
     }
   ],
   "pageTypeRules": [],
-  "excludePaths": [
-    "/tag/",
-    "/tags/",
-    "/page/",
-    "/search",
-    "/account",
-    "/checkout",
-    "/cart",
-    "/privacy",
-    "/terms",
-    "/wp-admin/"
-  ],
+  "excludePaths": [],
   "newsQueries": [
-    "freediving competition 2026",
-    "AIDA freediving rules 2026",
-    "freediving depth record 2026",
-    "cenote freediving regulations 2026",
     "freediving safety standards 2026",
-    "Playa del Carmen freediving events 2026"
+    "AIDA freediving rules 2026",
+    "freediving world record 2026",
+    "Playa del Carmen freediving news 2026",
+    "Mexico cenote freediving regulation 2026",
+    "freediving training certification news 2026"
   ],
-  "summary": "OceanicVibes sells private freediving coaching from Playa del Carmen to English-speaking US buyers. Topics split by service need and by the places demand names. Gear, record, app, competitor-brand and other-country queries are excluded as noise or out-of-area. 1 topic pair shared an owning page and were merged. 20 topic corrections: Freediving courses and certification: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving courses and certification: need terms not measured in this query set (aida 3); Private freediving coaching: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Private freediving coaching: need terms not measured in this query set (freediving coaching, private freediving coaching, one-to-one freediving coaching, personal freediving coaching, freediving coach, freediving teacher); Depth and line training: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Depth and line training: need terms not measured in this query set (depth training, freediving depth training, advanced depth, freediving line training, depth coaching, deep freediving); Freediving breathwork and CO2/O2 training: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving breathwork and CO2/O2 training: need terms not measured in this query set (co2 tables, co2 training, o2 tables, breathwork, relaxation); Freediving physical preparation and pool training: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving physical preparation and pool training: need terms not measured in this query set (dry training, land training, physical preparation, freediving exercises, freediving workout); Freediving safety and safety protocols: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving safety and safety protocols: need terms not measured in this query set (freediving safety, safety protocols, safety diver, buddy, freediving dangers, blackout, samba); Freediving in Playa del Carmen: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving in Playa del Carmen: need terms not measured in this query set (freediving school, freediving coaching, learn to freedive); Cenote freediving: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Cenote freediving: need terms not measured in this query set (cenote diving); Freediving in Tulum: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving in Tulum: need terms not measured in this query set (freediving school, cenote diving); Freediving in Mexico: offerKey \"OceanicVibes\" is not a supplied offer; using the topic name; Freediving in Mexico: need terms not measured in this query set (freediving school, learn to freedive)."
+  "summary": "US English demand for destination freediving training in Playa del Carmen, Tulum, Bacalar and cenotes. Kept course, private coaching, depth/equalization, breathwork/CO2/pool prep, safety within coaching, and place topics. Excluded equipment, records, media, risk, foreign schools and non-served places. 1 topic pair shared an owning page and were merged. 8 topic corrections: Freediving courses and certification: need terms not measured in this query set (aida 3, learn to freedive, freediving school); Private freediving coaching and one-to-one training: need terms not measured in this query set (private freediving coaching, one-to-one coaching, one-to-one freediving coaching, personal freediving coaching, freediving coaching, freediving coach, freediving teacher, safety protocols, safety diver, buddy); Depth, line and equalization training: need terms not measured in this query set (depth training, freediving depth training, advanced depth, freediving line training, depth coaching, deep freediving, deep equalization, equalization, frenzel, safety protocols up to 30 meters, safety protocols, safety diver); Freediving breathwork, CO2/O2 and physical preparation: need terms not measured in this query set (co2 tables, co2 training, o2 tables, co2/o2 efficiency, breathwork, relaxation, dry training, land training, physical preparation, freediving exercises, freediving workout); Cenote freediving: need terms not measured in this query set (cenote diving); Freediving in Playa del Carmen: need terms not measured in this query set (freediving school, freediving coaching, cenote diving); Freediving in Tulum: need terms not measured in this query set (freediving school, cenote diving); Freediving in Mexico: need terms not measured in this query set (freediving school)."
 }

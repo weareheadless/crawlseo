@@ -163,6 +163,27 @@ export type TopicTaxonomyInput = {
    * treats two impressions as noise.
    */
   brandTerms?: string[];
+  /**
+   * Measured queries the previous map left with no owning topic. The map
+   * computes the list; the model decides whether each is a missing need term,
+   * a split, a missing topic, or off-business. Without this the next proposal
+   * starts blind and repeats the omission.
+   */
+  previousUnmapped?: Array<{ query: string; impressions: number; volume: number | null }>;
+  /**
+   * The taxonomy in use, so a re-proposal is a revision and not a fresh roll.
+   * The model keeps what still owns its demand and changes what the unowned
+   * demand requires; the code never merges old and new by itself.
+   */
+  currentTaxonomy?: Array<{
+    name: string;
+    kind: string;
+    marketScope?: string | null;
+    marketPlaces?: string[];
+    localIntent?: string[];
+    needTerms?: string[];
+    ownerPages?: string[];
+  }>;
 };
 
 export type TopicTaxonomyDb = Pick<PrismaClient, "siteProfile">;
@@ -175,6 +196,15 @@ function normalizeTerm(value: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * A path is a fact. Percent-encoding hex digits are case-insensitive
+ * (RFC 3986), so a model that copies %c3 for %C3 still names the same page.
+ * Nothing else about the path is normalized.
+ */
+export function normalizePathKey(path: string): string {
+  return path.trim().replace(/%[0-9a-f]{2}/gi, (match) => match.toUpperCase());
 }
 
 function termInText(text: string, term: string): boolean {
@@ -537,6 +567,8 @@ const SYSTEM = [
   "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
   "A query may appear in at most two topics, and only when it genuinely serves both.",
   "Every distinct place or need with measured demand must have a topic. Leave out only queries that are off-business or research noise, and say why in the summary. Do not invent a topic to cover noise.",
+  "previousUnmapped lists measured queries that the previous map left with no owning topic. Decide each one: add its missing need term to the topic it belongs to, split a topic, add the topic it needs, or leave it out as off-business and say why in the summary. Never add a term just to claim a query whose intent is different.",
+  "currentTaxonomy is the taxonomy in use. Revise it; do not replace it with a fresh guess. Keep a topic whose cited queries it still owns, change only what the unowned demand requires, and return the complete revised taxonomy.",
   "If audienceMarket is empty, infer the audience from the site, the audience facts and the query mix, and say so in the summary.",
   "Set ownerPages to the one to three real paths from the supplied inventory that should own the topic. The field must be present. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Return an empty list only when the site truly has no page for the topic, and say so in the rationale.",
   "offerKey must be copied exactly from the supplied offer names, or be the topic name when no offer fits. Do not paraphrase an offer name.",
@@ -604,6 +636,10 @@ export async function proposeTopicTaxonomy(
   const omittedQueries = Math.max(0, input.queries.length - sample.length);
   const sampleByKey = new Map(sample.map((query) => [normalizeTerm(query.query), query.query]));
   const baseBrandTerms = [...new Set((input.brandTerms ?? []).map(normalizeTerm).filter(Boolean))];
+  // The previous map's unmapped demand is the cross-run feedback loop. Bound it
+  // to what the model can read and report the count it did not send.
+  const previousUnmappedAll = input.previousUnmapped ?? [];
+  const previousUnmapped = previousUnmappedAll.slice(0, 200);
   const payload = {
     domain: input.domain,
     language: input.language,
@@ -622,6 +658,12 @@ export async function proposeTopicTaxonomy(
     pages: input.pages,
     today: new Date().toISOString().slice(0, 10),
     queries: sample,
+    // Measured demand the previous map could not place. The code lists it; the
+    // model decides why it is unowned.
+    previousUnmapped: previousUnmapped.length > 0
+      ? { count: previousUnmappedAll.length, sent: previousUnmapped.length, queries: previousUnmapped }
+      : null,
+    currentTaxonomy: input.currentTaxonomy ?? [],
   };
 
   const brandKey = input.business.name ?? input.domain.replace(/^www\./, "").split(".")[0];
@@ -686,10 +728,23 @@ export async function proposeTopicTaxonomy(
         rejected.push({ title: name, reason: "no ownerPages field" });
         continue;
       }
-      const ownerPages = ownerField
+      const proposedOwners = ownerField
         .filter((entry): entry is string => typeof entry === "string" && entry.startsWith("/"))
         .filter((path) => !stringList(record.excludePaths, 20).some((excluded) => path.startsWith(excluded.startsWith("/") ? excluded : `/${excluded}`)))
         .slice(0, 3);
+      // An owner must be a real page. A path the model invented reports "no
+      // page covers this topic" for a topic that has one, so it is a contract
+      // rejection, not a coverage fact.
+      const inventory = new Set(input.pages.map((page) => normalizePathKey(page.path)));
+      const ownerPages = proposedOwners.filter((path) => inventory.has(normalizePathKey(path)));
+      if (proposedOwners.length > ownerPages.length) {
+        const unknown = proposedOwners.filter((path) => !inventory.has(normalizePathKey(path)));
+        filled.push(`${name}: owner pages not in the supplied inventory (${unknown.join(", ")})`);
+      }
+      if (proposedOwners.length > 0 && ownerPages.length === 0) {
+        rejected.push({ title: name, reason: "owner pages are not in the supplied inventory" });
+        continue;
+      }
       if (ownerPages.length === 0) filled.push(`${name}: no owner page proposed`);
       const headTerms = stringList(row.headTerms, 10);
 
@@ -759,9 +814,7 @@ export async function proposeTopicTaxonomy(
         continue;
       }
 
-      seen.add(slug);
-      membersBySlug.set(slug, memberQueries);
-      topics.push({
+      const definition: TopicDefinition = {
         slug,
         name: name.slice(0, 160),
         kind: "market",
@@ -784,7 +837,18 @@ export async function proposeTopicTaxonomy(
         ...(ownerPages.length > 0 ? { preferredPages: ownerPages } : {}),
         ...(exclusive ? { exclusive: true } : {}),
         actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
-      });
+      };
+      // The cited evidence must satisfy the topic's own contract. A local
+      // topic whose cited queries name no place is not local, and a need list
+      // that cannot match its own evidence cannot match the market either.
+      // This is arithmetic on the model's own citations, not a guess.
+      if (!memberQueries.some((query) => topicMatchesQuery(definition, query))) {
+        rejected.push({ title: name, reason: "cites no query that matches its own market and need" });
+        continue;
+      }
+      seen.add(slug);
+      membersBySlug.set(slug, memberQueries);
+      topics.push(definition);
     }
 
     // Brand demand is the site's own name. The model must propose the brand

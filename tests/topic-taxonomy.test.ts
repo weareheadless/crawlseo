@@ -161,6 +161,45 @@ describe("taxonomy proposal", () => {
     expect(payload.queries.map((row) => row.query)).toContain("tulum condos for sale");
   });
 
+  it("sends the previous map's unmapped demand to the next proposal", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    await proposeTopicTaxonomy(input({
+      previousUnmapped: [{ query: "lustre artisanal", impressions: 85, volume: null }],
+    }));
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      previousUnmapped: { count: number; sent: number; queries: Array<{ query: string }> } | null;
+    };
+    expect(payload.previousUnmapped?.count).toBe(1);
+    expect(payload.previousUnmapped?.queries[0].query).toBe("lustre artisanal");
+  });
+
+  it("reports how many previous unmapped queries it did not send", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    const previousUnmapped = Array.from({ length: 250 }, (_, index) => ({
+      query: `query ${index}`,
+      impressions: 1,
+      volume: null,
+    }));
+    await proposeTopicTaxonomy(input({ previousUnmapped }));
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      previousUnmapped: { count: number; sent: number };
+    };
+    expect(payload.previousUnmapped.count).toBe(250);
+    expect(payload.previousUnmapped.sent).toBe(200);
+  });
+
+  it("omits previous unmapped demand when there is none", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    await proposeTopicTaxonomy(input());
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      previousUnmapped: unknown;
+    };
+    expect(payload.previousUnmapped).toBeNull();
+  });
+
   it("rejects a topic whose members are not in the supplied sample", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({
@@ -193,15 +232,99 @@ describe("taxonomy proposal", () => {
           intent: "commercial",
           relevance: "medium",
           coverageKind: "product",
-          memberQueries: ["tulum condos for sale"],
+          memberQueries: ["ikuku tulum for sale"],
           ownerPages: ["/tulum-condos"],
         },
       ],
       pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }],
     }));
-    const result = await proposeTopicTaxonomy(input());
+    const result = await proposeTopicTaxonomy(input({
+      queries: [
+        { query: "ikuku tulum for sale", impressions: 3, volume: null },
+        { query: "tulum condos for sale", impressions: 40, volume: 300 },
+      ],
+    }));
     expect(result.taxonomy?.topics).toHaveLength(1);
     expect(result.taxonomy?.topics[0].requireAny.length).toBeGreaterThan(0);
+  });
+
+  it("rejects a local topic whose cited queries name no place", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Restauration de sièges en Normandie",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Normandie"],
+          localIntent: [],
+          needTerms: ["restauration de sièges", "tapissier"],
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "service",
+          memberQueries: ["restauration de sièges", "tapissier"],
+          ownerPages: ["/tapisserie-restauration"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input({
+      queries: [
+        { query: "restauration de sièges", impressions: 30, volume: 900 },
+        { query: "tapissier", impressions: 10, volume: 200 },
+      ],
+      pages: [{ path: "/tapisserie-restauration", title: "Tapisserie", h1: "Tapisserie", wordCount: 600 }],
+    }));
+    // The evidence does not name the place the topic claims. The model must
+    // widen the scope or cite queries that support it; the code does not
+    // silently drop the place or the need.
+    expect(result.taxonomy).toBeNull();
+    expect(result.rejected.some((row) => /matches its own market and need/.test(row.reason))).toBe(true);
+  });
+
+  it("rejects an owner page that is not in the supplied inventory", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Tulum condos",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: [],
+          needTerms: ["condos"],
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          memberQueries: ["tulum condos for sale"],
+          ownerPages: ["/invented-page"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input());
+    expect(result.taxonomy).toBeNull();
+    expect(result.rejected.some((row) => /not in the supplied inventory/.test(row.reason))).toBe(true);
+  });
+
+  it("sends the current taxonomy so a pass revises instead of re-rolling", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    await proposeTopicTaxonomy(input({
+      currentTaxonomy: [
+        {
+          name: "Tulum condos",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: [],
+          needTerms: ["condos"],
+          ownerPages: ["/tulum-condos"],
+        },
+      ],
+    }));
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      currentTaxonomy: Array<{ name: string }>;
+    };
+    expect(payload.currentTaxonomy[0].name).toBe("Tulum condos");
   });
 
   it("does not derive need terms when the model omits them", async () => {
@@ -585,6 +708,7 @@ describe("taxonomy proposal", () => {
         { query: "propiedades en playa del carmen", impressions: 10, volume: 500 },
         { query: "playa del carmen", impressions: 5, volume: 200 },
       ],
+      pages: [{ path: "/cities/playa-del-carmen", title: "Playa", h1: "Playa", wordCount: 600 }],
     }));
     expect(result.error).toBeNull();
     expect(mocks.chatJson).toHaveBeenCalledTimes(2);
@@ -651,7 +775,10 @@ describe("taxonomy proposal", () => {
         { query: "freediving course", impressions: 0, volume: 1_300 },
         { query: "ocean school", impressions: 2, volume: 10 },
       ],
-      pages: [{ path: "/course", title: "Freediving course", h1: "Freediving course", wordCount: 800 }],
+      pages: [
+        { path: "/", title: "Ocean School", h1: "Ocean School", wordCount: 500 },
+        { path: "/course", title: "Freediving course", h1: "Freediving course", wordCount: 800 },
+      ],
       brandTerms: ["ocean school"],
     }));
     const brand = result.taxonomy?.topics.find((entry) => isBrandTopic(entry));

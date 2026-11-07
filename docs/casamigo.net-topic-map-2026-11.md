@@ -1,6 +1,6 @@
 # Topic map — casamigo.net — 2026-11
 
-Generated 2026-11-07T20:45:04.559Z. Locale en/US.
+Generated 2026-11-07T22:50:38.166Z. Locale en/US.
 
 ## Business
 
@@ -29,9 +29,9 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Seven local clusters, all high-relevance/strong-coverage. Demand is uneven: Tulum projects 534k, Riviera advisory 8k, listings 7.2k; Playa 220, AI 20, Puerto Morelos 0, brand 0. Query sets mix project/brand names and off-topic 'near me' services; the unmapped list is mostly generic/CDMX property terms outside the service area.
+Seven clusters, all high-relevance and local to Riviera Maya. Coverage is strong; contextOnly is zero everywhere. Demand concentrates in Tulum project/condo terms and Riviera Maya advisory/listings; Playa del Carmen, AI intelligence, Puerto Morelos and brand are low/zero volume. Tulum mixes real-estate project names with unrelated casas de cambio/empeños; AI lacks a service/category page.
 
-Prioritise core transactional listings and advisory pages, then Tulum project pages and the Casamigo brand page. Tulum demand is mostly named projects (Tao, Samsara), so validate each before scaling. Consolidate Playa del Carmen queries into the listings cluster unless a dedicated page earns impressions. The AI cluster needs a service/category page and a small test; Puerto Morelos presale needs one page/test. Do not chase casas de cambio/empeño or unmapped CDMX/Guadalajara demand.
+Prioritize Riviera Maya property listings, advisory/lead gen and Tulum condo/project market: strongest commercial demand and local fit. Keep Casamigo brand page; improve 'casa migo'/'casamigo residence' rankings. Playa del Carmen, AI intelligence and Puerto Morelos are weak but relevant: test a localized Playa condo page, an AI service page (flagged gap), and one Puerto Morelos presale landing. Clean Tulum: project names need real-estate need words; casas de cambio/empeños are wrong-need contamination. Named queries are in market; unmapped CDMX/Guadalajara terms are off-area.
 
 Priority topics: riviera-maya-property-listings, riviera-maya-real-estate-advisory-and-lead-generation, tulum-real-estate-market-and-condo-projects, casamigo.
 Weak topics: riviera-maya-ai-real-estate-market-intelligence, puerto-morelos-presale-condos-and-market-intelligence, playa-del-carmen-real-estate-market-and-condo-listings.

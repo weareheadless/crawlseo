@@ -15,6 +15,7 @@ import {
 } from "@/lib/site/market-scope";
 import {
   isBrandTopic,
+  normalizePathKey,
   placeMatches,
   stabilizeTopicTaxonomy,
   topicMatchesQuery,
@@ -331,7 +332,10 @@ function pageAllowed(page: TopicCoveragePage, kind: TopicDefinition["coverageKin
 function ownerCoveragePage(pages: TopicPage[], topic: TopicDefinition): TopicPage | null {
   const owner = topic.preferredPages?.[0];
   if (!owner) return null;
-  return pages.find((page) => page.path === owner || page.url.endsWith(owner)) ?? null;
+  // Percent-encoding hex case is not a different page; a model that copies
+  // %c3 for %C3 still named the page it read in the inventory.
+  const target = normalizePathKey(owner);
+  return pages.find((page) => normalizePathKey(page.path) === target || normalizePathKey(page.url).endsWith(target)) ?? null;
 }
 
 function coverageLevel(owner: TopicPage | null, topic: TopicDefinition): TopicCluster["coverage"] {

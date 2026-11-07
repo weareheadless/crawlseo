@@ -1,6 +1,6 @@
 # Topic map — oceanicvibes.com — 2026-11
 
-Generated 2026-11-07T20:45:04.523Z. Locale en/US.
+Generated 2026-11-07T22:16:14.471Z. Locale en/US.
 
 ## Business
 
@@ -12,17 +12,15 @@ Generated 2026-11-07T20:45:04.523Z. Locale en/US.
 
 ## Tenant model
 
-- Topics: 10
-  - `oceanicvibes` — OceanicVibes (mixed, brand, high); 3 matching terms
-  - `freediving-courses-and-certification` — Freediving courses and certification (commercial, service, high); 17 matching terms; head terms `freediving course`, `freediving courses`
-  - `private-freediving-coaching` — Private freediving coaching (commercial, service, high); 10 matching terms; head terms `freediving training`, `freediving coaching`
-  - `depth-and-line-training` — Depth and line training (commercial, service, high); 7 matching terms; head terms `depth training`, `line training`
-  - `freediving-breathwork-and-co2-o2-training` — Freediving breathwork and CO2/O2 training (mixed, service, high); 10 matching terms; head term `breathwork`
-  - `freediving-physical-preparation-and-pool-training` — Freediving physical preparation and pool training (informational, service, medium); 8 matching terms; head term `freediving pool training`
-  - `freediving-safety-and-safety-protocols` — Freediving safety and safety protocols (informational, content, high); 9 matching terms; head term `freediving safety`
-  - `cenote-freediving` — Cenote freediving (commercial, local, high); 5 matching terms
-  - `freediving-in-tulum` — Freediving in Tulum (local, local, medium); 5 matching terms
-  - `freediving-in-mexico` — Freediving in Mexico (mixed, local, medium); 6 matching terms
+- Topics: 8
+  - `oceanicvibes` — OceanicVibes (commercial, brand, high); 3 matching terms; head terms `oceanicvibes`, `oceanvibes`, `ocean vibes`
+  - `freediving-courses-and-certification` — Freediving courses and certification (transactional, service, high); 21 matching terms; head terms `freediving course`, `freediving courses`, `freediving certification`, `aida 3`, `freediving playa del carmen`, `playa del carmen freediving`
+  - `private-freediving-coaching-and-one-to-one-training` — Private freediving coaching and one-to-one training (commercial, service, high); 15 matching terms; head terms `freediving training`, `freediving coaching`
+  - `depth-line-and-equalization-training` — Depth, line and equalization training (commercial, service, high); 14 matching terms; head terms `line training`, `depth training`
+  - `freediving-breathwork-co2-o2-and-physical-preparation` — Freediving breathwork, CO2/O2 and physical preparation (mixed, service, high); 19 matching terms; head terms `breath training`, `breath hold training`, `apnea training`, `pool training`, `freediving pool training`
+  - `cenote-freediving` — Cenote freediving (local, local, high); 5 matching terms; head terms `cenote freediving`, `cenotes freediving`
+  - `freediving-in-tulum` — Freediving in Tulum (local, local, high); 5 matching terms; head terms `freediving tulum`, `tulum freediving`
+  - `freediving-in-mexico` — Freediving in Mexico (local, local, medium); 5 matching terms; head terms `freediving mexico`, `mexico freediving`
 
 ## Method
 
@@ -32,40 +30,39 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-11 local clusters: courses/certification, brand, breathwork/CO2-O2, safety, physical/pool, private coaching, depth/line, cenote, Tulum, Mexico. Demand concentrates in courses/certification (47k) and brand (1.3k), but course queries are record-interest and brand queries are near-miss. Breathwork 400, safety 140, physical 40; core service/location clusters have 0 measured demand.
+8 local clusters. Private coaching (2,130) and depth/line/equalization (1,610) are the strongest commercial fits. Courses/certification shows 44,400 demand, but the supplied queries are mostly record/world-record intent, not courses. Tulum (470) and breathwork (440) fit the service area; brand has 1,300 demand but weak positions. Mexico (50) and cenote (30) are low-demand; Dahab is out of area.
 
-Don't count the 47k courses cluster as course demand: listed queries are all 'freediving record' interest. Split records into an informational article or drop it; build course/certification pages for the service. Breathwork/CO2-O2 is the cleanest priority (400). Safety needs a blog/FAQ; physical/pool needs a service page. Brand must earn exact OceanicVibes, not 'ocean vibes' (66/83). Private, depth/line, cenote and Tulum show 0 demand: keep as business knowledge and test one private and one cenote/Tulum page. Mexico is broader than service area; keep off-area until narrowed.
+Prioritize private coaching, depth/line/equalization and Tulum, with breathwork as a supporting cluster. Courses/certification is core but the query set is record/world-record intent—split that from course/certification and retarget before building. Brand is complete, but positions 66/83 mean the page is not earning 'oceanvibes'/'ocean vibes'; fix name consistency. Cenote freediving is low demand but relevant: test Cenote Azul/Bacalar/Tulum cenote pages. Freediving in Mexico is country-level and exceeds the local service area; keep it regional, not a local target. Dahab is out of market.
 
-Priority topics: freediving-breathwork-and-co2-o2-training, freediving-safety-and-safety-protocols, freediving-physical-preparation-and-pool-training, freediving-courses-and-certification, oceanicvibes.
-Weak topics: private-freediving-coaching, depth-and-line-training, cenote-freediving, freediving-in-tulum.
+Priority topics: private-freediving-coaching-and-one-to-one-training, depth-line-and-equalization-training, freediving-in-tulum, freediving-breathwork-co2-o2-and-physical-preparation, freediving-courses-and-certification.
+Weak topics: cenote-freediving, freediving-in-mexico.
+Out-of-market queries excluded from demand and evidence: 4.
 
 ## Topic table
 
 | Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |
 |---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
-| OceanicVibes | mixed | high | local · default | 2 | 4 | 1300 | 2600 | — | strong | proven | / | — |
-| Freediving courses and certification | commercial | high | local · default | 72 | 0 | 47180 | 55580 | — | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
-| Private freediving coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Depth and line training | commercial | high | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Freediving breathwork and CO2/O2 training | mixed | high | local · default | 7 | 0 | 400 | 400 | — | strong | unproven | /blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t | — |
-| Freediving safety and safety protocols | informational | high | local · default | 2 | 0 | 140 | 140 | — | strong | unproven | / | Coverage exists, but there is no article or blog page for this topic. |
-| Cenote freediving | commercial | high | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | /blog/cenote-or-ocean-first-freediving-course | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Freediving physical preparation and pool training | informational | medium | local · default | 2 | 0 | 40 | 40 | — | strong | unproven | / | Coverage exists, but there is no service or category page for this topic. |
-| Freediving in Tulum | local | medium | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | / | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Freediving in Mexico | mixed | medium | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | / | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| OceanicVibes | commercial | high | local · default | 2 | 4 | 1300 | 2600 | — | strong | proven | / | — |
+| Freediving courses and certification | transactional | high | local · default | 65 | 0 | 44400 | 52800 | — | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
+| Private freediving coaching and one-to-one training | commercial | high | local · default | 14 | 0 | 2120 | 2120 | — | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
+| Depth, line and equalization training | commercial | high | local · default | 2 | 0 | 1610 | 1610 | — | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-that-s-normal | — |
+| Freediving breathwork, CO2/O2 and physical preparation | mixed | high | local · default | 9 | 0 | 440 | 440 | — | strong | unproven | /blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t | — |
+| Cenote freediving | local | high | local · default | 1 | 0 | 30 | 30 | — | strong | unproven | /blog/cenote-or-ocean-first-freediving-course | — |
+| Freediving in Tulum | local | high | local · default | 4 | 0 | 470 | 470 | — | strong | unproven | / | — |
+| Freediving in Mexico | local | medium | local · default | 0 | 0 | 0 | 0 | — | strong | unproven | / | — |
 
 ## Clusters
 
 ### OceanicVibes
 
 - Slug: `oceanicvibes`
-- Intent: mixed; relevance: high; confidence: 1.00
+- Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Only two measured searches, both the business name spelled closed or open; the home page is the single page that can own it.
+- Rationale: Brand queries exist; home is the only brand owner.
 - Demand: 2 queries, 4 impressions, 0 clicks, 1300 distinct monthly demand (2600 summed across keyword variants); average position 74.5.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 2 measured questions, 0 citations of the site.
-- Action hint: Keep the exact brand name in the home title, H1 and schema so both spellings resolve there.
+- Action hint: Keep the brand name consistent in title tags and schema.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -81,13 +78,13 @@ Owner page:
 ### Freediving courses and certification
 
 - Slug: `freediving-courses-and-certification`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Intent: transactional; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: AIDA 3 is the certification sold; buyers search course and certification words without naming a town, so the scope is international. Merged with Freediving in Playa del Carmen: the same page owns both topics.
-- Demand: 72 queries, 0 impressions, 0 clicks, 47180 distinct monthly demand (55580 summed across keyword variants); average position unknown.
+- Rationale: Course and certification demand is broad and agency-led; the local course guide can own it with home. Merged with Freediving in Playa del Carmen: the same page owns both topics.
+- Demand: 65 queries, 0 impressions, 0 clicks, 44400 distinct monthly demand (52800 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 3 measured questions, 0 citations of the site.
-- Action hint: Build an AIDA 3 course page with prerequisites, depth outcomes, price, dates and booking.
+- Action hint: Add a course/certification page and link the local course guide.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -102,11 +99,11 @@ Owner page:
 | freediving world record | 0 | 0 | — | 2900 | 1 |
 | world record for freediving | 0 | 0 | — | 2900 | 0 |
 | freediving in florida | 0 | 0 | — | 1600 | 10 |
-| freediving deep | 0 | 0 | — | 1600 | 12 |
 | fins for freediving | 0 | 0 | — | 1600 | 0 |
 | freediving fins | 0 | 0 | — | 1600 | 0 |
 | freediving course | 0 | 0 | — | 1300 | 0 |
-| … 57 more | | | | | |
+| padi freediving course | 0 | 0 | — | 1300 | 13 |
+| … 50 more | | | | | |
 
 Owner page:
 
@@ -114,16 +111,39 @@ Owner page:
 |---|---|---:|
 | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | other | 946 |
 
-### Private freediving coaching
+### Private freediving coaching and one-to-one training
 
-- Slug: `private-freediving-coaching`
-- Intent: commercial; relevance: high; confidence: 0.50
+- Slug: `private-freediving-coaching-and-one-to-one-training`
+- Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: One-to-one coaching is the core differentiator; 'freediving training' and 'training for freediving' are the searches that express it.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Rationale: Training and coaching queries fit the one-to-one offer; teacher-fit post plus home own it.
+- Demand: 14 queries, 0 impressions, 0 clicks, 2120 distinct monthly demand (2120 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Publish a private coaching page contrasting it with group courses and linking to booking.
+- AEO: 3 measured questions, 0 citations of the site.
+- Action hint: Create a private coaching page; link teacher-fit and plateau posts.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| freediving training | 0 | 0 | — | 590 | 8 |
+| training freediving | 0 | 0 | — | 590 | 8 |
+| training for freediving | 0 | 0 | — | 590 | 8 |
+| freediving training course | 0 | 0 | — | 90 | 0 |
+| breath hold training freediving | 0 | 0 | — | 70 | — |
+| breath training for freediving | 0 | 0 | — | 40 | 0 |
+| freediving training near me | 0 | 0 | — | 40 | 6 |
+| freediving training pool | 0 | 0 | — | 30 | 0 |
+| freediving training in pool | 0 | 0 | — | 30 | 0 |
+| line training freediving | 0 | 0 | — | 10 | — |
+| best freediving training app | 0 | 0 | — | 10 | — |
+| freediving training program | 0 | 0 | — | 10 | — |
+| freediving training app | 0 | 0 | — | 10 | 49 |
+| freediving training for beginners | 0 | 0 | — | 10 | — |
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| freediving training center dahab | 0 | Dahab is in Egypt, outside Playa del Carmen/service area. |
 
 Owner page:
 
@@ -131,41 +151,38 @@ Owner page:
 |---|---|---:|
 | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | other | 682 |
 
-Gaps:
+### Depth, line and equalization training
 
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
-
-### Depth and line training
-
-- Slug: `depth-and-line-training`
-- Intent: commercial; relevance: high; confidence: 0.50
+- Slug: `depth-line-and-equalization-training`
+- Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Depth Training, Advanced Depth and Line training are sold as one progression on the line; demand shows only in 'line training freediving' and 'freediving deep'.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Rationale: Line, depth and equalization demand is distinct; plateau and Frenzel posts own it with home.
+- Demand: 2 queries, 0 impressions, 0 clicks, 1610 distinct monthly demand (1610 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add a depth and line training page with the 10-30 m progression, session format and safety.
+- Action hint: Create a depth/line/equalization service page; link plateau and Frenzel posts.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| freediving deep | 0 | 0 | — | 1600 | 12 |
+| line training freediving | 0 | 0 | — | 10 | — |
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
-| /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | other | 793 |
+| /blog/why-your-freediving-progress-has-plateaued-and-why-that-s-normal | other | 619 |
 
-Gaps:
+### Freediving breathwork, CO2/O2 and physical preparation
 
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
-
-### Freediving breathwork and CO2/O2 training
-
-- Slug: `freediving-breathwork-and-co2-o2-training`
+- Slug: `freediving-breathwork-co2-o2-and-physical-preparation`
 - Intent: mixed; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Breathwork, relaxation and CO2/O2 efficiency are one sold skill set and the best-measured service need in the query set.
-- Demand: 7 queries, 0 impressions, 0 clicks, 400 distinct monthly demand (400 summed across keyword variants); average position unknown.
+- Rationale: Breath, CO2/O2 and pool prep share the land-practice post and home; merged to avoid duplicate owners.
+- Demand: 9 queries, 0 impressions, 0 clicks, 440 distinct monthly demand (440 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Create a breathwork and CO2 table coaching page with a downloadable table and booking.
+- Action hint: Create a breathwork and pool-prep page; link the land-practice post.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -176,73 +193,6 @@ Gaps:
 | breath training for freediving | 0 | 0 | — | 40 | 0 |
 | freediving breathing training | 0 | 0 | — | 40 | 0 |
 | freediving breath training | 0 | 0 | — | 40 | 0 |
-
-Owner page:
-
-| Page | Type | Words |
-|---|---|---:|
-| /blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t | other | 832 |
-
-### Freediving safety and safety protocols
-
-- Slug: `freediving-safety-and-safety-protocols`
-- Intent: informational; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: Safety protocols to 30 m are a sold service and the audience's top concern; only two danger queries measure it today.
-- Demand: 2 queries, 0 impressions, 0 clicks, 140 distinct monthly demand (140 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Write a safety protocol page: buddy roles, 30 m limits, rescue drills and waivers.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| freediving deaths | 0 | 0 | — | 90 | 0 |
-| is freediving dangerous | 0 | 0 | — | 50 | 0 |
-
-Owner page:
-
-| Page | Type | Words |
-|---|---|---:|
-| / | home | 270 |
-
-Gaps:
-
-- Coverage exists, but there is no article or blog page for this topic.
-
-### Cenote freediving
-
-- Slug: `cenote-freediving`
-- Intent: commercial; relevance: high; confidence: 0.50
-- Market scope: local · default
-- Rationale: Cenotes are the signature training environment and the site already compares cenote with ocean; four cenote queries measure it.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add a cenote freediving page listing the cenotes used, depths, access and rules.
-
-Owner page:
-
-| Page | Type | Words |
-|---|---|---:|
-| /blog/cenote-or-ocean-first-freediving-course | other | 898 |
-
-Gaps:
-
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
-
-### Freediving physical preparation and pool training
-
-- Slug: `freediving-physical-preparation-and-pool-training`
-- Intent: informational; relevance: medium; confidence: 0.90
-- Market scope: local · default
-- Rationale: Physical preparation is sold as dry and pool work; four pool-training queries measure the need. The site has no dedicated page yet.
-- Demand: 2 queries, 0 impressions, 0 clicks, 40 distinct monthly demand (40 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add a dry and pool training page with weekly drills for certified freedivers.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
 | freediving pool training | 0 | 0 | — | 30 | 0 |
 | freediving pool training exercises | 0 | 0 | — | 10 | — |
 
@@ -250,53 +200,77 @@ Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
-| / | home | 270 |
+| /blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t | other | 832 |
 
-Gaps:
+### Cenote freediving
 
-- Coverage exists, but there is no service or category page for this topic.
+- Slug: `cenote-freediving`
+- Intent: local; relevance: high; confidence: 0.87
+- Market scope: local · default
+- Rationale: Cenote freediving is a distinct local need; the cenote-vs-ocean post and home own it.
+- Demand: 1 queries, 0 impressions, 0 clicks, 30 distinct monthly demand (30 summed across keyword variants); average position unknown.
+- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Create a cenote freediving landing page; link the cenote-vs-ocean post.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| cenote freediving tulum | 0 | 0 | — | 30 | 0 |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /blog/cenote-or-ocean-first-freediving-course | other | 898 |
 
 ### Freediving in Tulum
 
 - Slug: `freediving-in-tulum`
-- Intent: local; relevance: medium; confidence: 0.50
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Tulum sits inside the service area and is searched separately from Playa del Carmen; three queries name it.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Rationale: Tulum queries name a separate destination; no Tulum page exists, so home owns it.
+- Demand: 4 queries, 0 impressions, 0 clicks, 470 distinct monthly demand (470 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add a Tulum page covering travel time from Playa del Carmen and cenote sessions.
+- Action hint: Create a Tulum freediving page targeting Tulum and cenote queries.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| freediving course near me | 0 | 0 | — | 390 | 5 |
+| tulum freediving | 0 | 0 | — | 30 | 0 |
+| freediving tulum | 0 | 0 | — | 30 | 0 |
+| padi freediving course near me | 0 | 0 | — | 20 | 0 |
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
 | / | home | 270 |
-
-Gaps:
-
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
 
 ### Freediving in Mexico
 
 - Slug: `freediving-in-mexico`
-- Intent: mixed; relevance: medium; confidence: 0.50
+- Intent: local; relevance: medium; confidence: 0.93
 - Market scope: local · default
-- Rationale: Country-level searches exist apart from the town ones and Mexico is the national frame for the Yucatan service area.
+- Rationale: Country-level Mexico demand is broad; home is the only national owner.
 - Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add a Mexico freediving page linking the Playa del Carmen, Tulum and Bacalar options.
+- Action hint: Create a Mexico destination page; home only broadly covers Yucatan.
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| freediving mexico | 0 | Mexico is broader than the local service area; offer is Playa/Tulum/cenotes. |
+| mexico freediving | 0 | Mexico is broader than the local service area; offer is Playa/Tulum/cenotes. |
+| freediving course mexico | 0 | Mexico is broader than the local service area; offer is Playa/Tulum/cenotes. |
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
 | / | home | 270 |
-
-Gaps:
-
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
 
 ## Unmapped demand
 
