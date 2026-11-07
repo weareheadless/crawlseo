@@ -1,6 +1,6 @@
 # Topic map — oceanicvibes.com — 2026-11
 
-Generated 2026-11-06T23:21:32.650Z. Locale en/US.
+Generated 2026-11-06T23:44:36.817Z. Locale en/US.
 
 ## Business
 
@@ -27,7 +27,15 @@ Deterministic taxonomy over stored Search Console queries, DataForSEO keyword me
 
 A query can belong to more than one topic (a local service query, or a content query that names the craft). Demand totals are per-topic and are not additive across topics.
 
-AI review: not available. The deterministic map is shown as-is.
+AI review: deepseek/deepseek-v4.1-flash-1017.
+
+Seven local clusters, 33 mapped queries. Demand is concentrated in brand/Playa (13.4k), AIDA 3/course selection (3.5k) and depth/line training (2.4k); cenotes is a smaller but tightly aligned local niche. Private coaching, breathwork and deep equalization have low/no measured demand. Several course/training queries name Florida, San Diego or Dahab and are out of market.
+
+Prioritize the brand/Playa del Carmen page first: coverage is partial, there is no brand page, and broad freediving demand is large. Then build the AIDA 3/course-selection and depth/line-training pages, using AIDA 3, 30m safety, line work and equalization as proof. The cenotes cluster is lower-volume but strongly local and should target Tulum/Yucatán cenote intent. Ignore Florida, San Diego and Dahab queries for SEO pages; PADI/SSI/app queries are comparison/FAQ only. Private coaching, breathwork and deep equalization are weak by measured demand: validate them with small FAQ/coaching pages or bundle equalization and breathwork into depth-training content, not as primary pages.
+
+Priority topics: oceanicvibes-brand-and-playa-del-carmen-freediving, aida-3-and-freediving-course-selection-in-playa-del-carmen, depth-training-advanced-depth-and-line-training-with-30m-saf, freediving-in-the-cenotes-of-yucatan.
+Weak topics: private-one-to-one-freediving-coaching, breathwork-relaxation-co-o-efficiency-and-physical-preparati, deep-equalization-coaching.
+Out-of-market queries excluded from demand and evidence: 5.
 
 ## Topic table
 
@@ -35,8 +43,8 @@ AI review: not available. The deterministic map is shown as-is.
 |---|---|---|---|---:|---:|---:|---:|---|---|---|---|
 | OceanicVibes brand and Playa del Carmen freediving | mixed | high | local · default | 4 | 4 | 13420 | 14720 | partial | proven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | Coverage exists, but there is no brand page for this topic. |
 | Private one-to-one freediving coaching | commercial | high | local · default | 2 | 0 | 20 | 20 | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
-| AIDA 3 and freediving course selection in Playa del Carmen | commercial | high | local · default | 23 | 0 | 3490 | 6090 | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
-| Depth training, advanced depth and line training with 30m safety | commercial | high | local · default | 11 | 0 | 2430 | 2430 | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | — |
+| AIDA 3 and freediving course selection in Playa del Carmen | commercial | high | local · default | 19 | 0 | 3290 | 5890 | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
+| Depth training, advanced depth and line training with 30m safety | commercial | high | local · default | 10 | 0 | 2420 | 2420 | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | — |
 | Deep equalization coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | strong | unproven | /blog/frenzel-works-on-land-not-underwater-what-to-do-when-equalization-stalls-on-the-depth-line-and-wheth | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
 | Breathwork, relaxation, CO₂/O₂ efficiency and physical preparation | commercial | high | local · default | 1 | 0 | 20 | 20 | strong | unproven | /blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t | — |
 | Freediving in the cenotes of Yucatán | local | high | local · default | 6 | 0 | 180 | 180 | strong | unproven | /blog/cenote-or-ocean-first-freediving-course | — |
@@ -105,7 +113,7 @@ Coverage pages:
 - Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
 - Rationale: The local course-choice guide is the closest owner for AIDA 3 and certification-course searches.
-- Demand: 23 queries, 0 impressions, 0 clicks, 3490 distinct monthly demand (6090 summed across keyword variants); average position unknown.
+- Demand: 19 queries, 0 impressions, 0 clicks, 3290 distinct monthly demand (5890 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Add AIDA 3 prerequisites, outcomes and course comparison details to the guide.
@@ -117,17 +125,26 @@ Coverage pages:
 | freediving courses | 0 | 0 | — | 1300 | 0 |
 | padi freediving courses | 0 | 0 | — | 1300 | 11 |
 | freediving course near me | 0 | 0 | — | 390 | 5 |
-| florida freediving course | 0 | 0 | — | 50 | 0 |
-| san diego freediving course | 0 | 0 | — | 50 | 0 |
-| freediving course san diego | 0 | 0 | — | 50 | 0 |
-| freediving course florida | 0 | 0 | — | 50 | 0 |
 | ssi freediving course | 0 | 0 | — | 40 | 4 |
 | freediving course los angeles | 0 | 0 | — | 30 | 0 |
 | freediving course oahu | 0 | 0 | — | 30 | 0 |
 | freediving course sydney | 0 | 0 | — | 30 | 0 |
 | aida freediving course | 0 | 0 | — | 30 | 3 |
 | freediving course for beginners | 0 | 0 | — | 20 | — |
-| … 8 more | | | | | |
+| level 1 freediving course | 0 | 0 | — | 20 | — |
+| freediving course miami | 0 | 0 | — | 20 | 0 |
+| padi freediving course near me | 0 | 0 | — | 20 | 0 |
+| miami freediving course | 0 | 0 | — | 20 | 0 |
+| … 4 more | | | | | |
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| florida freediving course | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| san diego freediving course | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| freediving course san diego | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| freediving course florida | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
 
 Coverage pages:
 
@@ -144,7 +161,7 @@ Coverage pages:
 - Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
 - Rationale: The plateau article addresses depth barriers and progression, the core of advanced depth and line training.
-- Demand: 11 queries, 0 impressions, 0 clicks, 2430 distinct monthly demand (2430 summed across keyword variants); average position unknown.
+- Demand: 10 queries, 0 impressions, 0 clicks, 2420 distinct monthly demand (2420 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Add a depth-training syllabus, line drills and 30m safety protocol section to this article.
@@ -157,11 +174,16 @@ Coverage pages:
 | freediving training near me | 0 | 0 | — | 40 | 6 |
 | freediving training pool | 0 | 0 | — | 30 | 0 |
 | freediving training in pool | 0 | 0 | — | 30 | 0 |
-| freediving training center dahab | 0 | 0 | — | 10 | — |
 | best freediving training app | 0 | 0 | — | 10 | — |
 | freediving training program | 0 | 0 | — | 10 | — |
 | freediving training app | 0 | 0 | — | 10 | 49 |
 | freediving training for beginners | 0 | 0 | — | 10 | — |
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| freediving training center dahab | 0 | Dahab, Egypt is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
 
 Coverage pages:
 

@@ -210,6 +210,7 @@ const SYSTEM = [
   "Write in the business's language, given in locale.language. Do not mix languages in one board.",
   "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, and the evidence rows the map cites.",
   "Decide for each cluster whether there is work worth proposing. It is correct to propose nothing for a cluster: say why in the batch summary.",
+  "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
   "Respect the market scope. A local offer is limited to the business location and service area; a national or international offer is not. Queries listed under outOfMarket are already excluded: never build a proposal on them.",

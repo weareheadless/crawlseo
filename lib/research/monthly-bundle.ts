@@ -907,10 +907,29 @@ export async function buildBundlePlan(input: {
 
   const keywordSelection = selectQueriesForBundle(orderedQueries, measuredKeywordSet, caps.keywordQueries);
   const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => topic.coverageKind === "brand") : [];
+  // The map's review has already decided which queries are outside the service
+  // area (Florida and San Diego for a Playa del Carmen school). A paid SERP for
+  // those teaches nothing the owner can act on.
+  const mapRun = await db.researchRun.findFirst({
+    where: { siteId: site.id, idempotencyKey: `topic-map:${site.id}:${input.month}` },
+    select: { report: true },
+  });
+  const mapReport = asRecord(asRecord(mapRun?.report).map);
+  const excludedByReview = new Set<string>();
+  for (const cluster of Array.isArray(mapReport.clusters) ? mapReport.clusters : []) {
+    const excluded = asRecord(cluster).excludedQueries;
+    for (const row of Array.isArray(excluded) ? excluded : []) {
+      const query = stringValue(asRecord(row).query);
+      if (query) excludedByReview.add(normalizePhrase(query));
+    }
+  }
   // Off-topic queries do not fill the SERP cap: a snapshot of "freediving
   // record" is paid-for research noise, not market intelligence. The fallback
   // keeps a brand-new site from buying nothing.
-  const serpCandidates = inMarket.length > 0 ? inMarket : orderedQueries;
+  const inMarketForSerp = (inMarket.length > 0 ? inMarket : orderedQueries).filter(
+    (query) => !excludedByReview.has(normalizePhrase(query))
+  );
+  const serpCandidates = inMarketForSerp.length > 0 ? inMarketForSerp : inMarket.length > 0 ? inMarket : orderedQueries;
   const serpSelection = selectSerpQueries({
     ranked: serpCandidates,
     measured: measuredSerpSet,
