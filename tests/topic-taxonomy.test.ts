@@ -8,9 +8,11 @@ vi.mock("@/lib/ai-seo/writer", () => ({
 vi.mock("@/lib/ai/chat", () => ({ chatJson: mocks.chatJson }));
 
 import {
+  brandTermMatches,
   loadTopicTaxonomy,
   parseTopicTaxonomy,
   proposeTopicTaxonomy,
+  queryMatchesTopics,
   saveTopicTaxonomy,
   stabilizeTopicTaxonomy,
   validateTopic,
@@ -344,5 +346,68 @@ describe("taxonomy stabilization", () => {
   it("does not claim a generic modifier that is not the market head", () => {
     const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
     expect(result.headTerms.map((entry) => entry.term)).not.toContain("course");
+  });
+
+  it("matches the site's own name even when the model split it in two", () => {
+    const brand = definition({
+      slug: "oceanicvibes-brand",
+      name: "OceanicVibes brand",
+      coverageKind: "brand",
+      requireAny: ["ocean vibes", "oceanvibes", "ocean"],
+      terms: ["ocean vibes", "oceanvibes", "freediving"],
+      strongTerms: ["ocean vibes"],
+      preferredPages: ["/"],
+      exclusive: true,
+    });
+    const result = stabilizeTopicTaxonomy({
+      topics: [brand],
+      queries: [
+        { query: "ocean vibes", impressions: 2, volume: 1300 },
+        { query: "oceanvibes", impressions: 2, volume: 1300 },
+      ],
+      pageTexts: [],
+      brandKey: "oceanicvibes",
+    });
+    const kept = result.topics[0];
+    expect(kept.requireAny).toContain("oceanicvibes");
+    expect(kept.requireAny).not.toContain("ocean");
+    expect(queryMatchesTopics([kept], "Is OceanicVibes trustworthy")).toBe(true);
+  });
+
+  it("recognises word-order and spacing variants of a multi-word brand", () => {
+    expect(brandTermMatches("harmonie atelier", "atelier-harmonie")).toBe(true);
+    expect(brandTermMatches("l'atelier by harmonie", "atelier-harmonie")).toBe(true);
+    expect(brandTermMatches("atelier harmonie", "atelier-harmonie")).toBe(true);
+    expect(brandTermMatches("harmonie boutique", "atelier-harmonie")).toBe(false);
+    expect(brandTermMatches("l'harmonie", "atelier-harmonie")).toBe(false);
+    expect(brandTermMatches("casa migo", "casamigo")).toBe(true);
+    expect(brandTermMatches("casas", "casamigo")).toBe(false);
+  });
+
+  it("keeps generic words out of an exclusive brand topic", () => {
+    const brand = definition({
+      slug: "casamigo-brand",
+      name: "Casamigo brand",
+      coverageKind: "brand",
+      requireAny: ["casa migo", "casamigo homes", "casa", "migo", "casamigo"],
+      terms: ["casa migo", "casamigo", "casa", "migo"],
+      strongTerms: ["casamigo"],
+      preferredPages: ["/"],
+      exclusive: true,
+    });
+    const result = stabilizeTopicTaxonomy({
+      topics: [brand],
+      queries: [
+        { query: "casa migo", impressions: 3, volume: 10 },
+        { query: "casamigo homes", impressions: 1, volume: 5 },
+        { query: "casas", impressions: 0, volume: 550000 },
+      ],
+      pageTexts: [],
+    });
+    const kept = result.topics[0];
+    expect(kept.requireAny).not.toContain("casa");
+    expect(kept.requireAny).not.toContain("migo");
+    expect(queryMatchesTopics([kept], "casa migo")).toBe(true);
+    expect(queryMatchesTopics([kept], "casas")).toBe(false);
   });
 });

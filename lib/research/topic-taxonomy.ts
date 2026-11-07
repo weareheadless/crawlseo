@@ -129,6 +129,39 @@ function termInText(text: string, term: string): boolean {
 }
 
 /**
+ * Whether a term is the business's name rather than a generic word the model
+ * split the name into. "casa migo" and "casamigo homes" are the brand; "casa"
+ * and "migo" alone are not, and an exclusive brand topic that claims them
+ * swallows the whole market ("casas", "casas de cambio").
+ */
+export function brandTermMatches(term: string, brandKey: string): boolean {
+  const compact = term.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!compact) return false;
+  const brandTokens = brandKey.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const termTokens = term.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const brandCompact = brandTokens.join("");
+  // Spacing and spelling variants of a one-word brand: "casa migo" for
+  // "casamigo", "ocean vibes" for "oceanicvibes".
+  if (compact.length >= 8 || term.trim().includes(" ")) {
+    let shared = 0;
+    while (shared < compact.length && shared < brandCompact.length && compact[shared] === brandCompact[shared]) shared += 1;
+    if (shared >= 4) return true;
+  }
+  // Word-order variants of a multi-word brand: "harmonie atelier" and
+  // "l'atelier by harmonie" are the same name, "harmonie boutique" is not.
+  if (brandTokens.length > 1) {
+    const termSet = new Set(termTokens);
+    const brandSet = new Set(brandTokens);
+    // The term must carry the whole name, in either order. A single word from
+    // a multi-word name ("harmonie" from "Atelier de l'harmonie") is not the
+    // brand: it is a generic word that would swallow the market.
+    if (brandTokens.every((token) => termSet.has(token))) return true;
+    if (termTokens.length >= 2 && termTokens.every((token) => brandSet.has(token))) return true;
+  }
+  return false;
+}
+
+/**
  * Does a measured query belong to one of the site's approved topics?
  *
  * The bundle and the topic map both need this answer, and both must give the
@@ -530,6 +563,15 @@ export async function proposeTopicTaxonomy(
         actionHint: text(row.actionHint)?.slice(0, 400) ?? "",
       });
     }
+    // A brand topic is exclusive, so its membership must be the name, not the
+    // generic tokens the model split it into.
+    const siteBrandKey = input.business.name ?? input.domain.replace(/^www\./, "").split(".")[0];
+    for (const topic of topics) {
+      if (topic.coverageKind !== "brand") continue;
+      const brandKey = siteBrandKey || topic.slug.split("-")[0];
+      const filtered = topic.requireAny.filter((term) => brandTermMatches(term, brandKey));
+      if (filtered.length > 0) topic.requireAny = filtered;
+    }
     // Brand demand is a topic even when the model treats it as noise: it is the
     // one query set where the owner's own name is the subject, and dropping it
     // leaves the brand volume unmapped on every re-proposal.
@@ -803,6 +845,8 @@ export function stabilizeTopicTaxonomy(input: {
   topics: TopicDefinition[];
   queries: Array<{ query: string; impressions: number; volume: number | null }>;
   pageTexts: string[];
+  /** The site's own name key (domain label or business name), for brand membership. */
+  brandKey?: string;
 }): TaxonomyStabilization {
   const topics = input.topics.map((topic) => ({
     ...topic,
@@ -812,6 +856,23 @@ export function stabilizeTopicTaxonomy(input: {
     coverageRequireAny: [...(topic.coverageRequireAny ?? [])],
     headTerms: [...(topic.headTerms ?? [])],
   }));
+  const siteBrandKey = (input.brandKey ?? "").toLowerCase();
+  const siteBrandCompact = siteBrandKey.replace(/[^a-z0-9]/g, "");
+  for (const topic of topics) {
+    if (topic.coverageKind !== "brand") continue;
+    const brandKey = siteBrandKey || topic.slug.split("-")[0];
+    const filtered = topic.requireAny.filter((term) => brandTermMatches(term, brandKey));
+    // The site's own name must match even when the model spelled the brand as
+    // two words: "OceanicVibes" is not "ocean vibes" to a substring matcher.
+    if (siteBrandCompact && !filtered.some((term) => term.toLowerCase().replace(/[^a-z0-9]/g, "") === siteBrandCompact)) {
+      filtered.push(siteBrandCompact);
+    }
+    if (filtered.length > 0) {
+      topic.requireAny = filtered;
+      topic.terms = [...new Set([...topic.terms, ...filtered])];
+      topic.strongTerms = [...new Set([...(topic.strongTerms ?? []), ...filtered])];
+    }
+  }
   const impressions = new Map(input.queries.map((query) => [query.query, query.impressions]));
   const volumeByQuery = new Map(input.queries.map((query) => [query.query, query.volume ?? 0]));
   const queryByText = new Map(input.queries.map((query) => [query.query, query]));

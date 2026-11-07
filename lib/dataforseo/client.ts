@@ -626,6 +626,18 @@ export async function executeDataForSeoLabsSerpCompetitors(input: {
   };
 }
 
+/**
+ * Provider-side search engine failures are transient and the failed task is not
+ * billed. The same request is worth sending again; a rejected payload is not.
+ */
+const RETRYABLE_SERP_TASK_CODES = new Set(["40101", "40102", "50000"]);
+
+function isRetryableSerpTaskError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const match = /^DATAFORSEO_TASK_(\d+)\b/.exec(error.message);
+  return Boolean(match && RETRYABLE_SERP_TASK_CODES.has(match[1]));
+}
+
 export async function executeDataForSeoOrganicSerp(input: {
   projectId: string;
   keyword: string;
@@ -635,20 +647,23 @@ export async function executeDataForSeoOrganicSerp(input: {
   device?: "desktop" | "mobile";
 }): Promise<DataForSeoSerpResearchResult> {
   const credentials = await credentialsForProject(input.projectId);
-  const response = await dataforseoPostWithMeta(
-    credentials.login,
-    credentials.password,
-    "/serp/google/organic/live/advanced",
-    [{
-      keyword: input.keyword,
-      language_code: input.languageCode,
-      location_code: input.locationCode,
-      device: input.device ?? "desktop",
-      os: input.device === "mobile" ? "android" : "windows",
-      depth: 10,
-      group_organic_results: true,
-    }]
-  );
+  const body = [{
+    keyword: input.keyword,
+    language_code: input.languageCode,
+    location_code: input.locationCode,
+    device: input.device ?? "desktop",
+    os: input.device === "mobile" ? "android" : "windows",
+    depth: 10,
+    group_organic_results: true,
+  }];
+  let response;
+  try {
+    response = await dataforseoPostWithMeta(credentials.login, credentials.password, "/serp/google/organic/live/advanced", body);
+  } catch (error) {
+    if (!isRetryableSerpTaskError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    response = await dataforseoPostWithMeta(credentials.login, credentials.password, "/serp/google/organic/live/advanced", body);
+  }
   if (!response.data) throw new Error("DataForSEO operation failed");
   const result = normalizeOrganicSerp(response.data);
   if (!result) throw new Error("DataForSEO SERP operation returned no result");

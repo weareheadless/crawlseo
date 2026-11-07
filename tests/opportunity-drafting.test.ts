@@ -154,6 +154,14 @@ describe("cluster drafting", () => {
     expect(result.proposals[0].confidenceReason).toBeNull();
   });
 
+  it("keeps a cluster proposal out of the timely lane without a news source", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockResolvedValue(draft({ lane: "timely", expiresAt: "2027-02-05" }));
+    const result = await draftClusterProposals(input());
+    expect(result.proposals[0].lane).toBe("content_business");
+    expect(result.proposals[0].expiresAt).toBeNull();
+  });
+
   it("drafts every cluster, not the first N", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockResolvedValue({ proposals: [] });

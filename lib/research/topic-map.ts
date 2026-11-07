@@ -665,6 +665,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     topics: taxonomy,
     queries: data.queries,
     pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
+    brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
   const topics = stabilized.topics;
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();

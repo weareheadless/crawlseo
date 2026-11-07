@@ -26,6 +26,7 @@ import {
   type TopicMap,
 } from "@/lib/research/topic-map";
 import {
+  brandTermMatches,
   loadTopicTaxonomy,
   parseTopicTaxonomy,
   proposeTopicTaxonomy,
@@ -166,17 +167,12 @@ async function main(): Promise<void> {
     // A re-proposal must not lose brand demand the owner already approved. The
     // prior brand topic's terms are the tenant's own memory, not a hardcoded
     // name in the pipeline.
-    const brandKey = site.domain.replace(/^www\./, "").split(".")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    const brandKey = site.domain.replace(/^www\./, "").split(".")[0].toLowerCase();
     // Keep the name-like terms of the approved brand topic, not its broad
     // location terms: "ocean vibes" belongs, "playa carmen" does not.
-    const sharesBrandName = (term: string): boolean => {
-      const compact = term.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (compact.length < 8 && !term.trim().includes(" ")) return false;
-      let shared = 0;
-      while (shared < compact.length && shared < brandKey.length && compact[shared] === brandKey[shared]) shared += 1;
-      return shared >= 4;
-    };
-    const priorBrandTerms = (taxonomy?.topics.find((topic) => topic.coverageKind === "brand")?.requireAny ?? []).filter(sharesBrandName);
+    const priorBrandTerms = (taxonomy?.topics.find((topic) => topic.coverageKind === "brand")?.requireAny ?? []).filter(
+      (term) => brandTermMatches(term, brandKey)
+    );
     if (!taxonomy || args.refreshTaxonomy) {
       if (!args.ai) {
         throw new CliError(

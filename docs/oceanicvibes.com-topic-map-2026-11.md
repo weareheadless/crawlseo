@@ -1,6 +1,6 @@
 # Topic map — oceanicvibes.com — 2026-11
 
-Generated 2026-11-06T23:44:36.817Z. Locale en/US.
+Generated 2026-11-07T01:08:30.691Z. Locale en/US.
 
 ## Business
 
@@ -13,7 +13,7 @@ Generated 2026-11-06T23:44:36.817Z. Locale en/US.
 ## Tenant model
 
 - Topics: 7
-  - `oceanicvibes-brand-and-playa-del-carmen-freediving` — OceanicVibes brand and Playa del Carmen freediving (mixed, brand, high); 12 matching terms; head term `freediving`
+  - `oceanicvibes-brand-and-playa-del-carmen-freediving` — OceanicVibes brand and Playa del Carmen freediving (mixed, brand, high); 13 matching terms; head term `freediving`
   - `private-one-to-one-freediving-coaching` — Private one-to-one freediving coaching (commercial, service, high); 5 matching terms
   - `aida-3-and-freediving-course-selection-in-playa-del-carmen` — AIDA 3 and freediving course selection in Playa del Carmen (commercial, service, high); 13 matching terms
   - `depth-training-advanced-depth-and-line-training-with-30m-saf` — Depth training, advanced depth and line training with 30m safety (commercial, service, high); 8 matching terms
@@ -29,20 +29,20 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Seven local clusters, 33 mapped queries. Demand is concentrated in brand/Playa (13.4k), AIDA 3/course selection (3.5k) and depth/line training (2.4k); cenotes is a smaller but tightly aligned local niche. Private coaching, breathwork and deep equalization have low/no measured demand. Several course/training queries name Florida, San Diego or Dahab and are out of market.
+Seven high-relevance local clusters cover Playa del Carmen and nearby cenotes. Course selection (3,490 demand) and depth/line training (2,430) carry commercial demand; brand/PDC has large generic demand but only 4 impressions and no brand page. Cenote/Tulum is on-area but small; private coaching and breathwork are low-demand; deep equalization has no measured queries. Off-area queries include Florida, San Diego and Dahab.
 
-Prioritize the brand/Playa del Carmen page first: coverage is partial, there is no brand page, and broad freediving demand is large. Then build the AIDA 3/course-selection and depth/line-training pages, using AIDA 3, 30m safety, line work and equalization as proof. The cenotes cluster is lower-volume but strongly local and should target Tulum/Yucatán cenote intent. Ignore Florida, San Diego and Dahab queries for SEO pages; PADI/SSI/app queries are comparison/FAQ only. Private coaching, breathwork and deep equalization are weak by measured demand: validate them with small FAQ/coaching pages or bundle equalization and breathwork into depth-training content, not as primary pages.
+Prioritise AIDA 3/course selection and depth/line training: strongest measured commercial demand and strong coverage. Then build the missing OceanicVibes/Playa brand page, using generic 'freediving' demand as supporting context. Cenote/Tulum content is on-area and worth a local cluster, though demand is small. Private coaching, breathwork and deep equalization are weak by measured demand; validate with one small page or client-question test, not a full build. Florida, San Diego and Dahab queries are off-area for Playa/Tulum/Bacalar; do not create local pages for them.
 
 Priority topics: oceanicvibes-brand-and-playa-del-carmen-freediving, aida-3-and-freediving-course-selection-in-playa-del-carmen, depth-training-advanced-depth-and-line-training-with-30m-saf, freediving-in-the-cenotes-of-yucatan.
 Weak topics: private-one-to-one-freediving-coaching, breathwork-relaxation-co-o-efficiency-and-physical-preparati, deep-equalization-coaching.
-Out-of-market queries excluded from demand and evidence: 5.
+Out-of-market queries excluded from demand and evidence: 8.
 
 ## Topic table
 
 | Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Coverage | Visibility | Main page | Main gap |
 |---|---|---|---|---:|---:|---:|---:|---|---|---|---|
-| OceanicVibes brand and Playa del Carmen freediving | mixed | high | local · default | 4 | 4 | 13420 | 14720 | partial | proven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | Coverage exists, but there is no brand page for this topic. |
-| Private one-to-one freediving coaching | commercial | high | local · default | 2 | 0 | 20 | 20 | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
+| OceanicVibes brand and Playa del Carmen freediving | mixed | high | local · default | 3 | 4 | 13400 | 14700 | partial | proven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | Coverage exists, but there is no brand page for this topic. |
+| Private one-to-one freediving coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | strong | unproven | /blog/beyond-the-course-how-to-find-a-freediving-teacher-who-adapts-to-you | — |
 | AIDA 3 and freediving course selection in Playa del Carmen | commercial | high | local · default | 19 | 0 | 3290 | 5890 | strong | unproven | /blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide | — |
 | Depth training, advanced depth and line training with 30m safety | commercial | high | local · default | 10 | 0 | 2420 | 2420 | strong | unproven | /blog/why-your-freediving-progress-has-plateaued-and-why-thats-normal | — |
 | Deep equalization coaching | commercial | high | local · default | 0 | 0 | 0 | 0 | strong | unproven | /blog/frenzel-works-on-land-not-underwater-what-to-do-when-equalization-stalls-on-the-depth-line-and-wheth | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
@@ -57,7 +57,7 @@ Out-of-market queries excluded from demand and evidence: 5.
 - Intent: mixed; relevance: high; confidence: 1.00
 - Market scope: local · default
 - Rationale: Brand and Playa del Carmen navigational queries should land on the home page, which states the Yucatán coaching offer.
-- Demand: 4 queries, 4 impressions, 0 clicks, 13420 distinct monthly demand (14720 summed across keyword variants); average position 74.5.
+- Demand: 3 queries, 4 impressions, 0 clicks, 13400 distinct monthly demand (14700 summed across keyword variants); average position 74.5.
 - Coverage: partial (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 2 measured questions, 0 citations of the site.
 - Action hint: Keep the home title and intro focused on OceanicVibes, Playa del Carmen and Yucatán freediving coaching.
@@ -67,7 +67,6 @@ Out-of-market queries excluded from demand and evidence: 5.
 | oceanvibes | 2 | 0 | 66.0 | 1300 | 0 |
 | ocean vibes | 2 | 0 | 83.0 | 1300 | 0 |
 | freediving | 0 | 0 | — | 12100 | 17 |
-| freediving mexico | 0 | 0 | — | 20 | 0 |
 
 Coverage pages:
 
@@ -85,18 +84,21 @@ Gaps:
 ### Private one-to-one freediving coaching
 
 - Slug: `private-one-to-one-freediving-coaching`
-- Intent: commercial; relevance: high; confidence: 0.83
+- Intent: commercial; relevance: high; confidence: 0.90
 - Market scope: local · default
 - Rationale: The teacher-selection article explains adaptive one-to-one coaching and is the best current owner for this need.
-- Demand: 2 queries, 0 impressions, 0 clicks, 20 distinct monthly demand (20 summed across keyword variants); average position unknown.
+- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
 - Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Add a private-coaching service block, booking CTA and skill-focus options to this article.
 
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| mexico freediving | 0 | 0 | — | 20 | 0 |
-| freediving in mexico | 0 | 0 | — | — | 0 |
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| freediving mexico | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
+| mexico freediving | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
+| freediving in mexico | 0 | Country-level query; broader than the local Playa/Tulum/Bacalar service area. |
 
 Coverage pages:
 
@@ -141,10 +143,10 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| florida freediving course | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
-| san diego freediving course | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
-| freediving course san diego | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
-| freediving course florida | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| florida freediving course | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar service area. |
+| san diego freediving course | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar service area. |
+| freediving course san diego | 0 | San Diego is outside the Playa del Carmen/Tulum/Bacalar service area. |
+| freediving course florida | 0 | Florida is outside the Playa del Carmen/Tulum/Bacalar service area. |
 
 Coverage pages:
 
@@ -183,7 +185,7 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| freediving training center dahab | 0 | Dahab, Egypt is outside the Playa del Carmen/Tulum/Bacalar/Yucatán service area. |
+| freediving training center dahab | 0 | Dahab is outside the Playa del Carmen/Tulum/Bacalar service area. |
 
 Coverage pages:
 

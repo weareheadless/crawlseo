@@ -393,4 +393,42 @@ describe("DataForSEO organic SERP contract", () => {
       group_organic_results: true,
     }]);
   });
+
+  it("retries a provider-side search engine error once", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status_code: 20000,
+          tasks: [{ id: "task-failed", status_code: 40101, status_message: "Internal SE Server Error" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status_code: 20000,
+          tasks: [{
+            id: "task-retried",
+            status_code: 20000,
+            cost: 0.001,
+            result: [{
+              keyword: "freediving playa del carmen",
+              datetime: "2026-08-29 10:00:00 +00:00",
+              item_types: ["organic"],
+              items: [{ type: "organic", rank_group: 1, domain: "school.example", title: "Freediving school", url: "https://school.example", description: "Courses." }],
+            }],
+          }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await executeDataForSeoOrganicSerp({
+      projectId: "project-1",
+      keyword: "freediving playa del carmen",
+      languageCode: "en",
+      locationCode: 2840,
+    });
+    expect(result.providerTaskId).toBe("task-retried");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

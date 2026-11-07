@@ -216,6 +216,7 @@ const SYSTEM = [
   "Respect the market scope. A local offer is limited to the business location and service area; a national or international offer is not. Queries listed under outOfMarket are already excluded: never build a proposal on them.",
   "Do not assume a product range exists or does not exist. If demand names a format or service the supplied pages do not cover, the proposal is a decision for the owner, not an assumption.",
   "A low-demand cluster can still deserve a small test when it is business-relevant. Say so and set confidence accordingly.",
+  "Do not drop the business's core offer because measured demand is zero. If the cluster is a service the business sells, propose a small page or section and set confidence low; say that the case rests on the offer, not on volume.",
   "Set confidence from the strength of the cited evidence: high only when first-party search data supports the action directly, medium when the data is directional, low for a test or an owner decision. Give a confidenceReason that describes the evidence in plain words for the owner; do not paste evidence ids into it.",
   "Target an existing page URL from the supplied pages when the work updates a page. Use newAsset true and a path only when a new page is genuinely required.",
   "The site's existing paths are listed in existingPaths. Never propose creating a page whose path already exists: propose an update to that page instead.",
@@ -307,6 +308,12 @@ function parseProposals(
     if (known.every((id) => allowedEvidence.get(id)?.kind === "ai_visibility_observation")) {
       lane = "aeo_geo";
       kind = "aeo";
+    }
+    // The timely lane is for a dated news story. A cluster proposal that only
+    // feels seasonal ("the holidays are coming") is content work; without a
+    // source URL it has no story to expire.
+    if (lane === "timely" && !text(row.sourceUrl)) {
+      lane = "content_business";
     }
     const url = text(target.url);
     const newAsset = bool(target.newAsset) ?? false;
