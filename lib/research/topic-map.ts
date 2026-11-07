@@ -20,6 +20,7 @@ import {
   topicMatchesQuery,
   type TopicDefinition,
   type TopicIntent,
+  type TopicKind,
   type TopicPageType,
   type TopicPageTypeRule,
   type TopicRelevance,
@@ -92,6 +93,8 @@ export type TopicCoveragePage = {
 export type TopicCluster = {
   slug: string;
   name: string;
+  /** Brand topics are the name alone; they need no need word. */
+  kind: TopicKind;
   topicSummary: string;
   intent: TopicIntent;
   relevance: TopicRelevance;
@@ -719,6 +722,7 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     return {
       slug: topic.slug,
       name: topic.name,
+      kind: isBrandTopic(topic) ? "brand" : "market",
       topicSummary: `${metrics.queries} queries, ${metrics.impressions} impressions; coverage ${coverage}, visibility ${visibility}; ${gaps.length} gap${gaps.length === 1 ? "" : "s"}.`,
       intent: topic.intent,
       relevance: topic.relevance,
@@ -872,20 +876,16 @@ export async function synthesizeTopicMap(
     };
   }
 
-  const priorityClusters = map.clusters
-    .filter((cluster) => cluster.relevance !== "low")
-    .sort(
-      (a, b) =>
-        b.metrics.impressions + b.metrics.volume - (a.metrics.impressions + a.metrics.volume)
-    )
-    .slice(0, 8);
-  // The local cluster is often the weakest by volume, so it would never reach a
-  // top-8 cut. Every cluster with a bounded market is sent, with its queries,
-  // because geography is judged from the query text, not from demand size.
-  const marketClusters = map.clusters.filter(
-    (cluster) => cluster.marketScope.scope !== "international" && cluster.queries.length > 0
+  // Every topic is reviewed. A demand-ranked cut would silently drop the
+  // smallest topic from the review, and the smallest topic is often the one
+  // whose owner page is wrong.
+  const rankedClusters = [...map.clusters].sort(
+    (a, b) => b.metrics.impressions + b.metrics.volume - (a.metrics.impressions + a.metrics.volume)
   );
-  const reviewClusters = [...new Map([...priorityClusters, ...marketClusters].map((cluster) => [cluster.slug, cluster])).values()];
+  // The local cluster is often the weakest by volume. Every cluster with a
+  // bounded market is sent, with its queries, because geography is judged from
+  // the query text, not from demand size.
+  const reviewClusters = rankedClusters;
   const payload = {
     site: map.domain,
     business: {
@@ -897,6 +897,7 @@ export async function synthesizeTopicMap(
     clusters: reviewClusters.map((cluster) => ({
       slug: cluster.slug,
       name: cluster.name,
+      kind: cluster.kind,
       intent: cluster.intent,
       relevance: cluster.relevance,
       coverage: cluster.coverage,
@@ -926,6 +927,7 @@ export async function synthesizeTopicMap(
     "Say which topics are worth doing first and which are weak or off-area.",
     "A weak topic has low measured demand, not no opportunity. If a weak topic is business-relevant, say what expansion or small test would validate it.",
     "A topic flagged no-need-word is defined only by place or brand: do not treat it as an opportunity. Say that its taxonomy needs a need word.",
+    "A topic whose kind is brand is the business's own name. It is complete as a name: do not ask for a need word and do not treat the name alone as a taxonomy defect. Judge whether its page earns the brand query.",
     "A cluster's contextOnly count is demand that names its place or brand but not its need. Treat it as evidence of a missing need term or a separate audience, not as demand the topic owns.",
     "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[], market_verdicts: [{ cluster: string, query: string, in_market: boolean, reason: string }] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",

@@ -1,6 +1,6 @@
 # Topic map — oceanicvibes.com — 2026-11
 
-Generated 2026-11-07T20:17:43.854Z. Locale en/US.
+Generated 2026-11-07T20:45:04.523Z. Locale en/US.
 
 ## Business
 
@@ -32,12 +32,12 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Eight local clusters. Courses/certification carries the largest measured demand but its listed queries are record-led, not course intent. Breathwork (400) and safety (140) are the cleanest service/info matches; physical prep is small (40). Private coaching, depth/line and cenote have no measured query demand. OceanicVibes is brand-only demand. All listed queries name no place, so none is out of area.
+11 local clusters: courses/certification, brand, breathwork/CO2-O2, safety, physical/pool, private coaching, depth/line, cenote, Tulum, Mexico. Demand concentrates in courses/certification (47k) and brand (1.3k), but course queries are record-interest and brand queries are near-miss. Breathwork 400, safety 140, physical 40; core service/location clusters have 0 measured demand.
 
-Start with breathwork and safety: breathwork matches your coaching and has 400 measured demand; safety needs the missing article. Courses has scale, but first re-taxonomize the record/informational queries into course/certification terms before building. OceanicVibes is brand-only: add a need word, do not chase it as an opportunity. Treat private coaching, depth/line, physical prep and cenote as business-knowledge; validate with small local tests (e.g. cenote freediving in Playa/Tulum) before SEO spend. All listed queries are in market; no out-of-area places appear.
+Don't count the 47k courses cluster as course demand: listed queries are all 'freediving record' interest. Split records into an informational article or drop it; build course/certification pages for the service. Breathwork/CO2-O2 is the cleanest priority (400). Safety needs a blog/FAQ; physical/pool needs a service page. Brand must earn exact OceanicVibes, not 'ocean vibes' (66/83). Private, depth/line, cenote and Tulum show 0 demand: keep as business knowledge and test one private and one cenote/Tulum page. Mexico is broader than service area; keep off-area until narrowed.
 
-Priority topics: freediving-breathwork-and-co2-o2-training, freediving-safety-and-safety-protocols, freediving-courses-and-certification.
-Weak topics: private-freediving-coaching, depth-and-line-training, cenote-freediving, freediving-physical-preparation-and-pool-training.
+Priority topics: freediving-breathwork-and-co2-o2-training, freediving-safety-and-safety-protocols, freediving-physical-preparation-and-pool-training, freediving-courses-and-certification, oceanicvibes.
+Weak topics: private-freediving-coaching, depth-and-line-training, cenote-freediving, freediving-in-tulum.
 
 ## Topic table
 

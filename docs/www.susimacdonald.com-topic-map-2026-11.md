@@ -1,6 +1,6 @@
 # Topic map — www.susimacdonald.com — 2026-11
 
-Generated 2026-11-07T20:22:03.752Z. Locale en/US.
+Generated 2026-11-07T20:45:04.725Z. Locale en/US.
 
 ## Business
 
@@ -34,12 +34,12 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-11 local clusters, all with strong coverage. Demand concentrates in Playa del Carmen, Tulum, Puerto Morelos, Cozumel, Akumal and Riviera Maya; Bacalar and financing are thin. Gaps show missing exact need words ('real estate', 'condo', 'apartment'). ContextOnly is largely hospitals, banks and population, so it is not demand these property topics own.
+Map covers 11 local real-estate clusters plus the Susana MacDonald brand. Playa del Carmen, Tulum and Puerto Morelos carry the most demand; Cozumel, Playa rentals, Akumal and Riviera Maya investment are secondary. Bacalar and Mexico financing are thin. Large contextOnly buckets (banks/population, hospitals) are unrelated needs, not topic demand.
 
-Prioritize Playa sale, Tulum sale, Puerto Morelos condos, Playa rentals and the local Playa/Riviera slice of beachfront-under-200k. They have real demand plus clear gaps: add exact 'real estate', 'condo' and 'apartment' need terms; improve weak Puerto Morelos condo and Tulum home positions. Do not chase Mexico-wide or Cancun queries on local pages. Financing and Bacalar are weak: test foreign-buyer financing and Bacalar lagoon/condo content before scaling. Hospital/bank/population context is not owned demand.
+Prioritise Playa del Carmen, Tulum, Puerto Morelos, Cozumel and Playa long-term rentals: high demand, high relevance, weak positions, and gaps for 'real estate', 'condos' and 'apartments'. Add need words in titles/H1s and build for-sale/rent pages. Riviera Maya investment/market-update content is useful but noisy: hospital/Cancun context is not real-estate demand. Treat Bacalar and Mexico financing as weak but relevant tests (one page, internal links, 60-90 day check). Brand page should earn 'Susana MacDonald'. Do not chase Cancun/Mexico-wide under-$100k queries outside the service area.
 
-Priority topics: playa-del-carmen-real-estate-condos-homes-and-villas-for-sal, tulum-real-estate-condos-homes-and-villas-for-sale, puerto-morelos-real-estate-and-condos-for-sale, playa-del-carmen-apartments-and-long-term-rentals, mexico-beachfront-and-condos-under-200k.
-Weak topics: mexico-home-financing-and-mortgages-for-foreign-buyers, bacalar-real-estate-and-condos-for-sale.
+Priority topics: playa-del-carmen-real-estate-condos-homes-and-villas-for-sal, tulum-real-estate-condos-homes-and-villas-for-sale, puerto-morelos-real-estate-and-condos-for-sale, cozumel-real-estate-and-condos-for-sale, playa-del-carmen-apartments-and-long-term-rentals.
+Weak topics: bacalar-real-estate-and-condos-for-sale, mexico-home-financing-and-mortgages-for-foreign-buyers.
 Out-of-market queries excluded from demand and evidence: 18.
 
 ## Topic table
@@ -184,8 +184,8 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| beachfront homes for sale under $100k in mexico | 183 | Mexico-wide, outside the listed local serviceArea. |
-| beachfront homes for sale under $100k in mexico zillow | 62 | Mexico-wide, outside the listed local serviceArea. |
+| beachfront homes for sale under $100k in mexico | 183 | Names Mexico only; broader than listed service area. |
+| beachfront homes for sale under $100k in mexico zillow | 62 | Names Mexico only; broader than listed service area. |
 
 Owner page:
 
@@ -278,13 +278,13 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| beachfront homes for sale under $100k in mexico | 183 | Mexico-wide, outside the listed local serviceArea. |
-| beachfront homes for sale under $100k in mexico zillow | 62 | Mexico-wide, outside the listed local serviceArea. |
-| cheap houses for sale in mexico on the beach under 100k | 54 | Mexico-wide, outside the listed local serviceArea. |
-| cheap houses for sale in mexico on the beach | 47 | Mexico-wide, outside the listed local serviceArea. |
-| cancun condos for sale under $100k | 46 | Cancun is not in serviceArea. |
-| cancun condos for sale under $200k | 45 | Cancun is not in serviceArea. |
-| condos for sale in mexico under 100k | 28 | Mexico-wide, outside the listed local serviceArea. |
+| beachfront homes for sale under $100k in mexico | 183 | Names Mexico only; broader than listed service area. |
+| beachfront homes for sale under $100k in mexico zillow | 62 | Names Mexico only; broader than listed service area. |
+| cheap houses for sale in mexico on the beach under 100k | 54 | Names Mexico only; broader than listed service area. |
+| cheap houses for sale in mexico on the beach | 47 | Names Mexico only; broader than listed service area. |
+| cancun condos for sale under $100k | 46 | Names Cancun; outside listed service area. |
+| cancun condos for sale under $200k | 45 | Names Cancun; outside listed service area. |
+| condos for sale in mexico under 100k | 28 | Names Mexico only; broader than listed service area. |
 
 Owner page:
 
@@ -504,15 +504,15 @@ Out-of-market queries (excluded from demand and evidence):
 
 | Query | Impressions | Reason |
 |---|---:|---|
-| construction loan mexico | 31 | Mexico-wide, outside the listed local serviceArea. |
-| loans in mexico | 12 | Mexico-wide, outside the listed local serviceArea. |
-| financing in mexico | 11 | Mexico-wide, outside the listed local serviceArea. |
-| mortgage in mexico for american | 11 | Mexico-wide, outside the listed local serviceArea. |
-| mortgages in mexico | 11 | Mexico-wide, outside the listed local serviceArea. |
-| mortgage in mexico | 9 | Mexico-wide, outside the listed local serviceArea. |
-| mortgage in mexico for mexicans abroad | 8 | Mexico-wide, outside the listed local serviceArea. |
-| mortgage in mexico for international buyers | 7 | Mexico-wide, outside the listed local serviceArea. |
-| financing a home in mexico | 6 | Mexico-wide, outside the listed local serviceArea. |
+| construction loan mexico | 31 | Names Mexico only; broader than listed service area. |
+| loans in mexico | 12 | Names Mexico only; broader than listed service area. |
+| financing in mexico | 11 | Names Mexico only; broader than listed service area. |
+| mortgage in mexico for american | 11 | Names Mexico only; broader than listed service area. |
+| mortgages in mexico | 11 | Names Mexico only; broader than listed service area. |
+| mortgage in mexico | 9 | Names Mexico only; broader than listed service area. |
+| mortgage in mexico for mexicans abroad | 8 | Names Mexico only; broader than listed service area. |
+| mortgage in mexico for international buyers | 7 | Names Mexico only; broader than listed service area. |
+| financing a home in mexico | 6 | Names Mexico only; broader than listed service area. |
 
 Owner page:
 

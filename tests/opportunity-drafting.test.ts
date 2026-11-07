@@ -21,6 +21,7 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
   return {
     slug: "luminaires",
     name: "Luminaires",
+    kind: "market",
     topicSummary: "",
     intent: "commercial",
     relevance: "high",
