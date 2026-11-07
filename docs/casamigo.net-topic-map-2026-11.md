@@ -1,6 +1,6 @@
 # Topic map — casamigo.net — 2026-11
 
-Generated 2026-11-07T22:50:38.166Z. Locale en/US.
+Generated 2026-11-07T23:09:24.703Z. Locale en/US.
 
 ## Business
 
@@ -29,35 +29,36 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Seven clusters, all high-relevance and local to Riviera Maya. Coverage is strong; contextOnly is zero everywhere. Demand concentrates in Tulum project/condo terms and Riviera Maya advisory/listings; Playa del Carmen, AI intelligence, Puerto Morelos and brand are low/zero volume. Tulum mixes real-estate project names with unrelated casas de cambio/empeños; AI lacks a service/category page.
+Seven local clusters for Casamigo in Playa del Carmen/Riviera Maya. Demand concentrates in Tulum project terms and generic Spanish real-estate terms; property listings and advisory are the clearest commercial themes. AI, Puerto Morelos presale and Playa del Carmen condo demand are thin; brand queries exist but split. Unmapped demand is mostly outside the service area or unrelated.
 
-Prioritize Riviera Maya property listings, advisory/lead gen and Tulum condo/project market: strongest commercial demand and local fit. Keep Casamigo brand page; improve 'casa migo'/'casamigo residence' rankings. Playa del Carmen, AI intelligence and Puerto Morelos are weak but relevant: test a localized Playa condo page, an AI service page (flagged gap), and one Puerto Morelos presale landing. Clean Tulum: project names need real-estate need words; casas de cambio/empeños are wrong-need contamination. Named queries are in market; unmapped CDMX/Guadalajara terms are off-area.
+Do property listings and Riviera Maya advisory/lead generation first: they match Casamigo's services and local market. Tulum is high-demand but noisy—project names plus currency-exchange/pawnshop queries—so isolate real-estate intent before scaling. Playa del Carmen condo listings are core but low-volume; use as supporting local page. Treat AI intelligence and Puerto Morelos presale as small tests, not priorities. Brand pages should consolidate casamigo/casa migo variants. Unmapped CDMX/Guadalajara/Monterrey demand is out of area.
 
-Priority topics: riviera-maya-property-listings, riviera-maya-real-estate-advisory-and-lead-generation, tulum-real-estate-market-and-condo-projects, casamigo.
-Weak topics: riviera-maya-ai-real-estate-market-intelligence, puerto-morelos-presale-condos-and-market-intelligence, playa-del-carmen-real-estate-market-and-condo-listings.
+Priority topics: riviera-maya-property-listings, riviera-maya-real-estate-advisory-and-lead-generation, tulum-real-estate-market-and-condo-projects, playa-del-carmen-real-estate-market-and-condo-listings, casamigo.
+Weak topics: riviera-maya-ai-real-estate-market-intelligence, puerto-morelos-presale-condos-and-market-intelligence.
 
 ## Topic table
 
-| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |
-|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
-| Riviera Maya property listings | transactional | high | local · default | 12 | 10 | 7230 | 7230 | — | strong | proven | /es/properties | — |
-| Riviera Maya AI real estate market intelligence | informational | high | local · default | 4 | 7 | 20 | 20 | — | strong | proven | / | Coverage exists, but there is no service or category page for this topic. |
-| Tulum real estate market and condo projects | mixed | high | local · default | 13 | 6 | 534380 | 644380 | — | strong | proven | /es/cities/tulum | — |
-| Casamigo | mixed | high | local · default | 3 | 5 | 0 | 0 | — | strong | proven | / | — |
-| Playa del Carmen real estate market and condo listings | mixed | high | local · default | 5 | 1 | 220 | 220 | — | strong | proven | /cities/playa-del-carmen | — |
-| Puerto Morelos presale condos and market intelligence | mixed | high | local · default | 1 | 1 | 0 | 0 | — | strong | proven | /cities/puerto-morelos | — |
-| Riviera Maya real estate advisory and lead generation | local | high | local · default | 4 | 0 | 8040 | 14640 | — | strong | unproven | /about-us | — |
+| Topic | Intent | Relevance | Market scope | Lang | Queries | Impressions | Clicks | Distinct demand | Summed volume | Context-only | Page | Ranks | Main page | Main gap |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
+| Riviera Maya property listings | transactional | high | local · default | es | 12 | 10 | 0 | 7230 | 7230 | — | exists | pos 82.2 | /es/properties | Spanish listing variants show no impressions; generic local terms lack area qualifier. |
+| Riviera Maya AI real estate market intelligence | informational | high | local · default | en | 4 | 7 | 0 | 20 | 20 | — | exists | pos 68.3 | / | Coverage exists, but there is no service or category page for this topic. |
+| Tulum real estate market and condo projects | mixed | high | local · default | en | 13 | 6 | 0 | 534380 | 644380 | — | exists | pos 74.2 | /es/cities/tulum | Project-name queries lack real-estate need modifiers; separate casas de cambio/empeño noise. |
+| Casamigo | mixed | high | local · default | en | 3 | 5 | 0 | 0 | 0 | — | exists | pos 25.3 | / | Brand variants split across casa migo, casamigo homes and casamigo residence; 'residence' ranks low. |
+| Playa del Carmen real estate market and condo listings | mixed | high | local · default | es | 5 | 1 | 0 | 220 | 220 | — | exists | pos 48.0 | /cities/playa-del-carmen | Low volume; Spanish listing variants duplicate and show no impressions. |
+| Puerto Morelos presale condos and market intelligence | mixed | high | local · default | en | 1 | 1 | 0 | 0 | 0 | — | exists | pos 20.0 | /cities/puerto-morelos | Only one query and one impression; no supporting presale demand in supplied data. |
+| Riviera Maya real estate advisory and lead generation | local | high | local · default | es | 4 | 0 | 0 | 8040 | 14640 | — | exists | no | /about-us | Generic 'cerca de mí' terms have no impressions; no advisory-specific qualifier in supplied demand. |
 
 ## Clusters
 
 ### Riviera Maya property listings
 
 - Slug: `riviera-maya-property-listings`
-- Intent: transactional; relevance: high; confidence: 1.00
+- Intent: transactional; relevance: high; confidence: 0.82
 - Market scope: local · default
-- Rationale: Broad listings hub captures Riviera Maya property and project-name demand.
+- Rationale: Transactional listing demand across Tulum, Cozumel and Playa del Carmen; strong commercial relevance with some English/Spanish split.
 - Demand: 12 queries, 10 impressions, 0 clicks, 7230 distinct monthly demand (7230 summed across keyword variants); average position 82.2.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (6546 words); ranking: position 82.2; clicks: 0.
+- Query language: es.
 - AEO: 1 measured questions, 0 citations of the site.
 - Action hint: Strengthen /properties with city, project and price filters; link project pages.
 
@@ -82,14 +83,19 @@ Owner page:
 |---|---|---:|
 | /es/properties | other | 6546 |
 
+Gaps:
+
+- Spanish listing variants show no impressions; generic local terms lack area qualifier.
+
 ### Riviera Maya AI real estate market intelligence
 
 - Slug: `riviera-maya-ai-real-estate-market-intelligence`
-- Intent: informational; relevance: high; confidence: 0.86
+- Intent: informational; relevance: high; confidence: 0.55
 - Market scope: local · default
-- Rationale: Owns Riviera Maya market, ROI, AI-rating and city-signal queries.
+- Rationale: Relevant differentiator, but very thin measured demand and a supplied gap: no service or category page for the topic.
 - Demand: 4 queries, 7 impressions, 0 clicks, 20 distinct monthly demand (20 summed across keyword variants); average position 68.3.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (1739 words); ranking: position 68.3; clicks: 0.
+- Query language: en.
 - AEO: 2 measured questions, 0 citations of the site.
 - Action hint: Build a hub linking weekly briefs, city reports and AI ratings.
 
@@ -109,15 +115,17 @@ Owner page:
 Gaps:
 
 - Coverage exists, but there is no service or category page for this topic.
+- Volume is only 20 distinct monthly demand.
 
 ### Tulum real estate market and condo projects
 
 - Slug: `tulum-real-estate-market-and-condo-projects`
-- Intent: mixed; relevance: high; confidence: 1.00
+- Intent: mixed; relevance: high; confidence: 0.62
 - Market scope: local · default
-- Rationale: Covers Tulum market reports plus Tao, Samsara and Los Amigos project demand.
+- Rationale: High-demand Tulum project and market terms, but the query set is polluted by unrelated currency-exchange/pawnshop terms and brand-only project names.
 - Demand: 13 queries, 6 impressions, 0 clicks, 534380 distinct monthly demand (644380 summed across keyword variants); average position 74.2.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (3117 words); ranking: position 74.2; clicks: 0.
+- Query language: en.
 - AEO: 4 measured questions, 0 citations of the site.
 - Action hint: Link Tulum city brief to project pages and market data; add project comparisons.
 
@@ -143,14 +151,19 @@ Owner page:
 |---|---|---:|
 | /es/cities/tulum | other | 3117 |
 
+Gaps:
+
+- Project-name queries lack real-estate need modifiers; separate casas de cambio/empeño noise.
+
 ### Casamigo
 
 - Slug: `casamigo`
-- Intent: mixed; relevance: high; confidence: 0.69
+- Intent: mixed; relevance: high; confidence: 0.70
 - Market scope: local · default
-- Rationale: Brand-name navigational demand for Casamigo and close misspelling.
+- Rationale: Own-brand cluster is complete as a name; variants are split, with 'casamigo residence' ranking low and no distinct monthly demand.
 - Demand: 3 queries, 5 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 25.3.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (1739 words); ranking: position 25.3; clicks: 0.
+- Query language: en.
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Keep home and about pages optimized for brand name and variants.
 
@@ -166,14 +179,19 @@ Owner page:
 |---|---|---:|
 | / | home | 1739 |
 
+Gaps:
+
+- Brand variants split across casa migo, casamigo homes and casamigo residence; 'residence' ranks low.
+
 ### Playa del Carmen real estate market and condo listings
 
 - Slug: `playa-del-carmen-real-estate-market-and-condo-listings`
-- Intent: mixed; relevance: high; confidence: 1.00
+- Intent: mixed; relevance: high; confidence: 0.65
 - Market scope: local · default
-- Rationale: Owns Playa market and project-listing demand including Punta Playa, Ikuku, Torre 25.
+- Rationale: Core home-market topic, but measured demand is low and the supplied queries are mostly duplicate Spanish listing variants.
 - Demand: 5 queries, 1 impressions, 0 clicks, 220 distinct monthly demand (220 summed across keyword variants); average position 48.0.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (2539 words); ranking: position 48.0; clicks: 0.
+- Query language: es.
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Tie Playa city brief to condo collections and project pages; add ROI filters.
 
@@ -191,14 +209,19 @@ Owner page:
 |---|---|---:|
 | /cities/playa-del-carmen | other | 2539 |
 
+Gaps:
+
+- Low volume; Spanish listing variants duplicate and show no impressions.
+
 ### Puerto Morelos presale condos and market intelligence
 
 - Slug: `puerto-morelos-presale-condos-and-market-intelligence`
-- Intent: mixed; relevance: high; confidence: 0.58
+- Intent: mixed; relevance: high; confidence: 0.40
 - Market scope: local · default
-- Rationale: Captures Puerto Morelos presale, Musa del Puerto and demographic market demand.
+- Rationale: Business-relevant local niche, but only one query and one impression in the supplied data.
 - Demand: 1 queries, 1 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 20.0.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- Page: exists (1939 words); ranking: position 20.0; clicks: 0.
+- Query language: en.
 - AEO: 1 measured questions, 0 citations of the site.
 - Action hint: Add presale timeline and absorption data to Puerto Morelos city page.
 
@@ -212,14 +235,19 @@ Owner page:
 |---|---|---:|
 | /cities/puerto-morelos | other | 1939 |
 
+Gaps:
+
+- Only one query and one impression; no supporting presale demand in supplied data.
+
 ### Riviera Maya real estate advisory and lead generation
 
 - Slug: `riviera-maya-real-estate-advisory-and-lead-generation`
-- Intent: local; relevance: high; confidence: 1.00
+- Intent: local; relevance: high; confidence: 0.76
 - Market scope: local · default
-- Rationale: Captures local agency, advisor and lead-generation intent with near-me modifiers.
+- Rationale: Strong local advisory demand and direct fit with Casamigo's services, though supplied queries are generic 'near me' terms with no impressions yet.
 - Demand: 4 queries, 0 impressions, 0 clicks, 8040 distinct monthly demand (14640 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- Page: exists (459 words); ranking: no measured position; clicks: 0.
+- Query language: es.
 - AEO: 0 measured questions, 0 citations of the site.
 - Action hint: Add consultation CTA and local proof to about page; capture leads by city.
 
@@ -235,6 +263,10 @@ Owner page:
 | Page | Type | Words |
 |---|---|---:|
 | /about-us | other | 459 |
+
+Gaps:
+
+- Generic 'cerca de mí' terms have no impressions; no advisory-specific qualifier in supplied demand.
 
 ## Unmapped demand
 

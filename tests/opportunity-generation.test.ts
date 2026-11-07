@@ -49,10 +49,48 @@ function makeProposal(overrides: Partial<Proposal> = {}): Proposal {
 const map = {
   domain,
   month: "2026-11",
+  locale: { language: "en", country: null },
   business: { name: null, services: [], location: null, serviceArea: [], audience: null, differentiators: [] },
   clusters: [],
   ai: { available: false },
 } as unknown as TopicMap;
+
+function topicCluster(overrides: Record<string, unknown> = {}) {
+  return {
+    slug: "luminaires",
+    name: "Luminaires",
+    kind: "market",
+    topicSummary: "",
+    intent: "commercial",
+    relevance: "high",
+    rationale: "",
+    actionHint: "",
+    marketScope: { scope: "international", markets: [], source: "offer" },
+    confidence: 0.7,
+    metrics: {
+      queries: 1,
+      impressions: 1_000,
+      clicks: 20,
+      volume: 500,
+      volumeSum: 500,
+      difficulty: null,
+      position: 8,
+      aeoQuestions: 0,
+      aeoCited: 0,
+    },
+    queries: [],
+    excludedQueries: [],
+    pages: [],
+    coverage: "strong",
+    visibility: "proven",
+    coverageFacts: { page: true, ranks: true, converts: true },
+    language: "en",
+    contextOnly: { queries: 0, impressions: 0, volume: 0, examples: [] },
+    reviewFlags: [],
+    gaps: [],
+    ...overrides,
+  };
+}
 
 describe("proposal identity", () => {
   it("is the asset, so a re-worded proposal updates the same row", () => {
@@ -267,5 +305,49 @@ describe("proposal rendering", () => {
     expect(score.worth.change).toBe(proposal.action);
     expect(score.worth.successMeasure).toBe(proposal.expectedOutcome);
     expect(score.effort.playTypeBase).toBe(8);
+  });
+
+  it("puts foundations first and holds content when the site is invisible", () => {
+    const invisible = {
+      ...map,
+      clusters: [topicCluster({ metrics: { ...topicCluster().metrics, impressions: 30, clicks: 0 } })],
+    } as unknown as TopicMap;
+    const board = renderProposalBoard({
+      map: invisible,
+      proposals: [
+        makeProposal({ title: "Write the luminaire page", topicSlug: "luminaires" }),
+        makeProposal({
+          lane: "technical",
+          kind: "technical",
+          title: "Fix the sitemap",
+          target: { url: "/", newAsset: false, section: null },
+          topicSlug: null,
+        }),
+      ],
+      dropped: [],
+      critique: { available: false, model: null, summary: null, error: "none" },
+      technical: [],
+      generatedAt: "2026-11-05T00:00:00Z",
+    });
+    expect(board).toContain("Foundations first");
+    expect(board).toContain("HOLD");
+    expect(board.indexOf("Fix the sitemap")).toBeLessThan(board.indexOf("Write the luminaire page"));
+  });
+
+  it("scores a measured topic and flags a language mismatch", () => {
+    const spanish = {
+      ...map,
+      clusters: [topicCluster({ language: "es" })],
+    } as unknown as TopicMap;
+    const board = renderProposalBoard({
+      map: spanish,
+      proposals: [makeProposal()],
+      dropped: [],
+      critique: { available: false, model: null, summary: null, error: "none" },
+      technical: [],
+      generatedAt: "2026-11-05T00:00:00Z",
+    });
+    expect(board).toContain("clicks/month at the measured position");
+    expect(board).toContain("queries are in es; the site locale is en");
   });
 });

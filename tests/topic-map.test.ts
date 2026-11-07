@@ -530,4 +530,26 @@ describe("page type and owner coverage", () => {
     );
     expect(map.clusters[0].coverage).not.toBe("none");
   });
+
+  it("separates page existence, ranking and clicks", () => {
+    const lampes = {
+      ...taxonomy[0],
+      slug: "lampes",
+      name: "Lampes",
+      requireAny: ["lampes"],
+      terms: ["lampes"],
+      strongTerms: ["lampes"],
+      preferredPages: ["/lampes"],
+      coverageKind: "product" as const,
+    };
+    const map = buildTopicMap(
+      data({
+        queries: [query("lampes artisanales", 10)],
+        pages: [page("/lampes", "Lampes", "category", 400)],
+      }),
+      [lampes]
+    );
+    const cluster = map.clusters[0];
+    expect(cluster.coverageFacts).toEqual({ page: true, ranks: true, converts: false });
+  });
 });

@@ -5,7 +5,15 @@ import type { PrismaClient } from "@prisma/client";
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
-import { assignQuery, type TopicCluster, type TopicMap } from "@/lib/research/topic-map";
+import { ctrAtPosition } from "@/lib/funnel/scoring";
+import {
+  comparePriority,
+  foundationsGate,
+  intentFitFor,
+  proposalPriority,
+  type ProposalPriority,
+} from "@/lib/research/priority";
+import { type TopicCluster, type TopicMap } from "@/lib/research/topic-map";
 
 /**
  * Phase 3: turn the reviewed topic map into board-ready proposals.
@@ -207,8 +215,11 @@ export function proposalScoreInputs(
   return {
     worth: {
       volume,
-      ctrAtPosition: volume ? 0.03 : null,
+      // The curve is declared in scoring.ts; a flat 3% made a page at position
+      // 8 and a page at position 60 look like the same opportunity.
+      ctrAtPosition: cluster?.metrics.position != null ? ctrAtPosition(cluster.metrics.position) : null,
       businessValue,
+      intentFit: intentFitFor(cluster?.intent),
       volumeSource: cluster?.metrics.volume ? "provider" : volume ? "first_party" : "unknown",
       readiness: proposal.kind === "business" ? "needs_investigation" : "actionable",
       measurement: proposal.kind === "business" ? "unquantified" : volume ? "observed_baseline" : "unquantified",
@@ -544,6 +555,13 @@ export async function storeProposals(
   return { stored, dropped };
 }
 
+function describePriority(priority: ProposalPriority): string {
+  const hold = priority.hold ? "HOLD — " : "";
+  if (priority.track === "foundation") return `${hold}foundation · ${priority.reason}`;
+  if (priority.score != null) return `${hold}≈${priority.score.toFixed(1)} clicks/month at the measured position · ${priority.reason}`;
+  return `${hold}not quantified · ${priority.reason}`;
+}
+
 export function renderProposalBoard(input: {
   map: TopicMap;
   proposals: Proposal[];
@@ -561,6 +579,14 @@ export function renderProposalBoard(input: {
   lines.push("");
   lines.push(`Generated ${input.generatedAt}. Proposals only; no task is created until a human accepts one.`);
   lines.push("");
+  const gate = foundationsGate(input.map);
+  const clusterBySlug = new Map(input.map.clusters.map((cluster) => [cluster.slug, cluster]));
+  const ranked = input.proposals
+    .map((proposal) => ({
+      proposal,
+      priority: proposalPriority(proposal, proposal.topicSlug ? clusterBySlug.get(proposal.topicSlug) ?? null : null, gate),
+    }))
+    .sort((a, b) => comparePriority(a, b, gate));
   if (input.changes) {
     lines.push(
       `Since the previous run: ${input.changes.updated} updated in place, ${input.changes.added.length} new, ${input.changes.closed.length} closed.`
@@ -569,8 +595,20 @@ export function renderProposalBoard(input: {
     for (const title of input.changes.closed) lines.push(`- closed: ${title}`);
     lines.push("");
   }
+  if (ranked.length > 0) {
+    lines.push("## Priority order");
+    lines.push("");
+    lines.push(gate.reason);
+    lines.push("");
+    for (const [index, item] of ranked.entries()) {
+      lines.push(`${index + 1}. **${item.proposal.title}** — ${describePriority(item.priority)}`);
+    }
+    lines.push("");
+  }
+  const languageMismatch = (cluster: TopicCluster) =>
+    cluster.language != null && cluster.language !== input.map.locale.language;
   const taxonomyReview = input.map.clusters.filter(
-    (cluster) => cluster.reviewFlags.includes("no-need-word") || cluster.contextOnly.queries > 0
+    (cluster) => cluster.reviewFlags.includes("no-need-word") || cluster.contextOnly.queries > 0 || languageMismatch(cluster)
   );
   if (taxonomyReview.length > 0) {
     lines.push("## Taxonomy review");
@@ -578,6 +616,9 @@ export function renderProposalBoard(input: {
     for (const cluster of taxonomyReview) {
       if (cluster.reviewFlags.includes("no-need-word")) {
         lines.push(`- \`${cluster.slug}\` — no need word: defined only by place or brand. Not drafted until the taxonomy is corrected.`);
+      }
+      if (languageMismatch(cluster)) {
+        lines.push(`- \`${cluster.slug}\` — queries are in ${cluster.language}; the site locale is ${input.map.locale.language}. Decide the language architecture before drafting this topic.`);
       }
     }
     // The same place-only queries are context-only for every topic that names
@@ -605,18 +646,19 @@ export function renderProposalBoard(input: {
     { lane: "technical", title: "Technical" },
   ];
   for (const lane of lanes) {
-    const laneProposals = input.proposals.filter((proposal) => proposal.lane === lane.lane);
+    const laneItems = ranked.filter((item) => item.proposal.lane === lane.lane);
     lines.push(`### ${lane.title}`);
     lines.push("");
-    if (laneProposals.length === 0) {
+    if (laneItems.length === 0) {
       lines.push("No proposal in this lane.");
       lines.push("");
       continue;
     }
-    for (const proposal of laneProposals) {
+    for (const { proposal, priority } of laneItems) {
       lines.push(`#### ${proposal.title}`);
       lines.push("");
       lines.push(`- Kind: ${proposal.kind}; effort: ${proposal.effort}; confidence: ${proposal.confidence ?? "not assessed"}${proposal.confidenceReason ? ` (${proposal.confidenceReason})` : ""}`);
+      lines.push(`- Priority: ${describePriority(priority)}`);
       lines.push(`- Summary: ${proposal.summary}`);
       if (proposal.whyNow) lines.push(`- Why now: ${proposal.whyNow}`);
       lines.push(`- Target: ${proposal.target.url ?? (proposal.target.newAsset ? "new asset" : "no page")}${proposal.target.section ? ` (${proposal.target.section})` : ""}`);

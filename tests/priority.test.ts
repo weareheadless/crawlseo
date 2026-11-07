@@ -1,0 +1,129 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  bandFor,
+  comparePriority,
+  foundationsGate,
+  intentFitFor,
+  proposalPriority,
+  type PriorityInput,
+} from "@/lib/research/priority";
+import type { TopicCluster, TopicMap } from "@/lib/research/topic-map";
+
+function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
+  return {
+    slug: "luminaires",
+    name: "Luminaires",
+    kind: "market",
+    topicSummary: "",
+    intent: "commercial",
+    relevance: "high",
+    rationale: "",
+    actionHint: "",
+    marketScope: { scope: "international", markets: [], source: "offer" },
+    confidence: 0.7,
+    metrics: {
+      queries: 1,
+      impressions: 1_000,
+      clicks: 20,
+      volume: 500,
+      volumeSum: 500,
+      difficulty: null,
+      position: 8,
+      aeoQuestions: 0,
+      aeoCited: 0,
+    },
+    queries: [],
+    excludedQueries: [],
+    pages: [],
+    coverage: "strong",
+    visibility: "proven",
+    coverageFacts: { page: true, ranks: true, converts: true },
+    language: "en",
+    contextOnly: { queries: 0, impressions: 0, volume: 0, examples: [] },
+    reviewFlags: [],
+    gaps: [],
+    ...overrides,
+  };
+}
+
+function mapWith(clusters: TopicCluster[]): TopicMap {
+  return { locale: { language: "en", country: null }, clusters } as unknown as TopicMap;
+}
+
+function proposal(overrides: Partial<PriorityInput> = {}): PriorityInput {
+  return { lane: "content_business", kind: "update", effort: "medium", confidence: "medium", ...overrides };
+}
+
+describe("priority bands", () => {
+  it("maps a measured position to a declared band", () => {
+    expect(bandFor(2)).toBe("top3");
+    expect(bandFor(8)).toBe("page1");
+    expect(bandFor(15)).toBe("page2");
+    expect(bandFor(42)).toBe("deep");
+    expect(bandFor(null)).toBe("unranked");
+  });
+
+  it("discounts informational intent", () => {
+    expect(intentFitFor("commercial")).toBe(1);
+    expect(intentFitFor("transactional")).toBe(1);
+    expect(intentFitFor("mixed")).toBe(0.7);
+    expect(intentFitFor("informational")).toBe(0.35);
+  });
+});
+
+describe("proposal priority", () => {
+  const gateOff = { needed: false };
+  const gateOn = { needed: true };
+
+  it("scores demand at the measured band, discounted by intent", () => {
+    // 500 demand × 4% at position 8 × commercial intent.
+    const priority = proposalPriority(proposal(), cluster(), gateOff);
+    expect(priority.score).toBe(20);
+    expect(priority.band).toBe("page1");
+    expect(priority.track).toBe("money");
+    expect(priority.hold).toBe(false);
+  });
+
+  it("does not turn a big market into a score without measured reach", () => {
+    const priority = proposalPriority(
+      proposal(),
+      cluster({ metrics: { ...cluster().metrics, impressions: 6, clicks: 0, volume: 534_380, position: 74 } }),
+      gateOff
+    );
+    expect(priority.score).toBeNull();
+    expect(priority.reason).toMatch(/below the 100 reach threshold/);
+  });
+
+  it("holds content when the site is invisible", () => {
+    const priority = proposalPriority(proposal(), cluster(), gateOn);
+    expect(priority.hold).toBe(true);
+    const foundation = proposalPriority(proposal({ lane: "technical", kind: "technical" }), null, gateOn);
+    expect(foundation.hold).toBe(false);
+    expect(foundation.track).toBe("foundation");
+  });
+
+  it("orders foundations first only when the site is invisible", () => {
+    const content = { proposal: proposal(), priority: proposalPriority(proposal(), cluster(), gateOn) };
+    const technical = {
+      proposal: proposal({ lane: "technical", kind: "technical" }),
+      priority: proposalPriority(proposal({ lane: "technical", kind: "technical" }), null, gateOn),
+    };
+    expect(comparePriority(technical, content, gateOn)).toBeLessThan(0);
+    expect(comparePriority(content, technical, gateOff)).toBeLessThan(0);
+  });
+});
+
+describe("foundations gate", () => {
+  it("opens when the site has too little reach", () => {
+    const gate = foundationsGate(mapWith([cluster({ metrics: { ...cluster().metrics, impressions: 30, clicks: 0 } })]));
+    expect(gate.needed).toBe(true);
+    expect(gate.reason).toMatch(/Foundations first/);
+  });
+
+  it("closes when the site earns clicks", () => {
+    const gate = foundationsGate(mapWith([cluster()]));
+    expect(gate.needed).toBe(false);
+    expect(gate.reason).toMatch(/content can be ranked by expected clicks/);
+  });
+});

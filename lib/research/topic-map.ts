@@ -125,6 +125,14 @@ export type TopicCluster = {
   /** Does the site actually earn impressions for it? */
   visibility: "proven" | "unproven";
   /**
+   * The three facts "coverage" was conflating: a page exists, the site earns
+   * impressions for it, and the page earns clicks. A page that ranks at 42 is
+   * not strong because it exists.
+   */
+  coverageFacts: { page: boolean; ranks: boolean; converts: boolean };
+  /** The language the topic's queries are written in, judged by the review. */
+  language: string | null;
+  /**
    * Queries that name the topic's place or brand but not its need. They are
    * not counted in the cluster's demand; the count makes the trade-off visible
    * instead of leaving it buried in the global unmapped table.
@@ -740,6 +748,12 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       pages,
       coverage,
       visibility,
+      coverageFacts: {
+        page: pages.length > 0,
+        ranks: visibility === "proven",
+        converts: metrics.clicks > 0,
+      },
+      language: null,
       contextOnly: {
         queries: contextOnlyQueries.length,
         impressions: contextOnlyQueries.reduce((sum, query) => sum + query.impressions, 0),
@@ -933,7 +947,8 @@ export async function synthesizeTopicMap(
     "A topic flagged no-need-word is defined only by place or brand: do not treat it as an opportunity. Say that its taxonomy needs a need word.",
     "A topic whose kind is brand is the business's own name. It is complete as a name: do not ask for a need word and do not treat the name alone as a taxonomy defect. Judge whether its page earns the brand query.",
     "A cluster's contextOnly count is demand that names its place or brand but not its need. Treat it as evidence of a missing need term or a separate audience, not as demand the topic owns.",
-    "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[], market_verdicts: [{ cluster: string, query: string, in_market: boolean, reason: string }] }.",
+    "For every cluster, set language to the ISO 639-1 code of the language its queries are written in (for example en, es, fr). If the queries mix languages, use the dominant one. This is a fact about the demand, not a preference.",
+    "Return exactly one JSON object: { map_summary: string, seo_review: string, clusters: [{ slug: string, name: string, rationale: string, intent: string, relevance: string, coverage: string, confidence: number, language: string, gaps: string[] }], priority_topics: string[], weak_topics: string[], market_verdicts: [{ cluster: string, query: string, in_market: boolean, reason: string }] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",
     "market_verdicts must use only the supplied cluster slugs and query strings. Omit a query you cannot place. Keep each reason under 140 characters.",
     "Keep map_summary under 400 characters and seo_review under 600 characters.",
@@ -971,6 +986,9 @@ export async function synthesizeTopicMap(
       const relevance = textValue(row.relevance);
       const coverage = textValue(row.coverage);
       const confidence = numberValue(row.confidence);
+      // The review names the language it reads in the queries. It is a fact
+      // about the demand, not a guess by the map: the model sees the queries.
+      const language = textValue(row.language)?.toLowerCase() ?? null;
       if (name) cluster.name = name.slice(0, 160);
       if (rationale) {
         cluster.rationale = rationale.slice(0, 600);
@@ -979,6 +997,7 @@ export async function synthesizeTopicMap(
       if (intent && allowedIntent.has(intent)) cluster.intent = intent as TopicIntent;
       if (relevance && allowedRelevance.has(relevance)) cluster.relevance = relevance as TopicRelevance;
       if (coverage && allowedCoverage.has(coverage)) cluster.coverage = coverage as TopicCluster["coverage"];
+      if (language && /^[a-z]{2}$/.test(language)) cluster.language = language;
       if (Number.isFinite(confidence)) cluster.confidence = Math.max(0, Math.min(1, confidence));
       if (Array.isArray(row.gaps)) {
         const gaps = row.gaps
@@ -1228,16 +1247,20 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Topic table");
   lines.push("");
-  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |");
-  lines.push("|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|");
+  lines.push("| Topic | Intent | Relevance | Market scope | Lang | Queries | Impressions | Clicks | Distinct demand | Summed volume | Context-only | Page | Ranks | Main page | Main gap |");
+  lines.push("|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|");
   for (const cluster of map.clusters) {
     const mainPage = cluster.pages[0]?.url.replace(/^https?:\/\/[^/]+/, "") ?? "—";
     const mainGap = cluster.gaps[0] ?? "—";
     const contextOnly = cluster.contextOnly.queries > 0
       ? `${cluster.contextOnly.queries} q / ${cluster.contextOnly.volume}`
       : "—";
+    const pageState = cluster.coverageFacts.page ? (cluster.coverage === "partial" ? "thin" : "exists") : "none";
+    const rankState = cluster.metrics.position != null && cluster.metrics.impressions > 0
+      ? `pos ${cluster.metrics.position.toFixed(1)}`
+      : "no";
     lines.push(
-      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.metrics.volumeSum} | ${contextOnly} | ${cluster.coverage} | ${cluster.visibility} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
+      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.language ?? "—"} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.clicks} | ${cluster.metrics.volume} | ${cluster.metrics.volumeSum} | ${contextOnly} | ${pageState} | ${rankState} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
     );
   }
   lines.push("");
@@ -1251,7 +1274,8 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     lines.push(`- Market scope: ${formatScope(cluster.marketScope)}`);
     lines.push(`- Rationale: ${cluster.rationale}`);
     lines.push(`- Demand: ${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.clicks} clicks, ${cluster.metrics.volume} distinct monthly demand (${cluster.metrics.volumeSum} summed across keyword variants); average position ${cluster.metrics.position?.toFixed(1) ?? "unknown"}.`);
-    lines.push(`- Coverage: ${cluster.coverage} (a page matches the terms); visibility: ${cluster.visibility} (${cluster.visibility === "proven" ? "the site earns impressions" : "the site earns no impressions yet"}).`);
+    lines.push(`- Page: ${cluster.coverageFacts.page ? `exists (${cluster.pages[0]?.wordCount ?? 0} words)` : "none"}; ranking: ${cluster.metrics.position != null ? `position ${cluster.metrics.position.toFixed(1)}` : "no measured position"}; clicks: ${cluster.metrics.clicks}.`);
+    if (cluster.language) lines.push(`- Query language: ${cluster.language}.`);
     lines.push(`- AEO: ${cluster.metrics.aeoQuestions} measured questions, ${cluster.metrics.aeoCited} citations of the site.`);
     lines.push(`- Action hint: ${cluster.actionHint}`);
     if (cluster.reviewFlags.includes("no-need-word")) {
