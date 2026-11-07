@@ -9,6 +9,7 @@ import {
   distinctVolume,
   distinctiveTopicTerms,
   normalizeTopicText,
+  pageType,
   renderTopicMapMarkdown,
   scoreTopicForQuery,
   storeTopicMap,
@@ -411,5 +412,85 @@ describe("topic anchor", () => {
     };
     const terms = distinctiveTopicTerms(seats, new Set(["normandie"]), new Set());
     expect(terms).toEqual(expect.arrayContaining(["fauteuil", "chaise", "tapissier"]));
+  });
+});
+
+describe("context-only demand", () => {
+  it("counts queries that name the place but not the need", () => {
+    const luxury = {
+      ...taxonomy[0],
+      slug: "luxury",
+      name: "Riviera Maya luxury condos",
+      requireAny: ["riviera maya", "condos"],
+      terms: ["riviera maya", "luxury", "condos"],
+      strongTerms: ["riviera maya"],
+      requireGroups: [["luxury", "condos"]],
+      preferredPages: ["/"],
+    };
+    const map = buildTopicMap(
+      data({
+        queries: [
+          query("riviera maya luxury condos", 10, 50),
+          query("riviera maya things to do", 20),
+        ],
+        pages: [page("/", "Riviera Maya", "home")],
+      }),
+      [luxury]
+    );
+    const cluster = map.clusters[0];
+    expect(cluster.contextOnly.queries).toBe(1);
+    expect(cluster.contextOnly.impressions).toBe(20);
+    expect(cluster.contextOnly.examples).toContain("riviera maya things to do");
+  });
+
+  it("flags a topic whose vocabulary is only a place", () => {
+    const placeOnly = {
+      ...taxonomy[0],
+      slug: "place",
+      name: "Normandie",
+      requireAny: ["normandie"],
+      terms: ["normandie"],
+      strongTerms: [],
+      preferredPages: ["/"],
+    };
+    const map = buildTopicMap(
+      data({ queries: [query("normandie", 5)], pages: [page("/", "Normandie", "home")] }),
+      [placeOnly]
+    );
+    expect(map.clusters[0].reviewFlags).toContain("no-need-word");
+  });
+});
+
+describe("page type and owner coverage", () => {
+  it("does not let the home rule swallow every path", () => {
+    const rules = [
+      { type: "home" as const, pattern: "/" },
+      { type: "category" as const, pattern: "/lampes" },
+    ];
+    expect(pageType("/", rules)).toBe("home");
+    expect(pageType("/lampes", rules)).toBe("category");
+    expect(pageType("/lampes/suspensions", rules)).toBe("category");
+  });
+
+  it("counts the owner page even when the page type is wrong", () => {
+    const lampes = {
+      ...taxonomy[0],
+      slug: "lampes",
+      name: "Lampes",
+      requireAny: ["lampes"],
+      terms: ["lampes"],
+      strongTerms: ["lampes"],
+      coverageRequireAny: ["does-not-match"],
+      preferredPages: ["/lampes"],
+      coverageKind: "product" as const,
+    };
+    const map = buildTopicMap(
+      data({
+        queries: [query("lampes artisanales", 10)],
+        pages: [page("/lampes", "Lampes", "home", 400)],
+      }),
+      [lampes]
+    );
+    expect(map.clusters[0].coverage).not.toBe("none");
   });
 });

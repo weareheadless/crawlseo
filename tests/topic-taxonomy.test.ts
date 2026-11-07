@@ -8,6 +8,7 @@ vi.mock("@/lib/ai-seo/writer", () => ({
 vi.mock("@/lib/ai/chat", () => ({ chatJson: mocks.chatJson }));
 
 import {
+  applyTopicAnchors,
   brandTermMatches,
   loadTopicTaxonomy,
   parseTopicTaxonomy,
@@ -15,6 +16,7 @@ import {
   queryMatchesTopics,
   saveTopicTaxonomy,
   stabilizeTopicTaxonomy,
+  topicContextTerms,
   validateTopic,
   type TopicDefinition,
   type TopicTaxonomyInput,
@@ -409,5 +411,111 @@ describe("taxonomy stabilization", () => {
     expect(kept.requireAny).not.toContain("migo");
     expect(queryMatchesTopics([kept], "casa migo")).toBe(true);
     expect(queryMatchesTopics([kept], "casas")).toBe(false);
+  });
+});
+
+describe("topic anchors", () => {
+  it("stores a need group that excludes the place", () => {
+    const [anchored] = applyTopicAnchors(
+      [topic({
+        name: "Riviera Maya luxury condos",
+        requireAny: ["riviera maya", "condos"],
+        terms: ["riviera maya", "luxury", "condos"],
+        strongTerms: ["riviera maya"],
+      }) as TopicDefinition],
+      topicContextTerms(["Riviera Maya"]),
+      new Set()
+    );
+    expect(anchored.requireGroups).toEqual([expect.arrayContaining(["luxury", "condos"])]);
+    expect(anchored.requireGroups?.flat()).not.toContain("riviera");
+    expect(anchored.reviewFlags).not.toContain("no-need-word");
+  });
+
+  it("flags a topic whose vocabulary is only a place", () => {
+    const [anchored] = applyTopicAnchors(
+      [topic({ name: "Riviera Maya", requireAny: ["riviera maya"], terms: ["riviera maya"], strongTerms: [] }) as TopicDefinition],
+      topicContextTerms(["Riviera Maya"]),
+      new Set()
+    );
+    expect(anchored.requireGroups).toBeUndefined();
+    expect(anchored.reviewFlags).toContain("no-need-word");
+  });
+});
+
+describe("taxonomy proposal anchors", () => {
+  it("stores the need group in the proposed taxonomy", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      summary: "One topic.",
+      topics: [
+        {
+          name: "Tulum condos",
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          offerKey: "Condos",
+          rationale: "Buyers search Tulum condos directly.",
+          actionHint: "Check the listing page.",
+          memberQueries: ["tulum condos for sale", "tulum condos"],
+          preferredPages: ["/tulum-condos"],
+        },
+      ],
+      pageTypeRules: [],
+      excludePaths: [],
+      newsQueries: [],
+    }));
+    const result = await proposeTopicTaxonomy(input());
+    expect(result.error).toBeNull();
+    const proposed = result.taxonomy!.topics[0];
+    expect(proposed.requireGroups).toBeDefined();
+    expect(proposed.requireGroups!.flat()).not.toContain("tulum");
+    expect(proposed.requireGroups!.flat()).toContain("condos");
+  });
+});
+
+describe("brand fallback head term", () => {
+  it("gives the brand topic the service vocabulary so it can own the bare head term", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      summary: "One service topic.",
+      topics: [
+        {
+          name: "Freediving course",
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "service",
+          offerKey: "Freediving course",
+          rationale: "Course demand.",
+          actionHint: "Improve the course page.",
+          memberQueries: ["freediving course", "freediving"],
+          preferredPages: ["/course"],
+        },
+      ],
+      pageTypeRules: [],
+      excludePaths: [],
+      newsQueries: [],
+    }));
+    const result = await proposeTopicTaxonomy(input({
+      domain: "ocean.example",
+      business: {
+        name: "Ocean School",
+        services: ["Freediving course"],
+        location: "Playa del Carmen",
+        serviceArea: ["Tulum"],
+        audience: null,
+        differentiators: [],
+        concerns: [],
+      },
+      queries: [
+        { query: "freediving", impressions: 0, volume: 12_000 },
+        { query: "freediving course", impressions: 0, volume: 1_300 },
+        { query: "ocean school", impressions: 2, volume: 10 },
+      ],
+      pages: [{ path: "/course", title: "Freediving course", h1: "Freediving course", wordCount: 800 }],
+      brandTerms: ["ocean school"],
+    }));
+    const brand = result.taxonomy?.topics.find((entry) => entry.coverageKind === "brand");
+    expect(brand).toBeDefined();
+    expect(brand?.terms).toContain("freediving");
   });
 });

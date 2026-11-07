@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { profileValue, confirmationStatus } from "@/lib/projects/business-profile-view";
 import { readBusinessKnowledge } from "@/lib/projects/business-knowledge";
 import { getResearchConfig } from "@/lib/research/policy";
+import { AudienceEditor } from "@/components/business/audience-editor";
 import { BusinessOperationalForm } from "@/components/business/business-operational-form";
 import { MarketScopeEditor } from "@/components/business/market-scope-editor";
 
@@ -53,6 +54,18 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
         description="Recorded business facts, where each came from, and the research configuration derived from them."
       />
 
+      <AudienceEditor
+        siteId={siteId}
+        revision={config.policy?.revision ?? 0}
+        profileUpdatedAt={profile?.updatedAt.toISOString() ?? null}
+        initial={{
+          audience: config.audience,
+          audienceMarket: config.audienceMarket,
+          audienceMarkets: config.audienceMarkets,
+          audienceLanguages: config.audienceLanguages,
+        }}
+      />
+
       <section className="panel p-4 sm:p-5">
         <h2 className="font-heading text-lg font-semibold">Canonical knowledge</h2>
         {!head ? (
@@ -98,7 +111,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
       </section>
 
       <BusinessOperationalForm siteId={siteId} revision={config.policy?.revision ?? 0} profileUpdatedAt={profile?.updatedAt.toISOString() ?? null} initial={{
-        topics: config.topics, audience: config.audience, market: config.market, language: config.language,
+        topics: config.topics, market: config.market, language: config.language,
         goals: config.goals, services: Array.isArray(profile?.services) ? profile.services.filter((value): value is string => typeof value === "string") : [],
         competitors: Array.isArray(profile?.competitors) ? profile.competitors.filter((value): value is string => typeof value === "string") : [],
         brandVoice: typeof profile?.brandVoice === "string" ? profile.brandVoice : "",
@@ -125,7 +138,8 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Topics" value={config.topics.join(", ") || "Not recorded"} />
           <Fact label="Audience" value={config.audience || "Not recorded"} />
-          <Fact label="Market" value={config.market || "Not recorded"} />
+          <Fact label="Audience market" value={config.audienceMarket || "Not recorded"} />
+          <Fact label="Business market" value={config.market || "Not recorded"} />
           <Fact label="Providers" value={config.providers.join(", ") || "Not recorded"} />
         </div>
         <Link

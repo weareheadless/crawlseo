@@ -37,6 +37,27 @@ describe("section configuration transaction", () => {
     expect(db.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it("saves the audience market and languages into constraints", async () => {
+    await saveConfigurationSection(
+      "site-1",
+      "business",
+      { audienceMarket: "United States", audienceMarkets: ["US", "CA"], audienceLanguages: ["en", "es"] },
+      3,
+      "2026-01-01T00:00:00.000Z"
+    );
+    expect(tx.siteProfile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          constraints: expect.objectContaining({
+            audienceMarket: "United States",
+            audienceMarkets: ["US", "CA"],
+            audienceLanguages: ["en", "es"],
+          }),
+        }),
+      })
+    );
+  });
+
   it("mirrors Research exclusions into constraints in the same transaction", async () => {
     await saveConfigurationSection("site-1", "research", { exclusions: ["competitor brand"] }, 3, "2026-01-01T00:00:00.000Z");
     expect(tx.researchPolicy.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ exclusions: ["competitor brand"] }) }));

@@ -35,6 +35,12 @@ export type TopicDefinition = {
   requireAny: string[];
   /** Every group must have at least one match; used for two-part rules like kit + workshop. */
   requireGroups?: string[][];
+  /**
+   * A deterministic defect the reviewer must see: `no-need-word` means the
+   * topic is defined only by place or brand and would claim every query that
+   * names it. It is not an opportunity until the taxonomy is corrected.
+   */
+  reviewFlags?: string[];
   /** Pages that should be shown first when they match. */
   preferredPages?: string[];
   /** A brand topic claims its query instead of sharing it with a generic topic. */
@@ -88,6 +94,17 @@ export type TopicTaxonomyInput = {
   domain: string;
   language: string;
   country: string | null;
+  /** The business's market as the owner wrote it, when known. */
+  market?: string | null;
+  /**
+   * Where the audience searches, which is not where the business sits. The
+   * taxonomy must serve this audience, not the business address.
+   */
+  audienceMarket?: string | null;
+  audienceCountry?: string | null;
+  audienceCountries?: string[];
+  /** The language(s) the audience searches in, when known. */
+  audienceLanguages?: string[];
   /** The site's own page paths, for coverage grounding. */
   pagePaths: string[];
   business: {
@@ -96,10 +113,12 @@ export type TopicTaxonomyInput = {
     location: string | null;
     serviceArea: string[];
     audience: string | null;
+    /** What the audience wants, from the business knowledge document. */
+    audienceMotivations?: string[];
     differentiators: string[];
     concerns: string[];
   };
-  marketScope: { default: string; offers: Array<{ offer: string; scope: string }> };
+  marketScope: { default: string; offers: Array<{ offer: string; scope: string; markets?: string[] }> };
   queries: Array<{ query: string; impressions: number; volume: number | null }>;
   pages: Array<{ path: string; title: string; h1: string; wordCount: number }>;
   /**
@@ -159,6 +178,82 @@ export function brandTermMatches(term: string, brandKey: string): boolean {
     if (termTokens.length >= 2 && termTokens.every((token) => brandSet.has(token))) return true;
   }
   return false;
+}
+
+/**
+ * The words that make a topic that topic, rather than the place it happens in
+ * or the brand that owns the site.
+ *
+ * A topic named "Riviera Maya beachfront, luxury properties and penthouses" is
+ * about beachfront/luxury/penthouses; "Riviera Maya" is where. Without this
+ * distinction every query containing the place joined the topic: "riviera maya
+ * things to do" became luxury demand. The same rule removes brand words from
+ * other topics, so a brand-split token ("casa") cannot create a second topic
+ * that swallows "casas".
+ *
+ * The source is the topic's whole vocabulary, not just its title: a seat
+ * restoration topic is also "fauteuil", "chaise" and "canape", and those are
+ * its demand. Only the place and brand words are stripped.
+ */
+export function distinctiveTopicTerms(
+  topic: TopicDefinition,
+  contextTerms: Set<string>,
+  brandTerms: Set<string>
+): string[] {
+  const vocabulary = [
+    topic.name,
+    ...topic.requireAny,
+    ...topic.terms,
+    ...(topic.strongTerms ?? []),
+  ];
+  const terms = new Set(vocabulary.flatMap((term) => significantTokens(term)));
+  for (const term of contextTerms) terms.delete(term);
+  for (const term of brandTerms) terms.delete(term);
+  return [...terms];
+}
+
+/** Place and market words that are context, never a topic's defining need. */
+export function topicContextTerms(parts: Array<string | null | undefined>): Set<string> {
+  return new Set(significantTokens(parts.filter((part): part is string => Boolean(part)).join(" ")));
+}
+
+/** The business name terms, taken from the brand topic the taxonomy already has. */
+export function topicBrandTerms(topics: TopicDefinition[]): Set<string> {
+  return new Set(
+    topics
+      .filter((topic) => topic.coverageKind === "brand")
+      .flatMap((topic) => topic.requireAny)
+      .flatMap((term) => significantTokens(term))
+  );
+}
+
+/**
+ * Store the need group on every topic that does not already have one. The map
+ * uses the stored group; this is what makes the proposed taxonomy the thing the
+ * map follows. A topic with no need word is flagged rather than silently
+ * allowed to claim every query that names its place.
+ */
+export function applyTopicAnchors(
+  topics: TopicDefinition[],
+  contextTerms: Set<string>,
+  brandTerms: Set<string>
+): TopicDefinition[] {
+  return topics.map((topic) => {
+    if (topic.coverageKind === "brand") return topic;
+    if (topic.requireGroups && topic.requireGroups.length > 0) return topic;
+    const anchor = distinctiveTopicTerms(topic, contextTerms, brandTerms);
+    if (anchor.length === 0) {
+      return {
+        ...topic,
+        reviewFlags: [...new Set([...(topic.reviewFlags ?? []), "no-need-word"])],
+      };
+    }
+    return {
+      ...topic,
+      requireGroups: [anchor],
+      reviewFlags: (topic.reviewFlags ?? []).filter((flag) => flag !== "no-need-word"),
+    };
+  });
 }
 
 /**
@@ -431,15 +526,18 @@ export function sampleQueries(
 
 const SYSTEM = [
   "You are an SEO strategist modelling one business so a topic map can be built.",
-  "You receive the business's own facts, the offers it sells with their market scope, its page inventory, and a sample of its measured Search Console queries.",
+  "You receive the business's own facts, the offers it sells with their market scope, its page inventory, the audience market and language where its buyers search, and a sample of its measured Search Console queries.",
   "The business's services list is authoritative: every service the owner lists must have at least one topic. If it lists renting, buying, management or advice, the taxonomy contains a topic for it even when its query volume is small.",
+  "The audience market is where the business sells and where its buyers search. It governs the market and the language of the topics; the business address is context, not the audience.",
   "Define the topics this business can serve. A topic is one need with one kind of page that should own it: a place, a product type, a service, a brand.",
   "Different places and different product or service types are different topics. Do not collapse a market into one topic: if the queries separate into houses in one place, condos in another and rentals in a third, those are three topics.",
   "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
   "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
   "A query may appear in at most two topics, and only when it genuinely serves both.",
   "Leave out queries that fit no topic, are off-business, or are research noise. Do not invent a topic to cover them.",
-  "Name each topic in the site language, state its intent, relevance and the kind of page that should own it, and explain in one sentence why it matters.",
+  "Name each topic in the language the audience searches, not necessarily the site language, and cite member queries in that language. If the query set contains another language, include it only when the audience facts say that audience is in scope; otherwise leave it out. State each topic's intent, relevance and the kind of page that should own it, and explain in one sentence why it matters.",
+  "Never treat the business's location, service area or brand name as the topic's defining term. A place or brand is context; the topic is the need.",
+  "If audienceMarket is empty, infer the audience from the site, the audience facts and the query mix, and say so in the summary.",
   "Set preferredPages to the one to three real paths from the supplied inventory that should own the topic. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Leave it empty only when the site truly has no page for the topic, and say so in the rationale.",
   "offerKey must be one of the supplied offer names, or the topic name when no offer fits.",
   "Do not invent matching terms: membership comes from the queries you cite.",
@@ -473,7 +571,14 @@ export async function proposeTopicTaxonomy(
   const payload = {
     domain: input.domain,
     language: input.language,
-    country: input.country,
+    // The business address is context, not the audience. Keep both so the
+    // model can tell a Tulum agency selling to US buyers from a local shop.
+    businessCountry: input.country,
+    market: input.market ?? null,
+    audienceMarket: input.audienceMarket ?? null,
+    audienceCountry: input.audienceCountry ?? null,
+    audienceCountries: input.audienceCountries ?? [],
+    audienceLanguages: input.audienceLanguages ?? [],
     business: input.business,
     offers: input.marketScope.offers.length > 0 ? input.marketScope.offers : [{ offer: input.business.name ?? input.domain, scope: input.marketScope.default }],
     // The whole inventory. A cap here is invisible to the model and to the
@@ -566,11 +671,19 @@ export async function proposeTopicTaxonomy(
     // A brand topic is exclusive, so its membership must be the name, not the
     // generic tokens the model split it into.
     const siteBrandKey = input.business.name ?? input.domain.replace(/^www\./, "").split(".")[0];
+    // The homepage also answers the bare service term ("freediving", "condos").
+    // Give the brand topic the business's service words in its vocabulary so
+    // the head-term rule can choose the homepage over a narrower service topic.
+    // This does not widen requireAny: the brand topic still matches only its
+    // name; it only becomes eligible to own the bare market term.
+    const serviceTerms = input.business.services.flatMap((service) => significantTokens(service));
     for (const topic of topics) {
       if (topic.coverageKind !== "brand") continue;
       const brandKey = siteBrandKey || topic.slug.split("-")[0];
       const filtered = topic.requireAny.filter((term) => brandTermMatches(term, brandKey));
       if (filtered.length > 0) topic.requireAny = filtered;
+      topic.terms = [...new Set([...topic.terms, ...serviceTerms])];
+      topic.strongTerms = [...new Set([...(topic.strongTerms ?? []), ...serviceTerms])];
     }
     // Brand demand is a topic even when the model treats it as noise: it is the
     // one query set where the owner's own name is the subject, and dropping it
@@ -595,8 +708,11 @@ export async function proposeTopicTaxonomy(
             // Membership is the brand terms themselves, not tokens derived from
             // them: "ocean" would otherwise pull every ocean query into brand.
             requireAny: brandTerms,
-            terms: [...new Set([...brandTerms, ...derived.terms])],
-            strongTerms: brandTerms,
+            // The homepage also answers the bare service term. Keep the service
+            // words in the vocabulary so the head-term rule can give it the
+            // market head ("freediving"), without widening brand membership.
+            terms: [...new Set([...brandTerms, ...derived.terms, ...serviceTerms])],
+            strongTerms: [...new Set([...brandTerms, ...serviceTerms])],
             coverageRequireAny: brandTerms,
             pageTerms: derived.terms,
             preferredPages: ["/"],
@@ -755,6 +871,18 @@ export async function proposeTopicTaxonomy(
       if (!topic) continue;
       topic.headTerms = [...new Set([...(topic.headTerms ?? []), term])];
     }
+    // The need group is part of the taxonomy, not a second rule the map adds
+    // later. A topic whose vocabulary is only place or brand is flagged rather
+    // than allowed to claim every query that names it.
+    const contextTerms = topicContextTerms([
+      input.business.location,
+      ...input.business.serviceArea,
+      ...input.marketScope.offers.flatMap((offer) => offer.markets),
+      input.market ?? null,
+      input.audienceMarket ?? null,
+      ...(input.audienceCountries ?? []),
+    ]);
+    const anchoredTopics = applyTopicAnchors(topics, contextTerms, topicBrandTerms(topics));
     const pageTypeRules: TopicPageTypeRule[] = [];
     for (const raw of Array.isArray(record.pageTypeRules) ? record.pageTypeRules : []) {
       const row = asRecord(raw);
@@ -769,7 +897,7 @@ export async function proposeTopicTaxonomy(
         proposedBy: "ai",
         model: config.model,
         generatedAt: new Date().toISOString(),
-        topics,
+        topics: anchoredTopics,
         pageTypeRules,
         excludePaths: stringList(record.excludePaths, 20).map((path) => (path.startsWith("/") ? path : `/${path}`)),
         newsQueries: Array.isArray(record.newsQueries)
@@ -912,6 +1040,10 @@ export function stabilizeTopicTaxonomy(input: {
       survivor.strongTerms = derived.strongTerms;
       survivor.coverageRequireAny = derived.coverageRequireAny;
       survivor.pageTerms = derived.terms;
+      // The merge replaced the vocabulary the need group was derived from.
+      // Clear it so the map rebuilds it from the merged topic, rather than
+      // keeping a group that names terms the topic no longer uses.
+      survivor.requireGroups = undefined;
     }
     if (group.some((topic) => topic.exclusive)) survivor.exclusive = true;
     survivor.headTerms = [...new Set(group.flatMap((topic) => topic.headTerms ?? []))];

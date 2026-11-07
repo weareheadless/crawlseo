@@ -1,6 +1,6 @@
 # Topic map — casamigo.net — 2026-11
 
-Generated 2026-11-07T02:17:02.761Z. Locale en/MX.
+Generated 2026-11-07T16:37:11.132Z. Locale en/MX.
 
 ## Business
 
@@ -12,15 +12,13 @@ Generated 2026-11-07T02:17:02.761Z. Locale en/MX.
 
 ## Tenant model
 
-- Topics: 8
-  - `casamigo-ai-powered-real-estate-investment-consultation` — Casamigo AI-powered real estate & investment consultation (mixed, brand, high); 8 matching terms
-  - `tulum-real-estate-market-condos` — Tulum real estate market & condos (local, local, high); 14 matching terms
-  - `playa-del-carmen-real-estate-market-condos` — Playa del Carmen real estate market & condos (local, local, high); 14 matching terms
-  - `cozumel-real-estate-market-projects` — Cozumel real estate market & projects (local, local, medium); 12 matching terms
-  - `puerto-morelos-pre-construction-condos` — Puerto Morelos pre-construction condos (commercial, local, high); 11 matching terms
-  - `tao-tulum-condos` — Tao Tulum condos (commercial, product, high); 12 matching terms
-  - `riviera-maya-property-listings` — Riviera Maya property listings (transactional, product, high); 11 matching terms
-  - `riviera-maya-investment-specialist-lead-generation` — Riviera Maya investment specialist lead generation (transactional, business, medium); 8 matching terms
+- Topics: 6
+  - `casamigo-brand-and-investment-advisory` — Casamigo brand and investment advisory (commercial, brand, high); 8 matching terms
+  - `ai-powered-riviera-maya-real-estate-intelligence` — AI-powered Riviera Maya real estate intelligence (informational, service, high); 14 matching terms
+  - `tulum-condo-developments` — Tulum condo developments (transactional, product, high); 14 matching terms
+  - `playa-del-carmen-condo-developments` — Playa del Carmen condo developments (transactional, product, high); 14 matching terms
+  - `puerto-morelos-pre-sale-condos` — Puerto Morelos pre-sale condos (transactional, product, high); 11 matching terms
+  - `cozumel-luxury-condos-and-island-real-estate` — Cozumel luxury condos and island real estate (transactional, product, medium); 12 matching terms
 
 ## Method
 
@@ -30,64 +28,94 @@ A query can belong to more than one topic (a local service query, or a content q
 
 AI review: deepseek/deepseek-v4.1-flash-1017.
 
-Eight local clusters cover Riviera Maya real estate. Demand concentrates in Tulum (1,220) and Tao Tulum (220), with Puerto Morelos (170) and Cozumel (390) secondary; Playa del Carmen is core but low-volume (40). Gaps exist for Tao Tulum, Riviera Maya listings and lead gen. Unmapped terms are mostly generic Mexico/CDMX property searches outside the service area.
+Six local clusters sit in the Riviera Maya service area. Demand concentrates in Tulum (2,290), Cozumel (600), AI/Riviera Maya intelligence (230), Puerto Morelos (170), Playa del Carmen (30), and brand (0). Tulum/Playa contextOnly volume is mostly generic Mexico property terms. Supplied cluster queries name in-area places or no place; no cluster is off-area.
 
-Start with Tulum market/condos: highest measured demand and strong local fit. Build the missing Tao Tulum page next, then Puerto Morelos pre-construction and a Riviera Maya listings hub; keep Playa del Carmen as the home-market authority page. Cozumel is secondary because its queries look vague. Weak: Casamigo AI/brand and investment lead-gen have no measured demand; test a brand-defense page and a consultation/lead-magnet landing page before investing. Ignore unmapped CDMX/Guadalajara generic terms.
+Start with Tulum: highest demand and local transaction intent, but deep positions and project names need need terms. Next: AI/Riviera Maya intelligence, Puerto Morelos pre-sales, and Cozumel; Cozumel is medium relevance and needs sharper real-estate need wording. Playa del Carmen is home market but only 30 measured demand; treat as a weak test, expanding contextOnly 'propiedades en venta...' into listing/condo pages. Casamigo brand is brand-only with 0 demand: weak until a need word is added. No cluster is off-area; named places are in service area. ContextOnly in Tulum/Playa is not owned demand; unmapped terms are largely off-area.
 
-Priority topics: tulum-real-estate-market-condos, tao-tulum-condos, puerto-morelos-pre-construction-condos, riviera-maya-property-listings, playa-del-carmen-real-estate-market-condos.
-Weak topics: casamigo-ai-powered-real-estate-investment-consultation, riviera-maya-investment-specialist-lead-generation.
+Priority topics: tulum-condo-developments, ai-powered-riviera-maya-real-estate-intelligence, puerto-morelos-pre-sale-condos, cozumel-luxury-condos-and-island-real-estate.
+Weak topics: playa-del-carmen-condo-developments, casamigo-brand-and-investment-advisory.
 
 ## Topic table
 
-| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Coverage | Visibility | Main page | Main gap |
-|---|---|---|---|---:|---:|---:|---:|---|---|---|---|
-| Tulum real estate market & condos | local | high | local · default | 3 | 12 | 1220 | 1220 | strong | proven | /weekly-brief | — |
-| Casamigo AI-powered real estate & investment consultation | mixed | high | local · default | 3 | 5 | 0 | 0 | strong | proven | /es/property/akasha-homes-tulum | — |
-| Tao Tulum condos | commercial | high | local · default | 4 | 4 | 220 | 220 | none | proven | — | No page covers this topic. |
-| Riviera Maya property listings | transactional | high | local · default | 3 | 4 | 0 | 0 | none | proven | — | No page covers this topic. |
-| Puerto Morelos pre-construction condos | commercial | high | local · default | 3 | 3 | 170 | 170 | strong | proven | /cities/puerto-morelos | — |
-| Playa del Carmen real estate market & condos | local | high | local · default | 2 | 2 | 40 | 40 | strong | proven | /collections/playa-del-carmen-condos-under-200k | — |
-| Cozumel real estate market & projects | local | medium | local · default | 2 | 4 | 390 | 390 | strong | proven | /collections/cozumel-real-estate-the-sargasso-free-sanctuary-for-strategic-investors | — |
-| Riviera Maya investment specialist lead generation | transactional | medium | local · default | 0 | 0 | 0 | 0 | none | unproven | — | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |
+|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
+| AI-powered Riviera Maya real estate intelligence | informational | high | local · default | 3 | 12 | 230 | 230 | 1 q / 0 | strong | proven | /weekly-brief | — |
+| Tulum condo developments | transactional | high | local · default | 7 | 7 | 2290 | 2290 | 16 q / 3280 | strong | proven | /properties | — |
+| Casamigo brand and investment advisory | commercial | high | local · default | 3 | 5 | 0 | 0 | — | strong | proven | / | — |
+| Playa del Carmen condo developments | transactional | high | local · default | 3 | 4 | 30 | 30 | 4 q / 130 | strong | proven | /property/punta-playa-playa-del-carmen | — |
+| Puerto Morelos pre-sale condos | transactional | high | local · default | 3 | 3 | 170 | 170 | 1 q / 10 | strong | proven | /property/musa-del-puerto-puerto-morelos | — |
+| Cozumel luxury condos and island real estate | transactional | medium | local · default | 3 | 11 | 600 | 600 | — | strong | proven | /collections/cozumel-real-estate-the-sargasso-free-sanctuary-for-strategic-investors | — |
 
 ## Clusters
 
-### Tulum real estate market & condos
+### AI-powered Riviera Maya real estate intelligence
 
-- Slug: `tulum-real-estate-market-condos`
-- Intent: local; relevance: high; confidence: 1.00
+- Slug: `ai-powered-riviera-maya-real-estate-intelligence`
+- Intent: informational; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Tulum market and project-name queries show demand for local analysis and condo options. Merged with Riviera Maya real estate market intelligence: the same page owns both topics.
-- Demand: 3 queries, 12 impressions, 0 clicks, 1220 distinct monthly demand (1220 summed across keyword variants); average position 42.8.
+- Rationale: Buyers want clarity on Riviera Maya pricing, supply and risk, not generic listings.
+- Demand: 3 queries, 12 impressions, 0 clicks, 230 distinct monthly demand (230 summed across keyword variants); average position 46.1.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 2 measured questions, 0 citations of the site.
-- Action hint: Add Tulum project comparisons and oversupply risk signals.
+- AEO: 1 measured questions, 0 citations of the site.
+- Action hint: Use weekly briefs and pulse updates to explain AI ratings, source-backed signals and city-level risk.
+- Context-only: 1 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: low density development riviera maya comercial - mofu. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
 | mayan riviera real estate | 7 | 0 | 24.4 | 210 | 0 |
 | tulum real estate market | 4 | 0 | 72.5 | 10 | — |
-| tao tulum | 1 | 0 | 53.0 | 1000 | 0 |
+| playa del carmen real estate market | 1 | 0 | 92.0 | 10 | — |
 
 Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /weekly-brief | home | 2469 | 19 |
-| /weekly-brief?4f6e10ee_page=2 | home | 2443 | 19 |
-| /properties | home | 7142 | 15 |
-| /properties?bfa4e0c0_page=2 | home | 9813 | 15 |
+| /weekly-brief | other | 2469 | 21 |
+| /weekly-brief?4f6e10ee_page=2 | other | 2443 | 21 |
+| /pulse | other | 501 | 16 |
+| /post/riviera-maya-real-estate-surging-absorption-strategic-financing-drive-q4-momentum-2026-09-29 | other | 1623 | 11 |
 
-### Casamigo AI-powered real estate & investment consultation
+### Tulum condo developments
 
-- Slug: `casamigo-ai-powered-real-estate-investment-consultation`
-- Intent: mixed; relevance: high; confidence: 0.69
+- Slug: `tulum-condo-developments`
+- Intent: transactional; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Brand searches for Casamigo variants need a clear AI-plus-human investment entry point.
+- Rationale: Tulum project searches show active buyer interest in named condo developments and pre-sale inventory.
+- Demand: 7 queries, 7 impressions, 0 clicks, 2290 distinct monthly demand (2290 summed across keyword variants); average position 74.7.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 4 measured questions, 0 citations of the site.
+- Action hint: Create or link a Tulum development hub that routes Tao, Samsara and Los Amigos searches to project pages.
+- Context-only: 16 queries, 3280 monthly demand match this topic's place or brand but not its need. Examples: venta de propiedades en méxico, propiedades en venta en el estado de mexico, casas en venta en méxico baratas. Review for a missing need term or a separate audience.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| tao tulum | 1 | 0 | 53.0 | 1000 | 0 |
+| samsara tulum | 1 | 0 | 92.0 | 1000 | 0 |
+| tao tulum mexico | 1 | 0 | 76.0 | 210 | 8 |
+| los amigos tulum | 1 | 0 | 70.0 | 70 | 0 |
+| tao condos tulum mexico | 1 | 0 | 78.0 | 10 | — |
+| tao lofts tulum | 1 | 0 | 83.0 | — | — |
+| tao condo tulum | 1 | 0 | 71.0 | — | — |
+
+Coverage pages:
+
+| Page | Type | Words | Match score |
+|---|---|---:|---:|
+| /properties | other | 7142 | 11 |
+| /properties?bfa4e0c0_page=2 | other | 9813 | 11 |
+| /post/weekly-market-intelligence-playa-del-carmen-condos-dominate-inventory-tulum-cancun-see-selective-absorption-2026-10-26 | other | 1477 | 6 |
+| /property/condos-8-tulum | other | 1853 | 6 |
+
+### Casamigo brand and investment advisory
+
+- Slug: `casamigo-brand-and-investment-advisory`
+- Intent: commercial; relevance: high; confidence: 0.69
+- Market scope: local · default
+- Rationale: Branded searches need a trusted advisory page that converts interest into a specialist conversation.
 - Demand: 3 queries, 5 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 25.3.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Put AI Rating proof and specialist CTA above the fold.
+- Action hint: Strengthen /about-us with advisor credentials, licensed-in-Mexico proof and a clear lead form.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -99,68 +127,49 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /es/property/akasha-homes-tulum | home | 3343 | 2 |
-| /es/property/casa-dragonfly-playa-del-carmen | home | 3228 | 2 |
-| /es/property/casa-emilia-tulum | home | 3572 | 2 |
-| /es/property/casa-kaa-tulum | home | 3730 | 2 |
+| / | home | 1739 | 2 |
+| /about-us | other | 459 | 2 |
+| /property/akasha-homes-tulum | other | 2036 | 2 |
+| /property/casa-arca-playa-del-carmen | other | 2136 | 2 |
 
-### Tao Tulum condos
+### Playa del Carmen condo developments
 
-- Slug: `tao-tulum-condos`
-- Intent: commercial; relevance: high; confidence: 0.94
+- Slug: `playa-del-carmen-condo-developments`
+- Intent: transactional; relevance: high; confidence: 0.89
 - Market scope: local · default
-- Rationale: Multiple Tao variants prove a distinct project brand need; no dedicated English page exists.
-- Demand: 4 queries, 4 impressions, 0 clicks, 220 distinct monthly demand (220 summed across keyword variants); average position 77.0.
-- Coverage: none (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 2 measured questions, 0 citations of the site.
-- Action hint: Create an English Tao Tulum project page with pricing and ROI.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| tao tulum mexico | 1 | 0 | 76.0 | 210 | 8 |
-| tao condos tulum mexico | 1 | 0 | 78.0 | 10 | — |
-| tao lofts tulum | 1 | 0 | 83.0 | — | — |
-| tao condo tulum | 1 | 0 | 71.0 | — | — |
-
-No page matched this topic.
-
-Gaps:
-
-- No page covers this topic.
-
-### Riviera Maya property listings
-
-- Slug: `riviera-maya-property-listings`
-- Intent: transactional; relevance: high; confidence: 0.52
-- Market scope: local · default
-- Rationale: Project-name searches need a listings hub that captures inventory and filters.
-- Demand: 3 queries, 4 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 64.0.
-- Coverage: none (a page matches the terms); visibility: proven (the site earns impressions).
+- Rationale: Playa condo searches mix project names with resale and pre-sale intent, requiring curated project pages.
+- Demand: 3 queries, 4 impressions, 0 clicks, 30 distinct monthly demand (30 summed across keyword variants); average position 75.8.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 1 measured questions, 0 citations of the site.
-- Action hint: Add project-name filters and cards for these searches.
+- Action hint: Link Punta Playa, Torre 25 and related Playa projects from a single curated condo collection.
+- Context-only: 4 queries, 130 monthly demand match this topic's place or brand but not its need. Examples: propiedades en venta en playa del carmen, playa del carmen propiedades en venta, propiedades en venta playa del carmen. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
 | punta playa condos | 2 | 0 | 83.0 | — | — |
-| ikuku for sale | 1 | 0 | 1.0 | — | — |
+| green savage playa del carmen | 1 | 0 | 48.0 | 30 | — |
 | xaman ha condo | 1 | 0 | 89.0 | — | — |
 
-No page matched this topic.
+Coverage pages:
 
-Gaps:
+| Page | Type | Words | Match score |
+|---|---|---:|---:|
+| /property/punta-playa-playa-del-carmen | other | 3916 | 19 |
+| /property/torre-25-playa-del-carmen | other | 3768 | 15 |
+| /property/encanto-de-playa-playa-del-carmen | other | 2907 | 5 |
+| /property/punta-laguna-playa-del-carmen | other | 3018 | 5 |
 
-- No page covers this topic.
+### Puerto Morelos pre-sale condos
 
-### Puerto Morelos pre-construction condos
-
-- Slug: `puerto-morelos-pre-construction-condos`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Slug: `puerto-morelos-pre-sale-condos`
+- Intent: transactional; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Pre-sale and population queries signal growth-corridor research for Puerto Morelos.
+- Rationale: Puerto Morelos pre-sale and project searches show demand for early-entry condo investment options.
 - Demand: 3 queries, 3 impressions, 0 clicks, 170 distinct monthly demand (170 summed across keyword variants); average position 49.0.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 3 measured questions, 0 citations of the site.
-- Action hint: Add 2026 pre-sale inventory and absorption data to the collection.
+- Action hint: Use Musa del Puerto and the city brief to explain pre-sale timing, absorption and risk.
+- Context-only: 1 queries, 10 monthly demand match this topic's place or brand but not its need. Examples: condominios de lujo en puerto vallarta. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -172,49 +181,25 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /cities/puerto-morelos | home | 1939 | 18 |
-| /collections/puerto-morelos-pre-construction-investing-in-the-next-growth-corridor | home | 1684 | 18 |
-| /property/musa-del-puerto-puerto-morelos | home | 3481 | 11 |
-| /es/property/central-condo-living-puerto-morelos | home | 5087 | 10 |
+| /property/musa-del-puerto-puerto-morelos | other | 3481 | 21 |
+| /cities/puerto-morelos | other | 1939 | 18 |
+| /property/central-condo-living-puerto-morelos | other | 4082 | 10 |
+| /property/inna-condos-puerto-morelos | other | 3880 | 10 |
 
-### Playa del Carmen real estate market & condos
+### Cozumel luxury condos and island real estate
 
-- Slug: `playa-del-carmen-real-estate-market-condos`
-- Intent: local; relevance: high; confidence: 0.91
+- Slug: `cozumel-luxury-condos-and-island-real-estate`
+- Intent: transactional; relevance: medium; confidence: 1.00
 - Market scope: local · default
-- Rationale: Playa del Carmen has the densest query set and needs a local market hub.
-- Demand: 2 queries, 2 impressions, 0 clicks, 40 distinct monthly demand (40 summed across keyword variants); average position 70.0.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 1 measured questions, 0 citations of the site.
-- Action hint: Link city brief to PDC condo collections and project pages.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| green savage playa del carmen | 1 | 0 | 48.0 | 30 | — |
-| playa del carmen real estate market | 1 | 0 | 92.0 | 10 | — |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /collections/playa-del-carmen-condos-under-200k | home | 7384 | 16 |
-| /cities/playa-del-carmen | home | 2539 | 15 |
-| /es/property/punta-playa-playa-del-carmen | home | 4476 | 11 |
-| /property/punta-playa-playa-del-carmen | home | 3916 | 11 |
-
-### Cozumel real estate market & projects
-
-- Slug: `cozumel-real-estate-market-projects`
-- Intent: local; relevance: medium; confidence: 1.00
-- Market scope: local · default
-- Rationale: Cozumel project queries need island-specific market context and risk framing.
-- Demand: 2 queries, 4 impressions, 0 clicks, 390 distinct monthly demand (390 summed across keyword variants); average position 90.4.
+- Rationale: Cozumel project and island-market searches need a focused page covering supply, privacy and waterfront risk.
+- Demand: 3 queries, 11 impressions, 0 clicks, 600 distinct monthly demand (600 summed across keyword variants); average position 48.4.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add Distrito Norte and Elementos Life comparisons to Cozumel brief.
+- Action hint: Connect Distrito Norte and Elementos Life to the Cozumel city brief and a clear investor CTA.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
+| mayan riviera real estate | 7 | 0 | 24.4 | 210 | 0 |
 | distrito cozumel | 3 | 0 | 93.3 | 70 | — |
 | elementos cozumel | 1 | 0 | 82.0 | 320 | 0 |
 
@@ -222,37 +207,19 @@ Coverage pages:
 
 | Page | Type | Words | Match score |
 |---|---|---:|---:|
-| /collections/cozumel-real-estate-the-sargasso-free-sanctuary-for-strategic-investors | home | 2320 | 20 |
-| /es/post/riviera-maya-real-estate-surging-absorption-strategic-financing-drive-q4-momentum-2026-09-29 | home | 1755 | 10 |
-| /post/riviera-maya-real-estate-surging-absorption-strategic-financing-drive-q4-momentum-2026-09-29 | home | 1623 | 10 |
-| / | home | 1739 | 5 |
-
-### Riviera Maya investment specialist lead generation
-
-- Slug: `riviera-maya-investment-specialist-lead-generation`
-- Intent: transactional; relevance: medium; confidence: 0.35
-- Market scope: local · default
-- Rationale: Brand and market researchers need a direct route to a licensed investment specialist.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
-- Coverage: none (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add consultation forms to about and city pages.
-
-No page matched this topic.
-
-Gaps:
-
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
+| /collections/cozumel-real-estate-the-sargasso-free-sanctuary-for-strategic-investors | other | 2320 | 10 |
+| /post/riviera-maya-real-estate-surging-absorption-strategic-financing-drive-q4-momentum-2026-09-29 | other | 1623 | 10 |
+| /pulse | other | 501 | 5 |
+| /weekly-brief | other | 2469 | 5 |
 
 ## Unmapped demand
 
 | Query | Impressions | Volume | Why it is unmapped |
 |---|---:|---:|---|
 | torre 25 | 1 | 1600 | No taxonomy topic matched “torre 25”; review for a missing topic or an off-business query. |
-| samsara tulum | 1 | 1000 | No taxonomy topic matched “samsara tulum”; review for a missing topic or an off-business query. |
-| los amigos tulum | 1 | 70 | No taxonomy topic matched “los amigos tulum”; review for a missing topic or an off-business query. |
 | estratemex | 1 | 20 | No taxonomy topic matched “estratemex”; review for a missing topic or an off-business query. |
 | low density development riviera maya comercial - mofu | 1 | — | No taxonomy topic matched “low density development riviera maya comercial - mofu”; review for a missing topic or an off-business query. |
+| ikuku for sale | 1 | — | No taxonomy topic matched “ikuku for sale”; review for a missing topic or an off-business query. |
 | casas | 0 | 550000 | No taxonomy topic matched “casas”; review for a missing topic or an off-business query. |
 | las casas de los famosos | 0 | 450000 | No taxonomy topic matched “las casas de los famosos”; review for a missing topic or an off-business query. |
 | inmuebles24 | 0 | 246000 | No taxonomy topic matched “inmuebles24”; review for a missing topic or an off-business query. |
@@ -273,8 +240,9 @@ Gaps:
 | mario casas sierra | 0 | 40500 | No taxonomy topic matched “mario casas sierra”; review for a missing topic or an off-business query. |
 | fachada de las casas | 0 | 40500 | No taxonomy topic matched “fachada de las casas”; review for a missing topic or an off-business query. |
 | fachada de casas | 0 | 40500 | No taxonomy topic matched “fachada de casas”; review for a missing topic or an off-business query. |
+| mario casas | 0 | 40500 | No taxonomy topic matched “mario casas”; review for a missing topic or an off-business query. |
 
-- Showing the 25 unmapped queries with the most impressions; 229 more are in the map data.
+- Showing the 25 unmapped queries with the most impressions; 228 more are in the map data.
 
 ## Timely signals from the bundle
 
@@ -290,8 +258,8 @@ Gaps:
 
 ## Counts
 
-- Queries: 274; clustered: 20; unmapped: 254.
-- Pages considered: 481; news sources: 9.
+- Queries: 274; clustered: 21; unmapped: 253.
+- Pages considered: 252; news sources: 9.
 
 ## Limits
 

@@ -14,6 +14,7 @@ function context(overrides: Partial<SiteContext>): SiteContext {
     audienceMarket: null,
     audienceCountry: null,
     audienceCountries: [],
+    audienceLanguages: [],
     topics: [],
     audience: null,
     source: {

@@ -49,6 +49,11 @@ export type SiteContext = {
    * assumed to behave like the primary.
    */
   audienceCountries: string[];
+  /**
+   * The language(s) the audience searches in, lower-case primary subtags.
+   * Empty when the owner has not said; the site language is not a substitute.
+   */
+  audienceLanguages: string[];
   /** A place to name in generated assets: town, region or service area. */
   location: string | null;
   topics: string[];
@@ -290,6 +295,12 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     .map((entry) => countryFromText(entry))
     .filter((code): code is string => Boolean(code));
   const audienceCountries = [...new Set([audienceCountry, ...declaredMarkets].filter((code): code is string => Boolean(code)))];
+  const audienceLanguages = [
+    ...stringList(factValue(fields, "audienceLanguages")),
+    ...stringList(constraints.audienceLanguages),
+  ]
+    .map((entry) => entry.toLowerCase().slice(0, 2))
+    .filter((entry) => entry.length >= 2);
 
   // Business country: where the business is, which is not the audience's market.
   // A site can sell into the US from Mexico; taking `market` (an audience signal)
@@ -318,6 +329,7 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     audienceMarket,
     audienceCountry,
     audienceCountries,
+    audienceLanguages: [...new Set(audienceLanguages)],
     topics: stringList(profile?.topics),
     audience: typeof profile?.audience === "string" && profile.audience.trim() ? profile.audience.trim() : null,
     source: { language: languageSource, country: countrySource, location: locationSource, audienceCountry: audienceSource },

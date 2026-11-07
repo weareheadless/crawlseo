@@ -1,0 +1,1036 @@
+{
+  "version": 1,
+  "proposedBy": "ai",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "generatedAt": "2026-11-07T16:32:11.868Z",
+  "topics": [
+    {
+      "slug": "atelier-de-l-harmonie-marque",
+      "name": "Atelier de l'harmonie (marque)",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "brand",
+      "offerKey": "Marque",
+      "rationale": "Les requêtes de marque et de boutique sont nombreuses et sans page dédiée claire ; l'accueil doit les absorber et orienter vers les univers.",
+      "requireAny": [
+        "atelier harmonie",
+        "harmonie atelier",
+        "atelier harmony"
+      ],
+      "terms": [
+        "atelier harmonie",
+        "harmonie atelier",
+        "atelier harmony",
+        "harmonie boutique",
+        "atelier harmonia",
+        "harmony atelier",
+        "atelier",
+        "harmonie",
+        "harmony",
+        "boutique",
+        "harmonia"
+      ],
+      "strongTerms": [
+        "atelier harmonie",
+        "harmonie atelier",
+        "atelier harmony",
+        "harmonie boutique",
+        "atelier harmonia",
+        "harmony atelier"
+      ],
+      "coverageRequireAny": [
+        "atelier harmonie",
+        "harmonie atelier",
+        "harmonie boutique",
+        "atelier",
+        "harmonie",
+        "boutique"
+      ],
+      "preferredPages": [
+        "/",
+        "/a-propos"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "atelier harmonie",
+        "harmonie atelier",
+        "atelier harmony",
+        "harmonie boutique",
+        "atelier harmonia",
+        "harmony atelier",
+        "atelier",
+        "harmonie",
+        "harmony",
+        "boutique",
+        "harmonia"
+      ],
+      "actionHint": "Renforcer l'accueil (nom exact, métier, lien boutique) et la page À propos pour capter les variantes de marque."
+    },
+    {
+      "slug": "lampes-et-luminaires-artisanaux-faits-main",
+      "name": "Lampes et luminaires artisanaux faits main",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Lampes & luminaires",
+      "rationale": "Cœur de la création de lampes : requêtes génériques à forte impression qui doivent mener vers la catégorie luminaires et la boutique.",
+      "requireAny": [
+        "luminaire artisanal",
+        "lampes artisanales",
+        "artisanales originales",
+        "artisanal",
+        "luminaire",
+        "lampes"
+      ],
+      "terms": [
+        "luminaire artisanal",
+        "lampes artisanales",
+        "artisanales originales",
+        "lampe artisanale",
+        "artisanal creation",
+        "luminaires artisanaux",
+        "artisanal",
+        "luminaire",
+        "lampes",
+        "artisanales",
+        "originales",
+        "lampe",
+        "artisanale",
+        "creation"
+      ],
+      "strongTerms": [
+        "luminaire artisanal",
+        "lampes artisanales",
+        "artisanales originales",
+        "lampe artisanale",
+        "artisanal creation",
+        "luminaires artisanaux"
+      ],
+      "coverageRequireAny": [
+        "lampes artisanales",
+        "artisanales originales",
+        "lampe artisanale",
+        "artisanal creation",
+        "luminaires artisanaux",
+        "artisanal",
+        "lampes",
+        "artisanales"
+      ],
+      "preferredPages": [
+        "/lampes",
+        "/shop"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "luminaire artisanal",
+        "lampes artisanales",
+        "artisanales originales",
+        "lampe artisanale",
+        "artisanal creation",
+        "luminaires artisanaux",
+        "artisanal",
+        "luminaire",
+        "lampes",
+        "artisanales",
+        "originales",
+        "lampe",
+        "artisanale",
+        "creation"
+      ],
+      "actionHint": "Créer une page pilier « luminaires artisanaux » (matières, collections, fabrication en Normandie) liée aux catégories.",
+      "requireGroups": [
+        [
+          "lampes",
+          "luminaires",
+          "artisanaux",
+          "faits",
+          "main",
+          "luminaire",
+          "artisanal",
+          "artisanales",
+          "originales",
+          "lampe",
+          "artisanale",
+          "creation"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "lampes-a-poser-artisanales",
+      "name": "Lampes à poser artisanales",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "product",
+      "offerKey": "Lampes & luminaires",
+      "rationale": "Type de produit phare (Le Phare, La Balise) avec une catégorie existante mais peu de contenu pour capter les styles bohème et bauhaus.",
+      "requireAny": [
+        "lampe poser",
+        "poser artisanale",
+        "lampes originales",
+        "lampe",
+        "poser",
+        "artisanale"
+      ],
+      "terms": [
+        "lampe poser",
+        "poser artisanale",
+        "lampes originales",
+        "poser boheme",
+        "poser bauhaus",
+        "lampe",
+        "poser",
+        "artisanale",
+        "lampes",
+        "originales",
+        "boheme",
+        "bauhaus"
+      ],
+      "strongTerms": [
+        "lampe poser",
+        "poser artisanale",
+        "lampes originales",
+        "poser boheme",
+        "poser bauhaus"
+      ],
+      "coverageRequireAny": [
+        "lampe poser",
+        "poser artisanale",
+        "lampes originales",
+        "poser boheme",
+        "poser bauhaus",
+        "lampe",
+        "poser",
+        "artisanale"
+      ],
+      "preferredPages": [
+        "/lampes/lampes-a-poser",
+        "/shop"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "lampe poser",
+        "poser artisanale",
+        "lampes originales",
+        "poser boheme",
+        "poser bauhaus",
+        "lampe",
+        "poser",
+        "artisanale",
+        "lampes",
+        "originales",
+        "boheme",
+        "bauhaus"
+      ],
+      "actionHint": "Étoffer la catégorie lampes à poser (guide d'achat, collections, photos d'ambiance) et y router « lampes originales ».",
+      "requireGroups": [
+        [
+          "lampes",
+          "poser",
+          "artisanales",
+          "lampe",
+          "artisanale",
+          "originales",
+          "boheme",
+          "bauhaus"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "suspensions-plafonniers-et-lustres-artisanaux",
+      "name": "Suspensions, plafonniers et lustres artisanaux",
+      "intent": "commercial",
+      "relevance": "medium",
+      "coverageKind": "product",
+      "offerKey": "Lampes & luminaires",
+      "rationale": "Forte demande sur plafonniers et lustres artisanaux ; la catégorie suspensions existe mais reste trop mince pour se positionner.",
+      "requireAny": [
+        "plafonnier artisanal",
+        "lustre artisanal",
+        "suspensions artisanales",
+        "artisanal",
+        "plafonnier",
+        "lustre"
+      ],
+      "terms": [
+        "plafonnier artisanal",
+        "lustre artisanal",
+        "suspensions artisanales",
+        "suspension atelier",
+        "suspension artisanale",
+        "suspensions murales",
+        "artisanal",
+        "plafonnier",
+        "lustre",
+        "suspensions",
+        "artisanales",
+        "suspension",
+        "atelier",
+        "artisanale"
+      ],
+      "strongTerms": [
+        "plafonnier artisanal",
+        "lustre artisanal",
+        "suspensions artisanales",
+        "suspension atelier",
+        "suspension artisanale",
+        "suspensions murales"
+      ],
+      "coverageRequireAny": [
+        "suspensions artisanales",
+        "suspension atelier",
+        "suspension artisanale",
+        "suspensions murales",
+        "artisanal",
+        "suspensions",
+        "artisanales",
+        "suspension"
+      ],
+      "preferredPages": [
+        "/lampes/suspensions",
+        "/lampes"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "plafonnier artisanal",
+        "lustre artisanal",
+        "suspensions artisanales",
+        "suspension atelier",
+        "suspension artisanale",
+        "suspensions murales",
+        "artisanal",
+        "plafonnier",
+        "lustre",
+        "suspensions",
+        "artisanales",
+        "suspension",
+        "atelier",
+        "artisanale"
+      ],
+      "actionHint": "Enrichir la catégorie suspensions (lustres, plafonniers, hauteurs, conseils) et la relier aux fiches produits.",
+      "requireGroups": [
+        [
+          "suspensions",
+          "plafonniers",
+          "lustres",
+          "artisanaux",
+          "plafonnier",
+          "artisanal",
+          "lustre",
+          "artisanales",
+          "suspension",
+          "artisanale",
+          "murales"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "abat-jours-artisanaux-sur-mesure",
+      "name": "Abat-jours artisanaux sur mesure",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "product",
+      "offerKey": "Création d'abat-jours",
+      "rationale": "Service de création d'abat-jours : les requêtes « sur mesure » et tête de gamme « abat-jour » doivent mener à la catégorie et au devis.",
+      "requireAny": [
+        "abat jour",
+        "atelier abat",
+        "jour mesure",
+        "abat",
+        "jour",
+        "atelier"
+      ],
+      "terms": [
+        "abat jour",
+        "atelier abat",
+        "jour mesure",
+        "abat",
+        "jour",
+        "atelier",
+        "mesure"
+      ],
+      "strongTerms": [
+        "abat jour",
+        "atelier abat",
+        "jour mesure"
+      ],
+      "coverageRequireAny": [
+        "abat jour",
+        "atelier abat",
+        "jour mesure",
+        "abat",
+        "jour",
+        "atelier",
+        "mesure"
+      ],
+      "preferredPages": [
+        "/lampes/abat-jours",
+        "/devis"
+      ],
+      "pageTerms": [
+        "abat jour",
+        "atelier abat",
+        "jour mesure",
+        "abat",
+        "jour",
+        "atelier",
+        "mesure"
+      ],
+      "actionHint": "Créer un contenu « abat-jour sur mesure » (formes, dimensions, tissus, fixation) avec formulaire de devis.",
+      "requireGroups": [
+        [
+          "abat",
+          "jours",
+          "artisanaux",
+          "mesure",
+          "jour"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "abat-jour-pagode",
+      "name": "Abat-jour pagode",
+      "intent": "commercial",
+      "relevance": "medium",
+      "coverageKind": "product",
+      "offerKey": "Création d'abat-jours",
+      "rationale": "Type de produit identifiable (pagode, chinois, rectangulaire) avec une fiche Vermillon réelle et une demande régulière à capter.",
+      "requireAny": [
+        "jour pagode",
+        "abat jour",
+        "pagode moderne",
+        "jour",
+        "pagode",
+        "abat"
+      ],
+      "terms": [
+        "jour pagode",
+        "abat jour",
+        "pagode moderne",
+        "abats jour",
+        "jour chinois",
+        "chinois pagode",
+        "jour",
+        "pagode",
+        "abat",
+        "moderne",
+        "abats",
+        "chinois",
+        "rectangulaire"
+      ],
+      "strongTerms": [
+        "jour pagode",
+        "abat jour",
+        "pagode moderne",
+        "abats jour",
+        "jour chinois",
+        "chinois pagode"
+      ],
+      "coverageRequireAny": [
+        "jour pagode",
+        "abat jour",
+        "jour",
+        "pagode",
+        "abat"
+      ],
+      "preferredPages": [
+        "/product-page/abat-jour-pagode-vermillon",
+        "/lampes/abat-jours"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "jour pagode",
+        "abat jour",
+        "pagode moderne",
+        "abats jour",
+        "jour chinois",
+        "chinois pagode",
+        "jour",
+        "pagode",
+        "abat",
+        "moderne",
+        "abats",
+        "chinois",
+        "rectangulaire"
+      ],
+      "actionHint": "Créer un guide/landing « abat-jour pagode » (styles, dimensions) relié à la fiche Vermillon et à la catégorie abat-jours.",
+      "requireGroups": [
+        [
+          "abat",
+          "jour",
+          "pagode",
+          "moderne",
+          "abats",
+          "chinois",
+          "rectangulaire"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "restauration-et-renovation-d-abat-jour",
+      "name": "Restauration et rénovation d'abat-jour",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Restauration d'abat-jour",
+      "rationale": "Cluster le plus dense : réparation, rénovation, ancien et « comment faire ». L'article existant est le seul contenu solide sur le sujet.",
+      "requireAny": [
+        "abat jour",
+        "reparer abat",
+        "restaurer abat",
+        "abat",
+        "jour",
+        "reparer"
+      ],
+      "terms": [
+        "abat jour",
+        "reparer abat",
+        "restaurer abat",
+        "comment reparer",
+        "renover abat",
+        "restauration abat",
+        "abat",
+        "jour",
+        "reparer",
+        "comment",
+        "restaurer",
+        "renover",
+        "restauration",
+        "cabosse"
+      ],
+      "strongTerms": [
+        "abat jour",
+        "reparer abat",
+        "restaurer abat",
+        "comment reparer",
+        "renover abat",
+        "restauration abat"
+      ],
+      "coverageRequireAny": [
+        "abat jour",
+        "restauration abat",
+        "abat",
+        "jour",
+        "comment",
+        "restauration"
+      ],
+      "preferredPages": [
+        "/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9",
+        "/devis"
+      ],
+      "pageTerms": [
+        "abat jour",
+        "reparer abat",
+        "restaurer abat",
+        "comment reparer",
+        "renover abat",
+        "restauration abat",
+        "abat",
+        "jour",
+        "reparer",
+        "comment",
+        "restaurer",
+        "renover",
+        "restauration",
+        "cabosse"
+      ],
+      "actionHint": "Transformer l'article en guide complet (diagnostic, réparation, quand confier) avec CTA devis et lien catégorie.",
+      "requireGroups": [
+        [
+          "restauration",
+          "renovation",
+          "abat",
+          "jour",
+          "reparer",
+          "restaurer",
+          "comment",
+          "renover",
+          "cabosse"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "restauration-de-sieges-et-fauteuils",
+      "name": "Restauration de sièges et fauteuils",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Restauration de siège",
+      "rationale": "Service historique de l'atelier : fauteuils, chaises à tapisser et devis siège doivent mener à la page restauration et à la galerie de sièges.",
+      "requireAny": [
+        "fauteuil restauration",
+        "chaises tapisserie",
+        "fauteuil tapisser",
+        "fauteuil",
+        "restauration",
+        "tapisserie"
+      ],
+      "terms": [
+        "fauteuil restauration",
+        "chaises tapisserie",
+        "fauteuil tapisser",
+        "fauteuils restauration",
+        "fauteuil tapisserie",
+        "devis siege",
+        "fauteuil",
+        "restauration",
+        "tapisserie",
+        "chaises",
+        "tapisser",
+        "fauteuils",
+        "devis",
+        "siege"
+      ],
+      "strongTerms": [
+        "fauteuil restauration",
+        "chaises tapisserie",
+        "fauteuil tapisser",
+        "fauteuils restauration",
+        "fauteuil tapisserie",
+        "devis siege"
+      ],
+      "coverageRequireAny": [
+        "fauteuil restauration",
+        "fauteuils restauration",
+        "fauteuil tapisserie",
+        "devis siege",
+        "fauteuil",
+        "restauration",
+        "tapisserie",
+        "fauteuils"
+      ],
+      "preferredPages": [
+        "/tapisserie-restauration",
+        "/sieges"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "fauteuil restauration",
+        "chaises tapisserie",
+        "fauteuil tapisser",
+        "fauteuils restauration",
+        "fauteuil tapisserie",
+        "devis siege",
+        "fauteuil",
+        "restauration",
+        "tapisserie",
+        "chaises",
+        "tapisser",
+        "fauteuils",
+        "devis",
+        "siege"
+      ],
+      "actionHint": "Renforcer la page restauration (avant/après, délais, fourchettes de prix) et capter « fauteuil à tapisser ».",
+      "requireGroups": [
+        [
+          "restauration",
+          "sieges",
+          "fauteuils",
+          "fauteuil",
+          "chaises",
+          "tapisserie",
+          "tapisser",
+          "devis",
+          "siege"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "tapissier-pres-de-chez-moi-en-normandie",
+      "name": "Tapissier près de chez moi en Normandie",
+      "intent": "local",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Restauration de siège",
+      "rationale": "Requêtes de découverte locale (« autour de moi ») : l'accueil et la page restauration doivent prouver l'ancrage normand et la proximité.",
+      "requireAny": [
+        "autour moi",
+        "tapissier autour",
+        "artisan tapissier",
+        "tapissier",
+        "autour",
+        "moi"
+      ],
+      "terms": [
+        "autour moi",
+        "tapissier autour",
+        "artisan tapissier",
+        "fauteuil tapissier",
+        "tapissier fauteuil",
+        "chaises tapissier",
+        "tapissier",
+        "autour",
+        "moi",
+        "fauteuil",
+        "artisan",
+        "chaises"
+      ],
+      "strongTerms": [
+        "autour moi",
+        "tapissier autour",
+        "artisan tapissier",
+        "fauteuil tapissier",
+        "tapissier fauteuil",
+        "chaises tapissier"
+      ],
+      "coverageRequireAny": [
+        "artisan tapissier",
+        "fauteuil tapissier",
+        "tapissier fauteuil",
+        "tapissier",
+        "fauteuil",
+        "artisan"
+      ],
+      "preferredPages": [
+        "/",
+        "/tapisserie-restauration"
+      ],
+      "pageTerms": [
+        "autour moi",
+        "tapissier autour",
+        "artisan tapissier",
+        "fauteuil tapissier",
+        "tapissier fauteuil",
+        "chaises tapissier",
+        "tapissier",
+        "autour",
+        "moi",
+        "fauteuil",
+        "artisan",
+        "chaises"
+      ],
+      "actionHint": "Ajouter un bloc local clair (atelier, zone Normandie, contact) sur l'accueil et la page restauration.",
+      "requireGroups": [
+        [
+          "tapissier",
+          "pres",
+          "chez",
+          "moi",
+          "autour",
+          "artisan",
+          "fauteuil",
+          "chaises"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "tapisserie-traditionnelle-savoir-faire",
+      "name": "Tapisserie traditionnelle, savoir-faire",
+      "intent": "informational",
+      "relevance": "medium",
+      "coverageKind": "content",
+      "offerKey": "Blog",
+      "rationale": "Service listé qui manque de couverture éditoriale : l'article existant explique le métier mais reste isolé et peu maillé.",
+      "requireAny": [
+        "art tapisserie",
+        "tapisserie siege",
+        "tapisserie",
+        "art",
+        "siege"
+      ],
+      "terms": [
+        "art tapisserie",
+        "tapisserie siege",
+        "tapisserie",
+        "art",
+        "siege"
+      ],
+      "strongTerms": [
+        "art tapisserie",
+        "tapisserie siege"
+      ],
+      "coverageRequireAny": [
+        "art tapisserie",
+        "tapisserie siege",
+        "tapisserie",
+        "art",
+        "siege"
+      ],
+      "preferredPages": [
+        "/post/la-tapisserie-traditionnelle-qu-est-ce-que-c-est",
+        "/blog"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "art tapisserie",
+        "tapisserie siege",
+        "tapisserie",
+        "art",
+        "siege"
+      ],
+      "actionHint": "Enrichir l'article tapisserie traditionnelle (gestes, matériaux, étapes) et le mailler vers sièges et ateliers.",
+      "requireGroups": [
+        [
+          "tapisserie",
+          "traditionnelle",
+          "savoir",
+          "faire",
+          "art",
+          "siege"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "kits-et-ateliers-diy-lampe-abat-jour-tapisserie",
+      "name": "Kits et ateliers DIY (lampe, abat-jour, tapisserie)",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Kits DIY & ateliers",
+      "rationale": "Kits à fabriquer et ateliers en petit comité partagent la même intention « faire soi-même » ; deux pages réelles les portent.",
+      "requireAny": [
+        "kit lampe",
+        "kit fabrication",
+        "fabrication luminaire",
+        "kit",
+        "lampe",
+        "fabrication"
+      ],
+      "terms": [
+        "kit lampe",
+        "kit fabrication",
+        "fabrication luminaire",
+        "lampe poser",
+        "lampe diy",
+        "diy lampe",
+        "kit",
+        "lampe",
+        "fabrication",
+        "luminaire",
+        "poser",
+        "diy",
+        "atelier",
+        "abat"
+      ],
+      "strongTerms": [
+        "kit lampe",
+        "kit fabrication",
+        "fabrication luminaire",
+        "lampe poser",
+        "lampe diy",
+        "diy lampe"
+      ],
+      "coverageRequireAny": [
+        "kit lampe",
+        "lampe poser",
+        "lampe diy",
+        "diy lampe",
+        "kit",
+        "lampe",
+        "poser",
+        "diy"
+      ],
+      "preferredPages": [
+        "/les-ateliers",
+        "/product-page/kit-diy-ma-lampe-%C3%A0-poser",
+        "/shop"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "kit lampe",
+        "kit fabrication",
+        "fabrication luminaire",
+        "lampe poser",
+        "lampe diy",
+        "diy lampe",
+        "kit",
+        "lampe",
+        "fabrication",
+        "luminaire",
+        "poser",
+        "diy",
+        "atelier",
+        "abat"
+      ],
+      "actionHint": "Créer un hub kits + ateliers (niveaux, contenu, réservation) relié à la fiche kit et à la boutique.",
+      "requireGroups": [
+        [
+          "kits",
+          "ateliers",
+          "diy",
+          "lampe",
+          "abat",
+          "jour",
+          "tapisserie",
+          "kit",
+          "fabrication",
+          "luminaire",
+          "poser"
+        ]
+      ],
+      "reviewFlags": []
+    },
+    {
+      "slug": "cartes-cadeaux-artisanat",
+      "name": "Cartes cadeaux artisanat",
+      "intent": "transactional",
+      "relevance": "medium",
+      "coverageKind": "product",
+      "offerKey": "Cartes cadeaux",
+      "rationale": "Besoin d'achat cadeau clairement exprimé (email, impression) ; la page carte cadeau existe mais n'est pas reliée à la boutique.",
+      "requireAny": [
+        "carte cadeau",
+        "cadeau artisanat",
+        "artisanat par",
+        "carte",
+        "cadeau",
+        "artisanat"
+      ],
+      "terms": [
+        "carte cadeau",
+        "cadeau artisanat",
+        "artisanat par",
+        "par email",
+        "artisanat imprimer",
+        "carte",
+        "cadeau",
+        "artisanat",
+        "par",
+        "email",
+        "imprimer"
+      ],
+      "strongTerms": [
+        "carte cadeau",
+        "cadeau artisanat",
+        "artisanat par",
+        "par email",
+        "artisanat imprimer"
+      ],
+      "coverageRequireAny": [
+        "carte cadeau",
+        "cadeau artisanat",
+        "carte",
+        "cadeau",
+        "artisanat"
+      ],
+      "preferredPages": [
+        "/gift-card"
+      ],
+      "exclusive": true,
+      "pageTerms": [
+        "carte cadeau",
+        "cadeau artisanat",
+        "artisanat par",
+        "par email",
+        "artisanat imprimer",
+        "carte",
+        "cadeau",
+        "artisanat",
+        "par",
+        "email",
+        "imprimer"
+      ],
+      "actionHint": "Optimiser la page carte cadeau (montants, envoi email ou impression, usages) et la lier depuis la boutique et les fiches produits.",
+      "requireGroups": [
+        [
+          "cartes",
+          "cadeaux",
+          "artisanat",
+          "carte",
+          "cadeau",
+          "par",
+          "email",
+          "imprimer"
+        ]
+      ],
+      "reviewFlags": []
+    }
+  ],
+  "pageTypeRules": [
+    {
+      "type": "home",
+      "pattern": "/"
+    },
+    {
+      "type": "service",
+      "pattern": "/tapisserie-restauration"
+    },
+    {
+      "type": "service",
+      "pattern": "/les-ateliers"
+    },
+    {
+      "type": "service",
+      "pattern": "/b2b"
+    },
+    {
+      "type": "service",
+      "pattern": "/devis"
+    },
+    {
+      "type": "category",
+      "pattern": "/lampes"
+    },
+    {
+      "type": "category",
+      "pattern": "/sieges"
+    },
+    {
+      "type": "category",
+      "pattern": "/objets-deco"
+    },
+    {
+      "type": "category",
+      "pattern": "/les-tissus"
+    },
+    {
+      "type": "category",
+      "pattern": "/shop"
+    },
+    {
+      "type": "category",
+      "pattern": "/category"
+    },
+    {
+      "type": "product",
+      "pattern": "/product-page/"
+    },
+    {
+      "type": "product",
+      "pattern": "/gift-card"
+    },
+    {
+      "type": "blog",
+      "pattern": "/blog"
+    },
+    {
+      "type": "blog",
+      "pattern": "/post/"
+    },
+    {
+      "type": "other",
+      "pattern": "/a-propos"
+    },
+    {
+      "type": "other",
+      "pattern": "/profile"
+    }
+  ],
+  "excludePaths": [
+    "/en",
+    "/blog/tags",
+    "/category/all-products",
+    "/conditions-generales-de-vente",
+    "/conditions-generales",
+    "/politique-de-confidentialite",
+    "/politique-de-cookies",
+    "/livraison",
+    "/profile"
+  ],
+  "newsQueries": [
+    "journées européennes des métiers d'art 2026",
+    "tendances déco 2026 luminaires",
+    "salon maison et objet 2026",
+    "artisanat d'art en Normandie 2026",
+    "marché du luminaire artisanal en France 2026"
+  ],
+  "summary": "Audience FR (Normandie), pages anglaises exclues. 12 thèmes couvrent les services de l'atelier : luminaires et abat-jours artisanaux (dont pagode), restauration d'abat-jour et de sièges, tapissier local, tapisserie traditionnelle, kits et ateliers DIY, cartes cadeaux, marque."
+}

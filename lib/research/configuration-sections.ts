@@ -15,14 +15,14 @@ function validate(section: ConfigurationSection, values: Record<string, unknown>
   const keys = Object.keys(values);
   if (!keys.length || keys.some((key) => !allowed.includes(key))) throw new InvalidConfigurationSection("Empty or unsupported field for section");
   for (const [key, value] of Object.entries(values)) {
-    if (["topics", "goals", "services", "competitors", "exclusions", "providers"].includes(key)) {
-      const limits: Record<string, number> = { topics: 12, goals: 12, services: 12, competitors: 12, exclusions: 12, providers: 2 };
-      const maxLength = key === "exclusions" ? 120 : key === "providers" ? 20 : 120;
-      const mayClear = ["goals", "services", "competitors", "exclusions"].includes(key);
+    if (["topics", "goals", "services", "competitors", "exclusions", "providers", "audienceMarkets", "audienceLanguages"].includes(key)) {
+      const limits: Record<string, number> = { topics: 12, goals: 12, services: 12, competitors: 12, exclusions: 12, providers: 2, audienceMarkets: 12, audienceLanguages: 8 };
+      const maxLength = key === "exclusions" ? 120 : key === "providers" ? 20 : key === "audienceLanguages" ? 16 : key === "audienceMarkets" ? 80 : 120;
+      const mayClear = ["goals", "services", "competitors", "exclusions", "audienceMarkets", "audienceLanguages"].includes(key);
       if (!Array.isArray(value) || (!mayClear && value.length < 1) || value.length > limits[key] || value.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > maxLength)) throw new InvalidConfigurationSection(`Invalid ${key}`);
       if (key === "providers" && (value.length < 1 || value.some((item) => !providers.includes(item)))) throw new InvalidConfigurationSection("Unsupported provider");
-    } else if (["audience", "market", "language", "brandVoice"].includes(key)) {
-      const limits: Record<string, number> = { audience: 300, market: 120, language: 16, brandVoice: 500 };
+    } else if (["audience", "audienceMarket", "market", "language", "brandVoice"].includes(key)) {
+      const limits: Record<string, number> = { audience: 300, audienceMarket: 120, market: 120, language: 16, brandVoice: 500 };
       if (typeof value !== "string" || (key === "language" ? value.trim().length < 2 : false) || value.trim().length > limits[key]) throw new InvalidConfigurationSection(`Invalid ${key}`);
     } else if (key === "recencyDays" || key === "maxSources" || key === "monthlyBudget") {
       const bounds: Record<string, [number, number]> = { recencyDays: [1, 3650], maxSources: [1, 100], monthlyBudget: [0, 500] };
@@ -62,7 +62,7 @@ export async function saveConfigurationSection(siteId: string, section: Configur
         if (changesProfile && profileStamp !== expectedProfileUpdatedAt) {
           const originalProfile = initialProfile;
           const changedKeys = Object.keys(values).filter((key) => ["topics", "audience", "language", "services", "competitors", "brandVoice"].includes(key));
-          const constraintKeys = Object.keys(values).filter((key) => ["market", "goals", "exclusions", "marketScope"].includes(key));
+          const constraintKeys = Object.keys(values).filter((key) => ["market", "goals", "exclusions", "marketScope", "audienceMarket", "audienceMarkets", "audienceLanguages"].includes(key));
           const sameTouchedValues = attempt > 0 && originalProfile !== null && changedKeys.every((key) => JSON.stringify(profileRecord?.[key] ?? null) === JSON.stringify(originalProfile[key] ?? null)) && constraintKeys.every((key) => {
             const current = mergeConstraints(profileRecord?.constraints, {});
             const initial = mergeConstraints(originalProfile.constraints, {});
@@ -76,7 +76,7 @@ export async function saveConfigurationSection(siteId: string, section: Configur
         const constraintsPatch: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(values)) {
           if (key === "topics" || key === "audience" || key === "language" || key === "services" || key === "competitors" || key === "brandVoice") profilePatch[key] = key === "audience" && value === "" ? Prisma.JsonNull : value;
-          else if (key === "market" || key === "goals" || key === "marketScope") constraintsPatch[key] = value;
+          else if (key === "market" || key === "goals" || key === "marketScope" || key === "audienceMarket" || key === "audienceMarkets" || key === "audienceLanguages") constraintsPatch[key] = value;
           else policyPatch[key] = value;
         }
         if (Object.hasOwn(values, "goals")) policyPatch.goals = values.goals;

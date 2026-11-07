@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type Values = { topics: string[]; audience: string; market: string; language: string; goals: string[]; services: string[]; competitors: string[]; brandVoice: string };
+type Values = { topics: string[]; market: string; language: string; goals: string[]; services: string[]; competitors: string[]; brandVoice: string };
 const fields: { key: keyof Values; label: string; list?: boolean }[] = [
-  { key: "topics", label: "Operational topics", list: true }, { key: "audience", label: "Audience" },
-  { key: "market", label: "Market" }, { key: "language", label: "Language" }, { key: "goals", label: "Goals", list: true },
+  { key: "topics", label: "Operational topics", list: true },
+  { key: "market", label: "Business market (where you are)" }, { key: "language", label: "Site language" }, { key: "goals", label: "Goals", list: true },
   { key: "services", label: "Services", list: true }, { key: "competitors", label: "Competitors", list: true }, { key: "brandVoice", label: "Brand voice" },
 ];
 export function BusinessOperationalForm({ siteId, initial, profileUpdatedAt, revision }: { siteId: string; initial: Values; profileUpdatedAt: string | null; revision: number }) {

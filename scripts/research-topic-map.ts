@@ -33,6 +33,7 @@ import {
   saveTopicTaxonomy,
   type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
+import { providerCountry } from "@/lib/site/context";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -184,13 +185,21 @@ async function main(): Promise<void> {
       const proposed = await proposeTopicTaxonomy({
         domain: site.domain,
         language: rawData.context.language,
-        country: rawData.context.country,
+        // The audience's market, not the business address: a Tulum agency
+        // selling to US buyers must not be modelled as a Mexican shop.
+        country: providerCountry(rawData.context),
+        market: rawData.context.market,
+        audienceMarket: rawData.context.audienceMarket,
+        audienceCountry: rawData.context.audienceCountry,
+        audienceCountries: rawData.context.audienceCountries,
+        audienceLanguages: rawData.context.audienceLanguages,
         business: {
           name: rawData.fields.businessName ? String((rawData.fields.businessName as { value?: unknown }).value ?? "") || null : null,
           services: asStringList(rawData.fields.services),
           location: asString(rawData.fields.location),
           serviceArea: asStringList(rawData.fields.serviceArea),
-          audience: asString(rawData.fields.audienceMotivations),
+          audience: rawData.context.audience ?? asString(rawData.fields.audienceMotivations),
+          audienceMotivations: asStringList(rawData.fields.audienceMotivations),
           differentiators: asStringList(rawData.fields.differentiators),
           concerns: asStringList(rawData.fields.concerns),
         },

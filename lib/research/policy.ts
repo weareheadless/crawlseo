@@ -28,6 +28,9 @@ export type ResearchConfigInput = {
   exclusions?: string[];
   recencyDays?: number;
   audience?: string;
+  audienceMarket?: string;
+  audienceMarkets?: string[];
+  audienceLanguages?: string[];
   market?: string;
   language: string;
   providers: string[];
@@ -58,6 +61,9 @@ export async function getResearchConfig(siteId: string) {
     recencyDays: policy?.recencyDays ?? 90,
     providers: stringList(policy?.providers).length > 0 ? stringList(policy?.providers) : ["reddit", "news", "web"],
     audience: typeof profile?.audience === "string" ? profile.audience : "",
+    audienceMarket: typeof constraints.audienceMarket === "string" ? constraints.audienceMarket : "",
+    audienceMarkets: stringList(constraints.audienceMarkets),
+    audienceLanguages: stringList(constraints.audienceLanguages),
     market: typeof constraints.market === "string" ? constraints.market : "",
     marketScope: parseMarketScope(constraints.marketScope),
     // The same resolver the runner uses, so settings and execution cannot
@@ -88,6 +94,9 @@ export async function saveResearchConfig(siteId: string, input: ResearchConfigIn
   const constraints = {
     ...existingConstraints,
     ...(input.market ? { market: input.market } : {}),
+    ...(input.audienceMarket ? { audienceMarket: input.audienceMarket } : {}),
+    ...(input.audienceMarkets ? { audienceMarkets: input.audienceMarkets } : {}),
+    ...(input.audienceLanguages ? { audienceLanguages: input.audienceLanguages } : {}),
     exclusions: input.exclusions ?? [],
     goals: input.goals ?? [],
     ...(input.marketScope ? { marketScope: input.marketScope } : {}),

@@ -364,6 +364,7 @@ describe("monthly bundle selection", () => {
         audienceMarket: "United States",
         audienceCountry: "US",
         audienceCountries: ["US", "CA"],
+        audienceLanguages: ["en"],
         topics: [],
         audience: null,
         source: {

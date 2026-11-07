@@ -54,6 +54,8 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
     pages: [],
     coverage: "partial",
     visibility: "proven",
+    contextOnly: { queries: 0, impressions: 0, volume: 0, examples: [] },
+    reviewFlags: [],
     gaps: [],
     ...overrides,
   };
@@ -314,5 +316,20 @@ describe("timely drafting", () => {
     expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0].sources[0].url).toBe("https://news.example/fresh");
     expect(Date.parse(result.proposals[0].expiresAt ?? "")).toBeGreaterThan(now.getTime());
+  });
+});
+
+describe("taxonomy review guard", () => {
+  it("does not draft a topic flagged with no need word", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockResolvedValue({ proposals: [] });
+    const base = input();
+    const flagged = {
+      ...base.map,
+      clusters: [{ ...base.map.clusters[0], reviewFlags: ["no-need-word"] }],
+    };
+    const result = await draftClusterProposals({ ...base, map: flagged });
+    expect(result.proposals).toHaveLength(0);
+    expect(mocks.chatJson).not.toHaveBeenCalled();
   });
 });

@@ -569,6 +569,33 @@ export function renderProposalBoard(input: {
     for (const title of input.changes.closed) lines.push(`- closed: ${title}`);
     lines.push("");
   }
+  const taxonomyReview = input.map.clusters.filter(
+    (cluster) => cluster.reviewFlags.includes("no-need-word") || cluster.contextOnly.queries > 0
+  );
+  if (taxonomyReview.length > 0) {
+    lines.push("## Taxonomy review");
+    lines.push("");
+    for (const cluster of taxonomyReview) {
+      if (cluster.reviewFlags.includes("no-need-word")) {
+        lines.push(`- \`${cluster.slug}\` — no need word: defined only by place or brand. Not drafted until the taxonomy is corrected.`);
+      }
+    }
+    // The same place-only queries are context-only for every topic that names
+    // the place. Group them so the board shows one gap, not one row per topic.
+    const contextGroups = new Map<string, { topics: string[]; queries: number; volume: number }>();
+    for (const cluster of taxonomyReview) {
+      if (cluster.contextOnly.queries === 0) continue;
+      const key = cluster.contextOnly.examples.slice(0, 2).join("|") || `${cluster.contextOnly.queries}:${cluster.contextOnly.volume}`;
+      const group = contextGroups.get(key) ?? { topics: [], queries: cluster.contextOnly.queries, volume: cluster.contextOnly.volume };
+      group.topics.push(cluster.slug);
+      contextGroups.set(key, group);
+    }
+    for (const group of contextGroups.values()) {
+      const topics = group.topics.map((slug) => `\`${slug}\``).join(", ");
+      lines.push(`- ${topics} — ${group.queries} queries / ${group.volume} monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.`);
+    }
+    lines.push("");
+  }
   lines.push("## Lanes");
   lines.push("");
   const lanes: Array<{ lane: ProposalLane; title: string }> = [

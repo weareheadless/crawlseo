@@ -177,6 +177,8 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
     visibility: cluster.visibility,
     marketScope: cluster.marketScope,
     demand: cluster.metrics,
+    contextOnly: cluster.contextOnly,
+    reviewFlags: cluster.reviewFlags,
     gaps: cluster.gaps.slice(0, 5),
     outOfMarket: cluster.excludedQueries.slice(0, 5),
     queries: cluster.queries.slice(0, 10).map((query) => ({
@@ -217,6 +219,7 @@ const SYSTEM = [
   "Do not assume a product range exists or does not exist. If demand names a format or service the supplied pages do not cover, the proposal is a decision for the owner, not an assumption.",
   "A low-demand cluster can still deserve a small test when it is business-relevant. Say so and set confidence accordingly.",
   "Do not drop the business's core offer because measured demand is zero. If the cluster is a service the business sells, propose a small page or section and set confidence low; say that the case rests on the offer, not on volume.",
+  "A cluster's contextOnly count is demand that names its place or brand but not its need. Do not build a proposal on it; it is evidence of a missing need term or a separate audience.",
   "Set confidence from the strength of the cited evidence: high only when first-party search data supports the action directly, medium when the data is directional, low for a test or an owner decision. Give a confidenceReason that describes the evidence in plain words for the owner; do not paste evidence ids into it.",
   "Target an existing page URL from the supplied pages when the work updates a page. Use newAsset true and a path only when a new page is genuinely required.",
   "The site's existing paths are listed in existingPaths. Never propose creating a page whose path already exists: propose an update to that page instead.",
@@ -355,9 +358,13 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   }
 
   // Every cluster with demand or coverage is drafted. Batching is a transport
-  // detail; it must not decide which topics the owner gets to see.
+  // detail; it must not decide which topics the owner gets to see. A topic with
+  // no need word is the exception: it is a taxonomy defect, not an opportunity,
+  // and the board lists it under Taxonomy review instead.
   const clusters = input.map.clusters.filter(
-    (cluster) => cluster.queries.length > 0 || cluster.coverage !== "none"
+    (cluster) =>
+      !cluster.reviewFlags.includes("no-need-word") &&
+      (cluster.queries.length > 0 || cluster.coverage !== "none")
   );
   const allowedEvidence = new Map<string, DraftEvidence>();
   for (const cluster of clusters) {

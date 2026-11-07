@@ -6,7 +6,6 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
-import { significantTokens } from "@/lib/funnel/cluster-discovery";
 import { canonicalKeyword, distinctVolume } from "@/lib/research/keyword-identity";
 import {
   parseMarketScope,
@@ -15,7 +14,10 @@ import {
   type MarketScopeLevel,
 } from "@/lib/site/market-scope";
 import {
+  applyTopicAnchors,
   stabilizeTopicTaxonomy,
+  topicBrandTerms,
+  topicContextTerms,
   type TopicDefinition,
   type TopicIntent,
   type TopicPageType,
@@ -23,6 +25,8 @@ import {
   type TopicRelevance,
   type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
+
+export { distinctiveTopicTerms } from "@/lib/research/topic-taxonomy";
 
 /**
  * Phase 2 topic map.
@@ -118,6 +122,19 @@ export type TopicCluster = {
   coverage: "strong" | "partial" | "none";
   /** Does the site actually earn impressions for it? */
   visibility: "proven" | "unproven";
+  /**
+   * Queries that name the topic's place or brand but not its need. They are
+   * not counted in the cluster's demand; the count makes the trade-off visible
+   * instead of leaving it buried in the global unmapped table.
+   */
+  contextOnly: {
+    queries: number;
+    impressions: number;
+    volume: number;
+    examples: string[];
+  };
+  /** Deterministic taxonomy defects, e.g. `no-need-word`. */
+  reviewFlags: string[];
   gaps: string[];
 };
 
@@ -280,9 +297,13 @@ export function assignQuery(
   return selected.map(({ topic, score }) => ({ topic, score }));
 }
 
-function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPageType {
+export function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPageType {
   if (path === "/") return "home";
   for (const rule of rules) {
+    // "/" is the home rule, not a prefix for every path. Without this skip a
+    // taxonomy that lists home first classifies the whole site as home, and
+    // every product, service and category topic reports no coverage.
+    if (rule.pattern === "/") continue;
     if (path.startsWith(rule.pattern)) return rule.type;
   }
   return "other";
@@ -665,38 +686,6 @@ export async function loadTopicMapData(
   };
 }
 
-/**
- * The words that make a topic that topic, rather than the place it happens in
- * or the brand that owns the site.
- *
- * A topic named "Riviera Maya beachfront, luxury properties and penthouses" is
- * about beachfront/luxury/penthouses; "Riviera Maya" is where. Without this
- * distinction every query containing the place joined the topic: "riviera maya
- * things to do" became luxury demand. The same rule removes brand words from
- * other topics, so a brand-split token ("casa") cannot create a second topic
- * that swallows "casas".
- *
- * The source is the topic's whole vocabulary, not just its title: a seat
- * restoration topic is also "fauteuil", "chaise" and "canape", and those are
- * its demand. Only the place and brand words are stripped.
- */
-export function distinctiveTopicTerms(
-  topic: TopicDefinition,
-  contextTerms: Set<string>,
-  brandTerms: Set<string>
-): string[] {
-  const vocabulary = [
-    topic.name,
-    ...topic.requireAny,
-    ...topic.terms,
-    ...(topic.strongTerms ?? []),
-  ];
-  const terms = new Set(vocabulary.flatMap((term) => significantTokens(term)));
-  for (const term of contextTerms) terms.delete(term);
-  for (const term of brandTerms) terms.delete(term);
-  return [...terms];
-}
-
 export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], now = new Date()): TopicMap {
   // The approved taxonomy is normalised here, not by another model call: two
   // topics with one specific owner are merged, and the market head term gets a
@@ -707,35 +696,18 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
     brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
-  // A topic is its own vocabulary, not every query that mentions its place.
-  // The anchor group makes membership require one distinctive word from that
-  // vocabulary; place and brand words are context, not topics.
-  const contextTerms = new Set(
-    significantTokens(
-      [
-        fieldText(data.fields, "location") ?? "",
-        ...fieldList(data.fields, "serviceArea"),
-        ...data.marketScope.offers.flatMap((offer) => offer.markets),
-        data.context.market ?? "",
-        data.context.audienceMarket ?? "",
-      ].join(" ")
-    )
-  );
-  const brandTerms = new Set(
-    stabilized.topics
-      .filter((topic) => topic.coverageKind === "brand")
-      .flatMap((topic) => topic.requireAny)
-      .flatMap((term) => significantTokens(term))
-  );
-  const topics = stabilized.topics.map((topic) => {
-    if (topic.coverageKind === "brand") return topic;
-    const anchor = distinctiveTopicTerms(topic, contextTerms, brandTerms);
-    if (anchor.length === 0) return topic;
-    // The anchor restricts membership; it never adds a term to requireAny.
-    // Adding "freediving" from a topic name would make a coaching topic claim
-    // the whole freediving market.
-    return { ...topic, requireGroups: [...(topic.requireGroups ?? []), anchor] };
-  });
+  // The proposed taxonomy already stores the need group. The derivation here is
+  // a fallback for a taxonomy stored before that rule existed, and it also
+  // flags a topic whose vocabulary is only place or brand.
+  const contextTerms = topicContextTerms([
+    fieldText(data.fields, "location"),
+    ...fieldList(data.fields, "serviceArea"),
+    ...data.marketScope.offers.flatMap((offer) => offer.markets),
+    data.context.market,
+    data.context.audienceMarket,
+    ...(data.context.audienceCountries ?? []),
+  ]);
+  const topics = applyTopicAnchors(stabilized.topics, contextTerms, topicBrandTerms(stabilized.topics));
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();
   for (const query of data.queries) {
     const assigned = assignQuery(query.query, topics);
@@ -744,15 +716,37 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
 
   const clusters: TopicCluster[] = topics.map((topic) => {
     const queries = data.queries.filter((query) => assignments.get(query.query)?.some((entry) => entry.topic.slug === topic.slug));
+    // A query that matches the topic's broad terms but fails its required need
+    // group is context-only: it names the place or brand, not the topic. Keep
+    // the count so the gap is visible on the topic row and in the review.
+    const contextOnlyQueries = topic.requireGroups && topic.requireGroups.length > 0
+      ? data.queries.filter((query) => {
+          if (scoreTopicForQuery(query.query, topic) > 0) return false;
+          if (scoreTopicForQuery(query.query, { ...topic, requireGroups: undefined }) === 0) return false;
+          // A query another topic already owns is not a gap for this one: the
+          // rentals topic owning "playa del carmen rentals" is the split
+          // working, not the condos topic missing demand.
+          return !assignments.get(query.query)?.some((entry) => entry.topic.slug !== topic.slug);
+        })
+      : [];
     const allPages = data.pages
-      .map((page) => ({
-        url: page.url,
-        title: page.title,
-        type: page.type,
-        wordCount: page.wordCount,
-        score: pageCoverageScore(page, topic),
-      }))
-      .filter((page) => page.score > 0)
+      .map((page) => {
+        const preferred = topic.preferredPages?.includes(page.path) ?? false;
+        const score = pageCoverageScore(page, topic);
+        // The taxonomy named this page as the owner. Trust that choice even
+        // when the page-type rules are missing or classify the page as home:
+        // otherwise a model that omits pageTypeRules reports every topic as
+        // "no page covers this" while the owner is in the inventory.
+        return {
+          url: page.url,
+          title: page.title,
+          type: page.type,
+          wordCount: page.wordCount,
+          score: preferred ? Math.max(score, 2) : score,
+          preferred,
+        };
+      })
+      .filter((page) => page.score > 0 && (!page.preferred || page.wordCount >= 100))
       .sort((a, b) => b.score - a.score || typeRank(a.type) - typeRank(b.type));
     const pages = allPages.slice(0, 4);
     const coverage = coverageLevel(allPages, topic);
@@ -785,6 +779,13 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       pages,
       coverage,
       visibility,
+      contextOnly: {
+        queries: contextOnlyQueries.length,
+        impressions: contextOnlyQueries.reduce((sum, query) => sum + query.impressions, 0),
+        volume: distinctVolume(contextOnlyQueries),
+        examples: contextOnlyQueries.slice(0, 3).map((query) => query.query),
+      },
+      reviewFlags: topic.reviewFlags ?? [],
       gaps,
     };
   });
@@ -944,6 +945,8 @@ export async function synthesizeTopicMap(
       coverage: cluster.coverage,
       marketScope: cluster.marketScope,
       demand: `${cluster.metrics.queries} queries, ${cluster.metrics.impressions} impressions, ${cluster.metrics.volume} distinct monthly demand (${cluster.metrics.volumeSum} summed across keyword variants)`,
+      contextOnly: cluster.contextOnly,
+      reviewFlags: cluster.reviewFlags,
       gaps: cluster.gaps.slice(0, 2),
       queries: cluster.queries.slice(0, 10).map((query) => ({
         query: query.query,
@@ -965,6 +968,8 @@ export async function synthesizeTopicMap(
     "Do not use a radius or a fixed list of cities; judge the place the query names against the business's location and service area.",
     "Say which topics are worth doing first and which are weak or off-area.",
     "A weak topic has low measured demand, not no opportunity. If a weak topic is business-relevant, say what expansion or small test would validate it.",
+    "A topic flagged no-need-word is defined only by place or brand: do not treat it as an opportunity. Say that its taxonomy needs a need word.",
+    "A cluster's contextOnly count is demand that names its place or brand but not its need. Treat it as evidence of a missing need term or a separate audience, not as demand the topic owns.",
     "Return exactly one JSON object: { map_summary: string, seo_review: string, priority_topics: string[], weak_topics: string[], market_verdicts: [{ cluster: string, query: string, in_market: boolean, reason: string }] }.",
     "priority_topics and weak_topics must use only the supplied slugs. At most 5 priority topics and at most 4 weak topics.",
     "market_verdicts must use only the supplied cluster slugs and query strings. Omit a query you cannot place. Keep each reason under 140 characters.",
@@ -1260,13 +1265,16 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Topic table");
   lines.push("");
-  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Coverage | Visibility | Main page | Main gap |");
-  lines.push("|---|---|---|---|---:|---:|---:|---:|---|---|---|---|");
+  lines.push("| Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |");
+  lines.push("|---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|");
   for (const cluster of map.clusters) {
     const mainPage = cluster.pages[0]?.url.replace(/^https?:\/\/[^/]+/, "") ?? "—";
     const mainGap = cluster.gaps[0] ?? "—";
+    const contextOnly = cluster.contextOnly.queries > 0
+      ? `${cluster.contextOnly.queries} q / ${cluster.contextOnly.volume}`
+      : "—";
     lines.push(
-      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.metrics.volumeSum} | ${cluster.coverage} | ${cluster.visibility} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
+      `| ${escapePipe(cluster.name)} | ${cluster.intent} | ${cluster.relevance} | ${escapePipe(formatScope(cluster.marketScope))} | ${cluster.metrics.queries} | ${cluster.metrics.impressions} | ${cluster.metrics.volume} | ${cluster.metrics.volumeSum} | ${contextOnly} | ${cluster.coverage} | ${cluster.visibility} | ${escapePipe(mainPage)} | ${escapePipe(mainGap)} |`
     );
   }
   lines.push("");
@@ -1283,6 +1291,13 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     lines.push(`- Coverage: ${cluster.coverage} (a page matches the terms); visibility: ${cluster.visibility} (${cluster.visibility === "proven" ? "the site earns impressions" : "the site earns no impressions yet"}).`);
     lines.push(`- AEO: ${cluster.metrics.aeoQuestions} measured questions, ${cluster.metrics.aeoCited} citations of the site.`);
     lines.push(`- Action hint: ${cluster.actionHint}`);
+    if (cluster.reviewFlags.includes("no-need-word")) {
+      lines.push("- Review: no need word. This topic is defined only by place or brand and would claim every query that names it; correct the taxonomy before treating it as an opportunity.");
+    }
+    if (cluster.contextOnly.queries > 0) {
+      const examples = cluster.contextOnly.examples.length > 0 ? ` Examples: ${cluster.contextOnly.examples.join(", ")}.` : "";
+      lines.push(`- Context-only: ${cluster.contextOnly.queries} queries, ${cluster.contextOnly.volume} monthly demand match this topic's place or brand but not its need.${examples} Review for a missing need term or a separate audience.`);
+    }
     lines.push("");
     if (cluster.queries.length > 0) {
       lines.push("| Query | Impressions | Clicks | Position | Volume | Difficulty |");

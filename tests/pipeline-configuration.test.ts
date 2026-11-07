@@ -6,6 +6,9 @@ describe("pipeline configuration ownership", () => {
     const fields = Object.values(configurationSectionFields).flat();
     expect(new Set(fields).size).toBe(fields.length);
     expect(configurationOwners.topics).toBe("business");
+    expect(configurationOwners.audienceMarket).toBe("business");
+    expect(configurationOwners.audienceMarkets).toBe("business");
+    expect(configurationOwners.audienceLanguages).toBe("business");
     expect(configurationOwners.providers).toBe("research");
     expect(configurationOwners.cadence).toBe("operations");
   });

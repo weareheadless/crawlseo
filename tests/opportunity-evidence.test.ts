@@ -24,6 +24,8 @@ function cluster(overrides: Partial<TopicCluster> = {}): TopicCluster {
     pages: [],
     coverage: "strong",
     visibility: "proven",
+    contextOnly: { queries: 0, impressions: 0, volume: 0, examples: [] },
+    reviewFlags: [],
     gaps: [],
     ...overrides,
   };

@@ -1,5 +1,5 @@
 export const configurationSectionFields = {
-  business: ["topics", "audience", "market", "language", "goals", "services", "competitors", "brandVoice", "marketScope"],
+  business: ["topics", "audience", "audienceMarket", "audienceMarkets", "audienceLanguages", "market", "language", "goals", "services", "competitors", "brandVoice", "marketScope"],
   research: ["providers", "exclusions", "recencyDays", "maxSources"],
   operations: ["cadence", "enabled", "monthlyBudget", "autoDraft", "autoAgent"],
 } as const;
