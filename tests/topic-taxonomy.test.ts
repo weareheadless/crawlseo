@@ -8,15 +8,14 @@ vi.mock("@/lib/ai-seo/writer", () => ({
 vi.mock("@/lib/ai/chat", () => ({ chatJson: mocks.chatJson }));
 
 import {
-  applyTopicAnchors,
   brandTermMatches,
+  isBrandTopic,
   loadTopicTaxonomy,
   parseTopicTaxonomy,
   proposeTopicTaxonomy,
   queryMatchesTopics,
   saveTopicTaxonomy,
   stabilizeTopicTaxonomy,
-  topicContextTerms,
   validateTopic,
   type TopicDefinition,
   type TopicTaxonomyInput,
@@ -26,6 +25,7 @@ function topic(overrides: Record<string, unknown> = {}) {
   return {
     slug: "tulum-condos",
     name: "Tulum condos",
+    kind: "market",
     intent: "commercial",
     relevance: "high",
     coverageKind: "product",
@@ -75,7 +75,7 @@ describe("taxonomy validation", () => {
   });
 
   it("rejects a topic with no matching terms", () => {
-    const { topic: parsed, reason } = validateTopic(topic({ terms: [] }));
+    const { topic: parsed, reason } = validateTopic(topic({ terms: [], requireAny: [], need: undefined }));
     expect(parsed).toBeNull();
     expect(reason).toMatch(/no matching terms/);
   });
@@ -95,7 +95,7 @@ describe("taxonomy validation", () => {
   it("drops duplicates and invalid topics from a proposal", () => {
     const { taxonomy, rejected } = parseTopicTaxonomy(
       {
-        topics: [topic(), topic(), topic({ slug: "broken", terms: [] })],
+        topics: [topic(), topic(), topic({ slug: "broken", terms: [], requireAny: [], need: undefined })],
         pageTypeRules: [{ type: "product", pattern: "/tulum-condos" }, { type: "nonsense", pattern: "/x" }],
         excludePaths: ["/terms"],
         newsQueries: ["tulum real estate news"],
@@ -285,6 +285,7 @@ describe("taxonomy stabilization", () => {
       requireAny: ["ocean vibes"],
       terms: ["ocean vibes", "oceanvibes", "freediving"],
       strongTerms: ["ocean vibes"],
+      headTerms: ["freediving"],
       preferredPages: ["/"],
     }),
     definition({
@@ -334,18 +335,15 @@ describe("taxonomy stabilization", () => {
     expect(result.topics.map((entry) => entry.slug)).toContain("courses");
   });
 
-  it("gives the bare market head term one owner and removes it from every requireAny", () => {
+  it("reports the head term the model proposed and keeps it on its owner", () => {
     const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
     const head = result.headTerms.find((entry) => entry.term === "freediving");
     expect(head?.owner).toBe("Brand");
     const brand = result.topics.find((entry) => entry.slug === "brand")!;
     expect(brand.headTerms).toContain("freediving");
-    for (const entry of result.topics) {
-      expect(entry.requireAny).not.toContain("freediving");
-    }
   });
 
-  it("does not claim a generic modifier that is not the market head", () => {
+  it("does not invent a head term the taxonomy did not propose", () => {
     const result = stabilizeTopicTaxonomy({ topics, queries, pageTexts: [] });
     expect(result.headTerms.map((entry) => entry.term)).not.toContain("course");
   });
@@ -414,42 +412,79 @@ describe("taxonomy stabilization", () => {
   });
 });
 
-describe("topic anchors", () => {
-  it("stores a need group that excludes the place", () => {
-    const [anchored] = applyTopicAnchors(
-      [topic({
-        name: "Riviera Maya luxury condos",
-        requireAny: ["riviera maya", "condos"],
-        terms: ["riviera maya", "luxury", "condos"],
-        strongTerms: ["riviera maya"],
-      }) as TopicDefinition],
-      topicContextTerms(["Riviera Maya"]),
-      new Set()
-    );
-    expect(anchored.requireGroups).toEqual([expect.arrayContaining(["luxury", "condos"])]);
-    expect(anchored.requireGroups?.flat()).not.toContain("riviera");
-    expect(anchored.reviewFlags).not.toContain("no-need-word");
+describe("structured membership", () => {
+  const luxury = topic({
+    name: "Riviera Maya luxury condos",
+    market: { scope: "local", places: ["riviera maya"], localIntent: [] },
+    need: { terms: ["luxury", "condos"] },
+    requireAny: ["riviera maya", "luxury", "condos"],
+    terms: ["luxury", "condos"],
+    strongTerms: ["luxury condos"],
+  }) as TopicDefinition;
+
+  it("requires the place and the need", () => {
+    expect(queryMatchesTopics([luxury], "riviera maya things to do")).toBe(false);
+    expect(queryMatchesTopics([luxury], "propiedades")).toBe(false);
+    expect(queryMatchesTopics([luxury], "propiedades en venta en playa del carmen")).toBe(false);
+    expect(queryMatchesTopics([luxury], "riviera maya luxury condos")).toBe(true);
   });
 
-  it("flags a topic whose vocabulary is only a place", () => {
-    const [anchored] = applyTopicAnchors(
-      [topic({ name: "Riviera Maya", requireAny: ["riviera maya"], terms: ["riviera maya"], strongTerms: [] }) as TopicDefinition],
-      topicContextTerms(["Riviera Maya"]),
-      new Set()
-    );
-    expect(anchored.requireGroups).toBeUndefined();
-    expect(anchored.reviewFlags).toContain("no-need-word");
+  it("matches a local-intent phrase without naming the place", () => {
+    const near = { ...luxury, market: { scope: "local" as const, places: ["riviera maya"], localIntent: ["near me"] } };
+    expect(queryMatchesTopics([near], "luxury condos near me")).toBe(true);
+  });
+
+  it("has no market requirement when the topic is international", () => {
+    const global = { ...luxury, market: { scope: "international" as const, places: [], localIntent: [] } };
+    expect(queryMatchesTopics([global], "luxury condos")).toBe(true);
+    expect(queryMatchesTopics([global], "riviera maya things to do")).toBe(false);
+  });
+
+  it("keeps a brand topic to its name", () => {
+    const brand = topic({
+      slug: "casamigo-brand",
+      name: "Casamigo brand",
+      kind: "brand",
+      coverageKind: "brand",
+      market: undefined,
+      need: undefined,
+      requireAny: ["casamigo"],
+      terms: ["casamigo"],
+      strongTerms: ["casamigo"],
+      exclusive: true,
+    }) as TopicDefinition;
+    expect(queryMatchesTopics([brand], "casamigo")).toBe(true);
+    expect(queryMatchesTopics([brand], "casas")).toBe(false);
+    expect(queryMatchesTopics([brand], "casas de cambio")).toBe(false);
+  });
+
+  it("still honours a legacy taxonomy with no structured fields", () => {
+    const legacy = topic({
+      kind: undefined,
+      market: undefined,
+      need: undefined,
+      requireAny: ["fauteuil"],
+      requireGroups: [["tapissier", "tapisserie"]],
+    }) as unknown as TopicDefinition;
+    expect(queryMatchesTopics([legacy], "fauteuil tapissier")).toBe(true);
+    expect(queryMatchesTopics([legacy], "fauteuil")).toBe(false);
   });
 });
 
-describe("taxonomy proposal anchors", () => {
-  it("stores the need group in the proposed taxonomy", async () => {
+describe("taxonomy proposal", () => {
+  it("stores the market and the need, not a place group", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({
       summary: "One topic.",
       topics: [
         {
           name: "Tulum condos",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: ["near me"],
+          needTerms: ["condos", "penthouses"],
+          headTerms: [],
           intent: "commercial",
           relevance: "high",
           coverageKind: "product",
@@ -457,38 +492,128 @@ describe("taxonomy proposal anchors", () => {
           rationale: "Buyers search Tulum condos directly.",
           actionHint: "Check the listing page.",
           memberQueries: ["tulum condos for sale", "tulum condos"],
-          preferredPages: ["/tulum-condos"],
+          ownerPages: ["/tulum-condos"],
         },
       ],
       pageTypeRules: [],
       excludePaths: [],
       newsQueries: [],
     }));
-    const result = await proposeTopicTaxonomy(input());
+    const result = await proposeTopicTaxonomy(input({
+      queries: [
+        { query: "tulum condos for sale", impressions: 40, volume: 300 },
+        { query: "tulum condos", impressions: 25, volume: 200 },
+        { query: "tulum penthouses", impressions: 10, volume: 100 },
+      ],
+    }));
     expect(result.error).toBeNull();
     const proposed = result.taxonomy!.topics[0];
-    expect(proposed.requireGroups).toBeDefined();
-    expect(proposed.requireGroups!.flat()).not.toContain("tulum");
-    expect(proposed.requireGroups!.flat()).toContain("condos");
+    expect(proposed.kind).toBe("market");
+    expect(proposed.market).toEqual({ scope: "local", places: ["tulum"], localIntent: ["near me"] });
+    expect(proposed.need).toEqual({ terms: ["condos", "penthouses"] });
+    expect(proposed.need?.terms).not.toContain("tulum");
   });
-});
 
-describe("brand fallback head term", () => {
-  it("gives the brand topic the service vocabulary so it can own the bare head term", async () => {
+  it("rejects a market topic with no need and re-proposes once", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson
+      .mockImplementationOnce(async () => ({
+        summary: "First pass.",
+        topics: [
+          {
+            name: "Playa del Carmen real estate",
+            kind: "market",
+            marketScope: "local",
+            marketPlaces: ["Playa del Carmen"],
+            localIntent: [],
+            needTerms: [],
+            intent: "mixed",
+            relevance: "high",
+            coverageKind: "mixed",
+            offerKey: "Condos",
+            rationale: "Place demand.",
+            actionHint: "Check the city page.",
+            memberQueries: ["propiedades en playa del carmen"],
+            ownerPages: ["/cities/playa-del-carmen"],
+          },
+        ],
+        pageTypeRules: [],
+        excludePaths: [],
+        newsQueries: [],
+      }))
+      .mockImplementationOnce(async () => ({
+        summary: "Corrected.",
+        topics: [
+          {
+            name: "Playa del Carmen real estate",
+            kind: "market",
+            marketScope: "local",
+            marketPlaces: ["Playa del Carmen"],
+            localIntent: [],
+            needTerms: ["propiedades", "real estate", "bienes raices"],
+            intent: "mixed",
+            relevance: "high",
+            coverageKind: "mixed",
+            offerKey: "Condos",
+            rationale: "Place demand with a need.",
+            actionHint: "Check the city page.",
+            memberQueries: ["propiedades en playa del carmen"],
+            ownerPages: ["/cities/playa-del-carmen"],
+          },
+        ],
+        pageTypeRules: [],
+        excludePaths: [],
+        newsQueries: [],
+      }));
+    const result = await proposeTopicTaxonomy(input({
+      queries: [
+        { query: "propiedades en playa del carmen", impressions: 10, volume: 500 },
+        { query: "playa del carmen", impressions: 5, volume: 200 },
+      ],
+    }));
+    expect(result.error).toBeNull();
+    expect(mocks.chatJson).toHaveBeenCalledTimes(2);
+    expect(result.taxonomy?.topics[0].need?.terms).toContain("propiedades");
+  });
+
+  it("gives the brand topic the head term the model proposed", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({
-      summary: "One service topic.",
+      summary: "Brand and course.",
       topics: [
         {
+          name: "Ocean School",
+          kind: "brand",
+          marketScope: "international",
+          marketPlaces: [],
+          localIntent: [],
+          needTerms: ["ocean school"],
+          headTerms: ["freediving"],
+          intent: "mixed",
+          relevance: "high",
+          coverageKind: "brand",
+          offerKey: "Freediving course",
+          rationale: "Brand demand.",
+          actionHint: "Home page.",
+          memberQueries: ["ocean school"],
+          ownerPages: ["/"],
+        },
+        {
           name: "Freediving course",
+          kind: "market",
+          marketScope: "international",
+          marketPlaces: [],
+          localIntent: [],
+          needTerms: ["freediving course", "course"],
+          headTerms: [],
           intent: "commercial",
           relevance: "high",
           coverageKind: "service",
           offerKey: "Freediving course",
           rationale: "Course demand.",
           actionHint: "Improve the course page.",
-          memberQueries: ["freediving course", "freediving"],
-          preferredPages: ["/course"],
+          memberQueries: ["freediving course"],
+          ownerPages: ["/course"],
         },
       ],
       pageTypeRules: [],
@@ -514,8 +639,10 @@ describe("brand fallback head term", () => {
       pages: [{ path: "/course", title: "Freediving course", h1: "Freediving course", wordCount: 800 }],
       brandTerms: ["ocean school"],
     }));
-    const brand = result.taxonomy?.topics.find((entry) => entry.coverageKind === "brand");
+    const brand = result.taxonomy?.topics.find((entry) => isBrandTopic(entry));
     expect(brand).toBeDefined();
-    expect(brand?.terms).toContain("freediving");
+    expect(brand?.headTerms).toEqual(["freediving"]);
+    expect(brand?.requireAny).toEqual(["ocean school"]);
+    expect(brand?.terms).not.toContain("freediving course");
   });
 });

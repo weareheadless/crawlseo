@@ -7,7 +7,7 @@
  */
 import type { TopicDefinition } from "@/lib/research/topic-taxonomy";
 
-export const ATELIER_TAXONOMY: TopicDefinition[] = [
+const ATELIER_TAXONOMY_LEGACY: Array<Omit<TopicDefinition, "kind">> = [
   {
     slug: "restauration-siege",
     offerKey: "Restauration de siège",
@@ -60,6 +60,7 @@ export const ATELIER_TAXONOMY: TopicDefinition[] = [
   {
     slug: "restauration-abat-jour",
     offerKey: "Restauration d'abat-jour",
+    preferredPages: ["/post/restauration-abat-jour"],
     name: "Restauration d'abat-jour",
     intent: "commercial",
     relevance: "high",
@@ -274,3 +275,8 @@ export const ATELIER_TAXONOMY: TopicDefinition[] = [
       "Use as supporting authority, not as a commercial target; check that the posts link to the service and product pages.",
   },
 ];
+
+export const ATELIER_TAXONOMY: TopicDefinition[] = ATELIER_TAXONOMY_LEGACY.map((topic) => ({
+  ...topic,
+  kind: topic.coverageKind === "brand" ? "brand" : "market",
+}));

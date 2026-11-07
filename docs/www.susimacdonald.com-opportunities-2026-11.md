@@ -1,20 +1,26 @@
 # Opportunity board — www.susimacdonald.com — 2026-11
 
-Generated 2026-11-07T16:57:52.146Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-07T19:27:57.150Z. Proposals only; no task is created until a human accepts one.
 
-Since the previous run: 16 updated in place, 2 new, 0 closed.
-- new: Sharpen the Puerto Aventuras homes page and hand condo terms to the condo page
-- new: Answer Akumal luxury-home searches on the Akumal hub, not a single project listing
+Since the previous run: 15 updated in place, 4 new, 3 closed.
+- new: Broaden Cozumel condos page for real estate and homes queries
+- new: Add AEO answer blocks to the Riviera Maya investment hub
+- new: Add Puerto Aventuras safety answer blocks to existing guide
+- new: Create a Riviera Maya home financing service page
+- closed: Broaden Cozumel homes page to cover real estate and homes for sale
+- closed: Add safety answer blocks to Riviera Maya safety article
+- closed: Add a Riviera Maya financing section to the one article that covers it
 
 ## Taxonomy review
 
-- `playa-del-carmen-condos-for-sale-buyer-representation`, `apartments-for-rent-in-playa-del-carmen`, `riviera-maya-real-estate-market-investment-location-guides` — 89 queries / 110030 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `puerto-morelos-condos-for-sale`, `puerto-aventuras-real-estate-condos-for-sale` — 38 queries / 80 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `tulum-real-estate-condos-for-sale` — 44 queries / 480 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `cozumel-real-estate-condos-for-sale` — 6 queries / 0 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `akumal-real-estate-condos-for-sale`, `houses-villas-for-sale-in-riviera-maya` — 6 queries / 0 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `riviera-maya-beachfront-luxury-penthouse-properties` — 63 queries / 74210 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
-- `home-financing-in-mexico-for-foreign-buyers` — 80 queries / 960 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `puerto-morelos-condos-real-estate-for-sale` — 18 queries / 0 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `playa-del-carmen-condos-penthouses-for-sale`, `playa-del-carmen-apartments-long-term-rentals`, `playa-del-carmen-real-estate-houses-villas-for-sale` — 98 queries / 110020 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `tulum-real-estate-condos-villas-for-sale` — 37 queries / 480 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `akumal-condos-real-estate-for-sale` — 7 queries / 0 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `cozumel-condos-real-estate-for-sale` — 10 queries / 0 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `riviera-maya-investment-market-updates-location-guides`, `puerto-aventuras-condos-homes-real-estate-for-sale` — 227 queries / 184720 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `riviera-maya-bacalar-real-estate-beachfront-luxury-propertie` — 54 queries / 74210 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
+- `mexico-home-financing` — 114 queries / 1100 monthly demand name this place or brand but not its need. Review for a missing need term or a separate audience.
 
 ## Lanes
 
@@ -24,197 +30,205 @@ No proposal in this lane.
 
 ### Content & business
 
-#### Retarget the Playa del Carmen condos page at page-one condo searches
+#### Refresh Puerto Morelos condos page to reach page one for 'condos for sale'
 
-- Kind: update; effort: medium; confidence: high (Search Console shows this exact page at around position 24 on 'playa del carmen condos for sale' and related buying terms, with 2,266 impressions and 1 click in the cluster.)
-- Summary: The condos page already earns 2,266 impressions in this cluster but sits around position 24 for 'playa del carmen condos for sale' and turns that into almost nothing. Rework the page around the buying queries it already appears for.
-- Why now: 4,550 monthly searches in the cluster and the page is on page three of results with a single click in the period: demand is proven, the page is not competing.
-- Target: https://www.susimacdonald.com/playa-del-carmen-condos-sale (title tag, H1, price and availability block, buyer FAQ)
-- Action: Rewrite the title tag and H1 around 'condos for sale in Playa del Carmen', state current price bands, add a short section on how buying works with a local agent and a FAQ answering the condo-buying questions the page already ranks for. Keep the existing listing content and internal links to individual condo listings so nothing that ranks today is lost.
-- Expected outcome: The page moves off page three for its head condo terms and converts impressions it already earns into clicks and enquiries.
+- Kind: update; effort: medium; confidence: medium (First-party rankings show the page at position 11–17 on its core condo queries, close to page one; gains on broader terms are directional.)
+- Summary: The Puerto Morelos condos page ranks around position 11–17 for its core 'condos for sale' queries, but it never mentions 'real estate', 'oceanfront' or 'Mexico', so broader and higher-intent variants fall to position 20+.
+- Why now: Roughly 1,400 monthly searches and 1,858 impressions already reach this cluster; the page sits just off page one, so on-page gains are cheap.
+- Target: https://www.susimacdonald.com/puerto-morelos-condos-sale
+- Action: Update the title, H1 and intro to include 'Puerto Morelos real estate' and 'oceanfront condos'. Add a short oceanfront/beachfront section and an FAQ answering 'are there oceanfront condos for sale in Puerto Morelos?'. Add internal links from the Puerto Morelos real-estate page and the Puerto Morelos listings, and keep the existing condo inventory.
+- Expected outcome: Moves from position ~11–17 toward page one for 'puerto morelos condos for sale' and starts capturing 'puerto morelos real estate' and 'oceanfront condos' variants.
 - Evidence: 5 reference(s)
 
-#### Turn Puerto Morelos condo rankings into clicks
+#### Strengthen Playa del Carmen condos page for 'buy a condo' and budget searches
 
-- Kind: update; effort: small; confidence: medium (Some Puerto Morelos condo queries rank around 11 to 13 in Search Console, but the cluster's average position is page six, so the upside is directional rather than certain.)
-- Summary: Several Puerto Morelos condo queries already land at positions 11 to 13 on the condo page, yet the cluster records zero clicks on 1,854 impressions. The page is close to page one and is not being chosen.
-- Why now: 1,410 monthly searches and no clicks: the rankings are near page one while the cluster's average position is page six, so the fix belongs on the page rather than in the market.
-- Target: https://www.susimacdonald.com/puerto-morelos-condos-sale (title tag, meta description, oceanfront section)
-- Action: Rewrite the title tag and meta description to match 'condos for sale in Puerto Morelos' and name a price range, then add a short section on oceanfront and beachfront condos, a query theme the cluster shows but the page does not address, linking through to the Puerto Morelos beachfront page. Keep the existing listing and market content in place.
-- Expected outcome: The page competes for the top ten on its main condo queries and starts earning clicks from impressions it already receives.
+- Kind: update; effort: medium; confidence: medium (First-party rank data shows the page at ~24–26 on 880-volume queries and a related post at position 10 for 'under $100k'; movement is directional.)
+- Summary: The Playa del Carmen condos page ranks around position 24–26 for its core 'condos for sale' queries (880 monthly searches), while 'condos under $100k' is only served by a blog post at position 10.
+- Why now: About 2,650 monthly searches and 1,520 impressions; the page is on page three and buy-intent, apartment and budget wording are unmatched.
+- Target: https://www.susimacdonald.com/playa-del-carmen-condos-sale
+- Action: Rework title, H1 and intro around 'Playa del Carmen condos for sale' and 'buy a condo in Playa del Carmen'. Add a 'condos under $100k and under $200k' section linking to /riviera-maya-condos-sale-under-200k and the under-$100k post, plus an 'apartments for sale' subsection and links to the penthouse page.
+- Expected outcome: Improves relevance for buy-intent and budget queries and consolidates budget traffic currently split to a blog post, supporting a move toward page one.
 - Evidence: 5 reference(s)
 
-#### Push the Tulum condo page from position 20 into the top ten
+#### Rebuild Tulum houses page to own 'Tulum real estate' and 'Tulum homes for sale'
 
-- Kind: update; effort: medium; confidence: medium (Search Console shows the Tulum condo page at positions 19 to 20 on two condo queries with dozens of impressions, which is close to page one but not yet proven.)
-- Summary: The Tulum condo page ranks around position 19 to 20 for 'tulum condos for sale' and 'condos for sale in tulum mexico', yet the whole cluster earns one click. A focused title and content update is the shortest route to page one.
-- Why now: 1,720 monthly searches and 1,387 impressions in the cluster, with the condo page within striking distance of page one on its two strongest terms.
-- Target: https://www.susimacdonald.com/tulum-condos-sale (title tag, H1, neighbourhood comparison, FAQ)
-- Action: Retitle and restructure the page around 'condos for sale in Tulum', add current price bands, a short comparison of beach, Aldea Zama and jungle locations, and an FAQ on buying a Tulum condo. Add a clear link to the Tulum homes page so the broader 'tulum real estate' searches, currently landing on the house page far down the results, have an obvious destination.
-- Expected outcome: The condo page reaches page one for its head terms and the Tulum cluster starts producing clicks rather than impressions only.
-- Evidence: 4 reference(s)
-
-#### Build the under-$200K Riviera Maya hub into a real page
-
-- Kind: cluster_hub; effort: medium; confidence: medium (The hub exists but is only 221 words and ranks around position 11 on a single low-volume oceanfront query; the strongest budget queries are out of market.)
-- Summary: The under-$200K hub is 221 words and ranks around position 11 on one small oceanfront query. It is the only page built for the budget buyer in this cluster and it is too thin to compete with the articles that currently carry the topic.
-- Why now: The cluster converts (22 clicks, 848 impressions) but the big $100K beachfront queries are Mexico- and Caribbean-wide and excluded, so the in-market opportunity is the local under-$200K hub.
-- Target: https://www.susimacdonald.com/riviera-maya-condos-sale-under-200k (full page rebuild)
-- Action: Expand the 221-word hub into a working guide: what under $200K buys in Playa del Carmen, Tulum, Puerto Morelos and Akumal, example listings with links, ownership and financing costs, and an FAQ on oceanfront condos under $200K. Keep the existing under-$200K articles linked as supporting content rather than duplicating them.
-- Expected outcome: The hub becomes the destination for budget condo searches inside the service area and supports the existing under-$200K articles instead of leaving them to rank alone.
-- Evidence: 3 reference(s)
-
-#### Own the Cozumel condo query: fix the split between the condo and homes pages
-
-- Kind: update; effort: medium; confidence: medium (First-party rows show real Cozumel impressions, average position near 45 but near position 12 on the head condo term — directional evidence that intent work, not new pages, is the gap.)
-- Summary: Cozumel earns 1,308 impressions and 3 clicks at average position ~47, with /cozumel-condos-sale and /homes-for-sale-in-cozumel chasing the same condo demand. The condo page already reaches ~position 12 on a sampled 'condo for sale cozumel' row, so sharpening it is the cheapest lift here.
-- Why now: 'condo for sale cozumel' carries 320 monthly searches and the page already sits near page two in the sampled row, while the two Cozumel pages currently split the same intent.
-- Target: https://www.susimacdonald.com/cozumel-condos-sale (H1, opening copy, internal links and meta)
-- Action: Rewrite the H1 and opening of /cozumel-condos-sale to own condo-for-sale intent, and move broad 'Cozumel real estate' framing to /homes-for-sale-in-cozumel with a distinct title, H1 and meta description. Add a section for the 'residential' gap wording, and ask the owner whether presale is actually offered before writing about it. Link the Cozumel listing pages (Deck 48, The Stella, Elementos, Antilia) and cross-link the two hubs with different anchors.
-- Expected outcome: The condo page competes for page-one condo queries, the homes page keeps broad real estate queries, and impressions stop splitting between two near-identical targets.
-- Evidence: 4 reference(s)
-
-#### Expand the 600-word Playa del Carmen rentals page against 1,100 impressions
-
-- Kind: update; effort: medium; confidence: medium (First-party rows show 1,122 rental impressions, 10 clicks and exact-match queries at positions 8-10 against a ~600-word page — direct evidence the page is thin, though the size of any lift is unproven.)
-- Summary: The rentals cluster earns 1,122 impressions and 10 clicks at average position ~19, and exact-match rental queries already land at positions 8-10, but the target page carries only about 600 words. Seven queries mention 'monthly' and no matched page does.
-- Why now: Positions 8-10 on 'apartments for rent playa del carmen' put page one within reach; the page is too thin to hold it and ignores the monthly-rental wording searchers use.
-- Target: https://www.susimacdonald.com/apartments-for-rent-in-playa-del-carmen (Body copy, FAQ block and listing links)
-- Action: Build the page out into a full rental guide: monthly versus short-term lets, what a rent price includes, deposit and contract steps for foreign renters, and which neighbourhoods suit which budget. Answer the 'monthly' gap explicitly, add an FAQ block, and link the three rental listings (Nalu, Olaya 209, Terrazas Condominio 106). Keep the existing URL and H1; do not create a second rentals page.
-- Expected outcome: A page able to hold page-one positions on exact-match rental queries and capture the monthly-rental wording it currently misses.
-- Evidence: 5 reference(s)
-
-#### Separate the two Akumal pages so one clearly owns 'condos for sale'
-
-- Kind: update; effort: medium; confidence: medium (First-party rows show 1,032 Akumal impressions, zero clicks and average position around 46, with sampled rankings in the mid-20s — directional evidence the two overlapping pages are splitting the cluster.)
-- Summary: Akumal draws 1,032 impressions and no clicks at average position ~46, and both /akumal-condos-sale and /homes-for-sale-in-akumal cover the same ground. Sampled rows put 'akumal real estate' near 26 and 'akumal condos for sale' near 30.
-- Why now: 'akumal real estate' carries 110 monthly searches and the cluster already generates 1,032 impressions; rankings in the mid-20s to 40s are close enough to act on now.
-- Target: https://www.susimacdonald.com/akumal-condos-sale (Title, H1, opening and internal links)
-- Action: Give /akumal-condos-sale a condo-specific title, H1 and opening, and keep /homes-for-sale-in-akumal for houses and land. Cross-link them with distinct anchors, link the Akumal listings (Nikte Ha, Santamar, Baikal, Coastal Haven, Casa Caribe), and add a short section on what is available in Akumal versus nearby Tulum and Playa del Carmen. Do not create new Akumal pages.
-- Expected outcome: Each Akumal page targets one intent instead of competing, improving the chance of page-two and page-one positions on both condo and homes queries.
-- Evidence: 4 reference(s)
-
-#### Sharpen the Puerto Aventuras homes page and hand condo terms to the condo page
-
-- Kind: update; effort: small; confidence: low (First-party rows confirm impressions and rankings in the 30s-50s, but market volume is small and clicks are zero, so this is a scoped test rather than proven demand.)
-- Summary: Puerto Aventuras earns 723 impressions and no clicks at average position ~45, with /homes-for-sale-in-puerto-aventuras ranking 39-58 and /puerto-aventuras-condos-sale at 28-37. Demand is smaller here, so treat this as a scoped test rather than a priority.
-- Why now: 'homes for sale in puerto aventuras' carries 140 monthly searches and both pages already rank in the 30s; a small fix is enough to test whether the market responds.
-- Target: https://www.susimacdonald.com/homes-for-sale-in-puerto-aventuras (Title, H1, opening and internal links)
-- Action: Rewrite the title, H1 and opening of /homes-for-sale-in-puerto-aventuras around houses and gated-community living, and let /puerto-aventuras-condos-sale keep condo queries. Link the listings (Quinta del Sol, Quinta Luna, Cielo Maya, Marina Aqua, Club Aqua), add a short section on what the gated community includes, and cross-link the condo page with a distinct anchor.
-- Expected outcome: Two clearly separated pages, with the homes page eligible for house queries it currently splits with the condo page.
-- Evidence: 5 reference(s)
-
-#### Rebuild the Playa del Carmen investment guide around the queries it already ranks for
-
-- Kind: update; effort: medium; confidence: medium (Search Console shows the page already receives impressions for these exact investment queries but ranks around position 40-50, so the direction is clear while the click outcome is not guaranteed.)
-- Summary: The complete investment guide already receives about 180 impressions for 'playa del carmen real estate investment' and 'real estate investment in playa del carmen', but sits near position 40-50 with zero clicks. The page is matched to the query; it needs to be reworked rather than replaced.
-- Why now: First-party impressions for these exact investment terms are already landing on this URL at positions 36-51, so the cluster is unproven on clicks, not on relevance. Small structural work moves a page that is already in the running.
-- Target: https://www.susimacdonald.com/post/your-complete-playa-del-carmen-real-estate-investment-guide
-- Action: Rework the page around the investment intent it already ranks for: rewrite the title, H1 and opening section for 'Playa del Carmen real estate investment'; add sections on neighbourhood-level investment cases, rental yield and cost of ownership, buyer timeline and closing costs, and the financing route; add an FAQ answering whether Playa del Carmen is a good real estate investment; link out to the Playa del Carmen condos page, the under-200K page and the financing article.
-- Expected outcome: Movement from page 4 toward page 1-2 for the Playa del Carmen investment terms and the first clicks from the 570 impressions the cluster already earns.
-- Evidence: 4 reference(s)
-
-#### Turn the thin Riviera Maya beachfront page into a real beachfront hub
-
-- Kind: update; effort: medium; confidence: medium (Search Console shows beachfront queries reaching a page of only a couple of hundred words at positions 31-76; the direction is supported but the query volumes behind it are not measured.)
-- Summary: Beachfront queries bring roughly 160 impressions and the matching page ranks between position 31 and 76 on about 220 words. It needs substance — areas, price bands, live listings and buying steps — before it can compete for beachfront buyers.
-- Why now: 'riviera maya beachfront homes for sale' and 'playa del carmen beachfront homes for sale' already reach this URL, but a few hundred words of copy gives search engines almost nothing to rank. The sibling luxury and penthouse pages are equally thin, so the gap is structural.
-- Target: https://www.susimacdonald.com/riviera-maya-beachfront-sale
-- Action: Expand the page from about 220 words to a substantive hub: beachfront by area (Playa del Carmen, Puerto Aventuras, Akumal, Tulum), price bands, what beachfront ownership involves (fideicomiso, financing, insurance), environmental and sargassum risk with a link to the existing sargassum post, and current beachfront listings. Add internal links from the Riviera Maya luxury and penthouse pages so the three thin pages support each other instead of competing.
-- Expected outcome: A page that can hold a position for beachfront searches instead of drifting between pages 3 and 7, plus clearer internal routing to live beachfront inventory.
-- Evidence: 3 reference(s)
-
-#### Fix the Tulum houses page that ranks near position 65 for 'tulum homes for sale'
-
-- Kind: update; effort: medium; confidence: medium (Search Console confirms the Tulum house page is the ranking URL for 'tulum homes for sale' at about position 65; the volume is measured but the page has never converted, so the upside is directional.)
-- Summary: 'tulum homes for sale' is the cluster's only measured volume at about 2,400 a month, and the existing Tulum house page sits around position 65 with 42 impressions. The page exists and is long; the problem is relevance and structure, not a missing page.
-- Why now: The cluster's 429 impressions are dominated by Tulum and Akumal house queries, and the Tulum page is the one URL with real volume behind it that currently converts nothing. It is also the cheapest place to win ground in this cluster.
+- Kind: update; effort: medium; confidence: high (First-party rankings show this exact page at position ~54–63 for 'Tulum real estate' and 'Tulum homes for sale' while a sibling page reaches ~20 — a clear, well-supported gap.)
+- Summary: The Tulum houses page ranks only around position 54–63 for 'Tulum real estate' and 'Tulum homes for sale', while the Tulum condos page reaches position ~20, showing the houses page is under-optimized.
+- Why now: Tulum is the largest cluster (~4,120 monthly searches, 1,413 impressions) and these high-volume terms land on a page stuck on page five or six.
 - Target: https://www.susimacdonald.com/tulum-house-sale
-- Action: Re-optimise title, H1, meta description and opening section for 'homes for sale in Tulum' and 'Tulum houses for sale'; restructure the body into neighbourhood sections, price ranges and a villa-versus-condo comparison; add a short FAQ on buying a house in Tulum; link to the Tulum condos page, the Tulum homes hub and the construction-stall article so buyers see both the opportunity and the risk.
-- Expected outcome: The Tulum house page starts competing for a 2,400-a-month term instead of sitting on page 7, and the cluster's Tulum impressions begin producing clicks.
-- Evidence: 1 reference(s)
+- Action: Retitle and restructure /tulum-house-sale around 'Tulum real estate' and 'Tulum homes for sale'. Add a real-estate overview, area/neighborhood guidance, FAQ answer blocks and internal links to the Tulum condo, penthouse and /homes-for-sale-in-tulum pages.
+- Expected outcome: Gains relevance for the site's highest-volume Tulum terms and starts climbing from position ~54–63 toward page one.
+- Evidence: 4 reference(s)
 
-#### Answer Akumal luxury-home searches on the Akumal hub, not a single project listing
+#### Push Tulum condos page from page two to page one
 
-- Kind: update; effort: small; confidence: medium (Search Console shows over 100 impressions for luxury Akumal searches resolving to one listing URL, while the hub ranks around position 17-24 for Akumal homes; the mismatch is clear, the gain is not measured.)
-- Summary: 'luxury real estate akumal' is the cluster's biggest impression source at over 100, but it lands on one project listing page. The Akumal hub already ranks better for 'akumal homes for sale' and is the right place to carry the luxury angle.
-- Why now: Luxury Akumal demand is being served by a listing page for one development, which cannot answer a market-level question. The hub is the page that should absorb this intent, and it already has the ranking base to do it.
-- Target: https://www.susimacdonald.com/homes-for-sale-in-akumal (Luxury homes section)
-- Action: Add a luxury section to the Akumal hub covering the Akumal communities already listed on the site (Buluc, Baikal, Nikte Ha, Santamar, Coastal Haven, Casa Caribe), typical price bands and what separates gated from beachfront product, with links to each listing. Add internal links from those individual listing pages back to the hub so the market query resolves to a market page.
-- Expected outcome: The Akumal hub becomes the landing page for luxury Akumal searches instead of a single project page, and listing pages feed it instead of competing with it.
+- Kind: update; effort: small; confidence: medium (First-party rankings put the page at ~19–20 on 'Tulum condos for sale'; it is close to page one but the lift is directional.)
+- Summary: The Tulum condos page ranks around position 19–20 for 'Tulum condos for sale', just off page one, but it doesn't address 'Mexico' or broader 'real estate' variants.
+- Why now: This is the closest Tulum asset to page one and the cluster carries ~4,120 monthly searches.
+- Target: https://www.susimacdonald.com/tulum-condos-sale
+- Action: Refresh title, H1 and intro to include 'Tulum condos for sale' and 'condos for sale in Tulum Mexico'. Add a short buyer FAQ and internal links to the Tulum house and penthouse pages and the condo listings, keeping the existing inventory.
+- Expected outcome: A small lift from position ~19–20 into page one for the core 'Tulum condos for sale' query.
 - Evidence: 3 reference(s)
 
-#### Add mortgage, lender and cross-border loan language to the financing article
+#### Broaden Akumal condos page to cover 'Akumal real estate' demand
 
-- Kind: update; effort: small; confidence: low (The search data is only a few dozen impressions, so this is a small test; the case rests on home financing being a service the business actually offers, not on measured volume.)
-- Summary: Financing demand is small — about 44 impressions — but the article never uses the words buyers search with. Nine 'mortgage' queries reach pages that do not contain the term, and home financing is a service the business actually sells with a named local mortgage partner.
-- Why now: The gap between the queries arriving and the vocabulary on the page is a quick, low-cost correction on a core service. Treat it as a small test, not a volume play.
-- Target: https://www.susimacdonald.com/post/home-financing-mexico-yes-you-can
-- Action: Add sections using the terms buyers actually type: how mortgages work in Mexico for foreign buyers, which lenders and cross-border loan routes serve US and Canadian buyers, pre-approval steps and timelines, and the local mortgage partner the business works with. Put 'mortgage' and 'loan' in the title, H1 and meta description, and add a short FAQ block. Keep the existing residency and fideicomiso context so the article stays complete.
-- Expected outcome: The financing article starts matching mortgage and loan queries it currently misses, and gives buyers a clear next step toward the consultation page.
+- Kind: update; effort: small; confidence: medium (First-party rankings show the condos page near position 30 and a sibling homes page at ~17–25; the case is directional given the smaller search volume.)
+- Summary: The Akumal condos page ranks around position 30 for 'Akumal condos for sale', while 'Akumal real estate' and 'Akumal homes for sale' are handled by a separate homes page; the condos page doesn't mention real estate or homes.
+- Why now: About 510 monthly searches and 1,299 impressions; the condos page is on page three and misses the broader real-estate wording.
+- Target: https://www.susimacdonald.com/akumal-condos-sale
+- Action: Refresh the page to add an 'Akumal real estate' intro and a short FAQ, and link clearly to /homes-for-sale-in-akumal and the Akumal listings so the two pages support rather than compete.
+- Expected outcome: Improves relevance for 'Akumal condos for sale' and supports the homes page on 'Akumal real estate' queries.
+- Evidence: 4 reference(s)
+
+#### Update Playa del Carmen rentals page for long-term and condo rental intent
+
+- Kind: update; effort: small; confidence: high (First-party data shows 1,006 impressions and rental/condo-rental queries already reaching this page, but the page copy does not match those terms.)
+- Summary: The existing apartments-for-rent page has proven visibility but its copy does not match the rental, condo-rental and long-term wording already driving impressions.
+- Why now: The page earns 1,006 impressions and 10 clicks but sits around position 18, while rental and condo-rental queries appear in the cluster without matching page copy.
+- Target: https://www.susimacdonald.com/apartments-for-rent-in-playa-del-carmen (Long-term rental and condo rental sections)
+- Action: Update the existing page title, H1 and opening copy to name long-term rentals and condo rentals explicitly. Add a short section for each intent, answer common long-term rental questions, and link to relevant rental listings and the free consultation page.
+- Expected outcome: Better match to rental and condo-rental queries, improved rankings around the current position 18, and more clicks from existing impressions.
+- Evidence: 5 reference(s)
+
+#### Strengthen Playa del Carmen homes page for houses, villas and investment
+
+- Kind: update; effort: medium; confidence: high (The page earns 950 impressions but ranks near position 51, and the query set names investment, houses and properties that the page does not match.)
+- Summary: The homes-for-sale page has strong coverage but ranks poorly for broad real estate and investment-property queries that the page does not explicitly address.
+- Why now: The page earns 950 impressions but zero clicks and an average position near 51; investment and houses wording appears in the query set without matching page copy.
+- Target: https://www.susimacdonald.com/homes-for-sale-in-playa-del-carmen (Houses/villas and investment-property sections)
+- Action: Update the page title, H1 and intro to cover Playa del Carmen houses, villas and investment properties. Add two short sections with internal links to relevant listings, the investment guide and the consultation page, and tighten the meta description.
+- Expected outcome: Improved relevance for broad real estate, houses and investment-property queries, with a chance to move up from the current position near 51.
+- Evidence: 5 reference(s)
+
+#### Broaden Cozumel condos page for real estate and homes queries
+
+- Kind: update; effort: small; confidence: medium (Condo queries already reach the page at strong positions, but broader Cozumel real estate and homes queries sit much lower; the evidence is directional.)
+- Summary: Condo queries already reach the Cozumel page, but broader real estate and homes queries sit far lower and the title needs cleanup.
+- Why now: The page ranks strongly for several condo-for-sale terms but the cluster also carries 745 impressions for Cozumel real estate and homes searches that the page does not match.
+- Target: https://www.susimacdonald.com/cozumel-condos-sale (Title/meta and real-estate/homes section)
+- Action: Clean up the title's double pipe, add Cozumel real estate and homes-for-sale wording to the title, H1 and intro, and add a short section linking condo listings to broader Cozumel property pages. Keep the existing condo-for-sale focus.
+- Expected outcome: Preserve strong condo rankings while improving relevance for broader Cozumel real estate and homes queries.
+- Evidence: 6 reference(s)
+
+#### Update Riviera Maya condos page for condo search demand
+
+- Kind: update; effort: medium; confidence: medium (Search Console shows condo queries earning impressions and the condos page already ranks for one, but there are no clicks yet and demand is split across several URLs.)
+- Summary: The Riviera Maya condos page already ranks for some condo queries, but the cluster’s condo demand is split across pages and the beachfront page does not match it. Tighten the page around condo intent and link to the beachfront and Bacalar options.
+- Why now: Condo queries carry 452 impressions in this cluster, and the condos page has a first-page-adjacent position for one term; the current matched page is only a 220-word beachfront page.
+- Target: https://www.susimacdonald.com/riviera-maya-condos-sale (Condo inventory and buying guidance)
+- Action: Update the existing Riviera Maya condos page: align title, H1 and meta with 'Riviera Maya condos for sale', add a short intro on condo ownership in the Riviera Maya, group listings by area, and link clearly to the beachfront and Bacalar condo pages. Add FAQ-style answer blocks for condo buying questions already present in Search Console.
+- Expected outcome: A stronger condo page that matches the cluster’s largest unserved term group and routes buyers to relevant inventory.
+- Evidence: 3 reference(s)
+
+#### Strengthen Bacalar condo page for Bacalar condo searches
+
+- Kind: update; effort: small; confidence: medium (First-party search data shows Bacalar condo queries with impressions and existing rankings, but the demand is modest and currently spread across a listing and a location page.)
+- Summary: Bacalar condo queries have 153 impressions in the cluster, but the matched page is a beachfront page and Bacalar demand is landing on a listing page. Give the Bacalar condo page a clearer title, intro and links.
+- Why now: Bacalar condo terms are already earning impressions and ranking around positions 15–31, so a small on-page fix can capture demand that is currently split with a single listing page.
+- Target: https://www.susimacdonald.com/bacalar-condos-sale (Bacalar condo inventory)
+- Action: Update the existing Bacalar condos page: make the title and H1 explicitly 'Bacalar condos for sale', add a short market and ownership intro, feature the Bacalar listings, and link to the Blue Water Condos listing and the broader Bacalar real estate page. Add an FAQ block on buying condos in Bacalar.
+- Expected outcome: A dedicated Bacalar condo page that consolidates the split impressions and gives buyers a clear next step.
+- Evidence: 3 reference(s)
+
+#### Fix Puerto Aventuras homes page for real estate and condo intent
+
+- Kind: update; effort: medium; confidence: medium (Search Console shows strong local impressions and weak positions on the main homes page; the condo page already ranks better, which points to a page-level alignment fix rather than a new page.)
+- Summary: The Puerto Aventuras homes page is the main local page but ranks around position 55 for 'puerto aventuras real estate'. The cluster also has condo, house and homes demand that the page does not clearly match.
+- Why now: The cluster has 698 impressions and 160 volume, yet the main homes page sits far down the results while condo queries land on a separate page. A page fix can connect the two.
+- Target: https://www.susimacdonald.com/homes-for-sale-in-puerto-aventuras (Homes and condos for sale)
+- Action: Update the existing Puerto Aventuras homes page: rewrite title, H1 and meta to cover 'Puerto Aventuras real estate, homes and condos for sale', add a clear homes-vs-condos section, feature a short local buying guide, and link prominently to the Puerto Aventuras condos page. Keep the page focused on the local market and avoid generic Riviera Maya copy.
+- Expected outcome: Better relevance for the main Puerto Aventuras real estate and homes queries, with condo demand routed to the existing condo page.
+- Evidence: 4 reference(s)
+
+#### Create a Riviera Maya home financing service page
+
+- Kind: cluster_hub; effort: medium; confidence: medium (The business lists home financing as a service and the existing guide earns financing impressions, but the cluster has no service page yet and current demand is modest.)
+- Summary: Financing is a listed service, and the cluster’s queries cover mortgages, construction loans and home equity lending. The only page is a blog post, so there is no local service page to convert financing demand for Riviera Maya buyers.
+- Why now: The financing blog post already ranks for several loan queries, but the cluster has no service or category page. A local page can explain the offer and route buyers to the existing guide.
+- Target: https://www.susimacdonald.com/riviera-maya-home-financing (Financing services)
+- Action: Create a Riviera Maya home financing service page for local buyers and investors: explain who it is for, the financing options available, the process, required documents and how the local mortgage partner supports the purchase. Link to the existing home financing guide and consultation page. Add FAQ answer blocks for mortgage, construction loan and home equity questions already appearing in Search Console.
+- Expected outcome: A commercial landing page for local financing demand that complements the existing guide and gives buyers a clear conversion path.
 - Evidence: 4 reference(s)
 
 ### AEO/GEO
 
-No proposal in this lane.
+#### Add AEO answer blocks to the Riviera Maya investment hub
+
+- Kind: aeo; effort: small; confidence: medium (The hub has measured AI Overview citations and related safety/investment queries already ranking well, but the answer-block work is a test.)
+- Summary: The investment hub already appears in AI Overview observations for safety and investment questions; add concise answer blocks that link to the deeper posts.
+- Why now: The cluster has measured AI Overview citations and safety/investment queries already ranking well, but the category hub does not present direct answer blocks.
+- Target: https://www.susimacdonald.com/blog/categories/investment-strategies (FAQ / answer blocks)
+- Action: Add short answer blocks to the existing investment hub for the safety and location-investment questions in the cluster, such as Puerto Aventuras safety and where to invest in the Riviera Maya. Keep each answer concise, cite the business's local expertise, and link to the relevant safety, market and location posts.
+- Expected outcome: A small AEO test: clearer answer-ready content on the hub and more chances to be cited for the measured questions.
+- Evidence: 5 reference(s)
+
+#### Add Puerto Aventuras safety answer blocks to existing guide
+
+- Kind: aeo; effort: small; confidence: medium (AI Overview observations show repeated Puerto Aventuras safety questions with many competitors, and the site already has a relevant guide; the signal is directional rather than a proven click opportunity.)
+- Summary: AI Overview observations show Puerto Aventuras safety questions are answered by many competitors. The site already has a Puerto Aventuras safety guide, so add direct answer blocks rather than a new page.
+- Why now: The safety questions have competitor counts of 20 and 11, and the existing guide can answer them without new inventory or a new URL.
+- Target: https://www.susimacdonald.com/post/discover-puerto-aventuras-gated-community-a-haven-of-safety-in-the-riviera-maya (Safety Q&A)
+- Action: Add concise answer blocks near the top of the existing Puerto Aventuras safety guide: 'Is Puerto Aventuras safe?' and 'Is Puerto Aventuras Mexico safe for buyers and families?' Use the page's existing safety and gated-community information, keep each answer short and direct, and link to the broader Riviera Maya safety guide and consultation page.
+- Expected outcome: A clearer answer-first page that is easier for AI Overviews and buyers to cite on Puerto Aventuras safety questions.
+- Evidence: 1 reference(s)
 
 ### Technical
 
-#### Fix duplicate title tags and meta descriptions across the listing pages
+#### Repair the broken internal link that strands 39 pages
 
-- Kind: technical; effort: medium; confidence: high (The crawl finding records duplicate titles on 57 pages and duplicate descriptions on 63 pages, with a sample URL supplied for each.)
-- Summary: 57 pages share duplicate title tags and 63 share duplicate meta descriptions. On a listing-heavy site this suppresses click-through on exactly the project pages that should convert.
-- Why now: The listing pages are the commercial surface of the site, and duplicate metadata is the most widespread crawl defect found, ahead of missing schema on 88 pages and broken links on 39.
-- Target: https://www.susimacdonald.com/es/privacy-policy (title tags and meta descriptions site-wide)
-- Action: Work through the affected URLs and give each a unique title naming the development, the location and the price band, for example the project name plus 'Playa del Carmen condos for sale', then do the same for the duplicate descriptions. Start with the Playa del Carmen, Tulum and Puerto Morelos listing pages that carry commercial intent, and treat it as one pass over the templates rather than page-by-page rewrites.
-- Expected outcome: Each listing page shows a distinct title and description in results, clearing the duplicate metadata defect and lifting click-through on pages that already rank.
+- Kind: technical; effort: small; confidence: high (The finding identifies one destination URL shared by 39 pages, so the fix is a single redirect plus a find-and-replace across known templates.)
+- Summary: 39 pages link to a Spanish blog post URL that no longer resolves, so crawlers and Spanish-language visitors hit a dead end from dozens of entry points. The link target is a single URL, which makes this a mechanical fix rather than a content project.
+- Why now: Every crawl of those 39 pages re-discovers a failing URL and burns budget on it, and any visitor following that path out of the Spanish funnel is lost at the moment of highest intent. It is the cheapest high-volume defect in the set.
+- Target: https://www.susimacdonald.com/es/post/the-cozumel-moat-how-regulatory-scarcity-is-driving-asset-premiums-in-the-mexican-caribbean (Blog (es))
+- Action: Confirm whether the post was deleted or renamed. If renamed, 301 the old URL to the live equivalent; if deleted, 301 to the closest live Spanish article or the /es/blog index. Then update every anchor pointing at the old URL on the 39 affected pages, and add a redirect check to the deploy process so a removed post cannot silently break links again.
+- Expected outcome: All 39 pages stop emitting a failing link, crawl budget is redirected to live URLs, and Spanish-language visitors stay inside the site instead of landing on an error.
+- Evidence: 1 reference(s)
+
+#### Get the 50 Spanish-locale pages into a sitemap
+
+- Kind: technical; effort: small; confidence: medium (The finding confirms 50 pages are missing from the sitemap, but the sample URL implies the whole locale may be absent, so the exact scope needs confirming before regeneration.)
+- Summary: 50 pages, sampled by /es/about, are absent from the sitemap. For a business targeting relocation and investment buyers, the Spanish locale is a real acquisition surface, and right now it is not being declared to search engines.
+- Why now: Sitemap omission slows discovery of every new Spanish page and leaves the locale dependent on internal links alone. Fixing it now means each future Spanish listing or guide is picked up on publication rather than weeks later.
+- Target: https://www.susimacdonald.com/es/about (Spanish locale)
+- Action: Regenerate the XML sitemap so it includes every indexable /es/ URL alongside the English equivalents, reference it from robots.txt, and submit it in Search Console. Confirm that hreflang alternates pair each /es/ page with its English counterpart so the two locales are not treated as duplicates of each other.
+- Expected outcome: Spanish pages become discoverable on publication, indexation latency for the locale drops, and the hreflang pairing reinforces rather than competes with the English pages.
+- Evidence: 1 reference(s)
+
+#### Add self-referencing canonicals to the 19 uncannonicalised pages
+
+- Kind: technical; effort: small; confidence: high (A missing canonical is directly verifiable in the page head and the fix is a single template change applied to 19 identified URLs.)
+- Summary: 19 pages, including the homepage at /home, ship without a canonical tag. The homepage is the strongest URL on the site and the one most likely to be duplicated by parameterised, trailing-slash or locale variants.
+- Why now: Uncannonicalised pages let alternate URL forms accumulate their own signals instead of consolidating onto one address. The longer this runs, the more equity is scattered across variants that have to be re-consolidated later.
+- Target: https://www.susimacdonald.com/home (Homepage and core templates)
+- Action: Add a self-referencing canonical to every one of the 19 pages, starting with /home. Standardise the preferred host, protocol and trailing-slash form in the template, and verify that canonical and hreflang agree so the /es/ and English versions each point to themselves rather than to one another.
+- Expected outcome: Ranking signals consolidate onto one URL per page, duplicate variants stop competing, and the homepage stops being the least-controlled page on the site.
+- Evidence: 1 reference(s)
+
+#### De-duplicate titles and meta descriptions at template level
+
+- Kind: technical; effort: medium; confidence: high (Duplicate counts of this size come from template output rather than one-off editorial error, and the two findings share an overlapping page set, indicating a single root cause.)
+- Summary: 57 pages share duplicate titles and 63 share duplicate descriptions, sampled at /es/privacy-policy. Overlap that large usually means templates are outputting a fixed string, or the Spanish locale is inheriting the English metadata wholesale.
+- Why now: Duplicate titles and descriptions split relevance across pages that should each own a distinct query, and they suppress click-through on the pages that do rank. The overlap between the two counts points to one root cause worth fixing once.
+- Target: https://www.susimacdonald.com/es/privacy-policy (Site-wide metadata templates)
+- Action: Audit the templates behind the 57 and 63 affected pages. Generate titles and descriptions from page-level fields rather than fixed strings, and localise them per locale so /es/ pages do not mirror English metadata. For utility pages such as privacy and terms, decide deliberately whether they should carry unique metadata or be excluded from indexation instead.
+- Expected outcome: Each indexable page competes for its own query set, Spanish pages read naturally in SERPs for Spanish searchers, and click-through improves without adding new content.
 - Evidence: 2 reference(s)
 
-#### Add missing indexable pages to the XML sitemap
+#### Fix rendering speed on the 27-page listing template
 
-- Kind: technical; effort: small; confidence: high (The issue is explicitly MISSING_SITEMAP on 50 pages and the remediation is standard sitemap generation/submission.)
-- Summary: 50 pages, including /es/about, are missing from the sitemap. This slows discovery and can leave important pages out of crawl prioritization.
-- Why now: Sitemap gaps delay indexing and are cheap to correct before the next crawl cycle.
-- Target: https://www.susimacdonald.com/es/about (Sitemap)
-- Action: Generate a complete XML sitemap for all indexable URLs, include the 50 missing pages, remove non-indexable URLs, and submit/verify in Google Search Console.
-- Expected outcome: All intended pages are discoverable via sitemap; faster and more complete indexing coverage.
-- Evidence: 1 reference(s)
-
-#### Fix broken links on 39 pages
-
-- Kind: technical; effort: medium; confidence: high (BROKEN_LINK is directly evidenced on 39 pages; the fix is a known link-remediation task.)
-- Summary: 39 pages contain broken links, including the Cozumel article URL. Broken links waste crawl budget and interrupt navigation.
-- Why now: Broken links leak link equity and can send users away from conversion paths; repair before the next crawl.
-- Target: https://www.susimacdonald.com/es/post/the-cozumel-moat-how-regulatory-scarcity-is-driving-asset-premiums-in-the-mexican-caribbean (Navigation)
-- Action: Run a full broken-link crawl, identify the 39 affected pages, and fix each link with the correct destination or a 301 redirect where the target has moved.
-- Expected outcome: Broken links removed; crawl budget preserved and navigation paths restored.
-- Evidence: 1 reference(s)
-
-#### Improve performance on slow listing pages
-
-- Kind: technical; effort: medium; confidence: medium (SLOW_PAGE is evidenced on 27 pages, but the exact cause and achievable speed gain require a performance profile.)
-- Summary: 27 listing pages, including Polo 88 in Playa del Carmen, are slow. Slow templates consume crawl budget and hurt user experience on high-intent property pages.
-- Why now: Listing pages are commercial pages; speed issues affect both crawl efficiency and conversion, and the template can be fixed once for many URLs.
-- Target: https://www.susimacdonald.com/real-estate-listings/polo-88---playa-del-carmen (Performance)
-- Action: Profile the listing template, compress and lazy-load images, defer non-critical scripts, enable caching/CDN, and re-test Core Web Vitals on the affected URLs.
-- Expected outcome: Faster listing pages, lower crawl cost, and better user experience on property detail pages.
-- Evidence: 1 reference(s)
-
-#### Add self-referencing canonicals to 19 pages
-
-- Kind: technical; effort: small; confidence: high (MISSING_CANONICAL is explicitly evidenced on 19 pages and the remediation is a standard template/header change.)
-- Summary: 19 pages, including /home, lack a canonical tag. Missing canonicals can create duplicate-content ambiguity and split ranking signals.
-- Why now: Canonical gaps are a signal-consolidation issue; fixing them now prevents duplicate URL variants from competing.
-- Target: https://www.susimacdonald.com/home (Canonicalization)
-- Action: Add self-referencing canonical tags to all 19 affected pages, ensure one canonical per page, and align with sitemap and internal links.
-- Expected outcome: Clear canonical signals on affected pages; reduced duplicate-content ambiguity and consolidated ranking signals.
+- Kind: technical; effort: medium; confidence: medium (The finding confirms slowness on 27 pages but the sample is a single listing, so the assumption that one shared template is the cause should be verified with field data before scoping the work.)
+- Summary: 27 listing pages, sampled at the Polo 88 Playa del Carmen listing, are slow enough to be flagged. Listings are image-heavy by nature, so this is almost certainly a template-level media and script problem rather than 27 individual pages.
+- Why now: Slow listing pages are the pages buyers actually land on from search and ads. They consume disproportionate crawl budget and lose visitors during the exact session that produces an enquiry.
+- Target: https://www.susimacdonald.com/real-estate-listings/polo-88---playa-del-carmen (Property listings)
+- Action: Profile the listing template to find what dominates load time, then address the top offenders: serve listing photography as compressed modern formats at responsive sizes, lazy-load below-fold gallery images, defer non-critical third-party scripts such as maps and chat widgets, and confirm the template is served through a CDN.
+- Expected outcome: Faster rendering on the 27 listing pages, more of the site crawled per session, and fewer buyers abandoning a listing before the gallery loads.
 - Evidence: 1 reference(s)
 
 ## Drafting note
 
-Content and AEO: Four local clusters carry measured demand and each already has a page, so this is a board about fixing and deepening pages, not about creating new ones. Playa del Carmen condos is the biggest prize (4,550 searches, page three), Puerto Morelos condos ranks just outside page one with zero clicks, and  Four local clusters reviewed and all four are kept, none dropped: each already has strong page coverage and real impressions, yet all sit around position 45 with almost no clicks, so coverage is not the problem. The work is page-level. Cozumel and Akumal each have two pages chasing one intent, the P Four clusters reviewed for a single-operator Riviera Maya agency, all local-scope. The market/investment cluster is proven but earns zero clicks at positions 36-51, so the work is a rebuild of the existing Playa del Carmen investment guide. The beachfront/luxury cluster is served by three category p
+Content and AEO: All four clusters are local, strongly covered and already earn impressions, but each sits on page two or worse, so every one gets a focused page-refresh job rather than a new build. Puerto Morelos, Playa del Carmen and Akumal each get one on-page update; Tulum gets two because its houses page (posit All four measured clusters have proven visibility but each still has a clear query-to-page mismatch, so none is finished. I propose one focused update per cluster, plus a small AEO answer-block test on the investment hub. No new pages are required. Three clusters have work worth doing: Riviera Maya/Bacalar condo pages, the Puerto Aventuras homes page, and a local home financing service page. The beachfront page is thin, but the unserved demand sits in condo and Bacalar terms, so the proposals target those existing pages. A Puerto Aventuras saf
 
-Technical: Reviewed 8 crawl findings for www.susimacdonald.com. I would take forward 5 technical fixes: duplicate titles (57 pages), pages missing from the sitemap (50), broken links (39), slow listing pages (27), and missing canonicals (19). These affect discoverability, crawl efficiency, signal consolidation, or navigation. I would not propose the missing schema (88 pages), duplicate meta descriptions (63)
+Technical: Seven crawl findings cover roughly 300 page-level defects, but only five are worth delivering now because they either strand crawlers on dead links, keep an entire Spanish locale out of discovery, or let duplicate URL variants compete for the same rankings. Proposed: fix the broken internal link hitting 39 pages, get the 50 /es/ pages into a sitemap, add self-referencing canonicals to the 19 uncan
 
 ## Critique
 

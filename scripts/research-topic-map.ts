@@ -27,6 +27,7 @@ import {
 } from "@/lib/research/topic-map";
 import {
   brandTermMatches,
+  isBrandTopic,
   loadTopicTaxonomy,
   parseTopicTaxonomy,
   proposeTopicTaxonomy,
@@ -171,7 +172,7 @@ async function main(): Promise<void> {
     const brandKey = site.domain.replace(/^www\./, "").split(".")[0].toLowerCase();
     // Keep the name-like terms of the approved brand topic, not its broad
     // location terms: "ocean vibes" belongs, "playa carmen" does not.
-    const priorBrandTerms = (taxonomy?.topics.find((topic) => topic.coverageKind === "brand")?.requireAny ?? []).filter(
+    const priorBrandTerms = (taxonomy?.topics.find((topic) => isBrandTopic(topic))?.requireAny ?? []).filter(
       (term) => brandTermMatches(term, brandKey)
     );
     if (!taxonomy || args.refreshTaxonomy) {

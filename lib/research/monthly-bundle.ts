@@ -34,6 +34,7 @@ import {
   type DiscoverySeedResult,
 } from "@/lib/research/discovery-seeds";
 import {
+  isBrandTopic,
   loadTopicTaxonomy,
   queryMatchesTaxonomy,
   queryMatchesTopics,
@@ -907,7 +908,7 @@ export async function buildBundlePlan(input: {
   const orderedQueries = [...inMarket, ...offTopic];
 
   const keywordSelection = selectQueriesForBundle(orderedQueries, measuredKeywordSet, caps.keywordQueries);
-  const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => topic.coverageKind === "brand") : [];
+  const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => isBrandTopic(topic)) : [];
   // The map's review has already decided which queries are outside the service
   // area (Florida and San Diego for a Playa del Carmen school). A paid SERP for
   // those teaches nothing the owner can act on.

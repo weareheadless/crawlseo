@@ -6,7 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
-import { canonicalKeyword, distinctVolume } from "@/lib/research/keyword-identity";
+import { distinctVolume } from "@/lib/research/keyword-identity";
 import {
   parseMarketScope,
   marketScopeForTopic,
@@ -14,10 +14,10 @@ import {
   type MarketScopeLevel,
 } from "@/lib/site/market-scope";
 import {
-  applyTopicAnchors,
+  isBrandTopic,
+  placeMatches,
   stabilizeTopicTaxonomy,
-  topicBrandTerms,
-  topicContextTerms,
+  topicMatchesQuery,
   type TopicDefinition,
   type TopicIntent,
   type TopicPageType,
@@ -25,8 +25,6 @@ import {
   type TopicRelevance,
   type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
-
-export { distinctiveTopicTerms } from "@/lib/research/topic-taxonomy";
 
 /**
  * Phase 2 topic map.
@@ -256,15 +254,14 @@ function termWeight(text: string, term: string): number {
 }
 
 export function scoreTopicForQuery(query: string, topic: TopicDefinition): number {
+  // Membership is the taxonomy's own rule: a market topic needs both its
+  // market and its need, a brand topic needs its name. Scoring only ranks the
+  // topics that already belong; it never widens membership.
+  if (!topicMatchesQuery(topic, query)) return 0;
   const text = normalizeTopicText(query);
-  // A head term is claimed by one topic and matches only the bare query. It is
-  // deliberately not part of requireAny, or every "freediving <modifier>" query
-  // would join the owner as well.
-  const headMatch = (topic.headTerms ?? []).some((term) => normalizeTopicText(term) === text);
-  if (!headMatch && !topic.requireAny.some((term) => containsTerm(text, term))) return 0;
-  if (topic.requireGroups && !topic.requireGroups.every((group) => group.some((term) => containsTerm(text, term)))) return 0;
+  const terms = topic.need?.terms.length ? topic.need.terms : topic.requireAny;
   let score = 0;
-  for (const term of topic.terms) score += termWeight(text, term);
+  for (const term of terms) score += termWeight(text, term);
   for (const term of topic.strongTerms ?? []) score += termWeight(text, term);
   for (const term of topic.headTerms ?? []) score += termWeight(text, term);
   return score;
@@ -297,6 +294,34 @@ export function assignQuery(
   return selected.map(({ topic, score }) => ({ topic, score }));
 }
 
+// Page-structure words, not tenant words: the first path segment tells the
+// page's type when the taxonomy supplies no override. The model's rules win;
+// this is the deterministic default that keeps a missing rule from classifying
+// the whole site as "other" and reporting every topic as uncovered.
+const BLOG_SEGMENTS = new Set(["blog", "blogs", "post", "posts", "article", "articles", "news", "guide", "guides", "magazine", "journal"]);
+const PRODUCT_SEGMENTS = new Set([
+  "product", "products", "produit", "produits", "producto", "productos", "item", "items",
+  "property", "properties", "listing", "listings", "propiedad", "propiedades",
+]);
+const CATEGORY_SEGMENTS = new Set([
+  "category", "categories", "categorie", "categories", "categoria", "categorias",
+  "collection", "collections", "shop", "boutique", "store", "tienda",
+  "catalog", "catalogue", "catalogo", "city", "cities", "location", "locations", "area", "areas",
+]);
+const SERVICE_SEGMENTS = new Set(["service", "services", "prestation", "prestations", "servicio", "servicios"]);
+
+function classifyPath(path: string): TopicPageType {
+  const segments = path.toLowerCase().split("/").filter(Boolean);
+  // A language prefix ("/es/...", "/fr/...") is not the page type; classify the
+  // path behind it.
+  const first = segments.length > 1 && /^[a-z]{2}$/.test(segments[0]) ? segments[1] : segments[0] ?? "";
+  if (BLOG_SEGMENTS.has(first)) return "blog";
+  if (PRODUCT_SEGMENTS.has(first)) return "product";
+  if (CATEGORY_SEGMENTS.has(first)) return "category";
+  if (SERVICE_SEGMENTS.has(first)) return "service";
+  return "other";
+}
+
 export function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPageType {
   if (path === "/") return "home";
   for (const rule of rules) {
@@ -306,32 +331,7 @@ export function pageType(path: string, rules: TopicPageTypeRule[] = []): TopicPa
     if (rule.pattern === "/") continue;
     if (path.startsWith(rule.pattern)) return rule.type;
   }
-  return "other";
-}
-
-function pageCoverageScore(page: TopicPage, topic: TopicDefinition): number {
-  // The home page mentions every service in its marketing copy. It can carry a
-  // brand or local signal, but it must not win a service or product topic.
-  if (page.type === "home" && topic.coverageKind !== "brand" && topic.coverageKind !== "local") return 0;
-  // A brand name is usually appended to every page title. For a brand topic the
-  // evidence is the path or the H1, not a title suffix that every page carries.
-  const text = topic.coverageKind === "brand" ? normalizeTopicText(`${page.path} ${page.h1}`) : page.text;
-  if (topic.coverageRequireAny?.length && !topic.coverageRequireAny.some((term) => containsTerm(text, term))) {
-    return 0;
-  }
-  if (topic.coverageRequireGroups?.length && !topic.coverageRequireGroups.every((group) => group.some((term) => containsTerm(text, term)))) {
-    return 0;
-  }
-  // A page whose URL names the topic is stronger evidence than a page whose
-  // title happens to mention it: a shop index can list every product name.
-  const pathText = normalizeTopicText(page.path);
-  let score = 0;
-  for (const term of topic.pageTerms) {
-    if (containsTerm(pathText, term)) score += 2 * termWeight(pathText, term);
-    else score += termWeight(text, term);
-  }
-  if (topic.preferredPages?.includes(page.path)) score += 10;
-  return score;
+  return classifyPath(path);
 }
 
 function pageAllowed(page: TopicCoveragePage, kind: TopicDefinition["coverageKind"]): boolean {
@@ -353,20 +353,19 @@ function pageAllowed(page: TopicCoveragePage, kind: TopicDefinition["coverageKin
   }
 }
 
-function coverageLevel(pages: TopicCoveragePage[], topic: TopicDefinition): TopicCluster["coverage"] {
-  if (pages.length === 0) return "none";
+function ownerCoveragePage(pages: TopicPage[], topic: TopicDefinition): TopicPage | null {
+  const owner = topic.preferredPages?.[0];
+  if (!owner) return null;
+  return pages.find((page) => page.path === owner || page.url.endsWith(owner)) ?? null;
+}
+
+function coverageLevel(owner: TopicPage | null, topic: TopicDefinition): TopicCluster["coverage"] {
+  // The owner page is the coverage. A topic with no owner has none; a thin
+  // owner is partial. Whether the owner is the ideal page *type* is a separate
+  // gap, so a substantive blog post still covers the topic it owns.
+  if (!owner) return "none";
   const minWords = topic.coverageKind === "content" ? 100 : 200;
-  // A page the taxonomy named as the owner counts even when its URL does not
-  // match a page-type rule: the model chose it from the real inventory.
-  const allowed = pages.filter(
-    (page) =>
-      pageAllowed(page, topic.coverageKind) ||
-      (topic.preferredPages ?? []).some((path) => page.url.endsWith(path))
-  );
-  if (allowed.some((page) => page.score >= 2 && page.wordCount >= minWords)) return "strong";
-  // A blog post or product page can still be real coverage even when it is not
-  // the page type that should own the topic.
-  return "partial";
+  return owner.wordCount >= minWords ? "strong" : "partial";
 }
 
 function average(values: number[]): number | null {
@@ -441,12 +440,17 @@ function buildGaps(input: {
   }
   if (coverage === "none") {
     gaps.push("No page covers this topic.");
-  } else if (coverage === "partial") {
+  } else {
+    // Coverage is the owner page; the page type is a separate quality signal.
+    // A blog post that owns a service topic covers it, but the site still has
+    // no service page for it. An owner the classifier cannot type is not
+    // evidence of absence, so it does not produce that gap.
     const expected = expectedPageLabel(topic.coverageKind);
     const hasExpected = pages.some((page) => pageAllowed(page, topic.coverageKind));
-    if (!hasExpected) {
+    const typeUnknown = pages.length > 0 && pages.every((page) => page.type === "other");
+    if (!hasExpected && !typeUnknown) {
       gaps.push(`Coverage exists, but there is no ${expected} page for this topic.`);
-    } else {
+    } else if (coverage === "partial") {
       gaps.push("Coverage exists but is not strong enough to own the topic.");
     }
   }
@@ -688,26 +692,15 @@ export async function loadTopicMapData(
 
 export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], now = new Date()): TopicMap {
   // The approved taxonomy is normalised here, not by another model call: two
-  // topics with one specific owner are merged, and the market head term gets a
-  // single owner. The stored taxonomy stays the human-approved draft.
+  // topics with one specific owner are merged. The stored taxonomy stays the
+  // human-approved draft.
   const stabilized = stabilizeTopicTaxonomy({
     topics: taxonomy,
     queries: data.queries,
     pageTexts: data.pages.map((page) => `${page.path} ${page.title} ${page.h1}`),
     brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
-  // The proposed taxonomy already stores the need group. The derivation here is
-  // a fallback for a taxonomy stored before that rule existed, and it also
-  // flags a topic whose vocabulary is only place or brand.
-  const contextTerms = topicContextTerms([
-    fieldText(data.fields, "location"),
-    ...fieldList(data.fields, "serviceArea"),
-    ...data.marketScope.offers.flatMap((offer) => offer.markets),
-    data.context.market,
-    data.context.audienceMarket,
-    ...(data.context.audienceCountries ?? []),
-  ]);
-  const topics = applyTopicAnchors(stabilized.topics, contextTerms, topicBrandTerms(stabilized.topics));
+  const topics = stabilized.topics;
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();
   for (const query of data.queries) {
     const assigned = assignQuery(query.query, topics);
@@ -716,40 +709,29 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
 
   const clusters: TopicCluster[] = topics.map((topic) => {
     const queries = data.queries.filter((query) => assignments.get(query.query)?.some((entry) => entry.topic.slug === topic.slug));
-    // A query that matches the topic's broad terms but fails its required need
-    // group is context-only: it names the place or brand, not the topic. Keep
-    // the count so the gap is visible on the topic row and in the review.
-    const contextOnlyQueries = topic.requireGroups && topic.requireGroups.length > 0
+    // Context-only demand names the topic's market but not its need, and no
+    // other topic owns it. It is the taxonomy's own gap signal: a place-scoped
+    // topic that leaves real demand unowned is incomplete, and the board says
+    // so instead of burying the queries in the global unmapped table.
+    const contextOnlyQueries = !isBrandTopic(topic) && topic.market && topic.market.scope !== "international"
       ? data.queries.filter((query) => {
-          if (scoreTopicForQuery(query.query, topic) > 0) return false;
-          if (scoreTopicForQuery(query.query, { ...topic, requireGroups: undefined }) === 0) return false;
+          const text = normalizeTopicText(query.query);
+          if (topicMatchesQuery(topic, query.query)) return false;
+          if (!placeMatches(topic, text)) return false;
           // A query another topic already owns is not a gap for this one: the
           // rentals topic owning "playa del carmen rentals" is the split
           // working, not the condos topic missing demand.
           return !assignments.get(query.query)?.some((entry) => entry.topic.slug !== topic.slug);
         })
       : [];
-    const allPages = data.pages
-      .map((page) => {
-        const preferred = topic.preferredPages?.includes(page.path) ?? false;
-        const score = pageCoverageScore(page, topic);
-        // The taxonomy named this page as the owner. Trust that choice even
-        // when the page-type rules are missing or classify the page as home:
-        // otherwise a model that omits pageTypeRules reports every topic as
-        // "no page covers this" while the owner is in the inventory.
-        return {
-          url: page.url,
-          title: page.title,
-          type: page.type,
-          wordCount: page.wordCount,
-          score: preferred ? Math.max(score, 2) : score,
-          preferred,
-        };
-      })
-      .filter((page) => page.score > 0 && (!page.preferred || page.wordCount >= 100))
-      .sort((a, b) => b.score - a.score || typeRank(a.type) - typeRank(b.type));
-    const pages = allPages.slice(0, 4);
-    const coverage = coverageLevel(allPages, topic);
+    // The owner page is the coverage. A topic with no owner has none; a thin
+    // owner is partial. Coverage is not re-inferred from words on other pages.
+    const owner = ownerCoveragePage(data.pages, topic);
+    const pages: TopicCoveragePage[] = owner
+      ? [{ url: owner.url, title: owner.title, type: owner.type, wordCount: owner.wordCount, score: 10 }]
+      : [];
+    const allPages = pages;
+    const coverage = coverageLevel(owner, topic);
     const aeo = data.aeo.filter((row) => assignQuery(row.question, taxonomy).some((entry) => entry.topic.slug === topic.slug));
     const metrics = clusterMetrics(queries, {
       questions: aeo.length,
@@ -785,7 +767,15 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
         volume: distinctVolume(contextOnlyQueries),
         examples: contextOnlyQueries.slice(0, 3).map((query) => query.query),
       },
-      reviewFlags: topic.reviewFlags ?? [],
+      reviewFlags: [
+        ...new Set([
+          ...(topic.reviewFlags ?? []),
+          // A market topic with no need word is defined only by its place and
+          // would claim every query that names it. It is a taxonomy defect,
+          // not an opportunity, until the need is supplied.
+          ...(!isBrandTopic(topic) && (topic.need?.terms.length ?? 0) === 0 ? ["no-need-word"] : []),
+        ]),
+      ],
       gaps,
     };
   });
@@ -841,10 +831,6 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
       news: data.news.length,
     },
   };
-}
-
-function typeRank(type: TopicPage["type"]): number {
-  return { service: 0, category: 1, home: 2, product: 3, blog: 4, other: 5 }[type];
 }
 
 function relevanceRank(relevance: TopicRelevance): number {
@@ -1321,16 +1307,16 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
       lines.push("");
     }
     if (cluster.pages.length > 0) {
-      lines.push("Coverage pages:");
+      lines.push("Owner page:");
       lines.push("");
-      lines.push("| Page | Type | Words | Match score |");
-      lines.push("|---|---|---:|---:|");
+      lines.push("| Page | Type | Words |");
+      lines.push("|---|---|---:|");
       for (const page of cluster.pages) {
-        lines.push(`| ${escapePipe(page.url.replace(/^https?:\/\/[^/]+/, ""))} | ${page.type} | ${page.wordCount} | ${page.score} |`);
+        lines.push(`| ${escapePipe(page.url.replace(/^https?:\/\/[^/]+/, ""))} | ${page.type} | ${page.wordCount} |`);
       }
       lines.push("");
     } else {
-      lines.push("No page matched this topic.");
+      lines.push("No owner page: the taxonomy names none, so the topic has no coverage until it does.");
       lines.push("");
     }
     if (cluster.gaps.length > 0) {

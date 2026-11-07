@@ -1,6 +1,6 @@
 # Topic map — www.susimacdonald.com — 2026-11
 
-Generated 2026-11-07T16:37:11.450Z. Locale en/US.
+Generated 2026-11-07T19:21:39.390Z. Locale en/US.
 
 ## Business
 
@@ -12,19 +12,18 @@ Generated 2026-11-07T16:37:11.450Z. Locale en/US.
 
 ## Tenant model
 
-- Topics: 12
-  - `playa-del-carmen-condos-for-sale-buyer-representation` — Playa del Carmen Condos for Sale & Buyer Representation (mixed, mixed, high); 14 matching terms; head term `sale`
-  - `tulum-real-estate-condos-for-sale` — Tulum Real Estate & Condos for Sale (commercial, product, high); 13 matching terms
-  - `puerto-morelos-condos-for-sale` — Puerto Morelos Condos for Sale (commercial, product, high); 14 matching terms
-  - `cozumel-real-estate-condos-for-sale` — Cozumel Real Estate & Condos for Sale (commercial, product, high); 12 matching terms
-  - `akumal-real-estate-condos-for-sale` — Akumal Real Estate & Condos for Sale (commercial, product, high); 13 matching terms
-  - `puerto-aventuras-real-estate-condos-for-sale` — Puerto Aventuras Real Estate & Condos for Sale (commercial, product, high); 13 matching terms
-  - `riviera-maya-beachfront-luxury-penthouse-properties` — Riviera Maya Beachfront, Luxury & Penthouse Properties (commercial, product, high); 14 matching terms
-  - `riviera-maya-condos-under-200k` — Riviera Maya Condos Under $200K (commercial, product, high); 14 matching terms
-  - `houses-villas-for-sale-in-riviera-maya` — Houses & Villas for Sale in Riviera Maya (commercial, product, high); 14 matching terms
-  - `apartments-for-rent-in-playa-del-carmen` — Apartments for Rent in Playa del Carmen (transactional, service, high); 14 matching terms
-  - `home-financing-in-mexico-for-foreign-buyers` — Home Financing in Mexico for Foreign Buyers (informational, content, high); 14 matching terms
-  - `riviera-maya-real-estate-market-investment-location-guides` — Riviera Maya Real Estate Market, Investment & Location Guides (informational, content, high); 14 matching terms
+- Topics: 11
+  - `riviera-maya-bacalar-real-estate-beachfront-luxury-propertie` — Riviera Maya & Bacalar real estate, beachfront & luxury properties (commercial, service, high); 22 matching terms; head terms `riviera maya real estate`, `riviera maya beachfront homes for sale`, `riviera maya luxury real estate`, `bacalar condos for sale`
+  - `playa-del-carmen-condos-penthouses-for-sale` — Playa del Carmen condos & penthouses for sale (local, local, high); 17 matching terms; head terms `playa del carmen condos for sale`, `playa del carmen penthouses for sale`
+  - `playa-del-carmen-real-estate-houses-villas-for-sale` — Playa del Carmen real estate, houses & villas for sale (local, local, high); 19 matching terms; head terms `playa del carmen real estate`, `playa del carmen houses for sale`, `playa del carmen villas for sale`
+  - `playa-del-carmen-apartments-long-term-rentals` — Playa del Carmen apartments & long-term rentals (transactional, local, high); 19 matching terms; head terms `playa del carmen rentals`, `playa del carmen apartments for rent`
+  - `tulum-real-estate-condos-villas-for-sale` — Tulum real estate, condos & villas for sale (local, local, high); 20 matching terms; head terms `tulum real estate`, `tulum condos for sale`, `tulum homes for sale`
+  - `puerto-morelos-condos-real-estate-for-sale` — Puerto Morelos condos & real estate for sale (local, local, high); 17 matching terms; head terms `puerto morelos condos for sale`, `puerto morelos real estate`
+  - `cozumel-condos-real-estate-for-sale` — Cozumel condos & real estate for sale (local, local, high); 18 matching terms; head terms `cozumel condos for sale`, `cozumel real estate`
+  - `akumal-condos-real-estate-for-sale` — Akumal condos & real estate for sale (local, local, high); 17 matching terms; head terms `akumal real estate`, `akumal condos for sale`
+  - `puerto-aventuras-condos-homes-real-estate-for-sale` — Puerto Aventuras condos, homes & real estate for sale (local, local, high); 18 matching terms; head terms `puerto aventuras real estate`, `puerto aventuras condos for sale`
+  - `riviera-maya-investment-market-updates-location-guides` — Riviera Maya investment, market updates & location guides (informational, content, high); 22 matching terms; head terms `riviera maya real estate investment`, `playa del carmen real estate market`
+  - `mexico-home-financing` — Mexico home financing (commercial, service, high); 16 matching terms; head terms `mexico home financing`, `mortgage in mexico`
 
 ## Method
 
@@ -32,93 +31,37 @@ Deterministic taxonomy over stored Search Console queries, DataForSEO keyword me
 
 A query can belong to more than one topic (a local service query, or a content query that names the craft). Demand totals are per-topic and are not additive across topics.
 
-AI review: deepseek/deepseek-v4.1-flash-1017.
-
-12 local clusters, all high relevance/strong coverage. Demand concentrates in Playa condos (4.5k), Tulum (1.7k), Puerto Morelos (1.4k), Cozumel (1.2k), Playa rentals (1.1k); Akumal/Puerto Aventuras smaller. Luxury/penthouses, financing and guides show 0-30 distinct demand. ContextOnly is mostly place/brand or unrelated (crime, hospitals), not owned need demand. Under-200k has Cancun/Mexico-wide queries.
-
-Start with Playa condo/buyer and rental pages, Tulum condos, Puerto Morelos condos and Cozumel; improve high-impression terms ranking 40+. Build local under-200k price/filter pages and exclude Cancun/Mexico-wide terms. Validate weak topics with small localized tests: financing/foreign-buyer guide, beachfront/luxury/penthouse page, market/location guide, Puerto Aventuras condo page. High contextOnly (crime, hospitals, brands) needs need-word taxonomy, not topic demand.
-
-Priority topics: playa-del-carmen-condos-for-sale-buyer-representation, tulum-real-estate-condos-for-sale, apartments-for-rent-in-playa-del-carmen, puerto-morelos-condos-for-sale, cozumel-real-estate-condos-for-sale.
-Weak topics: riviera-maya-beachfront-luxury-penthouse-properties, home-financing-in-mexico-for-foreign-buyers, riviera-maya-real-estate-market-investment-location-guides, puerto-aventuras-real-estate-condos-for-sale.
-Out-of-market queries excluded from demand and evidence: 21.
+AI review: not available. The deterministic map is shown as-is.
 
 ## Topic table
 
 | Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |
 |---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
-| Playa del Carmen Condos for Sale & Buyer Representation | mixed | high | local · default | 122 | 2266 | 4550 | 4550 | 89 q / 110030 | strong | proven | /playa-del-carmen-condos-sale | Queries mention “vendre” (5 queries, 41 impressions) but no matched page does. |
-| Puerto Morelos Condos for Sale | commercial | high | local · default | 40 | 1854 | 1410 | 1410 | 38 q / 80 | strong | proven | /puerto-morelos-condos-sale | Queries mention “oceanfront” (3 queries, 122 impressions) but no matched page does. |
-| Tulum Real Estate & Condos for Sale | commercial | high | local · default | 84 | 1387 | 1720 | 1720 | 44 q / 480 | strong | proven | /tulum-condos-sale | Queries mention “verify” (1 query, 15 impressions) but no matched page does. |
-| Riviera Maya Condos Under $200K | commercial | high | local · default | 30 | 848 | 480 | 480 | — | strong | proven | /post/beachfront-homes-for-sale-under-100k-in-mexico-exploring-the-reality-and-alternatives-in-riviera-m | Queries mention “zillow” (3 queries, 67 impressions) but no matched page does. |
-| Cozumel Real Estate & Condos for Sale | commercial | high | local · default | 69 | 1308 | 1240 | 1240 | 6 q / 0 | strong | proven | /cozumel-condos-sale | Queries mention “residential” (1 query, 78 impressions) but no matched page does. |
-| Apartments for Rent in Playa del Carmen | transactional | high | local · default | 79 | 1122 | 1050 | 1050 | 89 q / 110030 | strong | proven | /apartments-for-rent-in-playa-del-carmen | Queries mention “monthly” (7 queries, 75 impressions) but no matched page does. |
-| Akumal Real Estate & Condos for Sale | commercial | high | local · default | 22 | 1032 | 340 | 340 | 6 q / 0 | strong | proven | /akumal-condos-sale | — |
-| Puerto Aventuras Real Estate & Condos for Sale | commercial | high | local · default | 21 | 723 | 160 | 160 | 38 q / 80 | strong | proven | /homes-for-sale-in-puerto-aventuras | — |
-| Riviera Maya Real Estate Market, Investment & Location Guides | informational | high | local · default | 11 | 570 | 30 | 30 | 89 q / 110030 | strong | proven | /blog/categories/real-estate-market-updates | Queries mention “informacional” (1 query, 10 impressions) but no matched page does. |
-| Riviera Maya Beachfront, Luxury & Penthouse Properties | commercial | high | local · default | 51 | 462 | 0 | 0 | 63 q / 74210 | strong | proven | /riviera-maya-luxury-real-estate | — |
-| Houses & Villas for Sale in Riviera Maya | commercial | high | local · default | 16 | 429 | 2570 | 2570 | 6 q / 0 | strong | proven | /tulum-house-sale | Queries mention “quintana” (1 query, 21 impressions) but no matched page does. |
-| Home Financing in Mexico for Foreign Buyers | informational | high | local · default | 15 | 44 | 0 | 0 | 80 q / 960 | strong | proven | /post/home-financing-mexico-yes-you-can | Queries mention “mortgage” (9 queries, 46 impressions) but no matched page does. |
+| Puerto Morelos condos & real estate for sale | local | high | local · default | 39 | 1858 | 1410 | 1410 | 18 q / 0 | strong | proven | /puerto-morelos-condos-sale | Queries mention “mexico” (5 queries, 212 impressions) but no matched page does. |
+| Playa del Carmen condos & penthouses for sale | local | high | local · default | 72 | 1520 | 2650 | 2650 | 98 q / 110020 | strong | proven | /playa-del-carmen-condos-sale | Queries mention “mexico” (7 queries, 94 impressions) but no matched page does. |
+| Tulum real estate, condos & villas for sale | local | high | local · default | 80 | 1413 | 4120 | 4120 | 37 q / 480 | strong | proven | /tulum-condos-sale | Queries mention “real” (20 queries, 478 impressions) but no matched page does. |
+| Akumal condos & real estate for sale | local | high | local · default | 27 | 1299 | 510 | 510 | 7 q / 0 | strong | proven | /akumal-condos-sale | Queries mention “real” (8 queries, 572 impressions) but no matched page does. |
+| Playa del Carmen apartments & long-term rentals | transactional | high | local · default | 59 | 1006 | 1190 | 1190 | 98 q / 110020 | strong | proven | /apartments-for-rent-in-playa-del-carmen | Queries mention “rental” (9 queries, 186 impressions) but no matched page does. |
+| Playa del Carmen real estate, houses & villas for sale | local | high | local · default | 57 | 950 | 1770 | 1770 | 98 q / 110020 | strong | proven | /homes-for-sale-in-playa-del-carmen | Queries mention “investment” (3 queries, 251 impressions) but no matched page does. |
+| Cozumel condos & real estate for sale | local | high | local · default | 28 | 745 | 1230 | 1230 | 10 q / 0 | strong | proven | /cozumel-condos-sale | Queries mention “real” (5 queries, 210 impressions) but no matched page does. |
+| Riviera Maya investment, market updates & location guides | informational | high | local · default | 37 | 737 | 90 | 90 | 227 q / 184720 | strong | proven | /blog/categories/investment-strategies | Queries mention “playa” (13 queries, 407 impressions) but no matched page does. |
+| Riviera Maya & Bacalar real estate, beachfront & luxury properties | commercial | high | local · default | 45 | 722 | 0 | 0 | 54 q / 74210 | strong | proven | /riviera-maya-beachfront-sale | Queries mention “condos” (16 queries, 452 impressions) but no matched page does. |
+| Puerto Aventuras condos, homes & real estate for sale | local | high | local · default | 20 | 698 | 160 | 160 | 13 q / 10 | strong | proven | /homes-for-sale-in-puerto-aventuras | Queries mention “condos” (5 queries, 162 impressions) but no matched page does. |
+| Mexico home financing | commercial | high | local · default | 20 | 168 | 0 | 0 | 114 q / 1100 | strong | proven | /post/home-financing-mexico-yes-you-can | Coverage exists, but there is no service or category page for this topic. |
 
 ## Clusters
 
-### Playa del Carmen Condos for Sale & Buyer Representation
+### Puerto Morelos condos & real estate for sale
 
-- Slug: `playa-del-carmen-condos-for-sale-buyer-representation`
-- Intent: mixed; relevance: high; confidence: 1.00
+- Slug: `puerto-morelos-condos-real-estate-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Playa del Carmen is the highest-volume condo and buyer-representation need for US/Canada buyers.
-- Demand: 122 queries, 2266 impressions, 1 clicks, 4550 distinct monthly demand (4550 summed across keyword variants); average position 36.4.
+- Rationale: Owns Puerto Morelos condo and generic real estate sale demand, including beachfront and presale interest.
+- Demand: 39 queries, 1858 impressions, 0 clicks, 1410 distinct monthly demand (1410 summed across keyword variants); average position 60.2.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Strengthen the Playa condo category with buyer-agent CTAs and link to the buying guide.
-- Context-only: 89 queries, 110030 monthly demand match this topic's place or brand but not its need. Examples: casa playa vista, playa del carmen crime rate, playa del carmen realty. Review for a missing need term or a separate audience.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| playa del carmen condos for sale | 276 | 0 | 24.9 | 880 | 0 |
-| playa del carmen real estate | 184 | 0 | 41.1 | 880 | 13 |
-| buy a condo in playa del carmen | 111 | 0 | 41.2 | 880 | 3 |
-| condos for sale playa del carmen | 75 | 0 | 24.5 | 880 | 3 |
-| playa del carmen condos for rent | 68 | 0 | 25.7 | 140 | 0 |
-| carmen del playa real estate | 62 | 0 | 52.4 | — | — |
-| real estate carmen del playa | 61 | 0 | 48.5 | — | — |
-| condos in playa del carmen for sale | 58 | 0 | 24.4 | — | — |
-| real estate in playa del carmen | 52 | 0 | 66.6 | — | — |
-| playa del carmen apartments for sale | 49 | 0 | 32.7 | — | — |
-| condos for sale in playa del carmen | 49 | 0 | 26.3 | — | — |
-| condos in playa del carmen | 48 | 0 | 26.7 | — | — |
-| playa del carmen condo for sale | 47 | 0 | 25.2 | — | — |
-| beachfront condo playa del carmen | 43 | 0 | 28.9 | — | — |
-| mexico condos for sale playa del carmen | 39 | 0 | 26.6 | — | — |
-| … 107 more | | | | | |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /playa-del-carmen-condos-sale | other | 3115 | 28 |
-| /es/playa-del-carmen-condos-sale | other | 3747 | 18 |
-| /post/how-to-buy-a-condo-in-playa-del-carmen-in-2024-essential-guide | other | 3898 | 18 |
-| /real-estate-listings/acanto---playa-del-carmen | other | 1619 | 17 |
-
-Gaps:
-
-- Queries mention “vendre” (5 queries, 41 impressions) but no matched page does.
-- Queries mention “croc” (1 query, 33 impressions) but no matched page does.
-- Queries mention “oceana” (1 query, 30 impressions) but no matched page does.
-- Queries mention “elements” (1 query, 14 impressions) but no matched page does.
-
-### Puerto Morelos Condos for Sale
-
-- Slug: `puerto-morelos-condos-for-sale`
-- Intent: commercial; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: Puerto Morelos has high condo-search volume and a distinct beachfront/small-town buyer audience.
-- Demand: 40 queries, 1854 impressions, 0 clicks, 1410 distinct monthly demand (1410 summed across keyword variants); average position 60.3.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Refresh Puerto Morelos condo listings and add beachfront vs. town comparison.
-- Context-only: 38 queries, 80 monthly demand match this topic's place or brand but not its need. Examples: puerto aventuras, is puerto aventuras safe, quinta del sol puerto aventuras. Review for a missing need term or a separate audience.
+- Action hint: Keep Puerto Morelos condo and real-estate pages updated with beachfront, presale and price-band inventory.
+- Context-only: 18 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: beach house for sale in puerto morelos, selva escondida 2 puerto morelos, selva escondida puerto morelos. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -130,51 +73,92 @@ Gaps:
 | oceanfront condos for sale puerto morelos | 98 | 0 | 63.3 | 10 | 0 |
 | puerto morelos condos | 69 | 0 | 69.6 | 50 | 0 |
 | puerto morelos real estate | 68 | 0 | 22.4 | 720 | 0 |
-| beach house for sale in puerto morelos | 58 | 0 | 36.2 | — | — |
 | condos in puerto morelos | 35 | 0 | 68.8 | — | — |
+| luxury real estate puerto morelos | 34 | 0 | 29.5 | — | — |
 | beach condos for sale puerto morelos | 33 | 0 | 53.4 | — | — |
 | beachfront condo puerto morelos for sale | 25 | 0 | 67.5 | — | — |
 | condos for sale puerto morelos | 24 | 0 | 58.7 | — | — |
 | presale condo puerto morelos 2026 | 23 | 0 | 65.1 | — | — |
-| pre-construction condo puerto morelos price transaccional - bofu | 22 | 0 | 68.9 | — | — |
-| … 25 more | | | | | |
+| puerto morelos property | 23 | 0 | 50.2 | — | — |
+| … 24 more | | | | | |
 
-Coverage pages:
+Owner page:
 
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /puerto-morelos-condos-sale | other | 3495 | 36 |
-| /es/puerto-morelos-condos-sale | other | 4297 | 26 |
-| /puerto-morelos-real-estate | other | 2104 | 23 |
-| /real-estate-listings/alux-33---puerto-morelos | other | 1537 | 19 |
+| Page | Type | Words |
+|---|---|---:|
+| /puerto-morelos-condos-sale | other | 3495 |
 
 Gaps:
 
+- Queries mention “mexico” (5 queries, 212 impressions) but no matched page does.
+- Queries mention “real” (7 queries, 133 impressions) but no matched page does.
+- Queries mention “estate” (7 queries, 133 impressions) but no matched page does.
 - Queries mention “oceanfront” (3 queries, 122 impressions) but no matched page does.
-- Queries mention “transaccional” (4 queries, 73 impressions) but no matched page does.
-- Queries mention “bofu” (4 queries, 73 impressions) but no matched page does.
-- Queries mention “house” (1 query, 58 impressions) but no matched page does.
 
-### Tulum Real Estate & Condos for Sale
+### Playa del Carmen condos & penthouses for sale
 
-- Slug: `tulum-real-estate-condos-for-sale`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Slug: `playa-del-carmen-condos-penthouses-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Tulum draws strong condo demand from international investors despite construction and market risk.
-- Demand: 84 queries, 1387 impressions, 1 clicks, 1720 distinct monthly demand (1720 summed across keyword variants); average position 49.0.
+- Rationale: Owns Playa condo, apartment and penthouse sale demand; separate from houses and rentals.
+- Demand: 72 queries, 1520 impressions, 1 clicks, 2650 distinct monthly demand (2650 summed across keyword variants); average position 27.9.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 2 measured questions, 0 citations of the site.
-- Action hint: Keep Tulum condo inventory current and add a buyer FAQ on pre-construction risk.
-- Context-only: 44 queries, 480 monthly demand match this topic's place or brand but not its need. Examples: tulum realestate, dejavu tulum, xalet tulum. Review for a missing need term or a separate audience.
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Keep condo and penthouse pages updated with new developments, prices and Playacar options.
+- Context-only: 98 queries, 110020 monthly demand match this topic's place or brand but not its need. Examples: apartments playa del carmen, playa del carmen realty, banks in playa del carmen. Review for a missing need term or a separate audience.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| playa del carmen condos for sale | 276 | 0 | 24.9 | 880 | 0 |
+| buy a condo in playa del carmen | 111 | 0 | 41.2 | 880 | 3 |
+| condos for sale playa del carmen | 75 | 0 | 24.5 | 880 | 3 |
+| playa del carmen condos for sale under $100k | 66 | 0 | 10.6 | — | — |
+| condos in playa del carmen for sale | 58 | 0 | 24.4 | — | — |
+| playa del carmen apartments for sale | 49 | 0 | 32.7 | — | — |
+| condos for sale in playa del carmen | 49 | 0 | 26.3 | — | — |
+| condos in playa del carmen | 48 | 0 | 26.7 | — | — |
+| playa del carmen condo for sale | 47 | 0 | 25.2 | — | — |
+| beachfront condo playa del carmen | 43 | 0 | 28.9 | — | — |
+| mexico condos for sale playa del carmen | 39 | 0 | 26.6 | — | — |
+| condo playa del carmen | 37 | 0 | 22.3 | — | — |
+| condos beach playa del carmen | 35 | 0 | 31.4 | — | — |
+| croc condos playa del carmen | 33 | 0 | 22.7 | — | — |
+| playa del carmen condo | 30 | 0 | 25.2 | — | — |
+| … 57 more | | | | | |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /playa-del-carmen-condos-sale | other | 3115 |
+
+Gaps:
+
+- Queries mention “mexico” (7 queries, 94 impressions) but no matched page does.
+- Queries mention “under” (4 queries, 84 impressions) but no matched page does.
+- Queries mention “100k” (2 queries, 68 impressions) but no matched page does.
+- Queries mention “apartments” (2 queries, 62 impressions) but no matched page does.
+
+### Tulum real estate, condos & villas for sale
+
+- Slug: `tulum-real-estate-condos-villas-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
+- Market scope: local · default
+- Rationale: Combines Tulum generic real estate, condo, house and villa sale demand because the same market pages cover them.
+- Demand: 80 queries, 1413 impressions, 0 clicks, 4120 distinct monthly demand (4120 summed across keyword variants); average position 49.2.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Keep Tulum condo, house and homes-for-sale pages aligned on prices, neighborhoods and delivery timing.
+- Context-only: 37 queries, 480 monthly demand match this topic's place or brand but not its need. Examples: tulum realestate, dejavu tulum, xalet tulum. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
 | tulum real estate | 208 | 0 | 56.6 | — | — |
 | tulum condos for sale | 111 | 0 | 19.6 | — | — |
 | condos for sale in tulum mexico | 84 | 0 | 16.6 | 720 | 0 |
+| tulum homes for sale | 77 | 0 | 67.9 | 2400 | 0 |
 | tulum mexico real estate | 75 | 0 | 63.7 | — | — |
 | tulum houses for sale | 60 | 0 | 71.3 | — | — |
-| cozumel mexico real estate | 55 | 0 | 64.3 | — | — |
 | tulum beach houses for sale | 43 | 0 | 42.7 | — | — |
 | real estate tulum | 42 | 0 | 65.2 | — | — |
 | tulum mexico condos for sale | 40 | 0 | 19.8 | — | — |
@@ -184,144 +168,82 @@ Gaps:
 | homes for sale tulum mx | 34 | 0 | 76.1 | — | — |
 | condos for sale tulum | 26 | 0 | 18.3 | — | — |
 | tulum real estate beachfront | 23 | 0 | 61.2 | — | — |
-| … 69 more | | | | | |
+| … 65 more | | | | | |
 
-Coverage pages:
+Owner page:
 
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /tulum-condos-sale | other | 3185 | 26 |
-| /homes-for-sale-in-tulum | other | 2075 | 20 |
-| /real-estate-listings/tankah-bay-beachfront-condos---tulum | other | 1440 | 18 |
-| /es/real-estate-listings/tankah-bay-beachfront-condos---tulum | other | 1457 | 17 |
+| Page | Type | Words |
+|---|---|---:|
+| /tulum-condos-sale | other | 3185 |
 
 Gaps:
 
-- Queries mention “verify” (1 query, 15 impressions) but no matched page does.
-- Queries mention “vendre” (2 queries, 11 impressions) but no matched page does.
+- Queries mention “real” (20 queries, 478 impressions) but no matched page does.
+- Queries mention “estate” (20 queries, 478 impressions) but no matched page does.
+- Queries mention “mexico” (26 queries, 464 impressions) but no matched page does.
+- Queries mention “houses” (11 queries, 233 impressions) but no matched page does.
 
-### Riviera Maya Condos Under $200K
+### Akumal condos & real estate for sale
 
-- Slug: `riviera-maya-condos-under-200k`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Slug: `akumal-condos-real-estate-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Price-capped searches reveal buyers who need realistic guidance on Riviera Maya affordability.
-- Demand: 30 queries, 848 impressions, 22 clicks, 480 distinct monthly demand (480 summed across keyword variants); average position 7.9.
+- Rationale: Owns Akumal generic real estate, condo and house sale demand; separate from Riviera Maya regional pages.
+- Demand: 27 queries, 1299 impressions, 0 clicks, 510 distinct monthly demand (510 summed across keyword variants); average position 42.9.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add budget filters and a realistic under-$200K vs. under-$100K explainer.
+- Action hint: Keep Akumal real estate and condo pages updated with beachfront, bay and new-development inventory.
+- Context-only: 7 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: homes sale akumal mexico, casas en venta en akumal, nikte ha akumal. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| beachfront homes for sale under $100k | 639 | 21 | 7.0 | 480 | 0 |
-| playa del carmen condos for sale under $100k | 66 | 0 | 10.6 | — | — |
-| beachfront homes for sale under $100 000 | 21 | 0 | 9.4 | — | — |
-| oceanfront condos for sale under $200k | 18 | 0 | 10.0 | — | — |
-| houses for sale in mexico under $100 000 | 17 | 0 | 12.1 | — | — |
-| cheap houses for sale in tulum mexico under 100k | 11 | 0 | 10.0 | — | — |
-| houses for sale under $100,000 in cozumel | 8 | 0 | 9.9 | — | — |
-| beachfront property under 100k | 6 | 0 | 9.3 | — | — |
-| beachfront homes for sale under $100 k | 5 | 0 | 7.3 | — | — |
-| oceanfront condos for sale under $100k | 5 | 0 | 11.0 | — | — |
-| beachfront condos under 100k | 4 | 0 | 10.5 | — | — |
-| beachfront homes for sale under $200k in mexico | 4 | 0 | 6.9 | — | — |
-| house for sale under 100k near me | 4 | 0 | 10.5 | — | — |
-| houses for sale in mexico under $100 000 by owner | 4 | 0 | 15.0 | — | — |
-| oceanfront condos for sale in mexico under 100k | 4 | 0 | 7.0 | — | — |
-| … 15 more | | | | | |
+| akumal real estate | 334 | 0 | 38.9 | 110 | 0 |
+| akumal condos for sale | 182 | 0 | 47.5 | 70 | 0 |
+| luxury real estate akumal | 106 | 0 | 37.9 | — | — |
+| akumal homes for sale | 78 | 0 | 21.5 | 170 | 0 |
+| condos for sale in akumal mexico | 77 | 0 | 55.1 | 70 | 0 |
+| homes for sale in akumal mexico | 64 | 0 | 43.6 | — | — |
+| akumal mexico real estate | 58 | 0 | 49.4 | — | — |
+| homes for sale akumal | 56 | 0 | 45.7 | — | — |
+| condos for sale akumal mexico | 48 | 0 | 49.9 | — | — |
+| akumal houses for sale | 44 | 0 | 38.4 | — | — |
+| real estate in akumal mexico | 35 | 0 | 52.2 | — | — |
+| homes for sale akumal mexico | 34 | 0 | 66.0 | — | — |
+| akumal property for sale | 31 | 0 | 35.9 | — | — |
+| house sale akumal mexico | 28 | 0 | 55.7 | — | — |
+| real estate akumal quintana roo | 21 | 0 | 43.2 | — | — |
+| … 12 more | | | | | |
 
-Out-of-market queries (excluded from demand and evidence):
+Owner page:
 
-| Query | Impressions | Reason |
-|---|---:|---|
-| beachfront homes for sale under $100k in mexico | 183 | Mexico-wide query, broader than local service area. |
-| beachfront homes for sale under $100k in mexico zillow | 62 | Mexico-wide query, broader than local service area. |
-| caribbean homes for sale under $200 000 | 57 | Caribbean-wide, not the local service area. |
-| cheap houses for sale in mexico on the beach under 100k | 54 | Mexico-wide query, broader than local service area. |
-| cancun condos for sale under $100k | 46 | Cancun is outside the service area. |
-| cancun condos for sale under $200k | 45 | Cancun is outside the service area. |
-| condos for sale in mexico under 100k | 28 | Mexico-wide query, broader than local service area. |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /post/beachfront-homes-for-sale-under-100k-in-mexico-exploring-the-reality-and-alternatives-in-riviera-m | other | 1296 | 34 |
-| /riviera-maya-condos-sale-under-200k | other | 221 | 24 |
-| /post/playa-del-carmen-condos-for-sale-under-200k-a-smart-investment-for-north-american-buyers | other | 1142 | 22 |
-| /es/riviera-maya-condos-sale-under-200k | other | 244 | 14 |
+| Page | Type | Words |
+|---|---|---:|
+| /akumal-condos-sale | other | 2928 |
 
 Gaps:
 
-- Queries mention “zillow” (3 queries, 67 impressions) but no matched page does.
-- Queries mention “cheap” (3 queries, 67 impressions) but no matched page does.
-- Queries mention “caribbean” (1 query, 57 impressions) but no matched page does.
-- Queries mention “oceanfront” (4 queries, 29 impressions) but no matched page does.
+- Queries mention “real” (8 queries, 572 impressions) but no matched page does.
+- Queries mention “estate” (8 queries, 572 impressions) but no matched page does.
+- Queries mention “homes” (5 queries, 247 impressions) but no matched page does.
+- Queries mention “houses” (3 queries, 68 impressions) but no matched page does.
 
-### Cozumel Real Estate & Condos for Sale
+### Playa del Carmen apartments & long-term rentals
 
-- Slug: `cozumel-real-estate-condos-for-sale`
-- Intent: commercial; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: Cozumel condo and real estate searches are steady and appeal to investors seeking island scarcity.
-- Demand: 69 queries, 1308 impressions, 3 clicks, 1240 distinct monthly demand (1240 summed across keyword variants); average position 46.5.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Add Cozumel buyer guidance on ferry access, healthcare and rental yield.
-- Context-only: 6 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: elementos life cozumel, elementos cozumel, distrito norte cozumel. Review for a missing need term or a separate audience.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| condo for sale cozumel | 112 | 0 | 72.6 | 320 | 0 |
-| riviera maya condos | 97 | 0 | 39.1 | — | — |
-| cozumel condo for sale | 85 | 0 | 53.3 | 320 | 0 |
-| iplaya residential condos | 78 | 2 | 9.1 | 10 | 0 |
-| cozumel real estate | 77 | 0 | 52.2 | 590 | 1 |
-| cozumel condos for sale | 72 | 0 | 67.2 | — | — |
-| condos for sale in cozumel | 68 | 0 | 64.1 | — | — |
-| bacalar condos for sale | 63 | 0 | 22.9 | — | — |
-| condos for sale in bacalar mexico | 62 | 0 | 22.2 | — | — |
-| condos sale riviera maya | 62 | 0 | 23.9 | — | — |
-| cozumel real estate for sale | 39 | 0 | 58.4 | — | — |
-| real estate in cozumel | 34 | 0 | 60.1 | — | — |
-| condo sales playa del carmen | 29 | 0 | 22.8 | — | — |
-| homes for sale in cozumel | 29 | 0 | 55.0 | — | — |
-| cozumel homes for sale | 27 | 0 | 59.7 | — | — |
-| … 54 more | | | | | |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /cozumel-condos-sale | other | 3297 | 26 |
-| /homes-for-sale-in-cozumel | other | 2999 | 22 |
-| /real-estate-listings/deck-48-chankanaab---cozumel | other | 1621 | 17 |
-| /real-estate-listings/the-stella---cozumel | other | 1703 | 17 |
-
-Gaps:
-
-- Queries mention “residential” (1 query, 78 impressions) but no matched page does.
-- Queries mention “vendre” (1 query, 21 impressions) but no matched page does.
-- Queries mention “presale” (1 query, 17 impressions) but no matched page does.
-- Queries mention “transaccional” (1 query, 17 impressions) but no matched page does.
-
-### Apartments for Rent in Playa del Carmen
-
-- Slug: `apartments-for-rent-in-playa-del-carmen`
+- Slug: `playa-del-carmen-apartments-long-term-rentals`
 - Intent: transactional; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Rental searches are a separate transactional need for relocators and long-stay visitors.
-- Demand: 79 queries, 1122 impressions, 10 clicks, 1050 distinct monthly demand (1050 summed across keyword variants); average position 18.6.
+- Rationale: Owns Playa rental and long-term apartment demand, kept separate from for-sale inventory.
+- Demand: 59 queries, 1006 impressions, 10 clicks, 1190 distinct monthly demand (1190 summed across keyword variants); average position 17.7.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Keep rental inventory fresh and add long-term lease application steps.
-- Context-only: 89 queries, 110030 monthly demand match this topic's place or brand but not its need. Examples: casa playa vista, playa del carmen crime rate, playa del carmen realty. Review for a missing need term or a separate audience.
+- Action hint: Keep the apartments-for-rent page current with monthly, long-term and Playacar rental inventory.
+- Context-only: 98 queries, 110020 monthly demand match this topic's place or brand but not its need. Examples: apartments playa del carmen, playa del carmen realty, banks in playa del carmen. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
 | playa del carmen rentals | 86 | 0 | 26.9 | 320 | 0 |
 | playa del carmen condo rental | 77 | 0 | 24.7 | 140 | 0 |
-| apartments playa del carmen | 56 | 0 | 17.9 | — | — |
+| playa del carmen condos for rent | 68 | 0 | 25.7 | 140 | 0 |
 | playa del carmen apartments for rent | 56 | 2 | 17.5 | — | — |
 | playa del carmen apartment rentals | 55 | 0 | 18.4 | — | — |
 | apartment rentals playa del carmen | 48 | 0 | 16.3 | — | — |
@@ -330,79 +252,212 @@ Gaps:
 | apartments for rent playa del carmen | 43 | 1 | 8.4 | — | — |
 | apartments for rent in playa del carmen | 42 | 3 | 9.6 | — | — |
 | playa del carmen condo rentals | 28 | 0 | 26.1 | — | — |
-| condo rental riviera maya | 27 | 0 | 34.4 | — | — |
 | playa del carmen long term rentals | 27 | 2 | 14.8 | — | — |
-| buy apartment playa del carmen | 26 | 0 | 31.1 | — | — |
 | monthly rental playa del carmen | 25 | 0 | 19.5 | — | — |
-| … 64 more | | | | | |
+| long term rentals in playa del carmen | 25 | 0 | 5.5 | — | — |
+| playa del carmen monthly rentals | 22 | 0 | 20.5 | — | — |
+| … 44 more | | | | | |
 
-Coverage pages:
+Owner page:
 
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /apartments-for-rent-in-playa-del-carmen | other | 604 | 20 |
-| /real-estate-listings/nalu-playa-del-carmen---playa-del-carmen-rental | other | 1458 | 13 |
-| /real-estate-listings/olaya-209---playa-del-carmen-rental | other | 1454 | 13 |
-| /real-estate-listings/terrazas-condominio-106---playa-del-carmen-rental | other | 1397 | 13 |
+| Page | Type | Words |
+|---|---|---:|
+| /apartments-for-rent-in-playa-del-carmen | other | 604 |
 
 Gaps:
 
-- Queries mention “monthly” (7 queries, 75 impressions) but no matched page does.
-- Queries mention “owner” (3 queries, 17 impressions) but no matched page does.
-- Queries mention “craigslist” (2 queries, 15 impressions) but no matched page does.
-- Queries mention “vacation” (2 queries, 14 impressions) but no matched page does.
+- Queries mention “rental” (9 queries, 186 impressions) but no matched page does.
+- Queries mention “condo” (9 queries, 142 impressions) but no matched page does.
+- Queries mention “term” (14 queries, 140 impressions) but no matched page does.
+- Queries mention “long” (13 queries, 138 impressions) but no matched page does.
 
-### Akumal Real Estate & Condos for Sale
+### Playa del Carmen real estate, houses & villas for sale
 
-- Slug: `akumal-real-estate-condos-for-sale`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Slug: `playa-del-carmen-real-estate-houses-villas-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Akumal's bay and villa/condo mix attracts luxury and family buyers with strong search demand.
-- Demand: 22 queries, 1032 impressions, 0 clicks, 340 distinct monthly demand (340 summed across keyword variants); average position 45.7.
+- Rationale: Owns generic Playa real estate and house/villa sale demand, distinct from condos and rentals.
+- Demand: 57 queries, 950 impressions, 0 clicks, 1770 distinct monthly demand (1770 summed across keyword variants); average position 50.9.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Update Akumal condo pages with bay-by-bay comparisons and due diligence tips.
-- Context-only: 6 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: casas en venta en akumal, nikte ha akumal, santamar akumal. Review for a missing need term or a separate audience.
+- Action hint: Use the homes and house pages to capture generic Playa real estate plus villa and beachfront home searches.
+- Context-only: 98 queries, 110020 monthly demand match this topic's place or brand but not its need. Examples: apartments playa del carmen, playa del carmen realty, banks in playa del carmen. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| akumal real estate | 334 | 0 | 38.9 | 110 | 0 |
-| akumal condos for sale | 182 | 0 | 47.5 | 70 | 0 |
-| condos for sale in akumal mexico | 77 | 0 | 55.1 | 70 | 0 |
-| homes for sale in akumal mexico | 64 | 0 | 43.6 | — | — |
-| akumal mexico real estate | 58 | 0 | 49.4 | — | — |
-| homes for sale akumal | 56 | 0 | 45.7 | — | — |
-| condos for sale akumal mexico | 48 | 0 | 49.9 | — | — |
-| real estate in akumal mexico | 35 | 0 | 52.2 | — | — |
-| homes for sale akumal mexico | 34 | 0 | 66.0 | — | — |
-| akumal property for sale | 31 | 0 | 35.9 | — | — |
-| house sale akumal mexico | 28 | 0 | 55.7 | — | — |
-| homes sale akumal mexico | 21 | 0 | 50.9 | — | — |
-| houses sale akumal mexico | 16 | 0 | 65.0 | — | — |
-| akumal mexico real estate sale | 10 | 0 | 51.4 | — | — |
-| akumal mexico condos for sale | 9 | 0 | 23.7 | — | — |
-| … 7 more | | | | | |
+| playa del carmen real estate | 184 | 0 | 41.1 | 880 | 13 |
+| playa del carmen real estate investment | 177 | 0 | 40.5 | 10 | 0 |
+| investment properties playa del carmen | 72 | 0 | 35.9 | — | — |
+| real estate in playa del carmen | 52 | 0 | 66.6 | — | — |
+| real estate playa del carmen | 37 | 0 | 51.9 | — | — |
+| playa del carmen beachfront homes for sale | 31 | 0 | 49.9 | — | — |
+| playa del carmen property | 31 | 0 | 57.7 | — | — |
+| homes for sale in playa del carmen | 30 | 0 | 78.0 | — | — |
+| buying real estate in playa del carmen | 25 | 0 | 43.6 | — | — |
+| playa del carmen homes for sale | 22 | 0 | 79.9 | — | — |
+| properties playa del carmen | 22 | 0 | 52.9 | — | — |
+| playa del carmen houses | 20 | 0 | 88.3 | — | — |
+| houses for sale in playa del carmen | 18 | 0 | 71.6 | — | — |
+| homes for sale in playa del carmen mexico | 16 | 0 | 75.7 | — | — |
+| playa del carmen properties | 14 | 0 | 37.0 | — | — |
+| … 42 more | | | | | |
 
-Coverage pages:
+Owner page:
 
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /akumal-condos-sale | other | 2928 | 24 |
-| /homes-for-sale-in-akumal | other | 2173 | 18 |
-| /real-estate-listings/nikte-ha-condo---akumal | other | 1668 | 16 |
-| /es/akumal-condos-sale | other | 3609 | 14 |
+| Page | Type | Words |
+|---|---|---:|
+| /homes-for-sale-in-playa-del-carmen | other | 2525 |
 
-### Puerto Aventuras Real Estate & Condos for Sale
+Gaps:
 
-- Slug: `puerto-aventuras-real-estate-condos-for-sale`
-- Intent: commercial; relevance: high; confidence: 1.00
+- Queries mention “investment” (3 queries, 251 impressions) but no matched page does.
+- Queries mention “properties” (6 queries, 118 impressions) but no matched page does.
+- Queries mention “houses” (12 queries, 93 impressions) but no matched page does.
+- Queries mention “mexico” (10 queries, 66 impressions) but no matched page does.
+
+### Cozumel condos & real estate for sale
+
+- Slug: `cozumel-condos-real-estate-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Puerto Aventuras queries show demand for gated, family-safe homes and condos.
-- Demand: 21 queries, 723 impressions, 0 clicks, 160 distinct monthly demand (160 summed across keyword variants); average position 44.8.
+- Rationale: Owns Cozumel condo and generic real estate sale demand, including houses and villas.
+- Demand: 28 queries, 745 impressions, 0 clicks, 1230 distinct monthly demand (1230 summed across keyword variants); average position 62.1.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Use the gated-community article to answer safety and HOA questions for Puerto Aventuras.
-- Context-only: 38 queries, 80 monthly demand match this topic's place or brand but not its need. Examples: puerto aventuras, is puerto aventuras safe, quinta del sol puerto aventuras. Review for a missing need term or a separate audience.
+- Action hint: Keep Cozumel condo, homes and house pages current with island inventory and buyer-market guidance.
+- Context-only: 10 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: elementos life cozumel, elementos cozumel, properties for sale in cozumel. Review for a missing need term or a separate audience.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| condo for sale cozumel | 112 | 0 | 72.6 | 320 | 0 |
+| cozumel condo for sale | 85 | 0 | 53.3 | 320 | 0 |
+| cozumel real estate | 77 | 0 | 52.2 | 590 | 1 |
+| cozumel condos for sale | 72 | 0 | 67.2 | — | — |
+| condos for sale in cozumel | 68 | 0 | 64.1 | — | — |
+| cozumel mexico real estate | 55 | 0 | 64.3 | — | — |
+| cozumel real estate for sale | 39 | 0 | 58.4 | — | — |
+| real estate in cozumel | 34 | 0 | 60.1 | — | — |
+| homes for sale in cozumel | 29 | 0 | 55.0 | — | — |
+| cozumel homes for sale | 27 | 0 | 59.7 | — | — |
+| houses for sale in cozumel | 22 | 0 | 86.2 | — | — |
+| homes for sale in cozumel mexico | 19 | 0 | 63.7 | — | — |
+| condos for sale in cozumel mexico | 16 | 0 | 72.6 | — | — |
+| houses for sale in cozumel mexico | 15 | 0 | 68.2 | — | — |
+| houses for sale cozumel mexico | 14 | 0 | 74.4 | — | — |
+| … 13 more | | | | | |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /cozumel-condos-sale | other | 3297 |
+
+Gaps:
+
+- Queries mention “real” (5 queries, 210 impressions) but no matched page does.
+- Queries mention “estate” (5 queries, 210 impressions) but no matched page does.
+- Queries mention “mexico” (5 queries, 119 impressions) but no matched page does.
+- Queries mention “homes” (3 queries, 75 impressions) but no matched page does.
+
+### Riviera Maya investment, market updates & location guides
+
+- Slug: `riviera-maya-investment-market-updates-location-guides`
+- Intent: informational; relevance: high; confidence: 1.00
+- Market scope: local · default
+- Rationale: Owns investment, market-update, safety and location-guide content; supports buyer education across the region.
+- Demand: 37 queries, 737 impressions, 2 clicks, 90 distinct monthly demand (90 summed across keyword variants); average position 23.1.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 5 measured questions, 3 citations of the site.
+- Action hint: Keep market, investment and location-guide categories updated with 2026 data and local comparisons.
+- Context-only: 227 queries, 184720 monthly demand match this topic's place or brand but not its need. Examples: puerto aventuras, quinta del sol puerto aventuras, assisted living in riviera maya. Review for a missing need term or a separate audience.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| real estate investment in playa del carmen | 150 | 0 | 43.3 | — | — |
+| is puerto aventuras safe | 107 | 2 | 6.2 | 70 | 0 |
+| playa del carmen real estate market | 107 | 0 | 38.0 | 20 | 8 |
+| playa del carmen crime rate | 55 | 0 | 6.1 | — | — |
+| riviera maya crime | 33 | 0 | 6.9 | — | — |
+| is puerto aventuras mexico safe | 29 | 0 | 2.8 | — | — |
+| is riviera maya safe | 28 | 0 | 21.0 | — | — |
+| real estate investment playa del carmen | 25 | 0 | 40.4 | — | — |
+| is puerto morelos a good investment comercial - mofu | 23 | 0 | 8.3 | — | — |
+| where to invest in the riviera maya | 15 | 0 | 30.4 | — | — |
+| playa del carmen vs tulum | 14 | 0 | 18.9 | — | — |
+| riviera maya crime rate | 12 | 0 | 2.0 | — | — |
+| crime rate in playa del carmen mexico | 11 | 0 | 4.2 | — | — |
+| playa del carmen mexico crime rate | 11 | 0 | 8.7 | — | — |
+| crime rate in playa del carmen | 10 | 0 | 5.0 | — | — |
+| … 22 more | | | | | |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /blog/categories/investment-strategies | blog | 1559 |
+
+Gaps:
+
+- Queries mention “playa” (13 queries, 407 impressions) but no matched page does.
+- Queries mention “carmen” (13 queries, 407 impressions) but no matched page does.
+- Queries mention “real” (3 queries, 282 impressions) but no matched page does.
+- Queries mention “estate” (3 queries, 282 impressions) but no matched page does.
+
+### Riviera Maya & Bacalar real estate, beachfront & luxury properties
+
+- Slug: `riviera-maya-bacalar-real-estate-beachfront-luxury-propertie`
+- Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: local · default
+- Rationale: Regional commercial hub for Riviera Maya and Bacalar property searches plus beachfront, luxury and under-$200K service lines.
+- Demand: 45 queries, 722 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 29.1.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Strengthen the Riviera Maya beachfront, luxury and under-200K category pages with inventory and price bands.
+- Context-only: 54 queries, 74210 monthly demand match this topic's place or brand but not its need. Examples: assisted living in riviera maya, riviera maya things to do, villas in gated communities riviera maya. Review for a missing need term or a separate audience.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| riviera maya condos | 97 | 0 | 39.1 | — | — |
+| bacalar condos for sale | 63 | 0 | 22.9 | — | — |
+| condos for sale in bacalar mexico | 62 | 0 | 22.2 | — | — |
+| condos sale riviera maya | 62 | 0 | 23.9 | — | — |
+| riviera maya condos for sale | 47 | 0 | 18.7 | — | — |
+| riviera maya beachfront homes for sale | 40 | 0 | 39.7 | — | — |
+| condos for sale riviera maya | 36 | 0 | 20.0 | — | — |
+| beachfront homes for sale in riviera maya mexico | 31 | 0 | 36.8 | — | — |
+| condos for sale in riviera maya | 29 | 0 | 20.4 | — | — |
+| condo rental riviera maya | 27 | 0 | 34.4 | — | — |
+| riviera maya properties sale | 25 | 0 | 62.3 | — | — |
+| condo a vendre riviera maya | 21 | 0 | 26.9 | — | — |
+| condos riviera maya | 18 | 0 | 43.8 | — | — |
+| invest in presale condo riviera maya transaccional - bofu | 17 | 0 | 9.7 | — | — |
+| riviera maya real estate investment | 17 | 0 | 21.3 | — | — |
+| … 30 more | | | | | |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /riviera-maya-beachfront-sale | other | 220 |
+
+Gaps:
+
+- Queries mention “condos” (16 queries, 452 impressions) but no matched page does.
+- Queries mention “bacalar” (6 queries, 153 impressions) but no matched page does.
+- Queries mention “mexico” (5 queries, 102 impressions) but no matched page does.
+- Queries mention “real” (13 queries, 73 impressions) but no matched page does.
+
+### Puerto Aventuras condos, homes & real estate for sale
+
+- Slug: `puerto-aventuras-condos-homes-real-estate-for-sale`
+- Intent: local; relevance: high; confidence: 1.00
+- Market scope: local · default
+- Rationale: Owns Puerto Aventuras real estate, condo and home sale demand, including gated-community and beachfront interest.
+- Demand: 20 queries, 698 impressions, 0 clicks, 160 distinct monthly demand (160 summed across keyword variants); average position 44.9.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Keep Puerto Aventuras real estate and beachfront pages current with gated-community and marina inventory.
+- Context-only: 13 queries, 10 monthly demand match this topic's place or brand but not its need. Examples: puerto aventuras, quinta del sol puerto aventuras, home for sale in puerto aventuras. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -420,215 +475,65 @@ Coverage pages:
 | house for sale puerto aventuras | 27 | 0 | 55.4 | — | — |
 | homes for sale puerto aventuras | 27 | 0 | 58.4 | — | — |
 | luxury real estate puerto aventuras | 27 | 0 | 36.6 | — | — |
-| home for sale in puerto aventuras | 25 | 0 | 42.3 | — | — |
-| … 6 more | | | | | |
+| house for sale in puerto aventuras | 24 | 0 | 41.0 | — | — |
+| … 5 more | | | | | |
 
-Coverage pages:
+Owner page:
 
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /homes-for-sale-in-puerto-aventuras | other | 1916 | 26 |
-| /real-estate-listings/quinta-del-sol---puerto-aventuras | other | 1483 | 20 |
-| /real-estate-listings/quinta-luna---puerto-aventuras | other | 1700 | 20 |
-| /real-estate-listings/cielo-maya---puerto-aventuras | other | 1541 | 19 |
-
-### Riviera Maya Real Estate Market, Investment & Location Guides
-
-- Slug: `riviera-maya-real-estate-market-investment-location-guides`
-- Intent: informational; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: Market, investment and location guides build authority and capture upper-funnel research.
-- Demand: 11 queries, 570 impressions, 0 clicks, 30 distinct monthly demand (30 summed across keyword variants); average position 38.9.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Refresh market/investment guides for 2026 and add location-guide internal links.
-- Context-only: 89 queries, 110030 monthly demand match this topic's place or brand but not its need. Examples: casa playa vista, playa del carmen crime rate, playa del carmen realty. Review for a missing need term or a separate audience.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| playa del carmen real estate investment | 177 | 0 | 40.5 | 10 | 0 |
-| real estate investment in playa del carmen | 150 | 0 | 43.3 | — | — |
-| playa del carmen real estate market | 107 | 0 | 38.0 | 20 | 8 |
-| investment properties playa del carmen | 72 | 0 | 35.9 | — | — |
-| real estate investment playa del carmen | 25 | 0 | 40.4 | — | — |
-| riviera maya real estate investment | 17 | 0 | 21.3 | — | — |
-| riviera maya real estate investment informacional - tofu | 10 | 0 | 11.9 | — | — |
-| luxury villa investments playa del carmen | 5 | 0 | 35.6 | — | — |
-| playa del carmen housing market | 4 | 0 | 23.0 | — | — |
-| playa del carmen investment property | 2 | 0 | 40.0 | — | — |
-| riviera maya real estate market 2026 | 1 | 0 | 11.0 | — | — |
-
-Out-of-market queries (excluded from demand and evidence):
-
-| Query | Impressions | Reason |
-|---|---:|---|
-| mexican riviera real estate | 52 | Mexican Riviera is broader/different from Riviera Maya. |
-| real estate market in mexico | 23 | Mexico-wide, not local service area. |
-| mexico real estate market | 22 | Mexico-wide, not local service area. |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /blog/categories/real-estate-market-updates | other | 1609 | 24 |
-| /post/mexico-real-estate-market-2025-economic-outlook-investment-trends-in-riviera-maya | other | 1178 | 22 |
-| /post/your-complete-playa-del-carmen-real-estate-investment-guide | other | 3054 | 22 |
-| /post/1031-exchanges-leveraging-tax-benefits-for-real-estate-investments-in-riviera-maya | other | 1076 | 18 |
+| Page | Type | Words |
+|---|---|---:|
+| /homes-for-sale-in-puerto-aventuras | other | 1916 |
 
 Gaps:
 
-- Queries mention “informacional” (1 query, 10 impressions) but no matched page does.
-- Queries mention “tofu” (1 query, 10 impressions) but no matched page does.
+- Queries mention “condos” (5 queries, 162 impressions) but no matched page does.
+- Queries mention “condo” (2 queries, 106 impressions) but no matched page does.
+- Queries mention “house” (2 queries, 51 impressions) but no matched page does.
+- Queries mention “houses” (1 query, 31 impressions) but no matched page does.
 
-### Riviera Maya Beachfront, Luxury & Penthouse Properties
+### Mexico home financing
 
-- Slug: `riviera-maya-beachfront-luxury-penthouse-properties`
+- Slug: `mexico-home-financing`
 - Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: local · default
-- Rationale: Beachfront and luxury searches capture high-intent buyers seeking premium coastal property.
-- Demand: 51 queries, 462 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 40.5.
+- Rationale: Owns Mexico mortgage and home-financing demand for US/Canadian buyers; distinct from property search topics.
+- Demand: 20 queries, 168 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 27.3.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Create a beachfront/luxury comparison hub with penthouse filters and price bands.
-- Context-only: 63 queries, 74210 monthly demand match this topic's place or brand but not its need. Examples: assisted living in riviera maya, riviera maya things to do, villas in gated communities riviera maya. Review for a missing need term or a separate audience.
+- Action hint: Keep the financing guide current with Fidum partner details, mortgage eligibility and cross-border lending options.
+- Context-only: 114 queries, 1100 monthly demand match this topic's place or brand but not its need. Examples: hospitals in cancun mexico, hospital in cancun mexico, mexico hospitals. Review for a missing need term or a separate audience.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| riviera maya condos for sale | 47 | 0 | 18.7 | — | — |
-| riviera maya beachfront homes for sale | 40 | 0 | 39.7 | — | — |
-| condos for sale riviera maya | 36 | 0 | 20.0 | — | — |
-| playa del carmen beachfront homes for sale | 31 | 0 | 49.9 | — | — |
-| beachfront homes for sale in riviera maya mexico | 31 | 0 | 36.8 | — | — |
-| condos for sale in riviera maya | 29 | 0 | 20.4 | — | — |
-| riviera maya properties sale | 25 | 0 | 62.3 | — | — |
-| beach houses for sale in riviera maya mexico | 21 | 0 | 53.8 | — | — |
-| riviera maya homes for sale | 16 | 0 | 73.5 | — | — |
-| beachfront properties in mexico | 12 | 0 | 76.5 | — | — |
-| homes sale riviera maya | 12 | 0 | 77.1 | — | — |
-| riviera maya real estate | 12 | 0 | 57.8 | — | — |
-| beach homes for sale in riviera maya | 11 | 0 | 30.6 | — | — |
-| riviera maya homes sale | 11 | 0 | 63.7 | — | — |
-| homes playa del carmen mexico | 7 | 0 | 76.8 | — | — |
-| … 36 more | | | | | |
-
-Out-of-market queries (excluded from demand and evidence):
-
-| Query | Impressions | Reason |
-|---|---:|---|
-| beachfront property in mexico | 14 | Mexico-wide, not local service area. |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /riviera-maya-luxury-real-estate | other | 220 | 30 |
-| /riviera-maya-beachfront-sale | other | 220 | 22 |
-| /es/riviera-maya-luxury-real-estate | other | 243 | 20 |
-| /riviera-maya-penthouses-sale | other | 219 | 20 |
-
-### Houses & Villas for Sale in Riviera Maya
-
-- Slug: `houses-villas-for-sale-in-riviera-maya`
-- Intent: commercial; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: House and villa searches show demand for space, privacy and gated-community living.
-- Demand: 16 queries, 429 impressions, 0 clicks, 2570 distinct monthly demand (2570 summed across keyword variants); average position 40.2.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Build a houses/villas hub with location filters and HOA/rental rules.
-- Context-only: 6 queries, 0 monthly demand match this topic's place or brand but not its need. Examples: casas en venta en akumal, nikte ha akumal, santamar akumal. Review for a missing need term or a separate audience.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| luxury real estate akumal | 106 | 0 | 37.9 | — | — |
-| akumal homes for sale | 78 | 0 | 21.5 | 170 | 0 |
-| tulum homes for sale | 77 | 0 | 67.9 | 2400 | 0 |
-| akumal houses for sale | 44 | 0 | 38.4 | — | — |
-| luxury real estate puerto morelos | 34 | 0 | 29.5 | — | — |
-| real estate akumal quintana roo | 21 | 0 | 43.2 | — | — |
-| homes for sale in tulum | 17 | 0 | 48.4 | — | — |
-| homes for sale in akumal | 15 | 0 | 23.7 | — | — |
-| luxury real estate in puerto morelos | 10 | 0 | 18.1 | — | — |
-| luxury real estate tulum | 7 | 0 | 36.6 | — | — |
-| playa del carmen houses sale | 7 | 0 | 70.5 | — | — |
-| tulum homes | 6 | 0 | 48.3 | — | — |
-| caribe luxury homes | 2 | 0 | 34.0 | — | — |
-| common scams to avoid in miami pre-construction luxury real estate | 2 | 0 | 68.5 | — | — |
-| home in tulum | 2 | 0 | 35.0 | — | — |
-| … 1 more | | | | | |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /tulum-house-sale | other | 1777 | 17 |
-| /playa-del-carmen-house-sale | other | 2039 | 15 |
-| /real-estate-listings/buluc---akumal | other | 1615 | 15 |
-| /es/riviera-maya-luxury-real-estate | other | 243 | 14 |
-
-Gaps:
-
-- Queries mention “quintana” (1 query, 21 impressions) but no matched page does.
-
-### Home Financing in Mexico for Foreign Buyers
-
-- Slug: `home-financing-in-mexico-for-foreign-buyers`
-- Intent: informational; relevance: high; confidence: 1.00
-- Market scope: local · default
-- Rationale: Financing is a key objection for foreign buyers and a trust differentiator via Fidum.
-- Demand: 15 queries, 44 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 23.4.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Link financing article to Fidum and add foreign-buyer mortgage FAQ.
-- Context-only: 80 queries, 960 monthly demand match this topic's place or brand but not its need. Examples: hospitals in cancun mexico, hospital in cancun mexico, mexico hospitals. Review for a missing need term or a separate audience.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
+| mexico home equity lending market | 38 | 0 | 30.2 | — | — |
+| construction loan mexico | 31 | 0 | 15.2 | — | — |
+| loans in mexico | 12 | 0 | 18.4 | — | — |
+| financing in mexico | 11 | 0 | 32.3 | — | — |
+| mortgage in mexico for american | 11 | 0 | 38.4 | — | — |
+| mortgages in mexico | 11 | 0 | 34.6 | — | — |
+| mortgage in mexico | 9 | 0 | 35.6 | — | — |
+| mortgage in mexico for mexicans abroad | 8 | 0 | 37.1 | — | — |
 | mortgage in mexico for international buyers | 7 | 0 | 30.3 | — | — |
 | financing a home in mexico | 6 | 0 | 26.0 | — | — |
-| mexico housing market | 6 | 0 | 14.7 | — | — |
-| can you finance a home in mexico | 3 | 0 | 11.0 | — | — |
+| how much can i borrow to buy in mexico | 6 | 0 | 38.3 | — | — |
 | mortgage in mexico for us citizens | 3 | 0 | 33.8 | — | — |
 | cross border loans mexico | 2 | 0 | 3.0 | — | — |
 | cross border mortgage mexico | 2 | 0 | 13.0 | — | — |
 | getting a mortgage in mexico | 2 | 0 | 33.0 | — | — |
-| home loans in mexico | 2 | 0 | 19.0 | — | — |
-| how do mortgages work in mexico | 2 | 0 | 11.0 | — | — |
-| how to get a mortgage in mexico | 2 | 0 | 1.0 | — | — |
-| mexico foreign ownership restricted zone fideicomiso official | 2 | 0 | 52.0 | — | — |
-| mortgage mexico | 2 | 0 | 37.0 | — | — |
-| us banks that finance homes in mexico | 2 | 0 | 32.0 | — | — |
-| loan mexico | 1 | 0 | 37.0 | — | — |
+| … 5 more | | | | | |
 
-Out-of-market queries (excluded from demand and evidence):
+Owner page:
 
-| Query | Impressions | Reason |
-|---|---:|---|
-| mexico home equity lending market | 38 | Country-level Mexico financing query; outside local service area. |
-| construction loan mexico | 31 | Country-level Mexico financing query; outside local service area. |
-| housing market mexico | 16 | Country-level Mexico financing query; outside local service area. |
-| loans in mexico | 12 | Country-level Mexico financing query; outside local service area. |
-| financing in mexico | 11 | Country-level Mexico financing query; outside local service area. |
-| housing market in mexico | 11 | Country-level Mexico financing query; outside local service area. |
-| mortgage in mexico for american | 11 | Country-level Mexico financing query; outside local service area. |
-| mortgages in mexico | 11 | Country-level Mexico financing query; outside local service area. |
-| mortgage in mexico | 9 | Country-level Mexico financing query; outside local service area. |
-| mortgage in mexico for mexicans abroad | 8 | Country-level Mexico financing query; outside local service area. |
-
-Coverage pages:
-
-| Page | Type | Words | Match score |
-|---|---|---:|---:|
-| /post/home-financing-mexico-yes-you-can | other | 2538 | 14 |
-| /es/post/home-financing-mexico-yes-you-can-1 | other | 2892 | 4 |
-| /es/post/mexico-s-real-estate-market-in-2025-a-mid-year-report-on-investment-hotspots-1 | other | 1291 | 4 |
-| /post/beachfront-homes-for-sale-under-100k-in-mexico-exploring-the-reality-and-alternatives-in-riviera-m | other | 1296 | 4 |
+| Page | Type | Words |
+|---|---|---:|
+| /post/home-financing-mexico-yes-you-can | blog | 2538 |
 
 Gaps:
 
-- Queries mention “mortgage” (9 queries, 46 impressions) but no matched page does.
+- Coverage exists, but there is no service or category page for this topic.
 - Queries mention “equity” (1 query, 38 impressions) but no matched page does.
 - Queries mention “lending” (1 query, 38 impressions) but no matched page does.
+- Queries mention “market” (1 query, 38 impressions) but no matched page does.
 - Queries mention “loan” (2 queries, 32 impressions) but no matched page does.
 
 ## Unmapped demand
@@ -636,32 +541,32 @@ Gaps:
 | Query | Impressions | Volume | Why it is unmapped |
 |---|---:|---:|---|
 | hospital near me | 1120 | 1220000 | No taxonomy topic matched “hospital near me”; review for a missing topic or an off-business query. |
+| beachfront homes for sale under $100k | 639 | 480 | No taxonomy topic matched “beachfront homes for sale under $100k”; review for a missing topic or an off-business query. |
 | polo88 | 327 | — | No taxonomy topic matched “polo88”; review for a missing topic or an off-business query. |
 | hospitals in cancun mexico | 264 | 480 | No taxonomy topic matched “hospitals in cancun mexico”; review for a missing topic or an off-business query. |
 | hospital in cancun mexico | 242 | 480 | No taxonomy topic matched “hospital in cancun mexico”; review for a missing topic or an off-business query. |
 | mexico hospitals | 196 | — | No taxonomy topic matched “mexico hospitals”; review for a missing topic or an off-business query. |
 | best hospital in mexico | 189 | — | No taxonomy topic matched “best hospital in mexico”; review for a missing topic or an off-business query. |
 | hospitales cancun | 187 | 30 | No taxonomy topic matched “hospitales cancun”; review for a missing topic or an off-business query. |
+| beachfront homes for sale under $100k in mexico | 183 | 90 | No taxonomy topic matched “beachfront homes for sale under $100k in mexico”; review for a missing topic or an off-business query. |
 | cancun hospital | 162 | 480 | No taxonomy topic matched “cancun hospital”; review for a missing topic or an off-business query. |
 | galenia hospital cancun | 122 | 210 | No taxonomy topic matched “galenia hospital cancun”; review for a missing topic or an off-business query. |
 | casa playa vista | 113 | 10 | No taxonomy topic matched “casa playa vista”; review for a missing topic or an off-business query. |
 | puerto aventuras | 108 | — | No taxonomy topic matched “puerto aventuras”; review for a missing topic or an off-business query. |
-| is puerto aventuras safe | 107 | 70 | No taxonomy topic matched “is puerto aventuras safe”; review for a missing topic or an off-business query. |
 | cancun hospitals | 97 | 480 | No taxonomy topic matched “cancun hospitals”; review for a missing topic or an off-business query. |
 | quinta del sol puerto aventuras | 81 | 10 | No taxonomy topic matched “quinta del sol puerto aventuras”; review for a missing topic or an off-business query. |
+| iplaya residential condos | 78 | 10 | No taxonomy topic matched “iplaya residential condos”; review for a missing topic or an off-business query. |
 | hospitals in cancun | 74 | — | No taxonomy topic matched “hospitals in cancun”; review for a missing topic or an off-business query. |
 | assisted living in riviera maya | 73 | — | No taxonomy topic matched “assisted living in riviera maya”; review for a missing topic or an off-business query. |
 | best hospital in cancun | 67 | 40 | No taxonomy topic matched “best hospital in cancun”; review for a missing topic or an off-business query. |
 | cancun hospital for tourists | 67 | 20 | No taxonomy topic matched “cancun hospital for tourists”; review for a missing topic or an off-business query. |
+| beachfront homes for sale under $100k in mexico zillow | 62 | 50 | No taxonomy topic matched “beachfront homes for sale under $100k in mexico zillow”; review for a missing topic or an off-business query. |
+| carmen del playa real estate | 62 | — | No taxonomy topic matched “carmen del playa real estate”; review for a missing topic or an off-business query. |
 | riviera maya things to do | 62 | — | No taxonomy topic matched “riviera maya things to do”; review for a missing topic or an off-business query. |
+| real estate carmen del playa | 61 | — | No taxonomy topic matched “real estate carmen del playa”; review for a missing topic or an off-business query. |
 | hospital in cancun | 60 | — | No taxonomy topic matched “hospital in cancun”; review for a missing topic or an off-business query. |
-| mukta residencial | 57 | — | No taxonomy topic matched “mukta residencial”; review for a missing topic or an off-business query. |
-| playa del carmen crime rate | 55 | — | No taxonomy topic matched “playa del carmen crime rate”; review for a missing topic or an off-business query. |
-| best hospital in cancun for tourists | 53 | — | No taxonomy topic matched “best hospital in cancun for tourists”; review for a missing topic or an off-business query. |
-| selva escondida 2 puerto morelos | 47 | — | No taxonomy topic matched “selva escondida 2 puerto morelos”; review for a missing topic or an off-business query. |
-| cheap houses for sale in mexico on the beach | 47 | — | No taxonomy topic matched “cheap houses for sale in mexico on the beach”; review for a missing topic or an off-business query. |
 
-- Showing the 25 unmapped queries with the most impressions; 525 more are in the map data.
+- Showing the 25 unmapped queries with the most impressions; 622 more are in the map data.
 
 ## Timely signals from the bundle
 
@@ -678,8 +583,8 @@ Gaps:
 
 ## Counts
 
-- Queries: 1131; clustered: 581; unmapped: 550.
-- Pages considered: 461; news sources: 20.
+- Queries: 1131; clustered: 484; unmapped: 647.
+- Pages considered: 299; news sources: 20.
 
 ## Limits
 

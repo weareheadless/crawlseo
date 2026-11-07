@@ -7,7 +7,6 @@ import {
   canonicalKeyword,
   clusterMetrics,
   distinctVolume,
-  distinctiveTopicTerms,
   normalizeTopicText,
   pageType,
   renderTopicMapMarkdown,
@@ -16,6 +15,7 @@ import {
   type DemandQuery,
   type TopicMapData,
 } from "@/lib/research/topic-map";
+import type { TopicDefinition } from "@/lib/research/topic-taxonomy";
 import { ATELIER_TAXONOMY } from "./fixtures/atelier-taxonomy";
 
 const taxonomy = ATELIER_TAXONOMY;
@@ -136,7 +136,9 @@ describe("topic map build", () => {
     expect(seat.pages[0].url).toContain("/tapisserie-restauration");
 
     const restoration = map.clusters.find((cluster) => cluster.slug === "restauration-abat-jour")!;
-    expect(restoration.coverage).toBe("partial");
+    // The blog post is the owner, so the topic is covered; the page type is a
+    // separate gap: the site still has no service landing page for it.
+    expect(restoration.coverage).toBe("strong");
     expect(restoration.gaps.join(" ")).toMatch(/no service or category page/i);
 
     const lighting = map.clusters.find((cluster) => cluster.slug === "luminaires")!;
@@ -348,70 +350,57 @@ describe("distinct demand", () => {
   });
 });
 
-describe("topic anchor", () => {
-  const base = {
+describe("topic membership", () => {
+  const luxury: TopicDefinition = {
     slug: "topic",
-    intent: "commercial" as const,
-    relevance: "high" as const,
-    coverageKind: "product" as const,
+    name: "Riviera Maya luxury condos",
+    kind: "market",
+    intent: "commercial",
+    relevance: "high",
+    coverageKind: "product",
     offerKey: "offer",
     rationale: "",
-    requireAny: ["riviera maya"],
-    terms: ["riviera maya", "luxury"],
-    strongTerms: ["riviera maya", "luxury real"],
-    pageTerms: ["riviera maya"],
+    market: { scope: "local", places: ["riviera maya"], localIntent: [] },
+    need: { terms: ["luxury", "condos", "penthouses"] },
+    requireAny: ["riviera maya", "luxury", "condos", "penthouses"],
+    terms: ["luxury", "condos", "penthouses"],
+    strongTerms: ["luxury condos"],
+    pageTerms: ["luxury", "condos"],
     actionHint: "",
   };
 
-  it("keeps the place and the brand out of the topic's own words", () => {
-    const luxury = {
-      ...base,
-      name: "Riviera Maya beachfront, luxury properties and penthouses",
-    };
-    const terms = distinctiveTopicTerms(luxury, new Set(["riviera", "maya"]), new Set());
-    expect(terms).toEqual(expect.arrayContaining(["beachfront", "luxury", "properties", "penthouses"]));
-    expect(terms).not.toContain("riviera");
-    expect(terms).not.toContain("maya");
-  });
-
-  it("requires a distinctive word, so a place-only query does not join", () => {
-    const luxury = {
-      ...base,
-      name: "Riviera Maya beachfront, luxury properties and penthouses",
-      requireGroups: [distinctiveTopicTerms(
-        { ...base, name: "Riviera Maya beachfront, luxury properties and penthouses" },
-        new Set(["riviera", "maya"]),
-        new Set()
-      )],
-    };
+  it("requires both the market and the need", () => {
     expect(scoreTopicForQuery("riviera maya things to do", luxury)).toBe(0);
     expect(scoreTopicForQuery("is riviera maya safe", luxury)).toBe(0);
     expect(scoreTopicForQuery("riviera maya luxury real estate", luxury)).toBeGreaterThan(0);
   });
 
-  it("removes brand words from a non-brand topic", () => {
-    const lead = {
-      ...base,
-      name: "Riviera Maya investment specialist lead generation",
-      requireAny: ["casa", "investment"],
-      terms: ["casa", "investment"],
-      strongTerms: ["casa migo", "investment"],
-    };
-    const terms = distinctiveTopicTerms(lead, new Set(["riviera", "maya"]), new Set(["casa", "migo", "casamigo"]));
-    expect(terms).toContain("investment");
-    expect(terms).not.toContain("casa");
+  it("matches a local-intent phrase without the place name", () => {
+    const near = { ...luxury, market: { scope: "local" as const, places: ["riviera maya"], localIntent: ["near me"] } };
+    expect(scoreTopicForQuery("luxury condos near me", near)).toBeGreaterThan(0);
   });
 
-  it("keeps the topic's own service words, not only its title", () => {
-    const seats = {
-      ...base,
-      name: "Restauration de sièges & tapisserie d'ameublement",
-      requireAny: ["fauteuil", "chaise", "siege", "tapissier", "tapisserie"],
-      terms: ["restauration", "fauteuil", "chaise", "siege", "tapissier"],
-      strongTerms: ["tapissier", "tapisserie"],
+  it("does not require a market for an international topic", () => {
+    const global = { ...luxury, market: { scope: "international" as const, places: [], localIntent: [] } };
+    expect(scoreTopicForQuery("luxury condos", global)).toBeGreaterThan(0);
+  });
+
+  it("keeps a brand topic to its name", () => {
+    const brand: TopicDefinition = {
+      ...luxury,
+      slug: "brand",
+      name: "Casa Migo",
+      kind: "brand",
+      coverageKind: "brand",
+      market: undefined,
+      need: undefined,
+      requireAny: ["casa migo"],
+      terms: ["casa migo"],
+      strongTerms: ["casa migo"],
+      exclusive: true,
     };
-    const terms = distinctiveTopicTerms(seats, new Set(["normandie"]), new Set());
-    expect(terms).toEqual(expect.arrayContaining(["fauteuil", "chaise", "tapissier"]));
+    expect(scoreTopicForQuery("casa migo", brand)).toBeGreaterThan(0);
+    expect(scoreTopicForQuery("casas", brand)).toBe(0);
   });
 });
 
@@ -421,10 +410,12 @@ describe("context-only demand", () => {
       ...taxonomy[0],
       slug: "luxury",
       name: "Riviera Maya luxury condos",
-      requireAny: ["riviera maya", "condos"],
-      terms: ["riviera maya", "luxury", "condos"],
-      strongTerms: ["riviera maya"],
-      requireGroups: [["luxury", "condos"]],
+      kind: "market" as const,
+      market: { scope: "local" as const, places: ["riviera maya"], localIntent: [] },
+      need: { terms: ["luxury", "condos"] },
+      requireAny: ["riviera maya", "luxury", "condos"],
+      terms: ["luxury", "condos"],
+      strongTerms: ["luxury condos"],
       preferredPages: ["/"],
     };
     const map = buildTopicMap(
@@ -441,6 +432,31 @@ describe("context-only demand", () => {
     expect(cluster.contextOnly.queries).toBe(1);
     expect(cluster.contextOnly.impressions).toBe(20);
     expect(cluster.contextOnly.examples).toContain("riviera maya things to do");
+  });
+
+  it("does not treat a generic local-intent phrase as the place", () => {
+    const luxury = {
+      ...taxonomy[0],
+      slug: "luxury",
+      name: "Riviera Maya luxury condos",
+      kind: "market" as const,
+      market: { scope: "local" as const, places: ["riviera maya"], localIntent: ["near me"] },
+      need: { terms: ["luxury", "condos"] },
+      requireAny: ["riviera maya", "luxury", "condos", "near me"],
+      terms: ["luxury", "condos"],
+      strongTerms: ["luxury condos"],
+      preferredPages: ["/"],
+    };
+    const map = buildTopicMap(
+      data({
+        queries: [query("hospital near me", 500)],
+        pages: [page("/", "Riviera Maya", "home")],
+      }),
+      [luxury]
+    );
+    // "near me" is not the place: it is only meaningful with the need, so a
+    // hospital query is not context-only demand for a condo topic.
+    expect(map.clusters[0].contextOnly.queries).toBe(0);
   });
 
   it("flags a topic whose vocabulary is only a place", () => {

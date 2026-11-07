@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { generateQuestionSet } from "@/lib/aeo/question-set";
 import { storeEvidenceRecord } from "@/lib/funnel/evidence";
 import {
+  isBrandTopic,
   loadTopicTaxonomy,
   queryMatchesTaxonomy,
   queryMatchesTopics,
@@ -116,7 +117,7 @@ export async function bridgeQuestionCoverageToEvidence(
         }).topics,
       }
     : null;
-  const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => topic.coverageKind === "brand") : [];
+  const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => isBrandTopic(topic)) : [];
   const questionQueries = [...keywords.values()].filter(
     (keyword) =>
       (!taxonomy || queryMatchesTaxonomy(taxonomy, keyword.query)) &&
