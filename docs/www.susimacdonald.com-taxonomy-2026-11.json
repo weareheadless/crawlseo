@@ -2,1038 +2,426 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-07T19:02:39.585Z",
+  "generatedAt": "2026-11-07T19:45:46.246Z",
   "topics": [
     {
-      "slug": "riviera-maya-bacalar-real-estate-beachfront-luxury-propertie",
-      "name": "Riviera Maya & Bacalar real estate, beachfront & luxury properties",
+      "slug": "riviera-maya-buying-financing-investment-guides",
+      "name": "Riviera Maya buying, financing & investment guides",
       "kind": "market",
-      "intent": "commercial",
+      "intent": "mixed",
       "relevance": "high",
-      "coverageKind": "service",
-      "offerKey": "Susana MacDonald",
+      "coverageKind": "content",
+      "offerKey": "Riviera Maya buying, financing & investment guides",
       "market": {
-        "scope": "local",
+        "scope": "national",
         "places": [
+          "mexico",
           "riviera maya",
+          "playa del carmen",
+          "tulum",
+          "puerto morelos",
+          "cozumel",
+          "akumal",
+          "puerto aventuras",
           "bacalar"
         ],
         "localIntent": [
           "near me",
-          "close to me",
-          "in my area"
+          "nearby"
         ]
       },
       "need": {
         "terms": [
-          "real estate",
-          "condos",
-          "beachfront",
-          "luxury",
-          "under $100k",
-          "under $200k",
-          "under 200k",
-          "oceanfront",
-          "waterfront",
-          "properties"
+          "buying",
+          "buy",
+          "fideicomiso",
+          "mortgage",
+          "financing",
+          "investment",
+          "market",
+          "real estate agent",
+          "scams",
+          "documents"
         ]
       },
-      "rationale": "Regional commercial hub for Riviera Maya and Bacalar property searches plus beachfront, luxury and under-$200K service lines.",
+      "rationale": "Covers buyer education, legal process, financing and investment strategy.",
       "requireAny": [
-        "real estate",
-        "condos",
-        "beachfront",
-        "luxury",
-        "under $100k",
-        "under $200k",
-        "under 200k",
-        "oceanfront",
-        "waterfront",
-        "properties",
+        "buying",
+        "buy",
+        "fideicomiso",
+        "mortgage",
+        "financing",
+        "investment",
+        "market",
+        "real estate agent",
+        "scams",
+        "documents",
+        "mexico",
         "riviera maya",
+        "playa del carmen",
+        "tulum",
+        "puerto morelos",
+        "cozumel",
+        "akumal",
+        "puerto aventuras",
         "bacalar",
         "near me",
-        "close to me",
-        "in my area"
+        "nearby"
       ],
       "terms": [
+        "buying",
+        "buy",
+        "fideicomiso",
+        "mortgage",
+        "financing",
+        "investment",
+        "market",
+        "real estate agent",
+        "scams",
+        "documents",
         "real estate",
-        "condos",
-        "beachfront",
-        "luxury",
-        "under $100k",
-        "under $200k",
-        "under 200k",
-        "oceanfront",
-        "waterfront",
-        "properties",
-        "beachfront homes",
-        "homes sale",
-        "sale under",
-        "under 100k",
-        "condos sale",
+        "estate investment",
+        "playa carmen",
+        "carmen real",
         "riviera maya",
-        "sale",
-        "homes",
-        "under",
-        "100k",
+        "maya real",
+        "real",
+        "estate",
+        "playa",
+        "carmen",
         "riviera",
-        "maya"
-      ],
-      "strongTerms": [
-        "real estate",
-        "under $100k",
-        "under $200k",
-        "under 200k",
-        "beachfront homes",
-        "homes sale",
-        "sale under",
-        "under 100k",
-        "condos sale",
-        "riviera maya"
-      ],
-      "headTerms": [
-        "riviera maya real estate",
-        "riviera maya beachfront homes for sale",
-        "riviera maya luxury real estate",
-        "bacalar condos for sale"
-      ],
-      "coverageRequireAny": [
-        "beachfront homes",
-        "homes sale",
-        "sale under",
-        "under 100k",
-        "condos sale",
-        "riviera maya",
-        "sale",
-        "beachfront"
-      ],
-      "pageTerms": [
-        "beachfront homes",
-        "homes sale",
-        "sale under",
-        "under 100k",
-        "condos sale",
-        "riviera maya",
-        "sale",
-        "beachfront",
-        "homes",
-        "under",
-        "100k",
-        "condos",
-        "riviera",
-        "maya"
-      ],
-      "preferredPages": [
-        "/riviera-maya-beachfront-sale",
-        "/riviera-maya-luxury-real-estate",
-        "/riviera-maya-condos-sale-under-200k"
-      ],
-      "exclusive": true,
-      "actionHint": "Strengthen the Riviera Maya beachfront, luxury and under-200K category pages with inventory and price bands."
-    },
-    {
-      "slug": "playa-del-carmen-condos-penthouses-for-sale",
-      "name": "Playa del Carmen condos & penthouses for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "playa del carmen",
-          "playacar"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "condos",
-          "condo",
-          "condominiums",
-          "penthouse",
-          "penthouses",
-          "apartments for sale"
-        ]
-      },
-      "rationale": "Owns Playa condo, apartment and penthouse sale demand; separate from houses and rentals.",
-      "requireAny": [
-        "condos",
-        "condo",
-        "condominiums",
-        "penthouse",
-        "penthouses",
-        "apartments for sale",
-        "playa del carmen",
-        "playacar",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "condos",
-        "condo",
-        "condominiums",
-        "penthouse",
-        "penthouses",
-        "apartments for sale",
-        "playa carmen",
-        "condos sale",
-        "carmen condos",
-        "sale playa",
-        "condos playa",
-        "carmen condo",
-        "playa",
-        "carmen",
-        "sale",
-        "new",
-        "luxury"
-      ],
-      "strongTerms": [
-        "apartments for sale",
-        "playa carmen",
-        "condos sale",
-        "carmen condos",
-        "sale playa",
-        "condos playa",
-        "carmen condo"
-      ],
-      "headTerms": [
-        "playa del carmen condos for sale",
-        "playa del carmen penthouses for sale"
-      ],
-      "coverageRequireAny": [
-        "playa carmen",
-        "condos sale",
-        "carmen condos",
-        "sale playa",
-        "condos playa",
-        "carmen condo",
-        "playa",
-        "carmen"
-      ],
-      "pageTerms": [
-        "playa carmen",
-        "condos sale",
-        "carmen condos",
-        "sale playa",
-        "condos playa",
-        "carmen condo",
-        "playa",
-        "carmen",
-        "condos",
-        "sale",
-        "condo",
-        "new",
-        "luxury",
-        "penthouse"
-      ],
-      "preferredPages": [
-        "/playa-del-carmen-condos-sale",
-        "/playa-del-carmen-penthouse-sale"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep condo and penthouse pages updated with new developments, prices and Playacar options."
-    },
-    {
-      "slug": "playa-del-carmen-real-estate-houses-villas-for-sale",
-      "name": "Playa del Carmen real estate, houses & villas for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "playa del carmen",
-          "playacar"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "houses",
-          "homes for sale",
-          "villas",
-          "property",
-          "properties",
-          "beachfront"
-        ]
-      },
-      "rationale": "Owns generic Playa real estate and house/villa sale demand, distinct from condos and rentals.",
-      "requireAny": [
-        "real estate",
-        "houses",
-        "homes for sale",
-        "villas",
-        "property",
-        "properties",
-        "beachfront",
-        "playa del carmen",
-        "playacar",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "houses",
-        "homes for sale",
-        "villas",
-        "property",
-        "properties",
-        "beachfront",
-        "playa carmen",
-        "carmen real",
-        "estate playa",
-        "homes sale",
-        "sale playa",
-        "playa",
-        "carmen",
-        "real",
-        "estate",
-        "sale",
-        "homes",
-        "villa"
-      ],
-      "strongTerms": [
-        "real estate",
-        "homes for sale",
-        "playa carmen",
-        "carmen real",
-        "estate playa",
-        "homes sale",
-        "sale playa"
-      ],
-      "headTerms": [
-        "playa del carmen real estate",
-        "playa del carmen houses for sale",
-        "playa del carmen villas for sale"
-      ],
-      "coverageRequireAny": [
-        "playa carmen",
-        "real estate",
-        "carmen real",
-        "estate playa",
-        "homes sale",
-        "sale playa",
-        "playa",
-        "carmen"
-      ],
-      "pageTerms": [
-        "playa carmen",
-        "real estate",
-        "carmen real",
-        "estate playa",
-        "homes sale",
-        "sale playa",
-        "playa",
-        "carmen",
-        "real",
-        "estate",
-        "sale",
-        "homes",
-        "houses",
-        "villa"
-      ],
-      "preferredPages": [
-        "/homes-for-sale-in-playa-del-carmen",
-        "/playa-del-carmen-house-sale"
-      ],
-      "exclusive": true,
-      "actionHint": "Use the homes and house pages to capture generic Playa real estate plus villa and beachfront home searches."
-    },
-    {
-      "slug": "playa-del-carmen-apartments-long-term-rentals",
-      "name": "Playa del Carmen apartments & long-term rentals",
-      "kind": "market",
-      "intent": "transactional",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "playa del carmen",
-          "playacar"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "rentals",
-          "for rent",
-          "long term rentals",
-          "monthly rental",
-          "apartment rentals",
-          "condos for rent"
-        ]
-      },
-      "rationale": "Owns Playa rental and long-term apartment demand, kept separate from for-sale inventory.",
-      "requireAny": [
-        "rentals",
-        "for rent",
-        "long term rentals",
-        "monthly rental",
-        "apartment rentals",
-        "condos for rent",
-        "playa del carmen",
-        "playacar",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "rentals",
-        "for rent",
-        "long term rentals",
-        "monthly rental",
-        "apartment rentals",
-        "condos for rent",
-        "playa carmen",
-        "apartments rent",
-        "carmen rentals",
-        "carmen condo",
-        "condo rental",
-        "carmen condos",
-        "playa",
-        "carmen",
-        "rent",
-        "apartments",
-        "condo",
-        "rental",
-        "condos"
-      ],
-      "strongTerms": [
-        "for rent",
-        "long term rentals",
-        "monthly rental",
-        "apartment rentals",
-        "condos for rent",
-        "playa carmen",
-        "apartments rent",
-        "carmen rentals",
-        "carmen condo",
-        "condo rental",
-        "carmen condos"
-      ],
-      "headTerms": [
-        "playa del carmen rentals",
-        "playa del carmen apartments for rent"
-      ],
-      "coverageRequireAny": [
-        "playa carmen",
-        "apartments rent",
-        "carmen condo",
-        "condo rental",
-        "carmen condos",
-        "playa",
-        "carmen",
-        "rent"
-      ],
-      "pageTerms": [
-        "playa carmen",
-        "apartments rent",
-        "carmen rentals",
-        "carmen condo",
-        "condo rental",
-        "carmen condos",
-        "playa",
-        "carmen",
-        "rentals",
-        "rent",
-        "apartments",
-        "condo",
-        "rental",
-        "condos"
-      ],
-      "preferredPages": [
-        "/apartments-for-rent-in-playa-del-carmen"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep the apartments-for-rent page current with monthly, long-term and Playacar rental inventory."
-    },
-    {
-      "slug": "tulum-real-estate-condos-villas-for-sale",
-      "name": "Tulum real estate, condos & villas for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "tulum"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "condos",
-          "condo",
-          "homes for sale",
-          "houses",
-          "villas",
-          "penthouses",
-          "property",
-          "properties"
-        ]
-      },
-      "rationale": "Combines Tulum generic real estate, condo, house and villa sale demand because the same market pages cover them.",
-      "requireAny": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "villas",
-        "penthouses",
-        "property",
-        "properties",
-        "tulum",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "villas",
-        "penthouses",
-        "property",
-        "properties",
-        "tulum real",
-        "condos sale",
-        "tulum mexico",
-        "tulum condos",
-        "sale tulum",
-        "tulum",
-        "real",
-        "estate",
-        "sale",
-        "mexico",
-        "homes"
-      ],
-      "strongTerms": [
-        "real estate",
-        "homes for sale",
-        "tulum real",
-        "condos sale",
-        "tulum mexico",
-        "tulum condos",
-        "sale tulum"
-      ],
-      "headTerms": [
-        "tulum real estate",
-        "tulum condos for sale",
-        "tulum homes for sale"
-      ],
-      "coverageRequireAny": [
-        "real estate",
-        "tulum real",
-        "condos sale",
-        "tulum mexico",
-        "tulum condos",
-        "sale tulum",
-        "tulum",
-        "real"
-      ],
-      "pageTerms": [
-        "real estate",
-        "tulum real",
-        "condos sale",
-        "tulum mexico",
-        "tulum condos",
-        "sale tulum",
-        "tulum",
-        "real",
-        "estate",
-        "sale",
-        "condos",
-        "mexico",
-        "homes",
-        "houses"
-      ],
-      "preferredPages": [
-        "/tulum-condos-sale",
-        "/tulum-house-sale",
-        "/homes-for-sale-in-tulum"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep Tulum condo, house and homes-for-sale pages aligned on prices, neighborhoods and delivery timing."
-    },
-    {
-      "slug": "puerto-morelos-condos-real-estate-for-sale",
-      "name": "Puerto Morelos condos & real estate for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "puerto morelos"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "condos",
-          "condo",
-          "homes for sale",
-          "property"
-        ]
-      },
-      "rationale": "Owns Puerto Morelos condo and generic real estate sale demand, including beachfront and presale interest.",
-      "requireAny": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "property",
-        "puerto morelos",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "property",
-        "puerto morelos",
-        "condos sale",
-        "morelos condos",
-        "sale puerto",
-        "morelos mexico",
-        "morelos condo",
-        "puerto",
-        "morelos",
-        "sale",
-        "mexico",
-        "real",
-        "estate"
-      ],
-      "strongTerms": [
-        "real estate",
-        "homes for sale",
-        "puerto morelos",
-        "condos sale",
-        "morelos condos",
-        "sale puerto",
-        "morelos mexico",
-        "morelos condo"
-      ],
-      "headTerms": [
-        "puerto morelos condos for sale",
-        "puerto morelos real estate"
-      ],
-      "coverageRequireAny": [
-        "puerto morelos",
-        "condos sale",
-        "morelos condos",
-        "sale puerto",
-        "morelos mexico",
-        "morelos condo",
-        "puerto",
-        "morelos"
-      ],
-      "pageTerms": [
-        "puerto morelos",
-        "condos sale",
-        "morelos condos",
-        "sale puerto",
-        "morelos mexico",
-        "morelos condo",
-        "puerto",
-        "morelos",
-        "sale",
-        "condos",
-        "mexico",
-        "condo",
-        "real",
-        "estate"
-      ],
-      "preferredPages": [
-        "/puerto-morelos-condos-sale",
-        "/puerto-morelos-real-estate",
-        "/puerto-morelos-beachfront"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep Puerto Morelos condo and real-estate pages updated with beachfront, presale and price-band inventory."
-    },
-    {
-      "slug": "cozumel-condos-real-estate-for-sale",
-      "name": "Cozumel condos & real estate for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "cozumel"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "condos",
-          "condo",
-          "homes for sale",
-          "houses",
-          "villas",
-          "property"
-        ]
-      },
-      "rationale": "Owns Cozumel condo and generic real estate sale demand, including houses and villas.",
-      "requireAny": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "villas",
-        "property",
-        "cozumel",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "villas",
-        "property",
-        "sale cozumel",
-        "condo sale",
-        "condos sale",
-        "cozumel real",
-        "cozumel condo",
-        "cozumel",
-        "sale",
-        "real",
-        "estate",
-        "mexico",
-        "homes"
-      ],
-      "strongTerms": [
-        "real estate",
-        "homes for sale",
-        "sale cozumel",
-        "condo sale",
-        "condos sale",
-        "cozumel real",
-        "cozumel condo"
-      ],
-      "headTerms": [
-        "cozumel condos for sale",
-        "cozumel real estate"
-      ],
-      "coverageRequireAny": [
-        "sale cozumel",
-        "condo sale",
-        "real estate",
-        "condos sale",
-        "cozumel real",
-        "cozumel condo",
-        "cozumel",
-        "sale"
-      ],
-      "pageTerms": [
-        "sale cozumel",
-        "condo sale",
-        "real estate",
-        "condos sale",
-        "cozumel real",
-        "cozumel condo",
-        "cozumel",
-        "sale",
-        "condo",
-        "real",
-        "estate",
-        "condos",
-        "mexico",
-        "homes"
-      ],
-      "preferredPages": [
-        "/cozumel-condos-sale",
-        "/homes-for-sale-in-cozumel",
-        "/cozumel-house-sale"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep Cozumel condo, homes and house pages current with island inventory and buyer-market guidance."
-    },
-    {
-      "slug": "akumal-condos-real-estate-for-sale",
-      "name": "Akumal condos & real estate for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "akumal"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "condos",
-          "condo",
-          "homes for sale",
-          "houses",
-          "property"
-        ]
-      },
-      "rationale": "Owns Akumal generic real estate, condo and house sale demand; separate from Riviera Maya regional pages.",
-      "requireAny": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "property",
-        "akumal",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "property",
-        "akumal real",
-        "homes sale",
-        "akumal condos",
-        "condos sale",
-        "akumal mexico",
-        "akumal",
-        "real",
-        "estate",
-        "sale",
-        "homes",
+        "maya",
         "mexico"
       ],
       "strongTerms": [
+        "real estate agent",
         "real estate",
-        "homes for sale",
-        "akumal real",
-        "homes sale",
-        "akumal condos",
-        "condos sale",
-        "akumal mexico"
+        "estate investment",
+        "playa carmen",
+        "carmen real",
+        "riviera maya",
+        "maya real"
       ],
       "headTerms": [
-        "akumal real estate",
-        "akumal condos for sale"
+        "buying property in mexico",
+        "mortgage in mexico",
+        "riviera maya real estate investment"
       ],
       "coverageRequireAny": [
         "real estate",
-        "akumal real",
-        "homes sale",
-        "akumal condos",
-        "condos sale",
-        "akumal mexico",
-        "akumal",
-        "real"
+        "estate investment",
+        "playa carmen",
+        "carmen real",
+        "riviera maya",
+        "maya real",
+        "real",
+        "estate"
       ],
       "pageTerms": [
         "real estate",
-        "akumal real",
-        "homes sale",
-        "akumal condos",
-        "condos sale",
-        "akumal mexico",
-        "akumal",
+        "estate investment",
+        "playa carmen",
+        "carmen real",
+        "riviera maya",
+        "maya real",
         "real",
         "estate",
-        "sale",
-        "homes",
-        "condos",
-        "mexico",
-        "houses"
+        "investment",
+        "playa",
+        "carmen",
+        "riviera",
+        "maya",
+        "mexico"
       ],
       "preferredPages": [
-        "/akumal-condos-sale",
-        "/homes-for-sale-in-akumal"
+        "/post/how-to-buy-property-mexico-as-an-american",
+        "/post/home-financing-mexico-yes-you-can",
+        "/post/your-complete-playa-del-carmen-real-estate-investment-guide"
       ],
-      "exclusive": true,
-      "actionHint": "Keep Akumal real estate and condo pages updated with beachfront, bay and new-development inventory."
+      "actionHint": "Link guides to service pages and consultation."
     },
     {
-      "slug": "puerto-aventuras-condos-homes-real-estate-for-sale",
-      "name": "Puerto Aventuras condos, homes & real estate for sale",
-      "kind": "market",
-      "intent": "local",
-      "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Susana MacDonald",
-      "market": {
-        "scope": "local",
-        "places": [
-          "puerto aventuras"
-        ],
-        "localIntent": [
-          "near me",
-          "close to me",
-          "in my area"
-        ]
-      },
-      "need": {
-        "terms": [
-          "real estate",
-          "condos",
-          "condo",
-          "homes for sale",
-          "houses",
-          "property"
-        ]
-      },
-      "rationale": "Owns Puerto Aventuras real estate, condo and home sale demand, including gated-community and beachfront interest.",
-      "requireAny": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "property",
-        "puerto aventuras",
-        "near me",
-        "close to me",
-        "in my area"
-      ],
-      "terms": [
-        "real estate",
-        "condos",
-        "condo",
-        "homes for sale",
-        "houses",
-        "property",
-        "puerto aventuras",
-        "sale puerto",
-        "homes sale",
-        "aventuras real",
-        "condos sale",
-        "puerto",
-        "aventuras",
-        "sale",
-        "real",
-        "estate",
-        "homes",
-        "house"
-      ],
-      "strongTerms": [
-        "real estate",
-        "homes for sale",
-        "puerto aventuras",
-        "sale puerto",
-        "homes sale",
-        "aventuras real",
-        "condos sale"
-      ],
-      "headTerms": [
-        "puerto aventuras real estate",
-        "puerto aventuras condos for sale"
-      ],
-      "coverageRequireAny": [
-        "puerto aventuras",
-        "real estate",
-        "sale puerto",
-        "homes sale",
-        "aventuras real",
-        "condos sale",
-        "puerto",
-        "aventuras"
-      ],
-      "pageTerms": [
-        "puerto aventuras",
-        "real estate",
-        "sale puerto",
-        "homes sale",
-        "aventuras real",
-        "condos sale",
-        "puerto",
-        "aventuras",
-        "sale",
-        "real",
-        "estate",
-        "homes",
-        "condos",
-        "house"
-      ],
-      "preferredPages": [
-        "/homes-for-sale-in-puerto-aventuras",
-        "/puerto-aventuras-beachfront-sale"
-      ],
-      "exclusive": true,
-      "actionHint": "Keep Puerto Aventuras real estate and beachfront pages current with gated-community and marina inventory."
-    },
-    {
-      "slug": "riviera-maya-investment-market-updates-location-guides",
-      "name": "Riviera Maya investment, market updates & location guides",
+      "slug": "riviera-maya-location-lifestyle-guides",
+      "name": "Riviera Maya location & lifestyle guides",
       "kind": "market",
       "intent": "informational",
       "relevance": "high",
       "coverageKind": "content",
-      "offerKey": "Susana MacDonald",
+      "offerKey": "Riviera Maya location & lifestyle guides",
+      "market": {
+        "scope": "national",
+        "places": [
+          "mexico",
+          "cancun",
+          "riviera maya",
+          "playa del carmen",
+          "tulum",
+          "puerto morelos",
+          "cozumel",
+          "akumal",
+          "puerto aventuras"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby",
+          "closest"
+        ]
+      },
+      "need": {
+        "terms": [
+          "safe",
+          "safety",
+          "crime",
+          "hospital",
+          "hospitals",
+          "healthcare",
+          "things to do",
+          "neighborhoods",
+          "cost of living",
+          "attractions",
+          "cenotes",
+          "retire",
+          "retiring"
+        ]
+      },
+      "rationale": "Owns safety, healthcare, retirement and lifestyle research around the region.",
+      "requireAny": [
+        "safe",
+        "safety",
+        "crime",
+        "hospital",
+        "hospitals",
+        "healthcare",
+        "things to do",
+        "neighborhoods",
+        "cost of living",
+        "attractions",
+        "cenotes",
+        "retire",
+        "retiring",
+        "mexico",
+        "cancun",
+        "riviera maya",
+        "playa del carmen",
+        "tulum",
+        "puerto morelos",
+        "cozumel",
+        "akumal",
+        "puerto aventuras",
+        "near me",
+        "nearby",
+        "closest"
+      ],
+      "terms": [
+        "safe",
+        "safety",
+        "crime",
+        "hospital",
+        "hospitals",
+        "healthcare",
+        "things to do",
+        "neighborhoods",
+        "cost of living",
+        "attractions",
+        "cenotes",
+        "retire",
+        "retiring",
+        "riviera maya",
+        "hospitals cancun",
+        "playa carmen",
+        "hospital cancun",
+        "maya things",
+        "carmen crime",
+        "cancun",
+        "riviera",
+        "maya",
+        "playa",
+        "carmen",
+        "things"
+      ],
+      "strongTerms": [
+        "things to do",
+        "cost of living",
+        "riviera maya",
+        "hospitals cancun",
+        "playa carmen",
+        "hospital cancun",
+        "maya things",
+        "carmen crime"
+      ],
+      "headTerms": [
+        "riviera maya things to do",
+        "is riviera maya safe",
+        "hospitals in cancun"
+      ],
+      "coverageRequireAny": [
+        "riviera maya",
+        "hospitals cancun",
+        "playa carmen",
+        "cancun",
+        "riviera",
+        "maya",
+        "hospitals",
+        "playa"
+      ],
+      "pageTerms": [
+        "riviera maya",
+        "hospitals cancun",
+        "playa carmen",
+        "hospital cancun",
+        "maya things",
+        "carmen crime",
+        "cancun",
+        "riviera",
+        "maya",
+        "hospitals",
+        "playa",
+        "carmen",
+        "hospital",
+        "things"
+      ],
+      "preferredPages": [
+        "/post/how-safe-is-the-riviera-maya-the-truth-behind-the-headlines",
+        "/post/top-hospitals-in-cancun-and-riviera-maya-a-guide-to-world-class-healthcare-in-mexico",
+        "/post/retire-in-playa-del-carmen-5-reasons-why-its-one-of-the-best-places-to-live-for-retirees"
+      ],
+      "exclusive": true,
+      "actionHint": "Connect lifestyle guides to relocation and property pages."
+    },
+    {
+      "slug": "riviera-maya-luxury-beachfront-penthouses",
+      "name": "Riviera Maya luxury, beachfront & penthouses",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Riviera Maya luxury, beachfront & penthouses",
       "market": {
         "scope": "local",
         "places": [
           "riviera maya",
           "playa del carmen",
           "tulum",
+          "puerto morelos",
+          "cozumel",
+          "akumal",
+          "puerto aventuras",
+          "bacalar"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "luxury",
+          "beachfront",
+          "oceanfront",
+          "penthouse",
+          "penthouses"
+        ]
+      },
+      "rationale": "Owns high-end, oceanfront and penthouse demand across the region.",
+      "requireAny": [
+        "luxury",
+        "beachfront",
+        "oceanfront",
+        "penthouse",
+        "penthouses",
+        "riviera maya",
+        "playa del carmen",
+        "tulum",
+        "puerto morelos",
+        "cozumel",
+        "akumal",
+        "puerto aventuras",
+        "bacalar",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "luxury",
+        "beachfront",
+        "oceanfront",
+        "penthouse",
+        "penthouses",
+        "riviera maya",
+        "maya beachfront",
+        "beachfront homes",
+        "homes sale",
+        "real estate",
+        "tulum beachfront",
+        "riviera",
+        "maya",
+        "homes",
+        "sale",
+        "real",
+        "estate",
+        "tulum"
+      ],
+      "strongTerms": [
+        "riviera maya",
+        "maya beachfront",
+        "beachfront homes",
+        "homes sale",
+        "real estate",
+        "tulum beachfront"
+      ],
+      "headTerms": [
+        "riviera maya luxury real estate",
+        "beachfront condos playa del carmen",
+        "penthouses for sale tulum"
+      ],
+      "coverageRequireAny": [
+        "riviera maya",
+        "maya beachfront",
+        "beachfront homes",
+        "homes sale",
+        "real estate",
+        "tulum beachfront",
+        "beachfront",
+        "riviera"
+      ],
+      "pageTerms": [
+        "riviera maya",
+        "maya beachfront",
+        "beachfront homes",
+        "homes sale",
+        "real estate",
+        "tulum beachfront",
+        "beachfront",
+        "riviera",
+        "maya",
+        "homes",
+        "sale",
+        "real",
+        "estate",
+        "tulum"
+      ],
+      "preferredPages": [
+        "/riviera-maya-luxury-real-estate",
+        "/riviera-maya-beachfront-sale",
+        "/riviera-maya-penthouses-sale"
+      ],
+      "actionHint": "Connect luxury guides to premium listings."
+    },
+    {
+      "slug": "riviera-maya-homes-condos-under-200k",
+      "name": "Riviera Maya homes & condos under $200K",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Riviera Maya homes & condos under $200K",
+      "market": {
+        "scope": "national",
+        "places": [
+          "mexico",
+          "riviera maya",
+          "playa del carmen",
+          "tulum",
+          "cancun",
           "cozumel",
           "puerto morelos",
           "akumal",
@@ -1042,235 +430,969 @@
         ],
         "localIntent": [
           "near me",
-          "close to me",
-          "in my area"
+          "nearby"
         ]
       },
       "need": {
         "terms": [
-          "investment",
-          "market",
-          "market update",
-          "where to invest",
-          "roi",
-          "safe",
-          "crime",
-          "guide",
-          "location guide",
-          "vs"
+          "under $100k",
+          "under $100 000",
+          "under $200k",
+          "under 200k",
+          "under 100k",
+          "cheap",
+          "affordable"
         ]
       },
-      "rationale": "Owns investment, market-update, safety and location-guide content; supports buyer education across the region.",
+      "rationale": "Captures budget-focused buyers and under-$200K condo demand.",
       "requireAny": [
-        "investment",
-        "market",
-        "market update",
-        "where to invest",
-        "roi",
-        "safe",
-        "crime",
-        "guide",
-        "location guide",
-        "vs",
+        "under $100k",
+        "under $100 000",
+        "under $200k",
+        "under 200k",
+        "under 100k",
+        "cheap",
+        "affordable",
+        "mexico",
         "riviera maya",
         "playa del carmen",
         "tulum",
+        "cancun",
         "cozumel",
         "puerto morelos",
         "akumal",
         "puerto aventuras",
         "bacalar",
         "near me",
-        "close to me",
-        "in my area"
+        "nearby"
       ],
       "terms": [
-        "investment",
-        "market",
-        "market update",
-        "where to invest",
-        "roi",
-        "safe",
-        "crime",
-        "guide",
-        "location guide",
-        "vs",
-        "playa carmen",
-        "real estate",
-        "estate investment",
-        "carmen real",
-        "investment playa",
-        "estate market",
-        "playa",
-        "carmen",
-        "real",
-        "estate",
-        "puerto",
-        "aventuras"
+        "under $100k",
+        "under $100 000",
+        "under $200k",
+        "under 200k",
+        "under 100k",
+        "cheap",
+        "affordable",
+        "sale under",
+        "beachfront homes",
+        "homes sale",
+        "100k mexico",
+        "condos sale",
+        "under",
+        "sale",
+        "100k",
+        "beachfront",
+        "homes",
+        "mexico",
+        "condos",
+        "200k"
       ],
       "strongTerms": [
-        "market update",
-        "where to invest",
-        "location guide",
-        "playa carmen",
-        "real estate",
-        "estate investment",
-        "carmen real",
-        "investment playa",
-        "estate market"
+        "under $100k",
+        "under $100 000",
+        "under $200k",
+        "under 200k",
+        "under 100k",
+        "sale under",
+        "beachfront homes",
+        "homes sale",
+        "100k mexico",
+        "condos sale"
       ],
       "headTerms": [
-        "riviera maya real estate investment",
-        "playa del carmen real estate market"
+        "condos under 200k",
+        "beachfront homes for sale under $100k"
+      ],
+      "coverageRequireAny": [
+        "sale under",
+        "under 100k",
+        "beachfront homes",
+        "homes sale",
+        "100k mexico",
+        "condos sale",
+        "under",
+        "sale"
+      ],
+      "pageTerms": [
+        "sale under",
+        "under 100k",
+        "beachfront homes",
+        "homes sale",
+        "100k mexico",
+        "condos sale",
+        "under",
+        "sale",
+        "100k",
+        "beachfront",
+        "homes",
+        "mexico",
+        "condos",
+        "200k"
+      ],
+      "preferredPages": [
+        "/riviera-maya-condos-sale-under-200k",
+        "/post/beachfront-homes-for-sale-under-100k-in-mexico-exploring-the-reality-and-alternatives-in-riviera-m",
+        "/post/playa-del-carmen-condos-for-sale-under-200k-a-smart-investment-for-north-american-buyers"
+      ],
+      "exclusive": true,
+      "actionHint": "Tie budget guides to under-$200K inventory."
+    },
+    {
+      "slug": "riviera-maya-apartments-long-term-rentals",
+      "name": "Riviera Maya apartments & long-term rentals",
+      "kind": "market",
+      "intent": "transactional",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Riviera Maya apartments & long-term rentals",
+      "market": {
+        "scope": "local",
+        "places": [
+          "playa del carmen",
+          "tulum",
+          "puerto morelos",
+          "cozumel",
+          "akumal",
+          "puerto aventuras",
+          "riviera maya"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "apartments for rent",
+          "apartment rentals",
+          "rentals",
+          "long term rentals",
+          "monthly rentals",
+          "rent",
+          "for rent"
+        ]
+      },
+      "rationale": "Owns rental and long-stay demand, especially in Playa del Carmen.",
+      "requireAny": [
+        "apartments for rent",
+        "apartment rentals",
+        "rentals",
+        "long term rentals",
+        "monthly rentals",
+        "rent",
+        "for rent",
+        "playa del carmen",
+        "tulum",
+        "puerto morelos",
+        "cozumel",
+        "akumal",
+        "puerto aventuras",
+        "riviera maya",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "apartments for rent",
+        "apartment rentals",
+        "rentals",
+        "long term rentals",
+        "monthly rentals",
+        "rent",
+        "for rent",
+        "playa carmen",
+        "carmen rentals",
+        "rentals playa",
+        "carmen apartments",
+        "apartments rent",
+        "playa",
+        "carmen",
+        "apartments",
+        "apartment",
+        "long",
+        "term"
+      ],
+      "strongTerms": [
+        "apartments for rent",
+        "apartment rentals",
+        "long term rentals",
+        "monthly rentals",
+        "for rent",
+        "playa carmen",
+        "carmen rentals",
+        "rentals playa",
+        "carmen apartments",
+        "apartments rent"
+      ],
+      "headTerms": [
+        "playa del carmen apartments for rent",
+        "playa del carmen long term rentals"
       ],
       "coverageRequireAny": [
         "playa carmen",
+        "carmen apartments",
+        "apartments rent",
+        "playa",
+        "carmen",
+        "rent",
+        "apartments",
+        "apartment"
+      ],
+      "pageTerms": [
+        "playa carmen",
+        "carmen rentals",
+        "rentals playa",
+        "carmen apartments",
+        "apartments rent",
+        "apartment rentals",
+        "playa",
+        "carmen",
+        "rentals",
+        "rent",
+        "apartments",
+        "apartment",
+        "long",
+        "term"
+      ],
+      "preferredPages": [
+        "/apartments-for-rent-in-playa-del-carmen"
+      ],
+      "exclusive": true,
+      "actionHint": "Add rental availability and monthly terms."
+    },
+    {
+      "slug": "playa-del-carmen-real-estate",
+      "name": "Playa del Carmen real estate",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Playa del Carmen real estate",
+      "market": {
+        "scope": "local",
+        "places": [
+          "playa del carmen"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property",
+          "apartments for sale"
+        ]
+      },
+      "rationale": "One place-level owner for Playa property demand across condos, houses and apartments.",
+      "requireAny": [
         "real estate",
-        "estate investment",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "apartments for sale",
+        "playa del carmen",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "apartments for sale",
+        "playa carmen",
+        "carmen condos",
+        "condos sale",
         "carmen real",
-        "investment playa",
-        "estate market",
+        "buy condo",
+        "playa",
+        "carmen",
+        "sale",
+        "real",
+        "estate",
+        "buy"
+      ],
+      "strongTerms": [
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "apartments for sale",
+        "playa carmen",
+        "carmen condos",
+        "condos sale",
+        "carmen real",
+        "buy condo"
+      ],
+      "headTerms": [
+        "playa del carmen real estate",
+        "playa del carmen condos for sale"
+      ],
+      "coverageRequireAny": [
+        "playa carmen",
+        "carmen condos",
+        "condos sale",
+        "carmen real",
+        "real estate",
+        "buy condo",
         "playa",
         "carmen"
       ],
       "pageTerms": [
         "playa carmen",
-        "real estate",
-        "estate investment",
+        "carmen condos",
+        "condos sale",
         "carmen real",
-        "investment playa",
-        "estate market",
+        "real estate",
+        "buy condo",
         "playa",
         "carmen",
+        "sale",
+        "condos",
         "real",
         "estate",
-        "investment",
-        "market",
-        "puerto",
-        "aventuras"
+        "buy",
+        "condo"
       ],
       "preferredPages": [
-        "/blog/categories/investment-strategies",
-        "/blog/categories/real-estate-market-updates",
-        "/blog/categories/investment-guides"
+        "/homes-for-sale-in-playa-del-carmen",
+        "/playa-del-carmen-condos-sale",
+        "/playa-del-carmen-house-sale"
       ],
       "exclusive": true,
-      "actionHint": "Keep market, investment and location-guide categories updated with 2026 data and local comparisons."
+      "actionHint": "Use the place hub to route to type pages."
     },
     {
-      "slug": "mexico-home-financing",
-      "name": "Mexico home financing",
+      "slug": "tulum-real-estate",
+      "name": "Tulum real estate",
       "kind": "market",
-      "intent": "commercial",
+      "intent": "mixed",
       "relevance": "high",
-      "coverageKind": "service",
-      "offerKey": "Susana MacDonald",
+      "coverageKind": "local",
+      "offerKey": "Tulum real estate",
       "market": {
-        "scope": "national",
+        "scope": "local",
         "places": [
-          "mexico"
+          "tulum"
         ],
         "localIntent": [
           "near me",
-          "close to me",
-          "in my area"
+          "nearby"
         ]
       },
       "need": {
         "terms": [
-          "financing",
-          "mortgage",
-          "loan",
-          "home equity",
-          "construction loan",
-          "borrow"
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property",
+          "apartments for sale"
         ]
       },
-      "rationale": "Owns Mexico mortgage and home-financing demand for US/Canadian buyers; distinct from property search topics.",
+      "rationale": "Place-level owner for Tulum condo, house and villa demand.",
       "requireAny": [
-        "financing",
-        "mortgage",
-        "loan",
-        "home equity",
-        "construction loan",
-        "borrow",
-        "mexico",
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "apartments for sale",
+        "tulum",
         "near me",
-        "close to me",
-        "in my area"
+        "nearby"
       ],
       "terms": [
-        "financing",
-        "mortgage",
-        "loan",
-        "home equity",
-        "construction loan",
-        "borrow",
-        "mexico home",
-        "equity lending",
-        "lending market",
-        "loan mexico",
-        "mexico",
-        "home",
-        "equity",
-        "lending",
-        "market",
-        "construction"
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "apartments for sale",
+        "tulum real",
+        "tulum condos",
+        "condos sale",
+        "houses sale",
+        "tulum homes",
+        "tulum",
+        "sale",
+        "real",
+        "estate",
+        "houses",
+        "homes",
+        "mexico"
       ],
       "strongTerms": [
-        "home equity",
-        "construction loan",
-        "mexico home",
-        "equity lending",
-        "lending market",
-        "loan mexico"
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "apartments for sale",
+        "tulum real",
+        "tulum condos",
+        "condos sale",
+        "houses sale",
+        "tulum homes"
       ],
       "headTerms": [
-        "mexico home financing",
-        "mortgage in mexico"
+        "tulum real estate",
+        "tulum condos for sale"
       ],
       "coverageRequireAny": [
-        "mexico home",
-        "mexico",
-        "home",
-        "market",
-        "construction"
+        "real estate",
+        "tulum real",
+        "tulum condos",
+        "condos sale",
+        "houses sale",
+        "tulum homes",
+        "tulum",
+        "sale"
       ],
       "pageTerms": [
-        "mexico home",
-        "home equity",
-        "equity lending",
-        "lending market",
-        "construction loan",
-        "loan mexico",
-        "mexico",
-        "home",
-        "equity",
-        "lending",
-        "market",
-        "construction",
-        "loan",
-        "mortgage"
+        "real estate",
+        "tulum real",
+        "tulum condos",
+        "condos sale",
+        "houses sale",
+        "tulum homes",
+        "tulum",
+        "sale",
+        "real",
+        "estate",
+        "condos",
+        "houses",
+        "homes",
+        "mexico"
       ],
       "preferredPages": [
-        "/post/home-financing-mexico-yes-you-can"
+        "/homes-for-sale-in-tulum",
+        "/tulum-condos-sale",
+        "/tulum-house-sale"
       ],
       "exclusive": true,
-      "actionHint": "Keep the financing guide current with Fidum partner details, mortgage eligibility and cross-border lending options."
+      "actionHint": "Route Tulum searches to type-specific pages."
+    },
+    {
+      "slug": "puerto-morelos-real-estate",
+      "name": "Puerto Morelos real estate",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Puerto Morelos real estate",
+      "market": {
+        "scope": "local",
+        "places": [
+          "puerto morelos"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property",
+          "beachfront"
+        ]
+      },
+      "rationale": "Covers condo, home and beachfront demand in Puerto Morelos.",
+      "requireAny": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "beachfront",
+        "puerto morelos",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "beachfront",
+        "puerto morelos",
+        "condos sale",
+        "morelos condos",
+        "sale puerto",
+        "morelos real",
+        "puerto",
+        "morelos",
+        "sale",
+        "real",
+        "estate",
+        "beach",
+        "house"
+      ],
+      "strongTerms": [
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "puerto morelos",
+        "condos sale",
+        "morelos condos",
+        "sale puerto",
+        "morelos real"
+      ],
+      "headTerms": [
+        "puerto morelos real estate",
+        "puerto morelos condos for sale"
+      ],
+      "coverageRequireAny": [
+        "puerto morelos",
+        "condos sale",
+        "morelos condos",
+        "sale puerto",
+        "real estate",
+        "morelos real",
+        "puerto",
+        "morelos"
+      ],
+      "pageTerms": [
+        "puerto morelos",
+        "condos sale",
+        "morelos condos",
+        "sale puerto",
+        "real estate",
+        "morelos real",
+        "puerto",
+        "morelos",
+        "condos",
+        "sale",
+        "real",
+        "estate",
+        "beach",
+        "house"
+      ],
+      "preferredPages": [
+        "/puerto-morelos-real-estate",
+        "/puerto-morelos-condos-sale",
+        "/puerto-morelos-beachfront"
+      ],
+      "exclusive": true,
+      "actionHint": "Connect the place hub to beachfront and condo pages."
+    },
+    {
+      "slug": "cozumel-real-estate",
+      "name": "Cozumel real estate",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Cozumel real estate",
+      "market": {
+        "scope": "local",
+        "places": [
+          "cozumel"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property"
+        ]
+      },
+      "rationale": "Owns Cozumel condo, home and villa searches in one place hub.",
+      "requireAny": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "cozumel",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "cozumel real",
+        "cozumel condos",
+        "condos sale",
+        "cozumel mexico",
+        "mexico real",
+        "cozumel",
+        "real",
+        "estate",
+        "sale",
+        "mexico",
+        "homes"
+      ],
+      "strongTerms": [
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "cozumel real",
+        "cozumel condos",
+        "condos sale",
+        "cozumel mexico",
+        "mexico real"
+      ],
+      "headTerms": [
+        "cozumel real estate",
+        "cozumel condos for sale"
+      ],
+      "coverageRequireAny": [
+        "real estate",
+        "cozumel real",
+        "cozumel condos",
+        "condos sale",
+        "cozumel mexico",
+        "mexico real",
+        "cozumel",
+        "real"
+      ],
+      "pageTerms": [
+        "real estate",
+        "cozumel real",
+        "cozumel condos",
+        "condos sale",
+        "cozumel mexico",
+        "mexico real",
+        "cozumel",
+        "real",
+        "estate",
+        "sale",
+        "condos",
+        "mexico",
+        "homes",
+        "villas"
+      ],
+      "preferredPages": [
+        "/homes-for-sale-in-cozumel",
+        "/cozumel-condos-sale",
+        "/cozumel-house-sale"
+      ],
+      "exclusive": true,
+      "actionHint": "Link condo and house pages from the hub."
+    },
+    {
+      "slug": "akumal-real-estate",
+      "name": "Akumal real estate",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Akumal real estate",
+      "market": {
+        "scope": "local",
+        "places": [
+          "akumal"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property"
+        ]
+      },
+      "rationale": "Covers Akumal condo and home demand, including luxury beachfront.",
+      "requireAny": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "akumal",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "akumal real",
+        "akumal condos",
+        "condos sale",
+        "luxury real",
+        "estate akumal",
+        "akumal",
+        "real",
+        "estate",
+        "sale",
+        "luxury",
+        "homes",
+        "mexico"
+      ],
+      "strongTerms": [
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "akumal real",
+        "akumal condos",
+        "condos sale",
+        "luxury real",
+        "estate akumal"
+      ],
+      "headTerms": [
+        "akumal real estate",
+        "akumal condos for sale"
+      ],
+      "coverageRequireAny": [
+        "real estate",
+        "akumal real",
+        "akumal condos",
+        "condos sale",
+        "luxury real",
+        "estate akumal",
+        "akumal",
+        "real"
+      ],
+      "pageTerms": [
+        "real estate",
+        "akumal real",
+        "akumal condos",
+        "condos sale",
+        "luxury real",
+        "estate akumal",
+        "akumal",
+        "real",
+        "estate",
+        "sale",
+        "condos",
+        "luxury",
+        "homes",
+        "mexico"
+      ],
+      "preferredPages": [
+        "/homes-for-sale-in-akumal",
+        "/akumal-condos-sale"
+      ],
+      "exclusive": true,
+      "actionHint": "Tie Akumal hub to condo and home pages."
+    },
+    {
+      "slug": "puerto-aventuras-real-estate",
+      "name": "Puerto Aventuras real estate",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Puerto Aventuras real estate",
+      "market": {
+        "scope": "local",
+        "places": [
+          "puerto aventuras"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby"
+        ]
+      },
+      "need": {
+        "terms": [
+          "real estate",
+          "condos",
+          "condo",
+          "homes for sale",
+          "houses for sale",
+          "villas",
+          "property",
+          "beachfront"
+        ]
+      },
+      "rationale": "Owns Puerto Aventuras condo, home and beachfront searches.",
+      "requireAny": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "beachfront",
+        "puerto aventuras",
+        "near me",
+        "nearby"
+      ],
+      "terms": [
+        "real estate",
+        "condos",
+        "condo",
+        "homes for sale",
+        "houses for sale",
+        "villas",
+        "property",
+        "beachfront",
+        "puerto aventuras",
+        "sale puerto",
+        "homes sale",
+        "condos sale",
+        "aventuras real",
+        "puerto",
+        "aventuras",
+        "sale",
+        "homes",
+        "real",
+        "estate",
+        "houses"
+      ],
+      "strongTerms": [
+        "real estate",
+        "homes for sale",
+        "houses for sale",
+        "puerto aventuras",
+        "sale puerto",
+        "homes sale",
+        "condos sale",
+        "aventuras real"
+      ],
+      "headTerms": [
+        "puerto aventuras real estate",
+        "puerto aventuras condos for sale"
+      ],
+      "coverageRequireAny": [
+        "puerto aventuras",
+        "sale puerto",
+        "homes sale",
+        "condos sale",
+        "aventuras real",
+        "real estate",
+        "puerto",
+        "aventuras"
+      ],
+      "pageTerms": [
+        "puerto aventuras",
+        "sale puerto",
+        "homes sale",
+        "condos sale",
+        "aventuras real",
+        "real estate",
+        "puerto",
+        "aventuras",
+        "sale",
+        "homes",
+        "condos",
+        "real",
+        "estate",
+        "houses"
+      ],
+      "preferredPages": [
+        "/homes-for-sale-in-puerto-aventuras",
+        "/puerto-aventuras-beachfront-sale"
+      ],
+      "exclusive": true,
+      "actionHint": "Use the hub to feature gated-community homes."
     }
   ],
   "pageTypeRules": [
     {
+      "type": "home",
+      "pattern": "/"
+    },
+    {
       "type": "service",
       "pattern": "/service-page/"
+    },
+    {
+      "type": "product",
+      "pattern": "/real-estate-listings/"
     },
     {
       "type": "category",
       "pattern": "/real-estate-listings"
     },
     {
-      "type": "product",
-      "pattern": "/real-estate-listings/"
+      "type": "category",
+      "pattern": "/riviera-maya-"
+    },
+    {
+      "type": "category",
+      "pattern": "/playa-del-carmen-"
+    },
+    {
+      "type": "category",
+      "pattern": "/tulum-"
+    },
+    {
+      "type": "category",
+      "pattern": "/puerto-morelos-"
+    },
+    {
+      "type": "category",
+      "pattern": "/cozumel-"
+    },
+    {
+      "type": "category",
+      "pattern": "/akumal-"
+    },
+    {
+      "type": "category",
+      "pattern": "/puerto-aventuras-"
+    },
+    {
+      "type": "category",
+      "pattern": "/bacalar-"
+    },
+    {
+      "type": "category",
+      "pattern": "/homes-for-sale-in-"
+    },
+    {
+      "type": "category",
+      "pattern": "/apartments-for-rent-in-playa-del-carmen"
     },
     {
       "type": "blog",
@@ -1279,23 +1401,41 @@
     {
       "type": "blog",
       "pattern": "/blog"
+    },
+    {
+      "type": "other",
+      "pattern": "/about"
+    },
+    {
+      "type": "other",
+      "pattern": "/contact"
+    },
+    {
+      "type": "other",
+      "pattern": "/testimonials"
+    },
+    {
+      "type": "other",
+      "pattern": "/privacy-policy"
     }
   ],
   "excludePaths": [
     "/es/",
-    "/privacy-policy",
-    "/blog/tags/",
     "/blog/page/",
-    "/profile/",
-    "/es/blog/hashtags/"
+    "/blog/tags/",
+    "/blog/hashtags/",
+    "/privacy-policy",
+    "/book-online",
+    "/service-page/book-a-free-consultation-with-susi",
+    "/profile/ben/profile"
   ],
   "newsQueries": [
-    "Riviera Maya real estate market 2026",
-    "Playa del Carmen PDU 2026",
-    "Tulum construction 2026 real estate",
-    "Mexico foreign property ownership fideicomiso 2026",
-    "sargassum Riviera Maya 2026 real estate",
-    "Mexico mortgage rates 2026"
+    "Riviera Maya real estate news 2026",
+    "Playa del Carmen real estate market 2026",
+    "Mexico fideicomiso rules for foreign buyers 2026",
+    "Tulum construction regulations 2026",
+    "Riviera Maya sargassum 2026 real estate",
+    "Mexico mortgage rates for foreign buyers 2026"
   ],
-  "summary": "English taxonomy for US/Canadian buyers of Riviera Maya property. Place topics own named-destination demand; regional topics cover beachfront/luxury, under-$200K, investment guides and Mexico financing. 2 topic corrections: Riviera Maya & Bacalar real estate, beachfront & luxury properties: need terms not measured in this query set (waterfront); Riviera Maya investment, market updates & location guides: need terms not measured in this query set (market update, guide, location guide). Re-proposed once after 12 topics left unowned market demand."
+  "summary": "English-language topic map for US/Canadian buyers of Riviera Maya property, balancing place-level real estate hubs with buying, financing, investment, rental, luxury, budget and lifestyle guide topics. 2 topic corrections: Riviera Maya buying, financing & investment guides: need terms not measured in this query set (documents); Riviera Maya location & lifestyle guides: need terms not measured in this query set (healthcare, cost of living). Re-proposed once after 10 topics left unowned market demand."
 }

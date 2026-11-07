@@ -2,7 +2,7 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-07T19:02:00.109Z",
+  "generatedAt": "2026-11-07T19:42:11.801Z",
   "topics": [
     {
       "slug": "casamigo",
@@ -12,37 +12,31 @@
       "relevance": "high",
       "coverageKind": "brand",
       "offerKey": "Casamigo",
-      "rationale": "Owns Casamigo name variants and misspellings; homepage and about page establish the brand.",
+      "rationale": "Owns the business name and close misspellings; no place or service need is mixed in.",
       "requireAny": [
-        "casa migo",
-        "casamigo homes",
-        "casamigo residence",
-        "casamigo"
+        "casamigo",
+        "casa migo"
       ],
       "terms": [
+        "casamigo",
         "casa migo",
         "casamigo homes",
         "casamigo residence",
-        "casamigo",
         "casa",
         "migo",
         "homes",
         "residence"
       ],
       "strongTerms": [
-        "casa migo",
-        "casamigo homes",
-        "casamigo residence",
-        "casamigo"
+        "casamigo",
+        "casa migo"
       ],
       "headTerms": [
         "casamigo"
       ],
       "coverageRequireAny": [
-        "casa migo",
-        "casamigo homes",
-        "casamigo residence",
-        "casamigo"
+        "casamigo",
+        "casa migo"
       ],
       "pageTerms": [
         "casa migo",
@@ -56,14 +50,15 @@
       ],
       "preferredPages": [
         "/",
-        "/about-us"
+        "/about-us",
+        "/es"
       ],
       "exclusive": true,
-      "actionHint": "Keep brand snippets consistent and link brand queries to the specialist contact page."
+      "actionHint": "Keep homepage and about page optimized for brand queries and entity consistency."
     },
     {
-      "slug": "riviera-maya-real-estate-market-intelligence-ai-ratings",
-      "name": "Riviera Maya real estate market intelligence & AI ratings",
+      "slug": "riviera-maya-real-estate-market-intelligence-and-ai-ratings",
+      "name": "Riviera Maya real estate market intelligence and AI ratings",
       "kind": "market",
       "intent": "informational",
       "relevance": "high",
@@ -88,28 +83,22 @@
       },
       "need": {
         "terms": [
-          "real estate intelligence",
+          "real estate market",
           "market intelligence",
           "market analysis",
-          "real estate market",
           "ai rating",
-          "ai-powered real estate",
-          "roi",
-          "inversión inmobiliaria",
-          "invertir en bienes raíces"
+          "property analysis",
+          "population"
         ]
       },
-      "rationale": "City reports, weekly briefs and AI ratings answer market and investment-intelligence demand.",
+      "rationale": "Covers market briefs, AI ratings and data-backed analysis; weekly and city brief pages are the natural owners.",
       "requireAny": [
-        "real estate intelligence",
+        "real estate market",
         "market intelligence",
         "market analysis",
-        "real estate market",
         "ai rating",
-        "ai-powered real estate",
-        "roi",
-        "inversión inmobiliaria",
-        "invertir en bienes raíces",
+        "property analysis",
+        "population",
         "riviera maya",
         "playa del carmen",
         "tulum",
@@ -122,313 +111,83 @@
         "cerca de mi"
       ],
       "terms": [
-        "real estate intelligence",
+        "real estate market",
         "market intelligence",
         "market analysis",
-        "real estate market",
         "ai rating",
-        "ai-powered real estate",
-        "roi",
-        "inversión inmobiliaria",
-        "invertir en bienes raíces",
+        "property analysis",
+        "population",
         "real estate",
         "estate market",
         "tulum real",
-        "inversion inmobiliaria",
-        "bienes raices",
         "playa carmen",
-        "real",
-        "estate",
-        "market",
-        "tulum",
-        "inversion",
-        "inmobiliaria",
-        "bienes",
-        "raices"
-      ],
-      "strongTerms": [
-        "real estate intelligence",
-        "market intelligence",
-        "market analysis",
-        "real estate market",
-        "ai rating",
-        "ai-powered real estate",
-        "inversión inmobiliaria",
-        "invertir en bienes raíces",
-        "real estate",
-        "estate market",
-        "tulum real",
-        "inversion inmobiliaria",
-        "bienes raices",
-        "playa carmen"
-      ],
-      "headTerms": [
-        "riviera maya real estate market",
-        "tulum real estate market",
-        "playa del carmen real estate market"
-      ],
-      "coverageRequireAny": [
-        "real estate",
-        "estate market",
-        "tulum real",
-        "bienes raices",
-        "playa carmen",
-        "real",
-        "estate",
-        "market"
-      ],
-      "pageTerms": [
-        "real estate",
-        "estate market",
-        "tulum real",
-        "inversion inmobiliaria",
-        "bienes raices",
-        "playa carmen",
-        "real",
-        "estate",
-        "market",
-        "tulum",
-        "inversion",
-        "inmobiliaria",
-        "bienes",
-        "raices"
-      ],
-      "preferredPages": [
-        "/es/cities/tulum",
-        "/cities/playa-del-carmen",
-        "/weekly-brief"
-      ],
-      "actionHint": "Add ROI and AI-rating summaries to each city brief and weekly update."
-    },
-    {
-      "slug": "riviera-maya-property-listings-lead-generation",
-      "name": "Riviera Maya property listings & lead generation",
-      "kind": "market",
-      "intent": "commercial",
-      "relevance": "high",
-      "coverageKind": "service",
-      "offerKey": "Casamigo",
-      "market": {
-        "scope": "local",
-        "places": [
-          "riviera maya",
-          "playa del carmen",
-          "tulum",
-          "cancún",
-          "puerto morelos",
-          "cozumel",
-          "bacalar"
-        ],
-        "localIntent": [
-          "near me",
-          "cerca de mí",
-          "cerca de mi"
-        ]
-      },
-      "need": {
-        "terms": [
-          "property listings",
-          "real estate listings",
-          "propiedades en venta",
-          "casas",
-          "departamentos",
-          "inmobiliaria",
-          "lead generation"
-        ]
-      },
-      "rationale": "Listings hub and contact page capture property-search and agency lead-generation demand.",
-      "requireAny": [
-        "property listings",
-        "real estate listings",
-        "propiedades en venta",
-        "casas",
-        "departamentos",
-        "inmobiliaria",
-        "lead generation",
-        "riviera maya",
-        "playa del carmen",
-        "tulum",
-        "cancún",
+        "carmen real",
         "puerto morelos",
-        "cozumel",
-        "bacalar",
-        "near me",
-        "cerca de mí",
-        "cerca de mi"
-      ],
-      "terms": [
-        "property listings",
-        "real estate listings",
-        "propiedades en venta",
-        "casas",
-        "departamentos",
-        "inmobiliaria",
-        "lead generation",
-        "mayan riviera",
-        "riviera real",
-        "real estate",
-        "propiedades venta",
-        "venta cerca",
-        "casas cerca",
-        "mayan",
-        "riviera",
         "real",
         "estate",
-        "cerca",
-        "propiedades",
-        "venta"
+        "market",
+        "tulum",
+        "playa",
+        "carmen",
+        "puerto",
+        "morelos"
       ],
       "strongTerms": [
-        "property listings",
-        "real estate listings",
-        "propiedades en venta",
-        "lead generation",
-        "mayan riviera",
-        "riviera real",
+        "real estate market",
+        "market intelligence",
+        "market analysis",
+        "ai rating",
+        "property analysis",
         "real estate",
-        "propiedades venta",
-        "venta cerca",
-        "casas cerca"
+        "estate market",
+        "tulum real",
+        "playa carmen",
+        "carmen real",
+        "puerto morelos"
       ],
       "headTerms": [
-        "riviera maya real estate",
-        "mayan riviera real estate"
+        "market intelligence",
+        "real estate market"
       ],
       "coverageRequireAny": [
-        "mayan riviera",
-        "riviera real",
         "real estate",
-        "propiedades venta",
-        "mayan",
-        "riviera",
+        "estate market",
+        "tulum real",
+        "playa carmen",
+        "carmen real",
+        "puerto morelos",
         "real",
         "estate"
       ],
       "pageTerms": [
-        "mayan riviera",
-        "riviera real",
         "real estate",
-        "propiedades venta",
-        "venta cerca",
-        "casas cerca",
-        "mayan",
-        "riviera",
+        "estate market",
+        "tulum real",
+        "playa carmen",
+        "carmen real",
+        "puerto morelos",
         "real",
         "estate",
-        "cerca",
-        "propiedades",
-        "venta",
-        "casas"
+        "market",
+        "tulum",
+        "playa",
+        "carmen",
+        "puerto",
+        "morelos"
       ],
       "preferredPages": [
-        "/properties",
-        "/about-us"
+        "/weekly-brief",
+        "/cities/tulum",
+        "/cities/playa-del-carmen"
       ],
-      "actionHint": "Strengthen listings filters and add clear lead-capture CTAs on property pages."
+      "actionHint": "Link city briefs and weekly briefs with AI rating explainers and ROI context."
     },
     {
-      "slug": "playa-del-carmen-condos-for-sale",
-      "name": "Playa del Carmen condos for sale",
+      "slug": "tulum-condo-developments",
+      "name": "Tulum condo developments",
       "kind": "market",
-      "intent": "transactional",
+      "intent": "commercial",
       "relevance": "high",
-      "coverageKind": "local",
-      "offerKey": "Casamigo",
-      "market": {
-        "scope": "local",
-        "places": [
-          "playa del carmen"
-        ],
-        "localIntent": [
-          "near me",
-          "cerca de mí",
-          "cerca de mi"
-        ]
-      },
-      "need": {
-        "terms": [
-          "condominios de lujo",
-          "condos",
-          "propiedades en venta"
-        ]
-      },
-      "rationale": "Playa condo collection and listings hub match city-specific condo and for-sale searches.",
-      "requireAny": [
-        "condominios de lujo",
-        "condos",
-        "propiedades en venta",
-        "playa del carmen",
-        "near me",
-        "cerca de mí",
-        "cerca de mi"
-      ],
-      "terms": [
-        "condominios de lujo",
-        "condos",
-        "propiedades en venta",
-        "playa carmen",
-        "propiedades venta",
-        "venta playa",
-        "condominios lujo",
-        "lujo playa",
-        "carmen propiedades",
-        "playa",
-        "carmen",
-        "propiedades",
-        "venta",
-        "condominios",
-        "lujo"
-      ],
-      "strongTerms": [
-        "condominios de lujo",
-        "propiedades en venta",
-        "playa carmen",
-        "propiedades venta",
-        "venta playa",
-        "condominios lujo",
-        "lujo playa",
-        "carmen propiedades"
-      ],
-      "headTerms": [
-        "playa del carmen condos",
-        "condominios playa del carmen"
-      ],
-      "coverageRequireAny": [
-        "playa carmen",
-        "propiedades venta",
-        "venta playa",
-        "condominios lujo",
-        "lujo playa",
-        "carmen propiedades",
-        "playa",
-        "carmen"
-      ],
-      "pageTerms": [
-        "playa carmen",
-        "propiedades venta",
-        "venta playa",
-        "condominios lujo",
-        "lujo playa",
-        "carmen propiedades",
-        "playa",
-        "carmen",
-        "propiedades",
-        "venta",
-        "condominios",
-        "lujo"
-      ],
-      "preferredPages": [
-        "/collections/playa-del-carmen-condos-under-200k",
-        "/properties"
-      ],
-      "actionHint": "Expand the Playa condo collection with price bands and AI ratings."
-    },
-    {
-      "slug": "tulum-condo-projects",
-      "name": "Tulum condo projects",
-      "kind": "market",
-      "intent": "transactional",
-      "relevance": "medium",
       "coverageKind": "product",
       "offerKey": "Casamigo",
       "market": {
@@ -445,13 +204,17 @@
       "need": {
         "terms": [
           "tao",
+          "tao condos",
+          "tao lofts",
           "samsara",
           "los amigos"
         ]
       },
-      "rationale": "Tulum project pages and listings hub answer named-development searches around Tao and peers.",
+      "rationale": "Project-specific Tulum demand clusters around Tao, Samsara and Los Amigos; city and project pages own it.",
       "requireAny": [
         "tao",
+        "tao condos",
+        "tao lofts",
         "samsara",
         "los amigos",
         "tulum",
@@ -461,13 +224,13 @@
       ],
       "terms": [
         "tao",
+        "tao condos",
+        "tao lofts",
         "samsara",
         "los amigos",
         "tao tulum",
         "tulum mexico",
-        "tao condos",
         "condos tulum",
-        "tao lofts",
         "lofts tulum",
         "tulum",
         "mexico",
@@ -477,17 +240,16 @@
         "amigos"
       ],
       "strongTerms": [
+        "tao condos",
+        "tao lofts",
         "los amigos",
         "tao tulum",
         "tulum mexico",
-        "tao condos",
         "condos tulum",
-        "tao lofts",
         "lofts tulum"
       ],
       "headTerms": [
-        "tao tulum",
-        "samsara tulum"
+        "tao tulum"
       ],
       "coverageRequireAny": [
         "tao tulum",
@@ -512,21 +274,22 @@
         "condos",
         "lofts",
         "condo",
-        "samsara",
-        "amigos"
+        "amigos",
+        "samsara"
       ],
       "preferredPages": [
         "/es/property/tao-tulum-tulum",
-        "/properties"
+        "/cities/tulum",
+        "/es/cities/tulum"
       ],
-      "actionHint": "Add comparison tables and investment memos to Tulum project pages."
+      "actionHint": "Strengthen Tao and Tulum project pages with availability, ROI and delivery data."
     },
     {
-      "slug": "playa-del-carmen-condo-projects",
-      "name": "Playa del Carmen condo projects",
+      "slug": "playa-del-carmen-condo-developments",
+      "name": "Playa del Carmen condo developments",
       "kind": "market",
-      "intent": "transactional",
-      "relevance": "medium",
+      "intent": "commercial",
+      "relevance": "high",
       "coverageKind": "product",
       "offerKey": "Casamigo",
       "market": {
@@ -542,176 +305,173 @@
       },
       "need": {
         "terms": [
-          "torre 25",
           "punta playa",
-          "ikuku"
+          "ikuku",
+          "torre 25",
+          "green savage"
         ]
       },
-      "rationale": "Project pages for Torre 25, Punta Playa and Ikuku match named Playa development searches.",
+      "rationale": "Playa project queries cluster around Punta Playa, Ikuku, Torre 25 and Green Savage; city and project pages are the owners.",
       "requireAny": [
-        "torre 25",
         "punta playa",
         "ikuku",
+        "torre 25",
+        "green savage",
         "playa del carmen",
         "near me",
         "cerca de mí",
         "cerca de mi"
       ],
       "terms": [
-        "torre 25",
         "punta playa",
         "ikuku",
+        "torre 25",
+        "green savage",
         "playa condos",
         "ikuku sale",
-        "punta",
+        "savage playa",
+        "playa carmen",
         "playa",
+        "punta",
         "condos",
+        "sale",
         "torre",
-        "sale"
+        "green",
+        "savage"
       ],
       "strongTerms": [
-        "torre 25",
         "punta playa",
+        "torre 25",
+        "green savage",
         "playa condos",
-        "ikuku sale"
+        "ikuku sale",
+        "savage playa",
+        "playa carmen"
       ],
       "headTerms": [
-        "torre 25",
         "punta playa condos"
       ],
       "coverageRequireAny": [
         "punta playa",
         "playa condos",
         "ikuku sale",
-        "punta",
+        "playa carmen",
         "playa",
+        "punta",
         "condos",
-        "torre",
         "ikuku"
       ],
       "pageTerms": [
         "punta playa",
         "playa condos",
         "ikuku sale",
-        "punta",
+        "green savage",
+        "savage playa",
+        "playa carmen",
         "playa",
+        "punta",
         "condos",
-        "torre",
         "ikuku",
-        "sale"
+        "sale",
+        "torre",
+        "green",
+        "savage"
       ],
       "preferredPages": [
-        "/property/torre-25-playa-del-carmen",
-        "/property/punta-playa-playa-del-carmen",
-        "/es/property/ikuku-playa-del-carmen"
+        "/cities/playa-del-carmen",
+        "/es/cities/playa-del-carmen",
+        "/property/punta-playa-playa-del-carmen"
       ],
-      "actionHint": "Interlink project pages with Playa condo collections and ROI data."
+      "actionHint": "Add project comparison and availability modules on Playa project pages."
     },
     {
-      "slug": "riviera-maya-new-development-condos-cozumel-puerto-morelos",
-      "name": "Riviera Maya new development condos (Cozumel & Puerto Morelos)",
+      "slug": "real-estate-lead-generation-and-agency-trust",
+      "name": "Real estate lead generation and agency trust",
       "kind": "market",
-      "intent": "transactional",
+      "intent": "commercial",
       "relevance": "medium",
-      "coverageKind": "product",
+      "coverageKind": "business",
       "offerKey": "Casamigo",
       "market": {
-        "scope": "local",
-        "places": [
-          "cozumel",
-          "puerto morelos"
-        ],
-        "localIntent": [
-          "near me",
-          "cerca de mí",
-          "cerca de mi"
-        ]
+        "scope": "international",
+        "places": [],
+        "localIntent": []
       },
       "need": {
         "terms": [
-          "distrito",
-          "elementos",
-          "musa del puerto",
-          "presale condo"
+          "inmobiliarias confiables",
+          "mejores inmobiliarias",
+          "inmobiliarias fraudulentas",
+          "lead generation",
+          "real estate leads"
         ]
       },
-      "rationale": "Cozumel and Puerto Morelos project pages capture named-development and presale demand.",
+      "rationale": "Covers trust/agency discovery and the lead-generation service; about-us is the closest owner until a service page exists.",
       "requireAny": [
-        "distrito",
-        "elementos",
-        "musa del puerto",
-        "presale condo",
-        "cozumel",
-        "puerto morelos",
-        "near me",
-        "cerca de mí",
-        "cerca de mi"
+        "inmobiliarias confiables",
+        "mejores inmobiliarias",
+        "inmobiliarias fraudulentas",
+        "lead generation",
+        "real estate leads"
       ],
       "terms": [
-        "distrito",
-        "elementos",
-        "musa del puerto",
-        "presale condo",
-        "distrito cozumel",
-        "elementos cozumel",
-        "musa puerto",
-        "condo puerto",
-        "puerto morelos",
-        "cozumel",
-        "puerto",
-        "musa",
-        "presale",
-        "condo",
-        "morelos"
+        "inmobiliarias confiables",
+        "mejores inmobiliarias",
+        "inmobiliarias fraudulentas",
+        "lead generation",
+        "real estate leads",
+        "inmobiliarias profeco",
+        "lista inmobiliarias",
+        "inmobiliarias",
+        "confiables",
+        "mejores",
+        "profeco",
+        "lista",
+        "fraudulentas"
       ],
       "strongTerms": [
-        "musa del puerto",
-        "presale condo",
-        "distrito cozumel",
-        "elementos cozumel",
-        "musa puerto",
-        "condo puerto",
-        "puerto morelos"
+        "inmobiliarias confiables",
+        "mejores inmobiliarias",
+        "inmobiliarias fraudulentas",
+        "lead generation",
+        "real estate leads",
+        "inmobiliarias profeco",
+        "lista inmobiliarias"
       ],
       "headTerms": [
-        "cozumel condos",
-        "puerto morelos pre-construction condos"
+        "lead generation",
+        "inmobiliaria"
       ],
-      "coverageRequireAny": [
-        "distrito cozumel",
-        "elementos cozumel",
-        "musa puerto",
-        "condo puerto",
-        "puerto morelos",
-        "cozumel",
-        "distrito",
-        "puerto"
-      ],
+      "coverageRequireAny": [],
       "pageTerms": [
-        "distrito cozumel",
-        "elementos cozumel",
-        "musa puerto",
-        "presale condo",
-        "condo puerto",
-        "puerto morelos",
-        "cozumel",
-        "distrito",
-        "puerto",
-        "elementos",
-        "musa",
-        "presale",
-        "condo",
-        "morelos"
+        "inmobiliarias confiables",
+        "mejores inmobiliarias",
+        "inmobiliarias profeco",
+        "lista inmobiliarias",
+        "inmobiliarias fraudulentas",
+        "inmobiliarias",
+        "confiables",
+        "mejores",
+        "profeco",
+        "lista",
+        "fraudulentas"
       ],
       "preferredPages": [
-        "/property/distrito-norte-cozumel",
-        "/property/elementos-life-cozumel",
-        "/property/musa-del-puerto-puerto-morelos"
+        "/about-us",
+        "/es/about-us"
       ],
-      "actionHint": "Add presale timelines and Cozumel/Puerto Morelos comparisons."
+      "actionHint": "Add a lead-generation/services page and trust proof to /about-us."
     }
   ],
   "pageTypeRules": [
+    {
+      "type": "category",
+      "pattern": "/properties"
+    },
+    {
+      "type": "category",
+      "pattern": "/es/properties"
+    },
     {
       "type": "product",
       "pattern": "/property/"
@@ -722,35 +482,27 @@
     },
     {
       "type": "category",
-      "pattern": "/properties"
+      "pattern": "/cities/"
     },
     {
       "type": "category",
-      "pattern": "/es/properties"
+      "pattern": "/es/cities/"
     },
     {
       "type": "category",
-      "pattern": "/collections"
+      "pattern": "/collections/"
     },
     {
       "type": "category",
-      "pattern": "/es/collections"
-    },
-    {
-      "type": "service",
-      "pattern": "/cities"
-    },
-    {
-      "type": "service",
-      "pattern": "/es/cities"
+      "pattern": "/es/collections/"
     },
     {
       "type": "blog",
-      "pattern": "/post"
+      "pattern": "/post/"
     },
     {
       "type": "blog",
-      "pattern": "/es/post"
+      "pattern": "/es/post/"
     },
     {
       "type": "blog",
@@ -769,36 +521,32 @@
       "pattern": "/es/pulse"
     },
     {
-      "type": "other",
+      "type": "service",
       "pattern": "/about-us"
     },
     {
-      "type": "other",
+      "type": "service",
       "pattern": "/es/about-us"
-    },
-    {
-      "type": "home",
-      "pattern": "/"
     }
   ],
   "excludePaths": [
     "/login",
     "/sign-up",
     "/privacy-notice",
-    "/terms-and-conditions-of-use",
-    "/transparency-cookie-policy",
     "/es/privacy-notice",
+    "/terms-and-conditions-of-use",
     "/es/terms-and-conditions-of-use",
+    "/transparency-cookie-policy",
     "/es/transparency-cookie-policy",
     "/property/proptest-es-xyzabc"
   ],
   "newsQueries": [
-    "Riviera Maya real estate market 2026",
+    "Riviera Maya real estate market news 2026",
     "Tulum condo oversupply 2026",
-    "Playa del Carmen construction permits 2026",
-    "Mexico foreign buyer property rules 2026",
-    "Quintana Roo real estate regulation 2026",
-    "Cancun airport expansion 2026 real estate"
+    "Playa del Carmen property prices 2026",
+    "Mexico foreign buyer real estate regulations 2026",
+    "Quintana Roo real estate development regulations 2026",
+    "Cancun real estate investment news 2026"
   ],
-  "summary": "Bilingual EN/ES Riviera Maya real estate intelligence and listings site for US, Canada and Latin America buyers; topics separate market intelligence, listings/lead gen, city condos and named developments. 2 topic corrections: Riviera Maya real estate market intelligence & AI ratings: need terms not measured in this query set (real estate intelligence, market intelligence, market analysis, ai rating, ai-powered real estate, roi); Riviera Maya property listings & lead generation: need terms not measured in this query set (property listings, real estate listings, lead generation). Re-proposed once after 6 topics left unowned market demand."
+  "summary": "Taxonomy for Casamigo covers brand, Riviera Maya market intelligence/AI ratings, broad property listings, Tulum and Playa project clusters, and international lead generation/agency trust; Spanish and English queries are included. 2 topic corrections: Riviera Maya real estate market intelligence and AI ratings: need terms not measured in this query set (market intelligence, market analysis, ai rating, property analysis); Real estate lead generation and agency trust: need terms not measured in this query set (lead generation, real estate leads). Re-proposed once after 3 topics left unowned market demand."
 }

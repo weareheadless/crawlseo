@@ -1,6 +1,6 @@
 # Topic map — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-07T19:21:39.148Z. Locale fr/FR.
+Generated 2026-11-07T19:39:14.360Z. Locale fr/FR.
 
 ## Business
 
@@ -13,18 +13,18 @@ Generated 2026-11-07T19:21:39.148Z. Locale fr/FR.
 ## Tenant model
 
 - Topics: 12
-  - `atelier-de-l-harmonie-marque` — Atelier de l'harmonie (marque) (mixed, brand, high); 9 matching terms; head terms `atelier de l'harmonie`, `atelier harmonie`
-  - `restauration-d-abat-jour-en-normandie` — Restauration d'abat-jour en Normandie (mixed, service, high); 19 matching terms
-  - `creation-d-abat-jours-artisanaux` — Création d'abat-jours artisanaux (commercial, product, high); 12 matching terms; head term `abat-jour artisanal`
-  - `abat-jour-pagode` — Abat-jour pagode (commercial, product, medium); 15 matching terms; head term `abat-jour pagode`
-  - `lampes-et-luminaires-artisanaux` — Lampes et luminaires artisanaux (commercial, product, high); 18 matching terms; head terms `luminaire artisanal`, `lampe artisanale`
-  - `suspensions-plafonniers-et-lustres-artisanaux` — Suspensions, plafonniers et lustres artisanaux (commercial, product, medium); 15 matching terms; head term `suspension artisanale`
-  - `restauration-de-sieges-et-fauteuils-en-normandie` — Restauration de sièges et fauteuils en Normandie (local, service, high); 19 matching terms; head terms `restauration de fauteuil`, `tapissier`
-  - `tapisserie-traditionnelle-savoir-faire` — Tapisserie traditionnelle (savoir-faire) (informational, content, medium); 8 matching terms; head term `tapisserie traditionnelle`
-  - `kits-diy-de-lampe` — Kits DIY de lampe (transactional, product, high); 17 matching terms; head term `kit lampe`
-  - `ateliers-diy-tapisserie-et-abat-jour-en-normandie` — Ateliers DIY tapisserie et abat-jour en Normandie (local, service, medium); 17 matching terms
-  - `objets-deco-et-coussins-artisanaux` — Objets déco et coussins artisanaux (commercial, product, medium); 14 matching terms; head term `coussin artisanal`
-  - `cartes-cadeaux-artisanat-et-decoration` — Cartes cadeaux artisanat et décoration (transactional, product, medium); 16 matching terms; head term `carte cadeau artisanat`
+  - `atelier-de-l-harmonie-marque` — Atelier de l'harmonie (marque) (mixed, brand, high); 11 matching terms; head term `atelier harmonie`
+  - `restauration-de-sieges-fauteuils-et-tapisserie-traditionnell` — Restauration de sièges, fauteuils et tapisserie traditionnelle (mixed, service, high); 20 matching terms; head terms `restauration fauteuil`, `tapisserie traditionnelle`, `tapissier`
+  - `restauration-d-abat-jour` — Restauration d'abat-jour (mixed, content, high); 21 matching terms; head terms `réparation abat-jour`, `restauration abat-jour`
+  - `creation-d-abat-jours-artisanaux` — Création d'abat-jours artisanaux (commercial, product, high); 20 matching terms; head terms `abat-jour artisanal`, `abat-jour sur mesure`, `abat-jour pagode`
+  - `creation-de-lampes-et-luminaires-artisanaux` — Création de lampes et luminaires artisanaux (commercial, product, high); 18 matching terms; head terms `luminaire artisanal`, `lampe artisanale`, `lampes artisanales`
+  - `suspensions-et-plafonniers-artisanaux` — Suspensions et plafonniers artisanaux (commercial, product, medium); 16 matching terms; head terms `suspension artisanale`, `plafonnier artisanal`
+  - `kits-diy-et-ateliers-creatifs` — Kits DIY et ateliers créatifs (mixed, service, high); 19 matching terms; head terms `kit lampe`, `atelier tapisserie`
+  - `vente-de-creations-artisanales-et-objets-deco` — Vente de créations artisanales et objets déco (commercial, product, medium); 14 matching terms; head terms `coussin artisanal`, `objet déco artisanal`
+  - `cartes-cadeaux-artisanat` — Cartes cadeaux artisanat (transactional, product, medium); 16 matching terms; head term `carte cadeau artisanat`
+  - `tissus-et-matieres-d-ameublement` — Tissus et matières d'ameublement (commercial, product, medium); 12 matching terms; head term `tissu d'ameublement`
+  - `projets-professionnels-et-devis-sur-mesure` — Projets professionnels et devis sur mesure (commercial, service, medium); 20 matching terms; head terms `projet professionnel`, `devis sur mesure`
+  - `blog-et-inspiration-artisanat` — Blog et inspiration artisanat (informational, content, low); 12 matching terms; head term `blog artisanat`
 
 ## Method
 
@@ -32,47 +32,59 @@ Deterministic taxonomy over stored Search Console queries, DataForSEO keyword me
 
 A query can belong to more than one topic (a local service query, or a content query that names the craft). Demand totals are per-topic and are not additive across topics.
 
-AI review: not available. The deterministic map is shown as-is.
+AI review: deepseek/deepseek-v4.1-flash-1017.
+
+Eight clusters. Creation carries the demand: abat-jours artisanaux (1050, mostly 'abat jour pagode'), lampes artisanales (320), suspensions (242 impressions, 0 demand). Local sièges/tapisserie ranks #1 on only 23 impressions; restauration d'abat-jour has no measured queries. Brand cluster ranks top-5. Gift cards and ventes créations are negligible. Brand and gift-card taxonomies need a need word.
+
+Prioritise abat-jours artisanaux (1050 demand; /lampes/abat-jours is 150 words — deepen it, cover pagode/bauhaus/sur mesure). Then lampes artisanales: 344 impressions on 'luminaire artisanal' at 56, no page uses 'artisanal'. Third, local sièges/tapisserie: position 1 on 'autour de moi' but tiny volume — add Normandie service pages. Brand = defence only. Weak: suspensions (test plafonnier/lustre artisanal), gift cards (test email/printable), ventes créations (test coussin fait main), restauration d'abat-jour (no demand; test a repair guide).
+
+Priority topics: creation-d-abat-jours-artisanaux, creation-de-lampes-et-luminaires-artisanaux, restauration-de-sieges-fauteuils-et-tapisserie-traditionnell.
+Weak topics: suspensions-et-plafonniers-artisanaux, cartes-cadeaux-artisanat, vente-de-creations-artisanales-et-objets-deco, restauration-d-abat-jour.
+Out-of-market queries excluded from demand and evidence: 2.
 
 ## Topic table
 
 | Topic | Intent | Relevance | Market scope | Queries | Impressions | Distinct demand | Summed volume | Context-only | Coverage | Visibility | Main page | Main gap |
 |---|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|
-| Lampes et luminaires artisanaux | commercial | high | international (France, Europe, International) | 8 | 585 | 350 | 350 | — | strong | proven | /lampes | Queries mention “artisanal” (3 queries, 438 impressions) but no matched page does. |
-| Kits DIY de lampe | transactional | high | local (Normandie) | 4 | 203 | 110 | 110 | — | none | proven | — | No page covers this topic. |
+| Création de lampes et luminaires artisanaux | commercial | high | international (France, Europe, International) | 12 | 642 | 320 | 320 | — | strong | proven | /lampes | Queries mention “artisanal” (3 queries, 438 impressions) but no matched page does. |
 | Atelier de l'harmonie (marque) | mixed | high | international (France, International) | 3 | 187 | 40 | 40 | — | strong | proven | / | Queries mention “harmony” (1 query, 27 impressions) but no matched page does. |
-| Restauration de sièges et fauteuils en Normandie | local | high | local (Normandie, Saint-Pierre-en-Port) | 3 | 23 | 0 | 0 | — | strong | proven | /tapisserie-restauration | Queries mention “artisan” (1 query, 10 impressions) but no matched page does. |
-| Création d'abat-jours artisanaux | commercial | high | international (France, Europe, International) | 3 | 1 | 590 | 1180 | — | partial | proven | /lampes/abat-jours | Coverage exists but is not strong enough to own the topic. |
-| Restauration d'abat-jour en Normandie | mixed | high | local (Normandie) | 0 | 0 | 0 | 0 | — | none | unproven | — | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Suspensions, plafonniers et lustres artisanaux | commercial | medium | international (France, Europe, International) | 3 | 242 | 0 | 0 | — | partial | proven | /lampes/suspensions | Coverage exists but is not strong enough to own the topic. |
-| Abat-jour pagode | commercial | medium | international (France, Europe, International) | 8 | 143 | 460 | 460 | — | strong | proven | /product-page/abat-jour-pagode-vermillon | Queries mention “moderne” (1 query, 13 impressions) but no matched page does. |
-| Cartes cadeaux artisanat et décoration | transactional | medium | international (France, International) | 5 | 52 | 0 | 0 | — | strong | proven | /gift-card | Queries mention “mans” (1 query, 16 impressions) but no matched page does. |
-| Objets déco et coussins artisanaux | commercial | medium | international (France, Europe, International) | 2 | 9 | 0 | 0 | — | strong | proven | /objets-deco | — |
-| Tapisserie traditionnelle (savoir-faire) | informational | medium | international (France, International) | 0 | 0 | 0 | 0 | — | strong | unproven | /post/la-tapisserie-traditionnelle-qu-est-ce-que-c-est | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
-| Ateliers DIY tapisserie et abat-jour en Normandie | local | medium | local (Normandie) | 0 | 0 | 0 | 0 | — | strong | unproven | /les-ateliers | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Création d'abat-jours artisanaux | commercial | high | international (France, Europe, International) | 9 | 129 | 1050 | 1640 | — | partial | proven | /lampes/abat-jours | Coverage exists but is not strong enough to own the topic. |
+| Restauration de sièges, fauteuils et tapisserie traditionnelle | mixed | high | local (Normandie, Saint-Pierre-en-Port) | 3 | 23 | 0 | 0 | — | strong | proven | /tapisserie-restauration | Queries mention “artisan” (1 query, 10 impressions) but no matched page does. |
+| Restauration d'abat-jour | mixed | high | local (Normandie) | 0 | 0 | 0 | 0 | — | strong | unproven | /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Kits DIY et ateliers créatifs | mixed | high | local (Normandie) | 0 | 0 | 0 | 0 | — | strong | unproven | /les-ateliers | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Suspensions et plafonniers artisanaux | commercial | medium | international (France, Europe, International) | 3 | 242 | 0 | 0 | — | partial | proven | /lampes/suspensions | Coverage exists but is not strong enough to own the topic. |
+| Cartes cadeaux artisanat | transactional | medium | international (France, International) | 3 | 30 | 0 | 0 | — | strong | proven | /gift-card | Queries mention “mans” (1 query, 16 impressions) but no matched page does. |
+| Vente de créations artisanales et objets déco | commercial | medium | international (France, Europe, International) | 1 | 2 | 0 | 0 | — | strong | proven | /objets-deco | — |
+| Tissus et matières d'ameublement | commercial | medium | national (France) | 0 | 0 | 0 | 0 | — | partial | unproven | /les-tissus | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Projets professionnels et devis sur mesure | commercial | medium | national (France) | 0 | 0 | 0 | 0 | — | strong | unproven | /b2b | No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority. |
+| Blog et inspiration artisanat | informational | low | international (France, International) | 3 | 10 | 0 | 0 | — | strong | proven | /blog | Low commercial relevance; treat as supporting content rather than a revenue topic. |
 
 ## Clusters
 
-### Lampes et luminaires artisanaux
+### Création de lampes et luminaires artisanaux
 
-- Slug: `lampes-et-luminaires-artisanaux`
+- Slug: `creation-de-lampes-et-luminaires-artisanaux`
 - Intent: commercial; relevance: high; confidence: 1.00
 - Market scope: international (France, Europe, International)
-- Rationale: Cœur de l'offre luminaires : lampes artisanales, fait main, créateur. La catégorie /lampes est la page mère.
-- Demand: 8 queries, 585 impressions, 0 clicks, 350 distinct monthly demand (350 summed across keyword variants); average position 47.1.
+- Rationale: Offre de lampes et luminaires artisanaux; catégorie luminaires et fiches produits à poser.
+- Demand: 12 queries, 642 impressions, 0 clicks, 320 distinct monthly demand (320 summed across keyword variants); average position 45.3.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Renforcer /lampes avec 'luminaire artisanal' et 'fait main', puis mailler vers les sous-catégories.
+- AEO: 1 measured questions, 0 citations of the site.
+- Action hint: Consolider la catégorie luminaires avec collections, matériaux et sur-mesure.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
 | luminaire artisanal | 344 | 0 | 56.2 | — | — |
 | lampe artisanale | 103 | 0 | 28.5 | 320 | 0 |
 | luminaire artisanal création | 81 | 0 | 29.4 | — | — |
-| luminaire fait main | 26 | 0 | 42.7 | 30 | 55 |
+| lampes artisanales | 53 | 0 | 19.0 | — | — |
+| artisan créateur de luminaire | 14 | 0 | 62.8 | — | — |
 | lampe fait main | 13 | 0 | 32.3 | — | — |
 | luminaire artisanal français | 13 | 0 | 80.5 | — | — |
+| création luminaires | 11 | 0 | 49.6 | — | — |
 | luminaire sur mesure | 4 | 0 | 65.0 | — | — |
+| artisan créateur de luminaires | 3 | 0 | 60.0 | — | — |
+| création luminaire | 2 | 0 | 40.0 | — | — |
 | devis fabrication luminaire sur mesure | 1 | 0 | 32.0 | — | — |
 
 Owner page:
@@ -84,45 +96,20 @@ Owner page:
 Gaps:
 
 - Queries mention “artisanal” (3 queries, 438 impressions) but no matched page does.
-- Queries mention “fait” (2 queries, 39 impressions) but no matched page does.
-- Queries mention “main” (2 queries, 39 impressions) but no matched page does.
-- Queries mention “francais” (1 query, 13 impressions) but no matched page does.
-
-### Kits DIY de lampe
-
-- Slug: `kits-diy-de-lampe`
-- Intent: transactional; relevance: high; confidence: 0.97
-- Market scope: local (Normandie)
-- Rationale: Demande produit de kits de fabrication de lampe, sans ancrage géographique : portée France et international.
-- Demand: 4 queries, 203 impressions, 3 clicks, 110 distinct monthly demand (110 summed across keyword variants); average position 5.3.
-- Coverage: none (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Détailler contenu du kit, niveaux de difficulté, outillage et livraison sur la page produit.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| kit lampe | 158 | 0 | 5.3 | 110 | 0 |
-| kit lampe à poser | 26 | 3 | 5.3 | — | — |
-| kit lampe diy | 18 | 0 | 5.1 | — | — |
-| kit lampe à faire soi-même | 1 | 0 | 15.0 | — | — |
-
-No owner page: the taxonomy names none, so the topic has no coverage until it does.
-
-Gaps:
-
-- No page covers this topic.
-- Queries mention “poser” (1 query, 26 impressions) but no matched page does.
+- Queries mention “artisan” (2 queries, 17 impressions) but no matched page does.
+- Queries mention “createur” (2 queries, 17 impressions) but no matched page does.
+- Queries mention “luminaires” (2 queries, 14 impressions) but no matched page does.
 
 ### Atelier de l'harmonie (marque)
 
 - Slug: `atelier-de-l-harmonie-marque`
 - Intent: mixed; relevance: high; confidence: 1.00
 - Market scope: international (France, International)
-- Rationale: Nom exact de l'atelier et variantes orthographiques (harmony, harmonia). Accueil et page à propos couvrent déjà la requête de marque.
+- Rationale: Nom et variantes de la marque; page d'accueil et à-propos à consolider.
 - Demand: 3 queries, 187 impressions, 15 clicks, 40 distinct monthly demand (40 summed across keyword variants); average position 5.0.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Uniformiser le nom 'Atelier de l'harmonie' dans les titles, le schema LocalBusiness et les réseaux.
+- Action hint: Créer/optimiser une page marque et gérer les variantes orthographiques.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -140,16 +127,52 @@ Gaps:
 
 - Queries mention “harmony” (1 query, 27 impressions) but no matched page does.
 
-### Restauration de sièges et fauteuils en Normandie
+### Création d'abat-jours artisanaux
 
-- Slug: `restauration-de-sieges-et-fauteuils-en-normandie`
-- Intent: local; relevance: high; confidence: 0.85
+- Slug: `creation-d-abat-jours-artisanaux`
+- Intent: commercial; relevance: high; confidence: 1.00
+- Market scope: international (France, Europe, International)
+- Rationale: Créations d'abat-jours et modèles pagode/tambour; catégorie et fiches produits portent l'offre.
+- Demand: 9 queries, 129 impressions, 0 clicks, 1050 distinct monthly demand (1640 summed across keyword variants); average position 15.5.
+- Coverage: partial (a page matches the terms); visibility: proven (the site earns impressions).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Étoffer la catégorie abat-jours et les pages pagode/tambour avec guides de style.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| abat jour pagode | 98 | 0 | 14.7 | 390 | 0 |
+| abat-jour pagode moderne | 13 | 0 | 10.7 | — | — |
+| abat-jour pagode rectangulaire | 8 | 0 | 30.0 | 70 | 0 |
+| abat jour bauhaus | 4 | 0 | 1.0 | — | — |
+| abat-jour pagode | 3 | 0 | 9.0 | — | — |
+| abat jour pagode rectangulaire | 2 | 0 | 50.0 | — | — |
+| abat jour pagode leroy merlin | 1 | 0 | 39.0 | — | — |
+| abat jour sur mesure | 0 | 0 | — | 590 | 0 |
+| abat-jour sur mesure | 0 | 0 | — | 590 | 0 |
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /lampes/abat-jours | category | 150 |
+
+Gaps:
+
+- Coverage exists but is not strong enough to own the topic.
+- Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words.
+- Queries mention “moderne” (1 query, 13 impressions) but no matched page does.
+- Queries mention “rectangulaire” (2 queries, 10 impressions) but no matched page does.
+
+### Restauration de sièges, fauteuils et tapisserie traditionnelle
+
+- Slug: `restauration-de-sieges-fauteuils-et-tapisserie-traditionnell`
+- Intent: mixed; relevance: high; confidence: 0.85
 - Market scope: local (Normandie, Saint-Pierre-en-Port)
-- Rationale: Restauration de sièges et fauteuils avec intention locale explicite ('autour de moi'); page service et catégorie sièges existantes.
+- Rationale: Cœur de métier tapissier; page service et catégorie sièges couvrent restauration et tapisserie traditionnelle.
 - Demand: 3 queries, 23 impressions, 8 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 1.0.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Ajouter une page zone Normandie, des avis clients locaux et un avant/après sur /tapisserie-restauration.
+- Action hint: Renforcer la page service avec tarifs, réalisations et FAQ restauration.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -167,61 +190,58 @@ Gaps:
 
 - Queries mention “artisan” (1 query, 10 impressions) but no matched page does.
 
-### Création d'abat-jours artisanaux
+### Restauration d'abat-jour
 
-- Slug: `creation-d-abat-jours-artisanaux`
-- Intent: commercial; relevance: high; confidence: 1.00
-- Market scope: international (France, Europe, International)
-- Rationale: Cœur de l'offre abat-jouriste : sur mesure, tissu, fait main. La catégorie /lampes/abat-jours porte déjà l'offre.
-- Demand: 3 queries, 1 impressions, 0 clicks, 590 distinct monthly demand (1180 summed across keyword variants); average position 34.0.
-- Coverage: partial (a page matches the terms); visibility: proven (the site earns impressions).
+- Slug: `restauration-d-abat-jour`
+- Intent: mixed; relevance: high; confidence: 0.50
+- Market scope: local (Normandie)
+- Rationale: Demande forte de réparation/restauration; seul un article de blog couvre le sujet, pas de page service dédiée.
+- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Enrichir /lampes/abat-jours : sur mesure, choix des tissus, délais, photos d'atelier.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| rénover un abat jour en tissu | 1 | 0 | 34.0 | — | — |
-| abat jour sur mesure | 0 | 0 | — | 590 | 0 |
-| abat-jour sur mesure | 0 | 0 | — | 590 | 0 |
+- Action hint: Créer une page service restauration d'abat-jour avec avant/après et devis.
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
-| /lampes/abat-jours | category | 150 |
-
-Gaps:
-
-- Coverage exists but is not strong enough to own the topic.
-- Thin coverage: https://www.atelier-harmonie.com/lampes/abat-jours has 150 words.
-
-### Restauration d'abat-jour en Normandie
-
-- Slug: `restauration-d-abat-jour-en-normandie`
-- Intent: mixed; relevance: high; confidence: 0.35
-- Market scope: local (Normandie)
-- Rationale: Demande forte de réparation et rénovation d'abat-jour; aucune page service dédiée, seul un article de blog traite le sujet.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
-- Coverage: none (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Créer une page service 'Restauration d'abat-jour' avec avant/après, tarifs et formulaire de devis.
-
-No owner page: the taxonomy names none, so the topic has no coverage until it does.
+| /post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 | blog | 854 |
 
 Gaps:
 
 - No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
 
-### Suspensions, plafonniers et lustres artisanaux
+### Kits DIY et ateliers créatifs
 
-- Slug: `suspensions-plafonniers-et-lustres-artisanaux`
+- Slug: `kits-diy-et-ateliers-creatifs`
+- Intent: mixed; relevance: high; confidence: 0.50
+- Market scope: local (Normandie)
+- Rationale: Kits et ateliers en petit comité; pages kits et ateliers couvrent les deux intentions.
+- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Relier kits et ateliers, préciser niveaux, lieux et réservation.
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /les-ateliers | service | 721 |
+
+Gaps:
+
+- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
+
+### Suspensions et plafonniers artisanaux
+
+- Slug: `suspensions-et-plafonniers-artisanaux`
 - Intent: commercial; relevance: medium; confidence: 1.00
 - Market scope: international (France, Europe, International)
-- Rationale: Demande plafonniers, lustres et suspensions distincte des lampes à poser; page /lampes/suspensions existante.
+- Rationale: Sous-catégorie suspensions/plafonniers; page suspensions et fiches pagode.
 - Demand: 3 queries, 242 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 50.9.
 - Coverage: partial (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Ajouter sur /lampes/suspensions un bloc plafonnier et lustre et des visuels de mise en situation.
+- Action hint: Créer une page catégorie suspensions avec filtres plafonnier/lustre.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
@@ -242,82 +262,53 @@ Gaps:
 - Queries mention “plafonnier” (1 query, 151 impressions) but no matched page does.
 - Queries mention “lustre” (1 query, 85 impressions) but no matched page does.
 
-### Abat-jour pagode
+### Cartes cadeaux artisanat
 
-- Slug: `abat-jour-pagode`
-- Intent: commercial; relevance: medium; confidence: 1.00
-- Market scope: international (France, Europe, International)
-- Rationale: Requêtes pagode nettement séparées (forme, style, matière); la page produit pagode vermillon est la plus proche du besoin.
-- Demand: 8 queries, 143 impressions, 0 clicks, 460 distinct monthly demand (460 summed across keyword variants); average position 15.8.
-- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Créer une page collection pagode regroupant tailles, coloris et suspensions assorties.
-
-| Query | Impressions | Clicks | Position | Volume | Difficulty |
-|---|---:|---:|---:|---:|---:|
-| abat jour pagode | 98 | 0 | 14.7 | 390 | 0 |
-| abat-jour pagode moderne | 13 | 0 | 10.7 | — | — |
-| abats jour pagode | 13 | 0 | 16.3 | — | — |
-| abat-jour pagode rectangulaire | 8 | 0 | 30.0 | 70 | 0 |
-| abat jour chinois pagode | 5 | 0 | 12.1 | — | — |
-| abat-jour pagode | 3 | 0 | 9.0 | — | — |
-| abat jour pagode rectangulaire | 2 | 0 | 50.0 | — | — |
-| abat jour pagode leroy merlin | 1 | 0 | 39.0 | — | — |
-
-Owner page:
-
-| Page | Type | Words |
-|---|---|---:|
-| /product-page/abat-jour-pagode-vermillon | product | 555 |
-
-Gaps:
-
-- Queries mention “moderne” (1 query, 13 impressions) but no matched page does.
-- Queries mention “rectangulaire” (2 queries, 10 impressions) but no matched page does.
-
-### Cartes cadeaux artisanat et décoration
-
-- Slug: `cartes-cadeaux-artisanat-et-decoration`
+- Slug: `cartes-cadeaux-artisanat`
 - Intent: transactional; relevance: medium; confidence: 0.93
 - Market scope: international (France, International)
-- Rationale: Intention transactionnelle sur les cartes cadeaux artisanat et décoration; page /gift-card existante mais peu détaillée.
-- Demand: 5 queries, 52 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 20.9.
+- Rationale: Carte cadeau pour créations et ateliers; page dédiée à renforcer.
+- Demand: 3 queries, 30 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 17.5.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Préciser validité, montants, envoi par email et impression sur /gift-card.
+- Action hint: Ajouter visuels, montants et livraison email/impression sur la page carte cadeau.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| carte cadeau décoration le mans | 16 | 0 | 26.7 | — | — |
 | carte cadeau artisanat | 13 | 0 | 13.5 | — | — |
 | carte cadeau artisanat par email | 9 | 0 | 12.8 | — | — |
 | carte cadeau artisanat à imprimer | 8 | 0 | 29.5 | — | — |
-| carte cadeau décoration sarthe | 6 | 0 | 22.4 | — | — |
+
+Out-of-market queries (excluded from demand and evidence):
+
+| Query | Impressions | Reason |
+|---|---:|---|
+| carte cadeau décoration le mans | 16 | Le Mans is in Sarthe, outside the Normandie service area. |
+| carte cadeau décoration sarthe | 6 | Sarthe sits outside the Normandie service area. |
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
-| /gift-card | other | 334 |
+| /gift-card | product | 334 |
 
 Gaps:
 
 - Queries mention “mans” (1 query, 16 impressions) but no matched page does.
 
-### Objets déco et coussins artisanaux
+### Vente de créations artisanales et objets déco
 
-- Slug: `objets-deco-et-coussins-artisanaux`
-- Intent: commercial; relevance: medium; confidence: 0.75
+- Slug: `vente-de-creations-artisanales-et-objets-deco`
+- Intent: commercial; relevance: medium; confidence: 0.62
 - Market scope: international (France, Europe, International)
-- Rationale: Coussins et objets déco artisanaux : demande modérée mais page /objets-deco existante à valoriser.
-- Demand: 2 queries, 9 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 14.4.
+- Rationale: Vente de coussins et objets déco artisanaux; pages objets déco et boutique.
+- Demand: 1 queries, 2 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 54.0.
 - Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Étoffer /objets-deco (matières, dimensions, entretien) et relier chaque pièce à la boutique.
+- Action hint: Développer la catégorie objets déco et relier aux créations luminaires.
 
 | Query | Impressions | Clicks | Position | Volume | Difficulty |
 |---|---:|---:|---:|---:|---:|
-| coussin créateur | 7 | 0 | 3.1 | — | — |
 | coussin fait main | 2 | 0 | 54.0 | — | — |
 
 Owner page:
@@ -326,52 +317,80 @@ Owner page:
 |---|---|---:|
 | /objets-deco | category | 299 |
 
-### Tapisserie traditionnelle (savoir-faire)
+### Tissus et matières d'ameublement
 
-- Slug: `tapisserie-traditionnelle-savoir-faire`
-- Intent: informational; relevance: medium; confidence: 0.50
+- Slug: `tissus-et-matieres-d-ameublement`
+- Intent: commercial; relevance: medium; confidence: 0.40
+- Market scope: national (France)
+- Rationale: Sélection de tissus pour tapisserie et abat-jours; page tissus encore mince.
+- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Coverage: partial (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Enrichir la page tissus avec familles, échantillons et conseils d'usage.
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /les-tissus | category | 146 |
+
+Gaps:
+
+- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
+
+### Projets professionnels et devis sur mesure
+
+- Slug: `projets-professionnels-et-devis-sur-mesure`
+- Intent: commercial; relevance: medium; confidence: 0.50
+- Market scope: national (France)
+- Rationale: Offre B2B hôtels, décorateurs et architectes; page projets pro à étoffer.
+- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
+- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- AEO: 0 measured questions, 0 citations of the site.
+- Action hint: Ajouter références, process de devis et livrables sur la page B2B.
+
+Owner page:
+
+| Page | Type | Words |
+|---|---|---:|
+| /b2b | service | 582 |
+
+Gaps:
+
+- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
+
+### Blog et inspiration artisanat
+
+- Slug: `blog-et-inspiration-artisanat`
+- Intent: informational; relevance: low; confidence: 0.76
 - Market scope: international (France, International)
-- Rationale: Savoir-faire traité en contenu; seul l'article de blog existe, sans page pilier ni maillage vers les services.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
+- Rationale: Contenus éditoriaux sur l'artisanat; blog existant à structurer par thèmes.
+- Demand: 3 queries, 10 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position 22.1.
+- Coverage: strong (a page matches the terms); visibility: proven (the site earns impressions).
 - AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Transformer l'article en guide pilier (garnissage, sanglage, CRIN) avec liens vers la restauration de sièges.
+- Action hint: Organiser le blog par guides pratiques et inspirations, mailler vers les services.
+
+| Query | Impressions | Clicks | Position | Volume | Difficulty |
+|---|---:|---:|---:|---:|---:|
+| blog artisanat | 4 | 0 | 11.0 | — | — |
+| blog artisan | 3 | 0 | 29.0 | — | — |
+| inspiration atelier | 3 | 0 | 30.0 | — | — |
 
 Owner page:
 
 | Page | Type | Words |
 |---|---|---:|
-| /post/la-tapisserie-traditionnelle-qu-est-ce-que-c-est | blog | 945 |
+| /blog | blog | 583 |
 
 Gaps:
 
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
-
-### Ateliers DIY tapisserie et abat-jour en Normandie
-
-- Slug: `ateliers-diy-tapisserie-et-abat-jour-en-normandie`
-- Intent: local; relevance: medium; confidence: 0.50
-- Market scope: local (Normandie)
-- Rationale: Ateliers en petit comité en Normandie; peu de volume mais intention locale claire et page /les-ateliers existante.
-- Demand: 0 queries, 0 impressions, 0 clicks, 0 distinct monthly demand (0 summed across keyword variants); average position unknown.
-- Coverage: strong (a page matches the terms); visibility: unproven (the site earns no impressions yet).
-- AEO: 0 measured questions, 0 citations of the site.
-- Action hint: Publier dates, tarifs, lieux et baliser chaque session en schema Event avec inscription.
-
-Owner page:
-
-| Page | Type | Words |
-|---|---|---:|
-| /les-ateliers | service | 721 |
-
-Gaps:
-
-- No measured query demand in the current Search Console window; keep as a business-knowledge topic, not an SEO priority.
+- Low commercial relevance; treat as supporting content rather than a revenue topic.
 
 ## Unmapped demand
 
 | Query | Impressions | Volume | Why it is unmapped |
 |---|---:|---:|---|
+| kit lampe | 158 | 110 | No taxonomy topic matched “kit lampe”; review for a missing topic or an off-business query. |
 | lampes artisanales originales | 140 | — | No taxonomy topic matched “lampes artisanales originales”; review for a missing topic or an off-business query. |
 | réparation abat jour | 94 | — | No taxonomy topic matched “réparation abat jour”; review for a missing topic or an off-business query. |
 | luminaires artisanaux | 69 | — | No taxonomy topic matched “luminaires artisanaux”; review for a missing topic or an off-business query. |
@@ -380,7 +399,6 @@ Gaps:
 | lampe à poser artisanale | 55 | — | No taxonomy topic matched “lampe à poser artisanale”; review for a missing topic or an off-business query. |
 | blogging artisanat | 55 | — | No taxonomy topic matched “blogging artisanat”; review for a missing topic or an off-business query. |
 | kit fabrication luminaire | 54 | 30 | No taxonomy topic matched “kit fabrication luminaire”; review for a missing topic or an off-business query. |
-| lampes artisanales | 53 | — | No taxonomy topic matched “lampes artisanales”; review for a missing topic or an off-business query. |
 | comment réparer un abat jour | 47 | 30 | No taxonomy topic matched “comment réparer un abat jour”; review for a missing topic or an off-business query. |
 | renover un abat jour | 46 | — | No taxonomy topic matched “renover un abat jour”; review for a missing topic or an off-business query. |
 | lampe coquelicot | 42 | 50 | No taxonomy topic matched “lampe coquelicot”; review for a missing topic or an off-business query. |
@@ -391,12 +409,12 @@ Gaps:
 | fauteuil à tapisser | 27 | 1000 | No taxonomy topic matched “fauteuil à tapisser”; review for a missing topic or an off-business query. |
 | renover abat jour | 27 | 90 | No taxonomy topic matched “renover abat jour”; review for a missing topic or an off-business query. |
 | restauration abat jour | 27 | 30 | No taxonomy topic matched “restauration abat jour”; review for a missing topic or an off-business query. |
+| luminaire fait main | 26 | 30 | No taxonomy topic matched “luminaire fait main”; review for a missing topic or an off-business query. |
+| kit lampe à poser | 26 | — | No taxonomy topic matched “kit lampe à poser”; review for a missing topic or an off-business query. |
 | reparer abat jour | 24 | — | No taxonomy topic matched “reparer abat jour”; review for a missing topic or an off-business query. |
 | lampes originales | 22 | — | No taxonomy topic matched “lampes originales”; review for a missing topic or an off-business query. |
 | coussins artisanaux | 22 | — | No taxonomy topic matched “coussins artisanaux”; review for a missing topic or an off-business query. |
 | éclairage artisanal | 21 | — | No taxonomy topic matched “éclairage artisanal”; review for a missing topic or an off-business query. |
-| harmonie boutique | 20 | — | No taxonomy topic matched “harmonie boutique”; review for a missing topic or an off-business query. |
-| abat jour | 19 | — | No taxonomy topic matched “abat jour”; review for a missing topic or an off-business query. |
 
 - Showing the 25 unmapped queries with the most impressions; 100 more are in the map data.
 
@@ -416,7 +434,7 @@ Gaps:
 ## Counts
 
 - Queries: 164; clustered: 39; unmapped: 125.
-- Pages considered: 55; news sources: 20.
+- Pages considered: 56; news sources: 20.
 
 ## Limits
 
