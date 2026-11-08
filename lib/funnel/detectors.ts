@@ -1243,8 +1243,10 @@ export async function retireStaleDetected(
   opts: { projectId: string; produced: Map<OpportunityType, Set<string>>; detectedBy: string }
 ): Promise<string[]> {
   if (opts.produced.size === 0) return [];
+  // Only the rows this producer owns: another producer's proposal of the same
+  // type must not be retired just because this detector did not re-produce it.
   const existing = await db.opportunity.findMany({
-    where: { projectId: opts.projectId, status: "detected", type: { in: [...opts.produced.keys()] } },
+    where: { projectId: opts.projectId, status: "detected", detectedBy: opts.detectedBy, type: { in: [...opts.produced.keys()] } },
     select: { id: true, type: true, dedupKey: true },
   });
   const stale = existing.filter((row) => !(opts.produced.get(row.type)?.has(row.dedupKey) ?? false));

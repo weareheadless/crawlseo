@@ -295,9 +295,13 @@ describe("superseding stale detected rows (spine plan §3)", () => {
       { id: "accepted", type: "O8_structured_data_gap", dedupKey: "O8:https://x.com/b:LocalBusiness" },
     ];
     const parkedIds: string[] = [];
+    const findArgs: Array<Record<string, unknown>> = [];
     const db = {
       opportunity: {
-        findMany: vi.fn(async () => [rows[0]]),
+        findMany: vi.fn(async (args: Record<string, unknown>) => {
+          findArgs.push(args);
+          return [rows[0]];
+        }),
         updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: { status: string } }) => {
           parkedIds.push(...args.where.id.in);
           return { count: args.where.id.in.length };
@@ -311,5 +315,7 @@ describe("superseding stale detected rows (spine plan §3)", () => {
     });
     expect(superseded).toEqual(["old-page"]);
     expect(parkedIds).toEqual(["old-page"]);
+    // Ownership is part of the query: a detector retires only its own rows.
+    expect((findArgs[0].where as Record<string, unknown>).detectedBy).toBe("test");
   });
 });
