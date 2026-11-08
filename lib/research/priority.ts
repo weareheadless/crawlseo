@@ -118,20 +118,22 @@ export function proposalPriority(
   const position = cluster?.metrics.position ?? null;
   const band = bandFor(position);
   const reach = cluster?.metrics.impressions ?? 0;
-  const demand = cluster?.metrics.volume || reach;
+  const marketDemand = cluster?.metrics.volume ?? 0;
   const ctr = ctrAtPosition(position);
-  // The estimate is demand at the measured band, discounted by intent. It is
-  // only computed when the site has enough observed reach for the band to mean
-  // something; otherwise it stays null and the reason says why.
-  const measured = track !== "foundation" && ctr != null && demand > 0 && reach >= MIN_REACH_IMPRESSIONS;
-  const expectedClicks = measured ? demand * ctr * intentFit : null;
+  // Expected clicks start from impressions the site actually received in the
+  // window, not from the size of the market. Provider volume is market size:
+  // it is shown next to the estimate, never multiplied into it, or a single
+  // 1.2M-search informational term outranks every page that earns money.
+  const measured = track !== "foundation" && ctr != null && reach >= MIN_REACH_IMPRESSIONS;
+  const expectedClicks = measured ? reach * ctr * intentFit : null;
   const score = expectedClicks == null ? null : Math.round(expectedClicks * 10) / 10;
 
   let reason: string;
   if (track === "foundation") {
     reason = "technical defect; priority comes from severity and reach, not from clicks";
   } else if (score != null) {
-    reason = `position ${position?.toFixed(1)} (${bandLabel(band)}) · ${demand} monthly demand · ${Math.round(intentFit * 100)}% intent fit`;
+    const market = marketDemand > 0 ? ` · ${marketDemand} monthly market demand` : "";
+    reason = `position ${position?.toFixed(1)} (${bandLabel(band)}) · ${reach} impressions in the window${market} · ${Math.round(intentFit * 100)}% intent fit`;
   } else if (reach === 0) {
     reason = "no measured impressions; demand is market size, not reachable yet";
   } else if (reach < MIN_REACH_IMPRESSIONS) {

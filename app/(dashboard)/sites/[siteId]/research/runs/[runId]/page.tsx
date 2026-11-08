@@ -8,6 +8,7 @@ import { jsonStringArray, sourceIdsForAction } from "@/lib/research/evidence";
 import { SourceCitations, SourceList } from "@/components/research/source-evidence";
 import { PipelineNavigation } from "@/components/pipeline/pipeline-navigation";
 import { formatResearchCost, recordedRunInputState } from "@/lib/pipeline/findings";
+import type { TopicMap } from "@/lib/research/topic-map";
 
 interface Props {
   params: Promise<{ siteId: string; runId: string }>;
@@ -57,6 +58,9 @@ export default async function ResearchRunPage({ params }: Props) {
   const automationDrafts = objectArray(automation?.drafts);
   const automationTasks = objectArray(automation?.agentTasks);
   const automationSkipped = objectArray(automation?.skipped);
+  const topicMap = report?.map && typeof report.map === "object" && !Array.isArray(report.map)
+    ? report.map as TopicMap
+    : null;
   const inputState = recordedRunInputState({ brief: run.brief, topics: run.topics, providers: run.providerSet, policyRevision: run.policyRevision });
 
   return (
@@ -64,7 +68,7 @@ export default async function ResearchRunPage({ params }: Props) {
       <PageHeader
         eyebrow={run.site?.domain ?? "project"}
         title={run.title}
-        description={`Research run · ${run.createdAt.toLocaleString()}`}
+        description={`Research run · ${(run.startedAt ?? run.createdAt).toLocaleString()}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <DataLagBadge />
@@ -86,6 +90,25 @@ export default async function ResearchRunPage({ params }: Props) {
         <Fact label="Actions" value={String(run.actions.length)} />
         <Fact label="Cost" value={formatResearchCost(run.costMicros)} />
       </div>
+
+      {topicMap && (
+        <section className="panel mb-5 p-5">
+          <h2 className="font-heading text-lg font-semibold">Topic map result</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Judged demand is the queries the job map assigned to a job this business serves. Context, noise and out-of-market queries are counted but not in demand. Deferred queries were outside this cycle&apos;s tranche and are not judged yet.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Fact label="Topics" value={String(topicMap.taxonomy?.length ?? topicMap.clusters?.length ?? 0)} />
+            <Fact label="Judged demand" value={String(topicMap.counts?.qualifiedQueries ?? 0)} />
+            <Fact label="Deferred" value={String(topicMap.counts?.deferredQueries ?? 0)} />
+            <Fact label="Not demand" value={String(topicMap.counts?.excludedQueries ?? 0)} />
+            <Fact label="Clustered" value={String(topicMap.counts?.clusteredQueries ?? 0)} />
+            <Fact label="Unmapped demand" value={String(topicMap.counts?.unmappedQueries ?? 0)} />
+            <Fact label="Site window" value={`${topicMap.site?.impressions ?? 0} impressions · ${topicMap.site?.clicks ?? 0} clicks`} />
+            <Fact label="Deferred weight" value={`${topicMap.deferred?.impressions ?? 0} impressions · ${topicMap.deferred?.clicks ?? 0} clicks`} />
+          </div>
+        </section>
+      )}
 
       <section className="panel mb-5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">

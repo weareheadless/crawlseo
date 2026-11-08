@@ -1,6 +1,6 @@
 # Opportunity board — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-08T18:16:11.596Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-08T19:39:19.125Z. Proposals only; no task is created until a human accepts one.
 
 Since the previous run: 10 updated in place, 7 new, 2 no longer proposed.
 - new: Test : placer « boutique » dans le titre de la page /shop
@@ -17,12 +17,12 @@ Since the previous run: 10 updated in place, 7 new, 2 no longer proposed.
 
 4066 impressions and 62 clicks in the window: the site has measured reach, so content can be ranked by expected clicks.
 
-1. **Page sièges : ajouter les sections fauteuil et tapissier** — ≈10.2 clicks/month at the measured position · position 25.8 (page 3+) · 2040 monthly demand · 100% intent fit
-2. **Catégorie abat-jours : structurer la demande pagode** — ≈6.9 clicks/month at the measured position · position 14.6 (page 2) · 460 monthly demand · 100% intent fit
-3. **Compléter la fiche du kit DIY avec « fabrication » et « luminaire »** — ≈5.6 clicks/month at the measured position · position 8.6 (page 1) · 140 monthly demand · 100% intent fit
-4. **Ajouter « réparer un abat-jour » à l'article de restauration** — ≈3.2 clicks/month at the measured position · position 8.7 (page 1) · 230 monthly demand · 35% intent fit
-5. **Réécrire /lampes avec le vocabulaire « luminaire artisanal »** — ≈2.4 clicks/month at the measured position · position 40.5 (page 3+) · 470 monthly demand · 100% intent fit
-6. **Test : placer « boutique » dans le titre de la page /shop** — ≈1.6 clicks/month at the measured position · position 6.0 (page 1) · 40 monthly demand · 100% intent fit
+1. **Compléter la fiche du kit DIY avec « fabrication » et « luminaire »** — ≈14.8 clicks/month at the measured position · position 8.6 (page 1) · 369 impressions in the window · 140 monthly market demand · 100% intent fit
+2. **Test : placer « boutique » dans le titre de la page /shop** — ≈13.2 clicks/month at the measured position · position 6.0 (page 1) · 329 impressions in the window · 40 monthly market demand · 100% intent fit
+3. **Ajouter « réparer un abat-jour » à l'article de restauration** — ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
+4. **Réécrire /lampes avec le vocabulaire « luminaire artisanal »** — ≈6.8 clicks/month at the measured position · position 40.5 (page 3+) · 1350 impressions in the window · 470 monthly market demand · 100% intent fit
+5. **Catégorie abat-jours : structurer la demande pagode** — ≈3.0 clicks/month at the measured position · position 14.6 (page 2) · 198 impressions in the window · 460 monthly market demand · 100% intent fit
+6. **Page sièges : ajouter les sections fauteuil et tapissier** — ≈1.4 clicks/month at the measured position · position 25.8 (page 3+) · 276 impressions in the window · 2040 monthly market demand · 100% intent fit
 7. **Ajouter une canonical aux pages de livraison** — foundation · technical defect; priority comes from severity and reach, not from clicks
 8. **Réparer les liens cassés de la fiche Baladeuse à franges** — foundation · technical defect; priority comes from severity and reach, not from clicks
 9. **Descriptions dupliquées sur 59 pages, à commencer par /sieges** — foundation · technical defect; priority comes from severity and reach, not from clicks
@@ -43,34 +43,10 @@ No proposal in this lane.
 
 ### Content & business
 
-#### Page sièges : ajouter les sections fauteuil et tapissier
-
-- Kind: update; effort: medium; confidence: high (La Search Console du site montre des impressions réelles sur les requêtes fauteuil et tapissier, avec des positions entre 12 et 29 : la demande est mesurée et la page à retravailler existe déjà.)
-- Priority: ≈10.2 clicks/month at the measured position · position 25.8 (page 3+) · 2040 monthly demand · 100% intent fit
-- Summary: /sieges obtient des impressions sur « fauteuil restauration » (position ~18) et « fauteuil à tapisser » (~24), mais la seule page associée au cluster est /en/tapisserie-restauration. Les requêtes fauteuil (163 impressions) et tapissier (51) n'ont pas de page française dédiée : on enrichit /sieges plutôt que de créer une page.
-- Why now: C'est le cluster le plus solide du site (10 clics, 276 impressions) mais la position moyenne est de 26 : la demande existe et se perd en page 2, sur des termes que la page ne traite pas frontalement.
-- Target: https://www.atelier-harmonie.com/sieges (Restauration de fauteuil et savoir-faire tapissier)
-- Action: Ajouter sur /sieges une section « Restauration de fauteuil » (types de fauteuils, garnissage, sanglage, mise en blanc, couverture) et un bloc « Tapissier en Normandie » reprenant les expressions tapissier / artisan tapissier, avec liens vers /tapisserie-restauration et /devis. Garder la version française comme cible : la page associée au cluster est aujourd'hui /en/tapisserie-restauration.
-- Expected outcome: Sortir « fauteuil restauration » et « fauteuil à tapisser » de la page 2 et convertir les recherches locales en demandes de devis.
-- Evidence: 5 reference(s)
-- Critique: revise — /sieges et /tapisserie-restauration viseraient le même intent : définir les rôles, confirmer l'URL FR (seule /en/... est fournie) avant d'ajouter les blocs.
-
-#### Catégorie abat-jours : structurer la demande pagode
-
-- Kind: cluster_hub; effort: medium; confidence: medium (Les positions 10-15 sur les requêtes pagode viennent d'une fiche produit et les impressions restent modestes : le signal est directionnel, pas encore une preuve de volume pour le hub.)
-- Priority: ≈6.9 clicks/month at the measured position · position 14.6 (page 2) · 460 monthly demand · 100% intent fit
-- Summary: Les requêtes pagode (environ 180 impressions) font apparaître la fiche produit en position 10-15, alors que la page catégorie /lampes/abat-jours ne porte pas ces termes. La couverture du cluster est partielle : le hub doit être enrichi pour tenir le sujet.
-- Why now: La demande pagode est la plus forte du cluster (390 de volume sur « abat jour pagode ») et se joue déjà en page 1-2 ; sans hub structuré, chaque variante repose sur une seule fiche produit.
-- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Abat-jour pagode)
-- Action: Structurer /lampes/abat-jours avec un bloc « Abat-jour pagode » (formes, dimensions, doublure, matières, sur mesure), des liens vers les fiches pagode existantes (vermillon, les cousus bleue et rose) et une courte FAQ sur le choix de la taille, la fixation et l'entretien. Compléter par un renvoi vers les collections bauhaus et seventies déjà présentes en boutique.
-- Expected outcome: Faire remonter la catégorie sur les variantes pagode (rectangulaire, moderne, chinois) et capter la demande adjacente.
-- Evidence: 4 reference(s)
-- Critique: keep — Les requêtes pagode atterrissent sur une fiche produit, pas sur la catégorie : bloc, FAQ et liens produits proportionnés au volume (~180).
-
 #### Compléter la fiche du kit DIY avec « fabrication » et « luminaire »
 
 - Kind: update; effort: small; confidence: medium (Les données first-party montrent une fiche à la position 5,5 sur « kit lampe » mais 16,6 sur « kit fabrication luminaire » : l'écart est directionnel, sur des volumes de 30 à 80 impressions.)
-- Priority: ≈5.6 clicks/month at the measured position · position 8.6 (page 1) · 140 monthly demand · 100% intent fit
+- Priority: ≈14.8 clicks/month at the measured position · position 8.6 (page 1) · 369 impressions in the window · 140 monthly market demand · 100% intent fit
 - Summary: La fiche kit apparaît en position 5,5 sur « kit lampe » (110 de volume), mais en position 16,6 sur « kit fabrication luminaire », et n'emploie ni « fabrication » ni « fabriquer ». Ces variantes représentent environ 150 impressions, et la fiche ne renvoie pas vers les ateliers.
 - Why now: La fiche est déjà bien classée sur le cœur de la demande : les variantes « fabrication » sont le seul manque mesuré et se traitent sans nouvelle page.
 - Target: https://www.atelier-harmonie.com/product-page/kit-diy-ma-lampe-%C3%A0-poser (Title, description produit et FAQ)
@@ -79,10 +55,22 @@ No proposal in this lane.
 - Evidence: 4 reference(s)
 - Critique: keep — Écart réel entre « kit lampe » (pos. 5,5) et « kit fabrication luminaire » (16,6), vocabulaire absent : mise à jour de la fiche et lien vers /les-ateliers justifiés.
 
+#### Test : placer « boutique » dans le titre de la page /shop
+
+- Kind: update; effort: small; confidence: low (Les volumes en jeu sont faibles (moins de 70 impressions sur les variantes) et la marque se classe déjà en tête : c'est un test de forme, pas un gisement de demande.)
+- Priority: ≈13.2 clicks/month at the measured position · position 6.0 (page 1) · 329 impressions in the window · 40 monthly market demand · 100% intent fit
+- Summary: La marque est déjà en positions 4 à 8 avec 22 clics. Les requêtes « harmonie boutique » / « boutique harmonie » (27 impressions) et la variante « atelier harmony » (39 impressions) ne trouvent pas les mots correspondants dans la page ciblée.
+- Why now: Rien ne presse : c'est un ajustement de forme sur une marque déjà bien visible, à faire quand l'atelier a un créneau.
+- Target: https://www.atelier-harmonie.com/shop (Title et meta description)
+- Action: Réécrire le title et la meta description de /shop en y plaçant « Boutique Atelier de l'harmonie » et une mention des luminaires faits main. Vérifier que /shop reste bien la page cible des requêtes de marque et que la page d'accueil n'entre pas en concurrence.
+- Expected outcome: Meilleur taux de clic sur les requêtes de marque et capture des variantes « boutique » ; aucun volume nouveau attendu.
+- Evidence: 4 reference(s)
+- Critique: revise — Volumes faibles (27+39) et « atelier harmony » n'est qu'une graphie anglaise : garder la marque exacte, ajouter « boutique » et mesurer avant de conclure.
+
 #### Ajouter « réparer un abat-jour » à l'article de restauration
 
 - Kind: update; effort: small; confidence: medium (L'article est déjà en positions 5 à 9 sur ces requêtes avec 22 clics et n'utilise pourtant pas les termes « réparer/réparation » : le gain est réel mais incrémental, la page étant déjà visible.)
-- Priority: ≈3.2 clicks/month at the measured position · position 8.7 (page 1) · 230 monthly demand · 35% intent fit
+- Priority: ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
 - Summary: L'article sur la restauration en contrecollé se classe en positions 5 à 9 et génère 22 clics, mais n'emploie jamais « réparer » ni « réparation », alors que ces formulations pèsent près de 300 impressions. La page est bonne : il manque le vocabulaire et un chemin vers le devis.
 - Why now: Le cluster est déjà visible et proche du top 5 ; les requêtes « réparation » sont à portée immédiate, sans nouvelle page à créer.
 - Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Corps de l'article : nouvelle section et FAQ de fin)
@@ -94,7 +82,7 @@ No proposal in this lane.
 #### Réécrire /lampes avec le vocabulaire « luminaire artisanal »
 
 - Kind: update; effort: small; confidence: high (Les données de recherche first-party montrent 1 350 impressions sur le cluster, une page déjà présente en positions 30 à 65, et des mots (« luminaire », « artisanal ») qui n'apparaissent nulle part dans les pages associées.)
-- Priority: ≈2.4 clicks/month at the measured position · position 40.5 (page 3+) · 470 monthly demand · 100% intent fit
+- Priority: ≈6.8 clicks/month at the measured position · position 40.5 (page 3+) · 1350 impressions in the window · 470 monthly market demand · 100% intent fit
 - Summary: La page catégorie apparaît déjà sur ces requêtes, mais en positions 30 à 65, avec 1 350 impressions et aucun clic. 615 impressions portent sur « luminaire » et 601 sur « artisanal », deux termes absents de la page : titre, H1 et intro ne parlent que de « lampes ».
 - Why now: La demande est déjà mesurée et la page est déjà indexée sur ces termes : le blocage est éditorial, pas technique, et se corrige en une passe de rédaction.
 - Target: https://www.atelier-harmonie.com/lampes (Title, H1, intro et H2 des familles de lampes)
@@ -103,17 +91,29 @@ No proposal in this lane.
 - Evidence: 4 reference(s)
 - Critique: keep — 1 350 impressions, 0 clic, « luminaire » et « artisanal » absents : réécriture du title/H1 justifiée. Garder le périmètre France/Europe/International.
 
-#### Test : placer « boutique » dans le titre de la page /shop
+#### Catégorie abat-jours : structurer la demande pagode
 
-- Kind: update; effort: small; confidence: low (Les volumes en jeu sont faibles (moins de 70 impressions sur les variantes) et la marque se classe déjà en tête : c'est un test de forme, pas un gisement de demande.)
-- Priority: ≈1.6 clicks/month at the measured position · position 6.0 (page 1) · 40 monthly demand · 100% intent fit
-- Summary: La marque est déjà en positions 4 à 8 avec 22 clics. Les requêtes « harmonie boutique » / « boutique harmonie » (27 impressions) et la variante « atelier harmony » (39 impressions) ne trouvent pas les mots correspondants dans la page ciblée.
-- Why now: Rien ne presse : c'est un ajustement de forme sur une marque déjà bien visible, à faire quand l'atelier a un créneau.
-- Target: https://www.atelier-harmonie.com/shop (Title et meta description)
-- Action: Réécrire le title et la meta description de /shop en y plaçant « Boutique Atelier de l'harmonie » et une mention des luminaires faits main. Vérifier que /shop reste bien la page cible des requêtes de marque et que la page d'accueil n'entre pas en concurrence.
-- Expected outcome: Meilleur taux de clic sur les requêtes de marque et capture des variantes « boutique » ; aucun volume nouveau attendu.
+- Kind: cluster_hub; effort: medium; confidence: medium (Les positions 10-15 sur les requêtes pagode viennent d'une fiche produit et les impressions restent modestes : le signal est directionnel, pas encore une preuve de volume pour le hub.)
+- Priority: ≈3.0 clicks/month at the measured position · position 14.6 (page 2) · 198 impressions in the window · 460 monthly market demand · 100% intent fit
+- Summary: Les requêtes pagode (environ 180 impressions) font apparaître la fiche produit en position 10-15, alors que la page catégorie /lampes/abat-jours ne porte pas ces termes. La couverture du cluster est partielle : le hub doit être enrichi pour tenir le sujet.
+- Why now: La demande pagode est la plus forte du cluster (390 de volume sur « abat jour pagode ») et se joue déjà en page 1-2 ; sans hub structuré, chaque variante repose sur une seule fiche produit.
+- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Abat-jour pagode)
+- Action: Structurer /lampes/abat-jours avec un bloc « Abat-jour pagode » (formes, dimensions, doublure, matières, sur mesure), des liens vers les fiches pagode existantes (vermillon, les cousus bleue et rose) et une courte FAQ sur le choix de la taille, la fixation et l'entretien. Compléter par un renvoi vers les collections bauhaus et seventies déjà présentes en boutique.
+- Expected outcome: Faire remonter la catégorie sur les variantes pagode (rectangulaire, moderne, chinois) et capter la demande adjacente.
 - Evidence: 4 reference(s)
-- Critique: revise — Volumes faibles (27+39) et « atelier harmony » n'est qu'une graphie anglaise : garder la marque exacte, ajouter « boutique » et mesurer avant de conclure.
+- Critique: keep — Les requêtes pagode atterrissent sur une fiche produit, pas sur la catégorie : bloc, FAQ et liens produits proportionnés au volume (~180).
+
+#### Page sièges : ajouter les sections fauteuil et tapissier
+
+- Kind: update; effort: medium; confidence: high (La Search Console du site montre des impressions réelles sur les requêtes fauteuil et tapissier, avec des positions entre 12 et 29 : la demande est mesurée et la page à retravailler existe déjà.)
+- Priority: ≈1.4 clicks/month at the measured position · position 25.8 (page 3+) · 276 impressions in the window · 2040 monthly market demand · 100% intent fit
+- Summary: /sieges obtient des impressions sur « fauteuil restauration » (position ~18) et « fauteuil à tapisser » (~24), mais la seule page associée au cluster est /en/tapisserie-restauration. Les requêtes fauteuil (163 impressions) et tapissier (51) n'ont pas de page française dédiée : on enrichit /sieges plutôt que de créer une page.
+- Why now: C'est le cluster le plus solide du site (10 clics, 276 impressions) mais la position moyenne est de 26 : la demande existe et se perd en page 2, sur des termes que la page ne traite pas frontalement.
+- Target: https://www.atelier-harmonie.com/sieges (Restauration de fauteuil et savoir-faire tapissier)
+- Action: Ajouter sur /sieges une section « Restauration de fauteuil » (types de fauteuils, garnissage, sanglage, mise en blanc, couverture) et un bloc « Tapissier en Normandie » reprenant les expressions tapissier / artisan tapissier, avec liens vers /tapisserie-restauration et /devis. Garder la version française comme cible : la page associée au cluster est aujourd'hui /en/tapisserie-restauration.
+- Expected outcome: Sortir « fauteuil restauration » et « fauteuil à tapisser » de la page 2 et convertir les recherches locales en demandes de devis.
+- Evidence: 5 reference(s)
+- Critique: revise — /sieges et /tapisserie-restauration viseraient le même intent : définir les rôles, confirmer l'URL FR (seule /en/... est fournie) avant d'ajouter les blocs.
 
 #### Page ateliers : faire d'/les-ateliers la cible des requêtes atelier
 

@@ -411,9 +411,15 @@ export async function storeProposals(
     knowledgeEvidenceIds: string[];
     clusters: Array<{ id: string; slug: string }>;
   }
-): Promise<{ stored: Array<{ id: string; dedupKey: string }>; dropped: Array<{ title: string; reason: string }> }> {
+): Promise<{
+  stored: Array<{ id: string; dedupKey: string }>;
+  dropped: Array<{ title: string; reason: string }>;
+  /** Rows a verified closure already covers, proposed again by the model. */
+  reproposedClosed: string[];
+}> {
   const stored: Array<{ id: string; dedupKey: string }> = [];
   const dropped: Array<{ title: string; reason: string }> = [];
+  const reproposedClosed: string[] = [];
   const clusterIdBySlug = new Map(input.clusters.map((cluster) => [cluster.slug, cluster.id]));
 
   for (const proposal of input.proposals) {
@@ -448,6 +454,7 @@ export async function storeProposals(
         where: { projectId_dedupKey: { projectId: input.projectId, dedupKey: proposal.dedupKey } },
         select: { id: true, status: true, parkReason: true },
       });
+      const wasClosed = existing?.status === "closed";
       if (existing && (existing.status === "accepted" || existing.status === "in_progress" || existing.status === "rejected")) {
         // An accepted or rejected proposal is a human decision, and for accepted
         // work it is the task's brief. A later draft must not rewrite it.
@@ -516,6 +523,7 @@ export async function storeProposals(
         recommendationEvidenceId: proposal.evidenceRefs[0] ?? null,
       });
       stored.push({ id: record.id, dedupKey: proposal.dedupKey });
+      if (wasClosed) reproposedClosed.push(proposal.title);
     } catch (error) {
       dropped.push({
         title: proposal.title,
@@ -523,7 +531,7 @@ export async function storeProposals(
       });
     }
   }
-  return { stored, dropped };
+  return { stored, dropped, reproposedClosed };
 }
 
 function describePriority(priority: ProposalPriority): string {
@@ -542,6 +550,8 @@ export function renderProposalBoard(input: {
   drafting?: { model: string | null; summary: string | null; errors: string[]; truncations?: string[] } | null;
   /** What changed against the previous run of this month. */
   changes?: { updated: number; added: string[]; noLongerProposed: string[] } | null;
+  /** Proposals the model drafted again although a verified closure covers them. */
+  reproposedClosed?: string[];
   technical: ProposalInputs["technical"];
   generatedAt: string;
 }): string {
@@ -658,6 +668,11 @@ export function renderProposalBoard(input: {
     lines.push("");
   }
   lines.push("## Critique");
+  if (input.reproposedClosed && input.reproposedClosed.length > 0) {
+    lines.push("");
+    lines.push("Proposed again after a verified closure — check for regression before reopening:");
+    for (const title of input.reproposedClosed) lines.push(`- ${title}`);
+  }
   lines.push("");
   if (input.critique.available) {
     lines.push(`Model: ${input.critique.model ?? "configured model"}.`);

@@ -807,7 +807,10 @@ export function buildTopicMap(
       slug: topic.slug,
       name: topic.name,
       kind: isBrandTopic(topic) ? "brand" : "market",
-      topicSummary: `${metrics.queries} queries, ${metrics.impressions} impressions; coverage ${coverage}, visibility ${visibility}; ${gaps.length} gap${gaps.length === 1 ? "" : "s"}.`,
+      // The prose is the model's reason for the topic. The counts, coverage and
+      // visibility are rendered as facts next to it, not folded into a sentence
+      // that reads like a keyword-cluster label.
+      topicSummary: topic.rationale?.trim() || `${metrics.queries} queries, ${metrics.impressions} impressions; coverage ${coverage}, visibility ${visibility}; ${gaps.length} gap${gaps.length === 1 ? "" : "s"}.`,
       intent: topic.intent,
       relevance: topic.relevance,
       rationale: topic.rationale,

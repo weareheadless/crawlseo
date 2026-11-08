@@ -138,7 +138,7 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
     bridgeCoverage: async () => ({ document: true, questions: 3, stored: 3, keywords: 0, omitted: 0 }),
     fetchNews: async () => [recentNews()],
     saveNews: async () => [{ id: "source-1" }],
-    storeProposals: async () => ({ stored: [{ id: "opp-1", dedupKey: "phase5:timely" }], dropped: [] }),
+    storeProposals: async () => ({ stored: [{ id: "opp-1", dedupKey: "phase5:timely" }], dropped: [], reproposedClosed: [] }),
     // Test double for the drafting call: it keeps the 21-day rule the real
     // call is given, so the weekly flow is exercised without a model.
     draftTimely: async (input) => {
@@ -270,7 +270,7 @@ describe("weekly refresh", () => {
       makeDeps({
         storeProposals: async (_db, input) => {
           storedProposals = input.proposals.length;
-          return { stored: input.proposals.map((proposal) => ({ id: "opp-1", dedupKey: proposal.dedupKey })), dropped: [] };
+          return { stored: input.proposals.map((proposal) => ({ id: "opp-1", dedupKey: proposal.dedupKey })), dropped: [], reproposedClosed: [] };
         },
       })
     );

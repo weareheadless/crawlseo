@@ -546,6 +546,7 @@ async function main(): Promise<void> {
         critique: report.critique,
         drafting: report.drafting,
         changes: report.changes,
+        reproposedClosed: stored.reproposedClosed,
         technical,
         generatedAt: report.generatedAt,
       }),

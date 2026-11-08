@@ -247,6 +247,33 @@ describe("proposal storage", () => {
     expect(updates[0]).toEqual({ status: "detected", parkReason: null });
   });
 
+  it("keeps a verified closure closed and reports the re-proposal", async () => {
+    const db = {
+      opportunity: {
+        findUnique: async () => ({ id: "opp-closed", status: "closed", parkReason: null, evidenceCompleteness: "both" }),
+        update: async () => ({ id: "opp-closed", status: "closed" }),
+      },
+      evidenceEdge: {
+        deleteMany: async () => ({ count: 0 }),
+        upsert: async () => ({ id: "edge" }),
+      },
+    };
+    const result = await storeProposals(db as never, {
+      projectId: "proj-1",
+      siteId: "site-1",
+      domain,
+      map,
+      topicMapRunId: "topic-run-1",
+      proposals: [makeProposal({ dedupKey: "closed-key" })],
+      evidenceIds: new Set(["ev-1", "ev-2"]),
+      firstPartyEvidenceIds: new Set(["ev-1"]),
+      knowledgeEvidenceIds: [],
+      clusters: [],
+    });
+    expect(result.stored[0]).toMatchObject({ id: "opp-closed" });
+    expect(result.reproposedClosed).toEqual([makeProposal().title]);
+  });
+
   it("does not rewrite an accepted proposal when it is drafted again", async () => {
     let updated = 0;
     const db = {

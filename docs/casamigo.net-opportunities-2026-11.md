@@ -1,6 +1,6 @@
 # Opportunity board — casamigo.net — 2026-11
 
-Generated 2026-11-08T18:43:04.086Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-08T19:39:19.111Z. Proposals only; no task is created until a human accepts one.
 
 Since the previous run: 11 updated in place, 6 new, 2 no longer proposed.
 - new: Consolidate five Tao Tulum variants on one English brand page

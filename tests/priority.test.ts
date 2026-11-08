@@ -76,13 +76,27 @@ describe("proposal priority", () => {
   const gateOff = { needed: false };
   const gateOn = { needed: true };
 
-  it("scores demand at the measured band, discounted by intent", () => {
-    // 500 demand × 4% at position 8 × commercial intent.
+  it("scores measured impressions at the measured band, discounted by intent", () => {
+    // 1,000 impressions × 4% at position 8 × commercial intent. Market volume
+    // is context, not a multiplier.
     const priority = proposalPriority(proposal(), cluster(), gateOff);
-    expect(priority.score).toBe(20);
+    expect(priority.score).toBe(40);
+    expect(priority.reason).toContain("1000 impressions in the window");
+    expect(priority.reason).toContain("500 monthly market demand");
     expect(priority.band).toBe("page1");
     expect(priority.track).toBe("money");
     expect(priority.hold).toBe(false);
+  });
+
+  it("does not let market volume change the score", () => {
+    const small = proposalPriority(proposal(), cluster(), gateOff);
+    const huge = proposalPriority(
+      proposal(),
+      cluster({ metrics: { ...cluster().metrics, volume: 534_380 } }),
+      gateOff
+    );
+    expect(huge.score).toBe(small.score);
+    expect(huge.reason).toContain("534380 monthly market demand");
   });
 
   it("does not turn a big market into a score without measured reach", () => {

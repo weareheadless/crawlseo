@@ -70,13 +70,14 @@ listing keywords.
   (10), plus investment, financing, hospitals and market/regulation context.
 - Priorities 2–10 are sound: Playa condos at 27.4, Tulum villas at 65.3,
   rentals at 604 words, Cozumel at 59.7, Puerto Morelos hubs on page three.
-- Priority 1 is a scoring artifact: the hospital topic is projected at about
-  17,081 clicks/month from 1.22M monthly demand even though the cluster has
-  1,701 impressions and a 35% intent fit. The estimate multiplies market volume
-  by CTR; it is not measured reach. For a real-estate agent, hospital content is
-  relocation support, not the first thing to build.
-- Do priorities 2–10 first, and fix the click estimate to use measured
-  impressions (or cap it by reach) before the board is used for sequencing.
+- The board now starts with the named-development directory (≈25 clicks from
+  1,681 impressions at position 16.5), the hospital guide (≈24 from 1,701
+  impressions at 6.5) and the rentals page (≈17 from 1,107 at 18.7). Those
+  estimates use measured impressions; market demand is shown next to them.
+  Before the scoring fix the hospital row read ≈17,081 clicks because market
+  volume was multiplied into the estimate.
+- Hospital content is relocation support, not the first commercial build; the
+  named-development directory and the rentals page are the buyer jobs.
 
 ### Oceanic — foundations only, and the map already says why
 
@@ -92,44 +93,41 @@ listing keywords.
 
 ## UI and data findings
 
-These were found while reviewing the deployed app; the first two were fixed in
-this session, the rest are open.
+All six were fixed structurally after the review; the app was redeployed and the
+stored data repaired.
 
-1. **A funnel refresh retired the model's map (fixed).** Minutes after deploy,
-   lexical cluster discovery re-clustered the same evidence and superseded 10 of
+1. **A funnel refresh retired the model's map.** Minutes after deploy, lexical
+   cluster discovery re-clustered the same evidence and superseded 10 of
    Casamigo's 14 topics. Discovery now yields to a project that already has
    topic-map clusters, retires its own untracked legacy rows, and a model topic
    that drops out of the map without members is retired. Data repaired to
    14 / 13 / 24 / 13 active clusters.
-2. **A detector parked the one-pass board (fixed).** `retireStaleDetected` parked
-   every detected row of a type it did not re-produce, including another
-   producer's proposals. Retirement is now scoped to the detector's own
-   `detectedBy`. Current proposals were restored and linked to their clusters.
-3. **Legacy sources still crowd the counts (open).** The opportunities page
-   defaults to `phase3`/`phase5` proposals but "All sources" still contains
-   `tenant-analysis`, `crawl-job` and `funnel-refresh` rows (84 / 21 / 80 / 83),
-   and the demand map counts them as 76 / 3 / 59 / 70 "not yet clustered". For a
-   site with a topic map, the model's board should be the only visible source,
-   or the legacy rows should be frozen.
-4. **Re-proposed rows that were closed stay closed (open).** Casamigo's board
-   has 17 rows but the UI shows 8 as new proposals; the rest are parked or
-   closed from earlier runs and are not reopened when the model proposes them
-   again. Closure is a human/verification state, so this is a rule to settle,
-   not a bug to paper over.
-5. **The run page hides the map's numbers (open).** The topic-map run lists its
-   topics as one comma string and shows the run's creation date (11/6) while the
-   map was rebuilt on 11/8. It does not show judged demand, deferred count or
-   coverage.
-6. **Cluster summaries are mixed (open).** Most rows show the model's rationale;
-   a few fall back to "N queries sharing the phrase …". The fallback is honest
-   but reads like the old lexical clustering next to the new prose.
+2. **A detector parked the one-pass board.** `retireStaleDetected` parked every
+   detected row of a type it did not re-produce, including another producer's
+   proposals. Retirement is now scoped to the detector's own `detectedBy`.
+3. **Legacy sources crowded the counts.** For a project with topic-map clusters,
+   `refreshFunnelForSite` now skips the legacy detectors and parks their detected
+   rows with a stated reason. Human decisions are untouched. Open opportunities
+   fell to 19 / 19 / 26 / 13 and unclustered to 3 / 4 / 4 / 0.
+4. **Re-proposed rows that were closed stayed closed.** The old diff rule had
+   closed 26 rows per project with `parkReason: "superseded by refreshed
+   proposal"` and no decision by a person. Those were migrated to `parked` and
+   the current board reopened. Going forward closure is untouched, and a
+   re-proposal of a verified closure is reported on the board as "proposed again
+   after a verified closure — check for regression".
+5. **The run page hid the map's numbers.** A topic-map run now shows topics,
+   judged demand, deferred count and weight, not-demand and unmapped counts, and
+   the site window. The run date uses `startedAt`, not `createdAt`.
+6. **Cluster summaries are mixed.** New map builds use the model's reason for the
+   topic; the counts and coverage are shown as facts beside it. Stored rows whose
+   summary was a lexical "N queries sharing the phrase" were repaired.
 
 ## What the review changes
 
 - Casamigo and Oceanic remain foundations-first; the one-pass map strengthens
   that conclusion rather than overturning it.
 - Atelier's board is ready to work as drafted.
-- Susi's map is ready, but its ordering is not: treat priorities 2–10 as the
-  queue and fix the click estimate before accepting priority 1.
+- Susi's board is now ordered by measured reach: the development directory,
+  hospitals and rentals lead. Work them in that order.
 - The next cycle's first job is the deferred Susi tail, not new topic
   discovery. 914 queries with real buyer language are still unjudged.

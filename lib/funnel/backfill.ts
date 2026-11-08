@@ -324,6 +324,36 @@ export async function retireLegacyClustersForTopicMap(
 }
 
 /**
+ * The topic map owns the opportunities too. When the project has model topics,
+ * the legacy detectors must not add a parallel board beside the one the job map
+ * produced; their detected rows are parked with a stated reason, and a human
+ * decision (accepted, in progress, rejected) is never touched.
+ */
+export async function retireLegacyOpportunitiesForTopicMap(
+  db: Pick<PrismaClient, "demandMapCluster" | "opportunity">,
+  projectId: string
+): Promise<{ modelled: number; parked: number }> {
+  const modelled = await db.demandMapCluster.count({
+    where: { projectId, supersededAt: null, proposedBy: "topic-map-v1" },
+  });
+  if (modelled === 0) return { modelled, parked: -1 };
+  const parked = await db.opportunity.updateMany({
+    where: {
+      projectId,
+      status: "detected",
+      detectedBy: { notIn: ["phase3:topic-map", "phase5:weekly"] },
+    },
+    data: {
+      status: "parked",
+      parkReason: "superseded by the topic-map pipeline",
+      decidedBy: "topic-map-v1",
+      decidedAt: new Date(),
+    },
+  });
+  return { modelled, parked: parked.count };
+}
+
+/**
  * Evidence only: backfill, business knowledge, question coverage, clusters.
  *
  * Split out so a shadow run can rebuild the inputs without running the detectors
@@ -388,6 +418,22 @@ export async function refreshFunnelForSite(
   // The why leg, question coverage and clusters all have to exist before
   // detection; refreshEvidenceForSite owns that order.
   const evidence = await refreshEvidenceForSite(db, siteId, { projectId: site.projectId });
+  // One board per project. A modelled project's board is the topic map's; the
+  // legacy detectors would add a second, differently-reasoned list of work.
+  const owned = await retireLegacyOpportunitiesForTopicMap(db, site.projectId);
+  if (owned.modelled > 0) {
+    evidence.backfill.skipped.push(
+      `opportunities are owned by the topic map; legacy detectors skipped${owned.parked > 0 ? `, ${owned.parked} legacy opportunities parked` : ""}`
+    );
+    return {
+      ...evidence.backfill,
+      knowledgeFacts: evidence.knowledgeFacts,
+      questionCoverage: evidence.questionCoverage,
+      created: 0,
+      updated: 0,
+      parked: owned.parked,
+    };
+  }
   const detection = await runDetectors(db, site.projectId, {
     detectedBy: opts.detectedBy ?? "funnel-refresh",
     // The site's own name is not an opportunity: a brand query already ranks.
