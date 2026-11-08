@@ -1,0 +1,39 @@
+{
+  "takenAt": "2026-11-08T19:23:55.421Z",
+  "checksum": "6131345557f8493813dbc0b223c97a2ba2a25868d523a6c91d175eb9a4f68df9",
+  "scope": {
+    "all": true
+  },
+  "sites": [
+    {
+      "siteId": "s1",
+      "projectId": "p1",
+      "domain": "site.test",
+      "opportunities": [
+        {
+          "id": "op1",
+          "dedupKey": "O13:1",
+          "type": "O13_user_pain_point",
+          "title": "Before",
+          "summary": "Before",
+          "scoreValue": 1,
+          "scoreInputs": {},
+          "recommendationDecision": {
+            "schemaVersion": "test"
+          },
+          "recommendationVersion": "test/1",
+          "recommendationFingerprint": "fp",
+          "recommendationEvidenceId": null,
+          "evidenceCompleteness": "none",
+          "status": "detected",
+          "parkReason": null,
+          "assessmentVersion": 1,
+          "decidedBy": null,
+          "decidedAt": null,
+          "updatedAt": "2026-11-04T00:00:00.000Z"
+        }
+      ],
+      "evidence": []
+    }
+  ]
+}

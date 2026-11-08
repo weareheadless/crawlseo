@@ -314,6 +314,43 @@ describe("topic map storage", () => {
     expect(state.evidence.some((row) => row.kind === "keyword_universe_membership")).toBe(true);
     expect(state.evidence.some((row) => (row.dimensions as Record<string, unknown>).cluster === "restauration-siege")).toBe(true);
   });
+
+  it("retires a model topic that left the map and never had members", async () => {
+    const rows: Array<Record<string, unknown>> = [
+      { id: "old", slug: "old-topic", identityKey: "topic:old-topic", tracked: false, proposedBy: "topic-map-v1", supersededAt: null },
+      { id: "human", slug: "human-topic", identityKey: "topic:human-topic", tracked: true, proposedBy: "human", supersededAt: null },
+    ];
+    const db = {
+      demandMapCluster: {
+        findMany: async () => rows,
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const row = { id: `cluster-${rows.length + 1}`, tracked: false, supersededAt: null, ...data };
+          rows.push(row);
+          return { id: row.id };
+        },
+        update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const row = rows.find((entry) => entry.id === where.id)!;
+          Object.assign(row, data);
+          return row;
+        },
+      },
+      evidenceRecord: {
+        findMany: async () => [],
+        update: async () => ({}),
+        upsert: async ({ create }: { create: Record<string, unknown> }) => {
+          const row = { id: `evidence-${Math.random()}`, supersededById: null, ...create };
+          return row;
+        },
+      },
+      rawProviderResponse: { findUnique: async () => null },
+    };
+    const map = buildTopicMap(data({ queries: [query("fauteuil restauration", 40, 480)] }), taxonomy);
+    const result = await storeTopicMap(db as never, map);
+    expect(rows.find((row) => row.id === "old")?.supersededAt).toBeTruthy();
+    // A row a person owns is not retired by a model map.
+    expect(rows.find((row) => row.id === "human")?.supersededAt).toBeNull();
+    expect(result.superseded).toBe(1);
+  });
 });
 
 describe("distinct demand", () => {

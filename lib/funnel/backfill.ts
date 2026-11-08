@@ -301,6 +301,29 @@ export type RefreshDb = BackfillDb & OpportunityDb & Pick<PrismaClient, "demandM
  * opportunities dedupe by key). Reads only; makes no paid calls.
  */
 /**
+ * The demand map has one owner. When the model has already stored topics for
+ * this project, lexical discovery would retire them and invent a second map
+ * from the same evidence; the job map owns the topics, so discovery does not
+ * run and its untracked legacy rows are retired. A project with no model topics
+ * still bootstraps through discovery. Returns `modelled: 0` when the caller
+ * should run discovery, and `retired: -1` when it did not touch the table.
+ */
+export async function retireLegacyClustersForTopicMap(
+  db: Pick<PrismaClient, "demandMapCluster">,
+  projectId: string
+): Promise<{ modelled: number; retired: number }> {
+  const modelled = await db.demandMapCluster.count({
+    where: { projectId, supersededAt: null, proposedBy: "topic-map-v1" },
+  });
+  if (modelled === 0) return { modelled, retired: -1 };
+  const retired = await db.demandMapCluster.updateMany({
+    where: { projectId, supersededAt: null, tracked: false, proposedBy: { not: "topic-map-v1" } },
+    data: { supersededAt: new Date() },
+  });
+  return { modelled, retired: retired.count };
+}
+
+/**
  * Evidence only: backfill, business knowledge, question coverage, clusters.
  *
  * Split out so a shadow run can rebuild the inputs without running the detectors
@@ -330,7 +353,14 @@ export async function refreshEvidenceForSite(
   } catch (error) {
     console.error("[funnel] legacy finding reassessment failed", error);
   }
-  await discoverClusters(db, projectId, { siteId });
+  const modelled = await retireLegacyClustersForTopicMap(db, projectId);
+  if (modelled.modelled > 0) {
+    backfill.skipped.push(
+      `demand map is owned by the topic map; lexical discovery skipped${modelled.retired > 0 ? `, ${modelled.retired} legacy clusters retired` : ""}`
+    );
+  } else {
+    await discoverClusters(db, projectId, { siteId });
+  }
   return { backfill, knowledgeFacts: knowledge.stored, questionCoverage: coverage.stored };
 }
 

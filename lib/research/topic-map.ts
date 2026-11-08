@@ -1161,7 +1161,7 @@ export async function storeTopicMap(
   // back after being superseded must reuse its row, not collide with it.
   const allRows = await db.demandMapCluster.findMany({
     where: { projectId: map.projectId },
-    select: { id: true, slug: true, identityKey: true, tracked: true, supersededAt: true },
+    select: { id: true, slug: true, identityKey: true, tracked: true, proposedBy: true, supersededAt: true },
     orderBy: { supersededAt: "desc" },
   });
   const existing = allRows.filter((row) => row.supersededAt === null);
@@ -1244,7 +1244,15 @@ export async function storeTopicMap(
   for (const row of existing) {
     if (newSlugs.has(row.slug) || row.tracked) continue;
     const oldMembers = await membershipQueries(db, map.projectId, row.slug);
-    if (oldMembers.length === 0) continue;
+    if (oldMembers.length === 0) {
+      // A model topic that is no longer in the map and never had members is
+      // stale, not curated: retire it. A row a person owns is left alone.
+      if (row.proposedBy === "topic-map-v1") {
+        await db.demandMapCluster.update({ where: { id: row.id }, data: { supersededAt: now } });
+        superseded += 1;
+      }
+      continue;
+    }
     let best: { slug: string; score: number } | null = null;
     for (const [slug, members] of newMembersBySlug) {
       const score = jaccard(oldMembers, members);

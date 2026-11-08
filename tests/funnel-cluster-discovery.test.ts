@@ -13,6 +13,7 @@ import {
   significantTokens,
   type ClusterProposal,
 } from "@/lib/funnel/cluster-discovery";
+import { retireLegacyClustersForTopicMap } from "@/lib/funnel/backfill";
 
 const AT = new Date("2026-11-01T00:00:00.000Z");
 
@@ -415,5 +416,44 @@ describe("discoverClusters end to end (stored evidence only)", () => {
     expect(result.proposals).toBeGreaterThan(0);
     expect(clusters.length).toBeGreaterThan(0);
     expect((db as unknown as { keyword: { findMany: ReturnType<typeof vi.fn> } }).keyword.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("demand map ownership", () => {
+  it("leaves discovery to bootstrap a project with no model topics", async () => {
+    let updated = 0;
+    const db = {
+      demandMapCluster: {
+        count: async () => 0,
+        updateMany: async () => {
+          updated += 1;
+          return { count: 0 };
+        },
+      },
+    };
+    const result = await retireLegacyClustersForTopicMap(db as never, "p1");
+    expect(result).toEqual({ modelled: 0, retired: -1 });
+    expect(updated).toBe(0);
+  });
+
+  it("retires only untracked legacy rows when the topic map owns the project", async () => {
+    let filter: Record<string, unknown> | null = null;
+    const db = {
+      demandMapCluster: {
+        count: async () => 14,
+        updateMany: async (args: { where: Record<string, unknown> }) => {
+          filter = args.where;
+          return { count: 9 };
+        },
+      },
+    };
+    const result = await retireLegacyClustersForTopicMap(db as never, "p1");
+    expect(result).toEqual({ modelled: 14, retired: 9 });
+    expect(filter).toMatchObject({
+      projectId: "p1",
+      supersededAt: null,
+      tracked: false,
+      proposedBy: { not: "topic-map-v1" },
+    });
   });
 });
