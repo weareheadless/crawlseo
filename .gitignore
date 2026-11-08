@@ -46,3 +46,6 @@ next-env.d.ts
 
 # launch drafts (local only)
 docs/launch/
+
+# Local scratch (build logs, release paths)
+.tmp/
