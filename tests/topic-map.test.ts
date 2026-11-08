@@ -631,4 +631,92 @@ describe("page type and owner coverage", () => {
     expect(map.counts.excludedQueries).toBe(1);
     expect(map.unmapped.find((row) => row.query === "lampes")?.reason).toMatch(/^noise/);
   });
+
+  it("defers queries outside the tranche instead of counting them as demand", () => {
+    const lampes = {
+      ...taxonomy[0],
+      slug: "lampes",
+      name: "Lampes",
+      requireAny: ["lampes"],
+      terms: ["lampes"],
+      strongTerms: ["lampes"],
+      preferredPages: ["/lampes"],
+      coverageKind: "product" as const,
+    };
+    const jobMap = {
+      version: 1,
+      proposedBy: "ai",
+      model: null,
+      generatedAt: "2026-11-07T00:00:00Z",
+      jobs: [],
+      verdicts: [{ query: "lampes artisanales", verdict: "demand", job: "buy-lamp", reason: "" }],
+      summary: null,
+      counts: { queries: 3, sent: 1, assigned: 1, unassigned: 0, deferred: 2 },
+    } as unknown as JobMap;
+    const map = buildTopicMap(
+      data({
+        queries: [query("lampes artisanales", 10, 200), query("suspension bois", 7, 90), query("applique laine", 3, 40)],
+        pages: [page("/lampes", "Lampes", "category", 400)],
+      }),
+      [lampes],
+      undefined,
+      jobMap
+    );
+    expect(map.counts.qualifiedQueries).toBe(1);
+    expect(map.counts.deferredQueries).toBe(2);
+    expect(map.deferred).toMatchObject({ count: 2, impressions: 10, clicks: 0 });
+    expect(map.deferred.examples).toEqual(["suspension bois", "applique laine"]);
+    // Topic memberships only ever see judged demand.
+    expect(map.clusters[0].metrics.queries).toBe(1);
+    expect(map.counts.unmappedQueries).toBe(0);
+  });
+
+  it("defers everything when a job map has no verdict at all", () => {
+    const jobMap = {
+      version: 1,
+      proposedBy: "ai",
+      model: null,
+      generatedAt: "2026-11-07T00:00:00Z",
+      jobs: [],
+      verdicts: [],
+      summary: null,
+      counts: { queries: 2, sent: 2, assigned: 0, unassigned: 2, deferred: 0 },
+    } as unknown as JobMap;
+    const map = buildTopicMap(
+      data({ queries: [query("fauteuil restauration", 40, 480), query("abat jour pagode", 50, 390)] }),
+      taxonomy,
+      undefined,
+      jobMap
+    );
+    expect(map.counts.qualifiedQueries).toBe(0);
+    expect(map.counts.deferredQueries).toBe(2);
+    // Topics still exist; none of them may claim a deferred query.
+    expect(map.clusters.every((cluster) => cluster.metrics.queries === 0)).toBe(true);
+  });
+
+  it("reports the deferred tail and the site window in the markdown", () => {
+    const jobMap = {
+      version: 1,
+      proposedBy: "ai",
+      model: null,
+      generatedAt: "2026-11-07T00:00:00Z",
+      jobs: [],
+      verdicts: [{ query: "fauteuil restauration", verdict: "demand", job: "restore-seat", reason: "" }],
+      summary: null,
+      counts: { queries: 2, sent: 1, assigned: 1, unassigned: 0, deferred: 1 },
+    } as unknown as JobMap;
+    const map = buildTopicMap(
+      data({
+        queries: [query("fauteuil restauration", 40, 480), query("abat jour pagode", 5, 390)],
+        pages: [page("/tapisserie-restauration", "Restauration de Sièges", "service", 712)],
+      }),
+      taxonomy,
+      undefined,
+      jobMap
+    );
+    const markdown = renderTopicMapMarkdown(map);
+    expect(markdown).toContain("## Deferred to next cycle");
+    expect(markdown).toContain("1 queries (5 impressions, 0 clicks)");
+    expect(markdown).toContain("Site window: 45 impressions");
+  });
 });

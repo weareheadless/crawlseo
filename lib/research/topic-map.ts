@@ -18,7 +18,6 @@ import {
   isBrandTopic,
   normalizePathKey,
   placeMatches,
-  stabilizeTopicTaxonomy,
   topicMatchesQuery,
   type TopicDefinition,
   type TopicIntent,
@@ -205,12 +204,21 @@ export type TopicMap = {
   unmapped: UnmappedQuery[];
   news: Array<{ title: string; url: string; publishedAt: string | null; excerpt: string | null }>;
   ai: TopicMapAi;
+  /** Site-level Search Console totals for the window: the reach gate uses these. */
+  site: { impressions: number; clicks: number };
+  /** Queries outside this cycle's tranche, counted and left for a later cycle. */
+  deferred: {
+    count: number;
+    impressions: number;
+    clicks: number;
+    examples: string[];
+  };
   counts: {
     queries: number;
-    /** Queries the job map kept as demand (or every query when no job map is stored). */
+    /** Queries the job map judged as demand (or every query when no job map is stored). */
     qualifiedQueries: number;
-    /** Qualified queries the job map did not judge; they stay in demand and are stated. */
-    unjudgedQueries: number;
+    /** Queries outside this cycle's tranche; not counted as demand. */
+    deferredQueries: number;
     /** Queries the job map marked context, noise or out of market. */
     excludedQueries: number;
     clusteredQueries: number;
@@ -696,32 +704,39 @@ export function buildTopicMap(
   now = new Date(),
   jobMap: JobMap | null = null
 ): TopicMap {
-  // Demand is qualified before it is clustered. A query the job map marked as
-  // context, noise or out of market is not this business's demand, however
-  // large its volume. Without a job map every query stays in, as before.
+  // Demand is judged demand, not "not excluded". A query outside this cycle's
+  // tranche has no verdict; it is deferred and counted, never treated as
+  // understood demand. Without a job map (legacy) every query stays in.
   const verdictIndex = jobVerdictIndex(jobMap);
+  // A job map with no verdict is a failed pass, not an absent one: everything
+  // is then deferred and reported, instead of silently counting as demand.
+  const hasJobMap = jobMap != null;
   const jobBySlug = new Map((jobMap?.jobs ?? []).map((job) => [job.slug, job]));
-  const excludedQueries = verdictIndex.size > 0
+  const qualifiedQueries = hasJobMap
+    ? data.queries.filter((query) => verdictIndex.get(query.query)?.verdict === "demand")
+    : data.queries;
+  const deferredQueries = hasJobMap
+    ? data.queries.filter((query) => !verdictIndex.has(query.query))
+    : [];
+  const excludedQueries = hasJobMap
     ? data.queries.filter((query) => {
         const verdict = verdictIndex.get(query.query);
         return verdict != null && verdict.verdict !== "demand";
       })
     : [];
-  const qualifiedQueries = verdictIndex.size > 0
-    ? data.queries.filter((query) => {
-        const verdict = verdictIndex.get(query.query);
-        return verdict == null || verdict.verdict === "demand";
-      })
-    : data.queries;
-  // The approved taxonomy is normalised here, not by another model call: two
-  // topics with one specific owner are merged. The stored taxonomy stays the
-  // human-approved draft.
-  const stabilized = stabilizeTopicTaxonomy({
-    topics: taxonomy,
-    queries: qualifiedQueries,
-    brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
-  });
-  const topics = stabilized.topics;
+  const deferred = {
+    count: deferredQueries.length,
+    impressions: deferredQueries.reduce((sum, query) => sum + query.impressions, 0),
+    clicks: deferredQueries.reduce((sum, query) => sum + (query.clicks ?? 0), 0),
+    examples: deferredQueries.slice(0, 10).map((query) => query.query),
+  };
+  const site = {
+    impressions: data.queries.reduce((sum, query) => sum + query.impressions, 0),
+    clicks: data.queries.reduce((sum, query) => sum + (query.clicks ?? 0), 0),
+  };
+  // The taxonomy is already one topic per job. There is nothing to merge or
+  // normalise: a code-side merge would be a second decision about meaning.
+  const topics = taxonomy;
   // A topic that rolls up a job owns that job's demand by the job map's own
   // verdict, not by string matching: "torre 25" names no place, yet the job map
   // decided it is demand for the Torre 25 job. The code joins the two model
@@ -900,13 +915,15 @@ export function buildTopicMap(
       marketExclusions: 0,
       error: null,
     },
+    site,
+    deferred,
     counts: {
       queries: data.queries.length,
       qualifiedQueries: qualifiedQueries.length,
-      unjudgedQueries: verdictIndex.size > 0 ? qualifiedQueries.filter((query) => !verdictIndex.has(query.query)).length : 0,
+      deferredQueries: deferredQueries.length,
       excludedQueries: excludedQueries.length,
       clusteredQueries: [...assignments.keys()].length,
-      unmappedQueries: unmapped.length,
+      unmappedQueries: qualifiedQueries.filter((query) => !assignments.has(query.query)).length,
       pages: data.pages.length,
       news: data.news.length,
     },
@@ -1307,7 +1324,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push(`- Service area: ${map.business.serviceArea.join("; ") || "unknown"}`);
   lines.push(`- Audience: ${map.business.audience ?? "unknown"}`);
   lines.push("");
-  lines.push("## Tenant model");
+  lines.push("## Topic taxonomy");
   lines.push("");
   lines.push(`- Topics: ${map.taxonomy.length}`);
   for (const topic of map.taxonomy) {
@@ -1316,7 +1333,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Method");
   lines.push("");
-  lines.push("Deterministic taxonomy over stored Search Console queries, DataForSEO keyword metrics, SERP snapshots and the latest crawl. Every membership and page match comes from a stated term. The AI call, when enabled, only reviews and names the clusters; it cannot add queries or pages.");
+  lines.push("One semantic pass: the job map decides the jobs, their markets, owner pages and topic fields, and the taxonomy is projected from it one topic per job. Membership and page matching are arithmetic over the stated need terms, market places and local-intent phrases. The AI call, when enabled, only reviews and names the clusters; it cannot add queries or pages.");
   lines.push("");
   lines.push("A query can belong to more than one topic (a local service query, or a content query that names the craft). Demand totals are per-topic and are not additive across topics.");
   lines.push("");
@@ -1454,6 +1471,17 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
     }
   }
   lines.push("");
+  lines.push("## Deferred to next cycle");
+  lines.push("");
+  if (map.deferred.count === 0) {
+    lines.push("Every measured query was in this cycle's tranche.");
+  } else {
+    lines.push(`- ${map.deferred.count} queries (${map.deferred.impressions} impressions, ${map.deferred.clicks} clicks) were outside this cycle's tranche. They are not counted as demand and are not judged yet; they are processed in a later cycle.`);
+    if (map.deferred.examples.length > 0) {
+      lines.push(`- Examples: ${map.deferred.examples.map((query) => `“${query}”`).join(", ")}.`);
+    }
+  }
+  lines.push("");
   lines.push("## Timely signals from the bundle");
   lines.push("");
   if (map.news.length === 0) {
@@ -1466,14 +1494,15 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Counts");
   lines.push("");
-  lines.push(`- Queries: ${map.counts.queries}; qualified: ${map.counts.qualifiedQueries} (unjudged: ${map.counts.unjudgedQueries}); clustered: ${map.counts.clusteredQueries}; not demand: ${map.counts.excludedQueries}; unmapped: ${map.counts.unmappedQueries}.`);
+  lines.push(`- Site window: ${map.site.impressions} impressions, ${map.site.clicks} clicks. Queries: ${map.counts.queries}; judged demand: ${map.counts.qualifiedQueries}; deferred: ${map.counts.deferredQueries}; clustered: ${map.counts.clusteredQueries}; not demand: ${map.counts.excludedQueries}; unmapped: ${map.counts.unmappedQueries}.`);
   lines.push(`- Pages considered: ${map.counts.pages}; news sources: ${map.counts.news}.`);
   lines.push("");
   lines.push("## Limits");
   lines.push("");
   lines.push("- This is a topic map, not an opportunity list. No article, business or technical proposal is created here.");
   lines.push("- Page coverage uses URL, title, description and H1 because the latest crawl stored no body text.");
-  lines.push("- The taxonomy is proposed for this site; another site needs its own terms or a reviewed taxonomy.");
+  lines.push("- The taxonomy is projected from this site's job map; another site needs its own job map. Two jobs may share one owner page, and that is the model's decision, not a defect.");
+  lines.push("- Queries outside this cycle's tranche are deferred, counted and not judged; they are not evidence either way.");
   lines.push("- Search Console query rows are privacy-limited and do not sum to the page total.");
   lines.push("");
   return lines.join("\n");

@@ -18,6 +18,28 @@ export type JobStage = "research" | "compare" | "buy" | "after_sale";
 export type JobMarketScope = "local" | "national" | "international";
 export type JobFit = "serves" | "does_not_serve" | "unknown";
 export type QueryVerdict = "demand" | "context" | "noise" | "out_of_market";
+export type JobKind = "brand" | "market";
+export type JobIntent = "informational" | "commercial" | "transactional" | "local" | "mixed";
+export type JobRelevance = "high" | "medium" | "low";
+export type JobCoverageKind = "service" | "product" | "content" | "local" | "brand" | "business" | "mixed";
+
+/**
+ * The topic this job rolls up. It is decided in the same call as the job, so
+ * the topic map is a projection and there is no second semantic pass.
+ */
+export type JobTopic = {
+  name: string;
+  kind: JobKind;
+  intent: JobIntent;
+  relevance: JobRelevance;
+  coverageKind: JobCoverageKind;
+  offerKey: string;
+  /** The forms buyers search, in their language. */
+  needTerms: string[];
+  /** Phrases that signal local intent without naming a place ("near me"). */
+  localIntent: string[];
+  actionHint: string;
+};
 
 export type Job = {
   slug: string;
@@ -28,6 +50,8 @@ export type Job = {
   language: string;
   market: { scope: JobMarketScope; places: string[] };
   businessFit: JobFit;
+  /** The topic projection, decided with the job. */
+  topic: JobTopic;
   /** Measured queries that express this job. */
   queries: string[];
   /** The page that does the job, or null when none exists. */
@@ -51,14 +75,21 @@ export type JobMap = {
   jobs: Job[];
   verdicts: JobVerdict[];
   summary: string | null;
+  /** Site-level config, decided in the same call as the jobs. */
+  pageTypeRules: Array<{ type: "home" | "service" | "category" | "product" | "blog" | "other"; pattern: string }>;
+  excludePaths: string[];
+  newsQueries: string[];
   counts: {
-    /** Unique measured queries with volume. */
+    /** Unique measured queries in the window. */
     queries: number;
+    /** Queries in this cycle's tranche that the model saw. */
+    sent: number;
+    /** Sent queries that received a verdict. */
     assigned: number;
-    /** Queries sent to the model that received no verdict. */
+    /** Sent queries with no verdict. */
     unassigned: number;
-    /** Queries with volume that the sample bound did not send; stated, not hidden. */
-    omitted: number;
+    /** Queries outside the tranche, deferred to a later cycle. */
+    deferred: number;
   };
 };
 
@@ -94,13 +125,19 @@ const STAGES: JobStage[] = ["research", "compare", "buy", "after_sale"];
 const SCOPES: JobMarketScope[] = ["local", "national", "international"];
 const FITS: JobFit[] = ["serves", "does_not_serve", "unknown"];
 const VERDICTS: QueryVerdict[] = ["demand", "context", "noise", "out_of_market"];
+const KINDS: JobKind[] = ["brand", "market"];
+const INTENTS: JobIntent[] = ["informational", "commercial", "transactional", "local", "mixed"];
+const RELEVANCES: JobRelevance[] = ["high", "medium", "low"];
+const COVERAGE_KINDS: JobCoverageKind[] = ["service", "product", "content", "local", "brand", "business", "mixed"];
+const PAGE_TYPES = ["home", "service", "category", "product", "blog", "other"] as const;
 
 /**
- * How many queries one job-map call sends. A model context bound, not a
- * relevance decision: the sample keeps the top impressions and the top volume,
- * and the count it dropped is reported in `counts.omitted`.
+ * How many queries one job-map call sends. This is the cycle's tranche, not a
+ * sample of a complete map: the highest-demand queries are processed now and
+ * the rest are deferred, counted and left for a later cycle. A thousand
+ * keywords are not a completeness target.
  */
-export const JOB_SAMPLE_LIMIT = 900;
+export const JOB_SAMPLE_LIMIT = 250;
 
 /** A query sample that includes the high-volume queries, not only the visible ones. */
 export function sampleForJobs(
@@ -152,29 +189,87 @@ function pathKey(path: string): string {
 
 const SYSTEM = [
   "You map search demand to the jobs people are trying to do for this business.",
-  "A job is what the searcher is trying to accomplish, in their words: 'I want to buy a condo in Tulum', 'I want to check whether this project is legitimate', 'I want to learn to freedive'. A topic is a roll-up of one job. A keyword is not a job.",
-  "Read the business facts, the offers and the page inventory. Decide which jobs this business can serve. A job the business does not serve is not demand, however large its volume.",
-  "For every job set statement (buyer language), who, stage (research, compare, buy, after_sale), language (two-letter ISO 639-1), marketScope (local, national, international), marketPlaces, businessFit (serves, does_not_serve, unknown), the measured queries that express it, and the page that does the job or null.",
+  "A job is what the searcher is trying to accomplish, in their words: 'I want to buy a condo in Tulum', 'I want to check whether this project is legitimate', 'I want to learn to freedive'. A keyword is not a job.",
+  "Read the crawled business facts, the services and offers it sells, and the page inventory. Those facts are authoritative: a job is served only when the supplied services or offers include it, or a supplied page sells it. A blog guide is not an offer. If the facts do not say, use unknown; do not invent an offer or a page.",
+  "A topic is a roll-up of one job. Decide the topic in the same response: topicName (the short label), kind (brand or market), intent (informational, commercial, transactional, local or mixed), relevance (high, medium or low), coverageKind (service, product, content, local, brand, business or mixed), offerKey (the supplied offer, or the topic name when no offer fits), needTerms (the forms buyers search, in their language, including singular/plural and word order), localIntent (phrases that signal local intent without naming a place, in the buyer language), and actionHint (one sentence).",
+  "For every job set statement (buyer language), who, stage (research, compare, buy, after_sale), language (two-letter ISO 639-1), marketScope (local, national, international), marketPlaces, businessFit (serves, does_not_serve, unknown), topic, the tranche queries that express it, and the page that does the job or null.",
   "A job may have no page: set page to null. Do not classify a query as context or noise only because no page exists.",
   "language is the ISO 639-1 code the buyers search in for this job. market.scope is local, national or international; a local or national job must name its places.",
   "businessFit is serves, does_not_serve or unknown. Use unknown when the facts do not say; do not invent an offer or a page.",
-  "Assign every measured query to exactly one verdict: demand (this job, this market, this buyer intent), context (names the market or the business but not the job), noise (shares a word but serves a different job or meaning), or out_of_market (another place or audience).",
-  "A bare place ('tulum') is context, never demand. A bare category noun ('casas', 'departamentos', 'freediving') is context unless the query also carries the specific job. A query that names a different job with the same word ('casas de cambio') is noise.",
-  "For a demand verdict, set job to the job slug. For every other verdict, job is null.",
-  "Do not create a job for a query the business does not serve. Do not leave a query with volume unassigned: if it fits no job, mark it context, noise or out_of_market and say why.",
+  "queries is this cycle's tranche, not the whole query set: list the tranche queries that express this job. A later call assigns every tranche query to a verdict.",
+  "Do not create a job for a query the business does not serve.",
+  "Also return the site config: pageTypeRules (map the inventory's URL prefixes to home, service, category, product, blog or other; exclude legal, checkout, account, tag, pagination and search paths), excludePaths, and newsQueries (4 to 6 searches in the site language that find current news or regulation for this business).",
   "previous lists the job map in use. Revise it; do not replace it with a fresh guess. Keep a job whose queries it still explains.",
-  "Return exactly one JSON object: { summary, jobs: [{ slug, statement, who, stage, language, marketScope, marketPlaces, businessFit, queries, page, reason }], verdicts: [{ query, verdict, job, reason }] }.",
-  "Keep summary under 400 characters, each reason under 200, at most 20 jobs.",
+  "Return exactly one JSON object: { summary, jobs: [{ slug, statement, who, stage, language, marketScope, marketPlaces, businessFit, topic: { name, kind, intent, relevance, coverageKind, offerKey, needTerms, localIntent, actionHint }, queries, page, reason }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
+  "Keep summary under 400 characters, each reason and actionHint under 200, at most 24 jobs.",
 ].join("\n");
+
+const SYSTEM_VERDICTS = [
+  "You receive the jobs already decided for this business and one batch of measured queries.",
+  "Assign every query in the batch to exactly one verdict: demand (this job, this market, this buyer intent), context (names the market or the business but not the job), noise (shares a word but serves a different job or meaning), or out_of_market (another place or audience).",
+  "For a demand verdict, set job to the job slug. For every other verdict, job is null.",
+  "A bare place ('tulum') is context, never demand. A bare category noun is context unless the query also carries the specific job. A query that names a different job with the same word is noise.",
+  "Do not leave a query unassigned. If it fits no job, mark it context, noise or out_of_market and say why.",
+  "Return exactly one JSON object: { verdicts: [{ query, verdict, job, reason }] }. Keep each reason under 160 characters.",
+].join("\n");
+
+/**
+ * Parse one verdict batch against the jobs already decided. It is the only
+ * per-query check: membership, the verdict enum and the job link. It does not
+ * decide what the query means.
+ */
+export function parseVerdicts(
+  record: Record<string, unknown>,
+  queries: Array<{ query: string }>,
+  jobs: Job[]
+): { verdicts: JobVerdict[]; rejected: Array<{ title: string; reason: string }> } {
+  const rejected: Array<{ title: string; reason: string }> = [];
+  const byKey = new Map(queries.map((query) => [query.query.toLowerCase(), query.query]));
+  const jobSlugs = new Set(jobs.map((job) => job.slug));
+  const fitBySlug = new Map(jobs.map((job) => [job.slug, job.businessFit]));
+  const verdicts: JobVerdict[] = [];
+  const seen = new Set<string>();
+  for (const raw of Array.isArray(record.verdicts) ? record.verdicts : []) {
+    const row = asRecord(raw);
+    const query = text(row.query);
+    const verdict = text(row.verdict) as QueryVerdict | null;
+    if (!query || !verdict || !VERDICTS.includes(verdict)) continue;
+    const matched = byKey.get(query.toLowerCase());
+    if (!matched || seen.has(matched)) continue;
+    const job = text(row.job);
+    if (verdict === "demand") {
+      if (!job || !jobSlugs.has(job)) {
+        rejected.push({ title: query, reason: "demand verdict names no supplied job" });
+        continue;
+      }
+      // A job the business does not serve cannot own demand.
+      if (fitBySlug.get(job) === "does_not_serve") {
+        rejected.push({ title: query, reason: "demand assigned to a job the business does not serve" });
+        continue;
+      }
+    }
+    if (verdict !== "demand" && job && !jobSlugs.has(job)) {
+      rejected.push({ title: query, reason: "verdict names an unknown job" });
+      continue;
+    }
+    seen.add(matched);
+    verdicts.push({ query: matched, verdict, job: verdict === "demand" ? job : null, reason: text(row.reason)?.slice(0, 240) ?? "" });
+  }
+  return { verdicts, rejected };
+}
 
 export function parseJobMap(
   record: Record<string, unknown>,
-  input: Pick<JobMapInput, "pages" | "queries">,
+  input: Pick<JobMapInput, "pages" | "queries" | "offers">,
   meta: { proposedBy: "ai" | "human"; model: string | null; generatedAt?: string }
 ): { jobMap: JobMap; rejected: Array<{ title: string; reason: string }> } {
   const rejected: Array<{ title: string; reason: string }> = [];
-  const sampleByKey = new Map(input.queries.map((query) => [query.query.toLowerCase(), query.query]));
+  // This cycle's tranche: only these queries can be cited or judged. A query
+  // outside it is deferred, not silently treated as understood.
+  const sample = sampleForJobs(input.queries);
+  const sampleByKey = new Map(sample.map((query) => [query.query.toLowerCase(), query.query]));
   const pageSet = new Set(input.pages.map((page) => pathKey(page.path)));
+  const offerKeys = new Set(input.offers.map((offer) => offer.offer));
   const jobs: Job[] = [];
   const seen = new Set<string>();
   for (const raw of Array.isArray(record.jobs) ? record.jobs : []) {
@@ -214,6 +309,26 @@ export function parseJobMap(
       rejected.push({ title: statement, reason: "local or national job needs market places" });
       continue;
     }
+    const topicRow = asRecord(row.topic);
+    const topicName = text(topicRow.name);
+    const kind = text(topicRow.kind)?.toLowerCase() as JobKind | null;
+    const intent = text(topicRow.intent)?.toLowerCase() as JobIntent | null;
+    const relevance = text(topicRow.relevance)?.toLowerCase() as JobRelevance | null;
+    const coverageKind = text(topicRow.coverageKind)?.toLowerCase() as JobCoverageKind | null;
+    const offerKey = text(topicRow.offerKey);
+    const needTerms = stringList(topicRow.needTerms, 30);
+    if (!topicName || !kind || !KINDS.includes(kind) || !intent || !INTENTS.includes(intent) || !relevance || !RELEVANCES.includes(relevance) || !coverageKind || !COVERAGE_KINDS.includes(coverageKind) || !offerKey) {
+      rejected.push({ title: statement, reason: "incomplete topic contract" });
+      continue;
+    }
+    if (needTerms.length === 0) {
+      rejected.push({ title: statement, reason: "topic has no need terms" });
+      continue;
+    }
+    if (input.offers.length > 0 && !offerKeys.has(offerKey)) {
+      rejected.push({ title: statement, reason: "offerKey is not a supplied offer" });
+      continue;
+    }
     const page = text(row.page);
     if (page && !pageSet.has(pathKey(page))) {
       rejected.push({ title: statement, reason: "page is not in the supplied inventory" });
@@ -223,7 +338,7 @@ export function parseJobMap(
       .map((query) => sampleByKey.get(query.toLowerCase()))
       .filter((query): query is string => Boolean(query));
     if (queries.length === 0) {
-      rejected.push({ title: statement, reason: "cites no measured query" });
+      rejected.push({ title: statement, reason: "cites no tranche query" });
       continue;
     }
     seen.add(slug);
@@ -235,53 +350,41 @@ export function parseJobMap(
       language,
       market: { scope, places },
       businessFit: fit,
+      topic: {
+        name: topicName.slice(0, 160),
+        kind,
+        intent,
+        relevance,
+        coverageKind,
+        offerKey: offerKey.slice(0, 120),
+        needTerms,
+        localIntent: stringList(topicRow.localIntent, 20),
+        actionHint: text(topicRow.actionHint)?.slice(0, 240) ?? "",
+      },
       queries,
       page: page ? pageKey(page, input.pages) : null,
       reason: text(row.reason)?.slice(0, 400) ?? "",
     });
   }
 
-  const jobSlugs = new Set(jobs.map((job) => job.slug));
-  const fitBySlug = new Map(jobs.map((job) => [job.slug, job.businessFit]));
-  const verdicts: JobVerdict[] = [];
-  const seenQueries = new Set<string>();
-  for (const raw of Array.isArray(record.verdicts) ? record.verdicts : []) {
-    const row = asRecord(raw);
-    const query = text(row.query);
-    const verdict = text(row.verdict) as QueryVerdict | null;
-    if (!query || !verdict || !VERDICTS.includes(verdict)) continue;
-    const matched = sampleByKey.get(query.toLowerCase());
-    if (!matched || seenQueries.has(matched)) continue;
-    const job = text(row.job);
-    if (verdict === "demand") {
-      if (!job || !jobSlugs.has(job)) {
-        rejected.push({ title: query, reason: "demand verdict names no supplied job" });
-        continue;
-      }
-      // A job the business does not serve cannot own demand.
-      if (fitBySlug.get(job) === "does_not_serve") {
-        rejected.push({ title: query, reason: "demand assigned to a job the business does not serve" });
-        continue;
-      }
-    }
-    if (verdict !== "demand" && job && !jobSlugs.has(job)) {
-      rejected.push({ title: query, reason: "verdict names an unknown job" });
-      continue;
-    }
-    seenQueries.add(matched);
-    verdicts.push({ query: matched, verdict, job: verdict === "demand" ? job : null, reason: text(row.reason)?.slice(0, 240) ?? "" });
-  }
+  const parsedVerdicts = parseVerdicts(record, sample, jobs);
+  rejected.push(...parsedVerdicts.rejected);
+  const verdicts = parsedVerdicts.verdicts;
 
-  const sample = sampleForJobs(input.queries);
-  const sampleSet = new Set(sample.map((query) => query.query));
-  const withVolume = input.queries.filter((query) => (query.volume ?? 0) > 0);
-  const withVolumeSet = new Set(withVolume.map((query) => query.query));
-  const sentWithVolume = withVolume.filter((query) => sampleSet.has(query.query));
-  const assigned = new Set(verdicts.filter((verdict) => withVolumeSet.has(verdict.query)).map((verdict) => verdict.query));
-  const unassigned = sentWithVolume.filter((query) => !assigned.has(query.query)).length;
-  // Everything the sample did not send, with or without volume: the bound is
-  // stated, not hidden. Volume queries are the ones the contract assigns.
-  const omitted = input.queries.length - sample.length;
+  const pageTypeRules: JobMap["pageTypeRules"] = [];
+  for (const raw of Array.isArray(record.pageTypeRules) ? record.pageTypeRules : []) {
+    const row = asRecord(raw);
+    const type = text(row.type) as JobMap["pageTypeRules"][number]["type"] | null;
+    const pattern = text(row.pattern);
+    if (!type || !(PAGE_TYPES as readonly string[]).includes(type) || !pattern || !pattern.startsWith("/")) continue;
+    pageTypeRules.push({ type, pattern: pattern.slice(0, 200) });
+  }
+  const excludePaths = stringList(record.excludePaths, 20).map((path) => (path.startsWith("/") ? path : `/${path}`));
+  const newsQueries = stringList(record.newsQueries, 8);
+
+  const assignedQueries = new Set(verdicts.map((verdict) => verdict.query));
+  const assigned = [...sample].filter((query) => assignedQueries.has(query.query)).length;
+  const unassigned = sample.length - assigned;
 
   return {
     jobMap: {
@@ -292,7 +395,16 @@ export function parseJobMap(
       jobs,
       verdicts,
       summary: text(record.summary)?.slice(0, 600) ?? null,
-      counts: { queries: withVolume.length, assigned: assigned.size, unassigned, omitted },
+      pageTypeRules,
+      excludePaths,
+      newsQueries,
+      counts: {
+        queries: input.queries.length,
+        sent: sample.length,
+        assigned,
+        unassigned,
+        deferred: input.queries.length - sample.length,
+      },
     },
     rejected,
   };
@@ -317,6 +429,7 @@ export async function proposeJobMap(
   if (input.queries.length === 0) return { jobMap: null, rejected: [], unassigned: [], error: "no measured query to model", model: null };
 
   const sample = sampleForJobs(input.queries);
+  const sampleQueries = sample.map((query) => query.query);
   const payload = {
     domain: input.domain,
     language: input.language,
@@ -340,70 +453,121 @@ export async function proposeJobMap(
             marketScope: job.market.scope,
             marketPlaces: job.market.places,
             businessFit: job.businessFit,
+            topic: job.topic,
             page: job.page,
           })),
         }
       : null,
-    queriesOmitted: Math.max(0, input.queries.length - sample.length),
+    queriesDeferred: Math.max(0, input.queries.length - sample.length),
   };
 
-  const run = async (extra?: Record<string, unknown>) => {
+  // Phase 1: the jobs and the site config. One call; the response is small.
+  const jobsRun = async (extra?: Record<string, unknown>) => {
     const parsed = await chatJson({
       config,
-      system: SYSTEM,
+      system: `${SYSTEM}\nThis call decides the jobs and site config only. Do not return verdicts; a later call assigns the tranche in batches.`,
       user: JSON.stringify(extra ? { ...payload, correction: extra } : payload),
-      maxTokens: 32_000,
+      maxTokens: 16_000,
       temperature: 0.2,
       attempts: 3,
       timeoutMs: 600_000,
       jsonMode: false,
     });
-    return parseJobMap(asRecord(parsed), input, { proposedBy: "ai", model: config.model });
+    return parseJobMap({ ...asRecord(parsed), verdicts: [] }, input, { proposedBy: "ai", model: config.model });
   };
 
-  let result: { jobMap: JobMap; rejected: Array<{ title: string; reason: string }> } | null = null;
+  let jobsResult: ReturnType<typeof parseJobMap> | null = null;
   let error: string | null = null;
   try {
-    result = await run();
+    jobsResult = await jobsRun();
+    if (jobsResult.jobMap.jobs.length === 0 || jobsResult.rejected.length > 0) {
+      const corrected = await jobsRun({
+        reason: "The first job proposal was incomplete.",
+        rejected: jobsResult.rejected,
+        instruction: "Return the complete job list. Every job needs the topic contract, a supplied offer key and a tranche query it expresses.",
+      });
+      if (corrected.jobMap.jobs.length > 0) jobsResult = corrected;
+    }
   } catch (cause) {
     error = cause instanceof Error ? cause.message.slice(0, 300) : String(cause).slice(0, 300);
   }
-  if (!result) return { jobMap: null, rejected: [], unassigned: [], error, model: config.model };
+  if (!jobsResult || jobsResult.jobMap.jobs.length === 0) {
+    return { jobMap: null, rejected: jobsResult?.rejected ?? [], unassigned: sampleQueries, error: error ?? "no usable job", model: config.model };
+  }
 
-  // One re-proposal: name the unassigned queries and the rejected jobs. Only
-  // queries the sample actually sent can be unassigned; an omitted query is
-  // reported as omitted, not asked for again.
-  const sampleSet = new Set(sampleForJobs(input.queries).map((query) => query.query));
-  const withVolume = new Set(
-    input.queries
-      .filter((query) => (query.volume ?? 0) > 0 && sampleSet.has(query.query))
-      .map((query) => query.query)
-  );
-  const assigned = new Set(result.jobMap.verdicts.map((verdict) => verdict.query));
-  const unassigned = [...withVolume].filter((query) => !assigned.has(query));
-  if (unassigned.length > 0 || result.jobMap.jobs.length === 0 || result.rejected.length > 0) {
-    try {
-      const corrected = await run({
-        reason: "The first map left measured queries unassigned or produced no usable job.",
-        unassigned: unassigned.slice(0, 60),
-        unassignedCount: unassigned.length,
-        rejected: result.rejected,
-        instruction: "Assign every query with volume to a job or to context, noise or out_of_market. Return the complete revised map, not a diff.",
+  const jobs = jobsResult.jobMap.jobs;
+  const verdictPayload = {
+    domain: input.domain,
+    language: input.language,
+    market: input.market ?? null,
+    audienceMarket: input.audienceMarket ?? null,
+    jobs: jobs.map((job) => ({
+      slug: job.slug,
+      statement: job.statement,
+      stage: job.stage,
+      marketScope: job.market.scope,
+      marketPlaces: job.market.places,
+      businessFit: job.businessFit,
+      topic: { name: job.topic.name, needTerms: job.topic.needTerms, intent: job.topic.intent },
+    })),
+  };
+
+  // Phase 2: verdict batches against the fixed jobs. Every batch is checked
+  // for coverage; a missing query is retried once in that batch, never guessed.
+  const batchSize = 80;
+  const verdicts: JobVerdict[] = [];
+  const rejected = [...jobsResult.rejected];
+  for (let index = 0; index < sample.length; index += batchSize) {
+    const batch = sample.slice(index, index + batchSize);
+    const runBatch = async (queries: typeof batch, extra?: Record<string, unknown>) => {
+      const parsed = await chatJson({
+        config,
+        system: SYSTEM_VERDICTS,
+        user: JSON.stringify({ ...verdictPayload, queries, correction: extra }),
+        maxTokens: 16_000,
+        temperature: 0.2,
+        attempts: 3,
+        timeoutMs: 300_000,
+        jsonMode: false,
       });
-      if (corrected.jobMap.jobs.length > 0) result = corrected;
+      return parseVerdicts(asRecord(parsed), queries, jobs);
+    };
+    try {
+      let parsed = await runBatch(batch);
+      rejected.push(...parsed.rejected);
+      const missing = batch.filter((query) => !parsed.verdicts.some((verdict) => verdict.query === query.query));
+      if (missing.length > 0) {
+        const retry = await runBatch(batch, {
+          reason: "The first pass left queries in this batch unassigned.",
+          unassigned: missing.map((query) => query.query),
+          instruction: "Assign every query in the batch. Return the complete batch, not a diff.",
+        });
+        rejected.push(...retry.rejected);
+        const byQuery = new Map(parsed.verdicts.map((verdict) => [verdict.query, verdict]));
+        for (const verdict of retry.verdicts) byQuery.set(verdict.query, verdict);
+        parsed = { verdicts: [...byQuery.values()], rejected: [] };
+      }
+      verdicts.push(...parsed.verdicts);
     } catch (cause) {
       error = cause instanceof Error ? cause.message.slice(0, 300) : String(cause).slice(0, 300);
     }
   }
 
-  const finalAssigned = new Set(result.jobMap.verdicts.map((verdict) => verdict.query));
-  return {
-    jobMap: result.jobMap,
-    rejected: result.rejected,
-    unassigned: [...withVolume].filter((query) => !finalAssigned.has(query)),
-    error,
-    model: config.model,
+  const assignedSet = new Set(verdicts.map((verdict) => verdict.query));
+  const assigned = sampleQueries.filter((query) => assignedSet.has(query)).length;
+  const unassigned = sampleQueries.filter((query) => !assignedSet.has(query));
+  const jobMap: JobMap = {
+    ...jobsResult.jobMap,
+    verdicts,
+    counts: {
+      queries: input.queries.length,
+      sent: sample.length,
+      assigned,
+      unassigned: unassigned.length,
+      deferred: input.queries.length - sample.length,
+    },
   };
+  return { jobMap, rejected, unassigned, error, model: config.model };
 }
 
 /** Verdicts keyed by query, for the topic map's demand arithmetic. */
@@ -424,7 +588,18 @@ export async function loadJobMap(db: JobMapDb, siteId: string): Promise<JobMap |
   if (!raw) return null;
   const record = asRecord(raw);
   if (!Array.isArray(record.jobs) || !Array.isArray(record.verdicts)) return null;
-  return record as unknown as JobMap;
+  // A map stored before the topic contract (or before the tranche counts) is
+  // not usable as a projection. Returning null forces one new proposal instead
+  // of guessing the missing fields.
+  const counts = asRecord(record.counts);
+  if (typeof counts.sent !== "number") return null;
+  if (record.jobs.some((job) => !asRecord(asRecord(job).topic).name)) return null;
+  return {
+    ...(record as unknown as JobMap),
+    pageTypeRules: Array.isArray(record.pageTypeRules) ? (record.pageTypeRules as JobMap["pageTypeRules"]) : [],
+    excludePaths: Array.isArray(record.excludePaths) ? (record.excludePaths as string[]) : [],
+    newsQueries: Array.isArray(record.newsQueries) ? (record.newsQueries as string[]) : [],
+  };
 }
 
 export async function saveJobMap(db: JobMapDb, siteId: string, jobMap: JobMap): Promise<void> {

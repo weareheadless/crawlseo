@@ -59,12 +59,6 @@ export type Proposal = {
   critique?: { verdict: "keep" | "revise" | "drop"; reason: string } | null;
 };
 
-export type ProposalGroup = {
-  members: string[];
-  title: string;
-  action: string;
-};
-
 export type ProposalGenerationDb = OpportunityDb &
   Pick<
     PrismaClient,
@@ -264,10 +258,8 @@ function deterministicCritique(proposals: Proposal[]): {
   summary: string | null;
   error: string | null;
   decisions: Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>;
-  groups: ProposalGroup[];
 } {
   const decisions = new Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>();
-  const groups: ProposalGroup[] = [];
   const byTarget = new Map<string, Proposal[]>();
   for (const proposal of proposals) {
     if (!proposal.target.url) continue;
@@ -283,11 +275,6 @@ function deterministicCritique(proposals: Proposal[]): {
         reason: `Same target (${url}) as “${group[0].title}”; sequence or merge before accepting.`,
       });
     }
-    groups.push({
-      members: group.map((proposal) => proposal.dedupKey),
-      title: group[0].title,
-      action: group.map((proposal) => proposal.action).join(" "),
-    });
   }
   let dependencies = 0;
   for (const proposal of proposals) {
@@ -323,7 +310,6 @@ function deterministicCritique(proposals: Proposal[]): {
     summary: `Deterministic critique: ${proposals.length} proposals checked; ${overlaps} target overlap(s), ${dependencies} new-asset dependency, ${thin} thin-evidence item(s).`,
     error: null,
     decisions,
-    groups,
   };
 }
 
@@ -336,14 +322,13 @@ export async function critiqueProposals(
   summary: string | null;
   error: string | null;
   decisions: Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>;
-  groups: ProposalGroup[];
 }> {
   const config = contentWriterConfig();
   if (!config) {
-    return { available: false, model: null, summary: null, error: "CONTENT_LLM_API_KEY is not configured", decisions: new Map(), groups: [] };
+    return { available: false, model: null, summary: null, error: "CONTENT_LLM_API_KEY is not configured", decisions: new Map() };
   }
   if (proposals.length === 0) {
-    return { available: false, model: config.model, summary: null, error: "no proposals to critique", decisions: new Map(), groups: [] };
+    return { available: false, model: config.model, summary: null, error: "no proposals to critique", decisions: new Map() };
   }
   const payload = {
     site: map.domain,
@@ -364,9 +349,8 @@ export async function critiqueProposals(
     "Check each proposal for unsupported claims, duplicates and wrong target pages.",
     "Respect the tenant market scope: a local service is local, while a national or international product offer may be proposed beyond the local service area. The owner decides whether to add a product range.",
     "A low-demand but business-relevant local proposal is valid; do not drop it only because volume is low. Check whether it is a reasonable expansion or small test.",
-    "Group proposals that one delivery would close: the same page, the same template, or the same metadata pass across many pages. Also group a page update with its answer blocks, and a hub update with a range question about the same formats. A group is advice on presentation; it does not delete the members.",
-    "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }], groups: [{ members: string[], title: string, action: string }] }.",
-    "Use only the supplied dedupKeys. A group needs at least two members. Keep the summary under 300 characters, each reason under 200, each group title under 120 and each group action under 600.",
+    "Do not rewrite the proposals. Return exactly one JSON object: { summary: string, decisions: [{ dedupKey: string, verdict: 'keep'|'revise'|'drop', reason: string }] }.",
+    "Use only the supplied dedupKeys. Keep the summary under 300 characters and each reason under 200.",
   ].join("\n");
 
   try {
@@ -392,25 +376,12 @@ export async function critiqueProposals(
       if (!dedupKey || !verdict || !["keep", "revise", "drop"].includes(verdict)) continue;
       decisions.set(dedupKey, { verdict: verdict as "keep" | "revise" | "drop", reason: reason?.slice(0, 400) ?? "" });
     }
-    const known = new Set(proposals.map((proposal) => proposal.dedupKey));
-    const groups: ProposalGroup[] = [];
-    for (const raw of Array.isArray(record.groups) ? record.groups : []) {
-      const row = asRecord(raw);
-      const members = Array.isArray(row.members)
-        ? row.members.filter((key): key is string => typeof key === "string" && known.has(key))
-        : [];
-      const title = textValue(row.title);
-      const action = textValue(row.action);
-      if (members.length < 2 || !title || !action) continue;
-      groups.push({ members: [...new Set(members)], title: title.slice(0, 160), action: action.slice(0, 900) });
-    }
     return {
       available: true,
       model: config.model,
       summary: textValue(record.summary)?.slice(0, 800) ?? null,
       error: null,
       decisions,
-      groups,
     };
   } catch (error) {
     const fallback = deterministicCritique(proposals);
@@ -483,15 +454,15 @@ export async function storeProposals(
         continue;
       }
       if (existing) {
-        // A proposal that the system closed on a previous run (superseded,
-        // merged, or dropped by advice) comes back when it is proposed again.
-        // A human rejection is never reopened.
-        const autoClosed =
-          existing.status === "closed" &&
+        // A proposal that was merely not re-proposed on a previous run comes
+        // back when it is proposed again. It was parked, never closed: closure
+        // means verified fixed. A human rejection is never reopened.
+        const autoParked =
+          existing.status === "parked" &&
           (existing.parkReason === "superseded by refreshed proposal" ||
             existing.parkReason === "merged into another proposal" ||
             existing.parkReason === "dropped by critique");
-        if (autoClosed) {
+        if (autoParked) {
           await db.opportunity.update({
             where: { id: existing.id },
             data: { status: "detected", parkReason: null },
@@ -570,7 +541,7 @@ export function renderProposalBoard(input: {
   /** The drafting call's own note, including why it proposed nothing. */
   drafting?: { model: string | null; summary: string | null; errors: string[]; truncations?: string[] } | null;
   /** What changed against the previous run of this month. */
-  changes?: { updated: number; added: string[]; closed: string[] } | null;
+  changes?: { updated: number; added: string[]; noLongerProposed: string[] } | null;
   technical: ProposalInputs["technical"];
   generatedAt: string;
 }): string {
@@ -589,10 +560,10 @@ export function renderProposalBoard(input: {
     .sort((a, b) => comparePriority(a, b, gate));
   if (input.changes) {
     lines.push(
-      `Since the previous run: ${input.changes.updated} updated in place, ${input.changes.added.length} new, ${input.changes.closed.length} closed.`
+      `Since the previous run: ${input.changes.updated} updated in place, ${input.changes.added.length} new, ${input.changes.noLongerProposed.length} no longer proposed.`
     );
     for (const title of input.changes.added) lines.push(`- new: ${title}`);
-    for (const title of input.changes.closed) lines.push(`- closed: ${title}`);
+    for (const title of input.changes.noLongerProposed) lines.push(`- no longer proposed: ${title}`);
     lines.push("");
   }
   if (ranked.length > 0) {
@@ -697,7 +668,7 @@ export function renderProposalBoard(input: {
   }
   lines.push("");
   if (input.dropped.length > 0) {
-    lines.push("Merged or not stored:");
+    lines.push("Not stored:");
     lines.push("");
     for (const row of input.dropped) lines.push(`- ${row.title} — ${row.reason}`);
     lines.push("");
@@ -705,7 +676,7 @@ export function renderProposalBoard(input: {
   lines.push("## Limits");
   lines.push("");
   lines.push("- This board is a proposal set, not accepted work. No task, delivery or publication is created.");
-  lines.push("- Proposals are drafted from the reviewed topic map and its cited evidence; the critique can challenge or group them but cannot add queries, pages or evidence.");
+  lines.push("- Proposals are drafted from the reviewed topic map and its cited evidence; the critique can challenge them but cannot add queries, pages or evidence.");
   lines.push("- A business proposal with no target page is an investigation, not an article.");
   lines.push("- Technical proposals are drafted from the crawl findings like any other lane; the crawl rows are cited as evidence.");
   lines.push("");

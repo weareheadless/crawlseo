@@ -126,4 +126,15 @@ describe("foundations gate", () => {
     expect(gate.needed).toBe(false);
     expect(gate.reason).toMatch(/content can be ranked by expected clicks/);
   });
+
+  it("uses the site's own window totals, not the sum of topic memberships", () => {
+    // Topic memberships overlap and miss queries, so their sum is a lower
+    // bound. The gate must read the site totals the map now stores.
+    const map = {
+      ...mapWith([cluster({ metrics: { ...cluster().metrics, impressions: 0, clicks: 0 } })]),
+      site: { impressions: 4_000, clicks: 60 },
+    } as unknown as TopicMap;
+    const gate = foundationsGate(map);
+    expect(gate.needed).toBe(false);
+  });
 });

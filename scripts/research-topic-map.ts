@@ -3,16 +3,16 @@
  *
  *   npx tsx scripts/research-topic-map.ts --site <siteId> --month 2026-11 --dry-run
  *   npx tsx scripts/research-topic-map.ts --site <siteId> --month 2026-11 \
- *     --execute --approval <reference> [--ai] [--refresh]
+ *     --execute --approval <reference> [--ai] [--refresh] [--refresh-job-map]
  *
- * Dry run is read-only: it builds the deterministic map and prints/writes the
- * report. Execute stores the clusters and memberships in the existing demand-map
- * tables. `--ai` additionally runs one context-synthesis review; it cannot add
- * queries or pages.
+ * One semantic pass: the job map decides the jobs, their markets, pages and
+ * topic fields. The taxonomy is projected from it and the map is built from
+ * both. A stored job map is reused; `--refresh-job-map` proposes a new one, and
+ * a missing or pre-contract map is proposed automatically. `--ai` adds one
+ * synthesis review of the finished map; it cannot add queries or pages.
  */
 
 import { loadEnvConfig } from "@next/env";
-import { readFile } from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
 
 import {
@@ -26,13 +26,8 @@ import {
   type TopicMap,
 } from "@/lib/research/topic-map";
 import {
-  brandTermMatches,
-  isBrandTopic,
-  loadTopicTaxonomy,
-  parseTopicTaxonomy,
-  proposeTopicTaxonomy,
+  projectTopicTaxonomy,
   saveTopicTaxonomy,
-  type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
 import {
   loadJobMap,
@@ -53,10 +48,7 @@ type Args = {
   approval?: string;
   ai: boolean;
   refresh: boolean;
-  refreshTaxonomy: boolean;
   refreshJobMap: boolean;
-  approveTaxonomy: boolean;
-  taxonomyPath?: string;
   out?: string;
   json: boolean;
 };
@@ -76,42 +68,6 @@ function asStringList(value: unknown): string[] {
   const text = asString(value);
   if (!text) return [];
   return text.split(/[;,]/).map((entry) => entry.trim()).filter(Boolean);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-/**
- * The previous map's unmapped queries, restricted to those still measured in
- * this window. The map computes which queries no topic owned; the next
- * proposal decides why. A query that dropped out of the window is not sent,
- * because the model cannot cite it as evidence.
- */
-function previousUnmappedQueries(
-  report: unknown,
-  queries: Array<{ query: string; impressions: number; volume: number | null }>
-): Array<{ query: string; impressions: number; volume: number | null }> {
-  const rows = asRecord(asRecord(report).map).unmapped;
-  if (!Array.isArray(rows)) return [];
-  const byQuery = new Map(queries.map((query) => [query.query, query]));
-  const seen = new Set<string>();
-  const out: Array<{ query: string; impressions: number; volume: number | null }> = [];
-  for (const row of rows) {
-    const record = asRecord(row);
-    // Only qualified demand that no topic owned is feedback for the next
-    // taxonomy. A query the job map marked context, noise or out of market is
-    // not demand to place, so sending it again would ask the model to solve a
-    // problem it already solved.
-    if (record.kind === "excluded") continue;
-    const query = record.query;
-    if (typeof query !== "string" || seen.has(query)) continue;
-    const current = byQuery.get(query);
-    if (!current) continue;
-    seen.add(query);
-    out.push(current);
-  }
-  return out;
 }
 
 class CliError extends Error {
@@ -153,10 +109,7 @@ function parseArgs(argv: string[]): Args {
     approval: values.get("approval"),
     ai: flags.has("ai"),
     refresh: flags.has("refresh"),
-    refreshTaxonomy: flags.has("refresh-taxonomy"),
     refreshJobMap: flags.has("refresh-job-map"),
-    approveTaxonomy: flags.has("approve-taxonomy"),
-    taxonomyPath: values.get("taxonomy"),
     out: values.get("out"),
     json: flags.has("json"),
   };
@@ -197,108 +150,15 @@ async function main(): Promise<void> {
     if (!site.projectId) throw new CliError(`site ${site.domain} is not attached to a project`, 2);
     const month = args.month?.trim() || new Date().toISOString().slice(0, 7);
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new CliError("--month must be YYYY-MM", 2);
-    // The tenant model: imported, stored, or proposed by the model. The
-    // pipeline no longer knows a site by name.
-    let taxonomy: TopicTaxonomy | null = await loadTopicTaxonomy(db, site.id);
+    // The job map is the only semantic pass. The topic taxonomy is a
+    // projection of it: one job, one topic, owner = job page. There is no
+    // second taxonomy proposal and no reconciliation between two models.
     let jobMap: JobMap | null = await loadJobMap(db, site.id);
-    if (args.taxonomyPath) {
-      const raw = JSON.parse(await readFile(args.taxonomyPath, "utf8")) as unknown;
-      const parsed = parseTopicTaxonomy(raw, { proposedBy: "human", model: null });
-      if (parsed.taxonomy.topics.length === 0) {
-        throw new CliError(`taxonomy file ${args.taxonomyPath} has no valid topic`, 2);
-      }
-      taxonomy = parsed.taxonomy;
-      for (const row of parsed.rejected) process.stderr.write(`taxonomy topic skipped: ${row.title} — ${row.reason}\n`);
-      if (args.mode === "execute") await saveTopicTaxonomy(db, site.id, taxonomy);
-    }
-    // A re-proposal must not lose brand demand the owner already approved. The
-    // prior brand topic's terms are the tenant's own memory, not a hardcoded
-    // name in the pipeline.
-    const brandKey = site.domain.replace(/^www\./, "").split(".")[0].toLowerCase();
-    // Keep the name-like terms of the approved brand topic, not its broad
-    // location terms: "ocean vibes" belongs, "playa carmen" does not.
-    const priorBrandTerms = (taxonomy?.topics.find((topic) => isBrandTopic(topic))?.requireAny ?? []).filter(
-      (term) => brandTermMatches(term, brandKey)
-    );
-    // The taxonomy in use is the base of a revision, not a suggestion. Without
-    // it every pass re-invents the taxonomy and can drop a topic that owns
-    // real demand.
-    const currentTaxonomy = (taxonomy?.topics ?? []).map((topic) => ({
-      name: topic.name,
-      job: topic.jobSlug ?? null,
-      kind: topic.kind ?? (isBrandTopic(topic) ? "brand" : "market"),
-      marketScope: topic.market?.scope ?? null,
-      marketPlaces: topic.market?.places ?? [],
-      localIntent: topic.market?.localIntent ?? [],
-      needTerms: topic.need?.terms ?? [],
-      ownerPages: topic.preferredPages ?? [],
-    }));
-    if (!taxonomy || args.refreshTaxonomy) {
-      if (!args.ai) {
-        throw new CliError(
-          `no topic taxonomy stored for ${site.domain}; run with --ai to propose one, or --taxonomy <file> to import one`,
-          2
-        );
-      }
-      const rawData = await loadTopicMapData(db, site.id, month, null);
-      // The job map is the primitive: what the buyer is trying to do. The
-      // taxonomy is a roll-up of it, so it is proposed first and only once per
-      // refresh. The checks are programmatic; there is no human gate here.
-      if (!jobMap || args.refreshJobMap) {
-        const proposedJobMap = await proposeJobMap({
-          domain: site.domain,
-          language: rawData.context.language,
-          country: providerCountry(rawData.context),
-          market: rawData.context.market,
-          audienceMarket: rawData.context.audienceMarket,
-          audienceCountry: rawData.context.audienceCountry,
-          audienceCountries: rawData.context.audienceCountries,
-          audienceLanguages: rawData.context.audienceLanguages,
-          business: {
-            name: rawData.fields.businessName ? String((rawData.fields.businessName as { value?: unknown }).value ?? "") || null : null,
-            services: asStringList(rawData.fields.services),
-            location: asString(rawData.fields.location),
-            serviceArea: asStringList(rawData.fields.serviceArea),
-            audience: rawData.context.audience ?? asString(rawData.fields.audienceMotivations),
-            audienceMotivations: asStringList(rawData.fields.audienceMotivations),
-            differentiators: asStringList(rawData.fields.differentiators),
-            concerns: asStringList(rawData.fields.concerns),
-          },
-          offers: rawData.marketScope.offers,
-          pages: [...rawData.pages]
-            .sort((a, b) => b.wordCount - a.wordCount)
-            .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
-          queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
-          previous: jobMap,
-        });
-        if (!proposedJobMap.jobMap) {
-          throw new CliError(`could not propose a job map for ${site.domain}: ${proposedJobMap.error ?? "unknown error"}`, 4);
-        }
-        jobMap = proposedJobMap.jobMap;
-        for (const row of proposedJobMap.rejected) process.stderr.write(`job map row skipped: ${row.title} — ${row.reason}\n`);
-        if (proposedJobMap.unassigned.length > 0) {
-          process.stderr.write(
-            `job map left ${proposedJobMap.unassigned.length} queries with volume unassigned: ${proposedJobMap.unassigned.slice(0, 10).join(", ")}${proposedJobMap.unassigned.length > 10 ? ", …" : ""}\n`
-          );
-        }
-        const jobMapPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-job-map-${month}.json`);
-        await writeFile(jobMapPath, JSON.stringify(jobMap, null, 2), "utf8");
-        if (args.mode === "execute") await saveJobMap(db, site.id, jobMap);
-        process.stderr.write(`job map: ${jobMap.jobs.length} jobs, ${jobMap.counts.assigned}/${jobMap.counts.queries} queries with volume assigned, ${jobMap.counts.unassigned} sent but unassigned, ${jobMap.counts.omitted} not sent; written to ${jobMapPath}\n`);
-      }
-      // The previous map is the feedback loop: the code lists the measured
-      // queries no topic owned, and the model decides the reason and the fix.
-      const previousRun = await db.researchRun.findFirst({
-        where: { siteId: site.id, idempotencyKey: topicMapKey(site.id, month), status: "COMPLETED" },
-        orderBy: { createdAt: "desc" },
-        select: { report: true },
-      });
-      const previousUnmapped = previousUnmappedQueries(previousRun?.report, rawData.queries);
-      const proposed = await proposeTopicTaxonomy({
+    const rawData = await loadTopicMapData(db, site.id, month, null);
+    if (!jobMap || args.refreshJobMap) {
+      const proposedJobMap = await proposeJobMap({
         domain: site.domain,
         language: rawData.context.language,
-        // The audience's market, not the business address: a Tulum agency
-        // selling to US buyers must not be modelled as a Mexican shop.
         country: providerCountry(rawData.context),
         market: rawData.context.market,
         audienceMarket: rawData.context.audienceMarket,
@@ -315,58 +175,34 @@ async function main(): Promise<void> {
           differentiators: asStringList(rawData.fields.differentiators),
           concerns: asStringList(rawData.fields.concerns),
         },
-        marketScope: rawData.marketScope,
-        pagePaths: rawData.pages.map((page) => page.path),
-        // Every query the site has: measured, plus the ones discovery bought.
-        // Sampling for the model happens once, in proposeTopicTaxonomy, which
-        // reports how many fell outside it.
-        queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
-        // The whole inventory: a page that exists must be visible to the model
-        // that is choosing owners. A cap here silently drops real pages and
-        // produces "no page covers this topic" for a page that does.
+        offers: rawData.marketScope.offers,
         pages: [...rawData.pages]
           .sort((a, b) => b.wordCount - a.wordCount)
           .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
-        brandTerms: priorBrandTerms,
-        previousUnmapped,
-        currentTaxonomy,
-        jobs: (jobMap?.jobs ?? []).map((job) => ({
-          slug: job.slug,
-          statement: job.statement,
-          stage: job.stage,
-          language: job.language,
-          marketScope: job.market.scope,
-          marketPlaces: job.market.places,
-          businessFit: job.businessFit,
-          queries: job.queries,
-          page: job.page,
-        })),
+        queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
+        previous: jobMap,
       });
-      if (!proposed.taxonomy) {
-        throw new CliError(`could not propose a topic taxonomy for ${site.domain}: ${proposed.error ?? "unknown error"}`, 4);
+      if (!proposedJobMap.jobMap) {
+        throw new CliError(`could not propose a job map for ${site.domain}: ${proposedJobMap.error ?? "unknown error"}`, 4);
       }
-      for (const row of proposed.rejected) process.stderr.write(`taxonomy topic skipped: ${row.title} — ${row.reason}\n`);
-      for (const merge of proposed.merges) process.stderr.write(`taxonomy topics merged into "${merge.into}": ${merge.merged.join(", ")} (shared owner ${merge.page})\n`);
-      taxonomy = proposed.taxonomy;
-      // A proposed taxonomy is a draft until a person approves it: it is
-      // written next to the report and only stored with --approve-taxonomy (or
-      // by importing a reviewed file).
-      const proposalPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-taxonomy-${month}.json`);
-      await writeFile(
-        proposalPath,
-        JSON.stringify({ ...taxonomy, topics: taxonomy.topics }, null, 2),
-        "utf8"
-      );
-      if (args.mode === "execute" && args.approveTaxonomy) {
-        await saveTopicTaxonomy(db, site.id, taxonomy);
-      } else {
-        process.stderr.write(`taxonomy draft written to ${proposalPath}; review it, then import with --taxonomy ${proposalPath}\n`);
-        if (args.mode === "execute") {
-          process.exitCode = 0;
-          return;
-        }
+      jobMap = proposedJobMap.jobMap;
+      for (const row of proposedJobMap.rejected) process.stderr.write(`job map row skipped: ${row.title} — ${row.reason}\n`);
+      if (proposedJobMap.unassigned.length > 0) {
+        process.stderr.write(
+          `job map left ${proposedJobMap.unassigned.length} tranche queries unassigned: ${proposedJobMap.unassigned.slice(0, 10).join(", ")}${proposedJobMap.unassigned.length > 10 ? ", …" : ""}\n`
+        );
       }
+      const jobMapPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-job-map-${month}.json`);
+      await writeFile(jobMapPath, JSON.stringify(jobMap, null, 2), "utf8");
+      if (args.mode === "execute") await saveJobMap(db, site.id, jobMap);
+      process.stderr.write(`job map: ${jobMap.jobs.length} jobs, ${jobMap.counts.assigned}/${jobMap.counts.sent} tranche queries assigned, ${jobMap.counts.unassigned} unassigned, ${jobMap.counts.deferred} deferred; written to ${jobMapPath}\n`);
     }
+    if (!jobMap) throw new CliError(`no job map for ${site.domain}`, 4);
+
+    const taxonomy = projectTopicTaxonomy(jobMap);
+    const taxonomyPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-taxonomy-${month}.json`);
+    await writeFile(taxonomyPath, JSON.stringify(taxonomy, null, 2), "utf8");
+    if (args.mode === "execute") await saveTopicTaxonomy(db, site.id, taxonomy);
 
     const data = await loadTopicMapData(db, site.id, month, taxonomy);
     const map = buildTopicMap(data, taxonomy.topics, undefined, jobMap);

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   jobVerdictIndex,
   parseJobMap,
+  parseVerdicts,
   sampleForJobs,
+  type Job,
   type JobMapInput,
 } from "@/lib/research/job-map";
 
@@ -41,6 +43,16 @@ function job(overrides: Record<string, unknown> = {}) {
     marketScope: "local",
     marketPlaces: ["Tulum"],
     businessFit: "serves",
+    topic: {
+      name: "Tulum condos",
+      kind: "market",
+      intent: "commercial",
+      relevance: "high",
+      coverageKind: "product",
+      offerKey: "Listings",
+      needTerms: ["tulum condos"],
+      actionHint: "Check the listings page.",
+    },
     queries: ["tulum condos for sale"],
     page: "/properties",
     reason: "The query names the place and the property need.",
@@ -65,7 +77,7 @@ describe("job map parsing", () => {
     );
     expect(rejected).toHaveLength(0);
     expect(jobMap.jobs).toHaveLength(1);
-    expect(jobMap.counts).toEqual({ queries: 2, assigned: 2, unassigned: 0, omitted: 0 });
+    expect(jobMap.counts).toEqual({ queries: 2, sent: 2, assigned: 2, unassigned: 0, deferred: 0 });
     expect(jobVerdictIndex(jobMap).get("casas de cambio")?.verdict).toBe("noise");
   });
 
@@ -137,9 +149,102 @@ describe("job query sample", () => {
       { proposedBy: "ai", model: "test-model" }
     );
     expect(jobMap.counts.queries).toBe(901);
-    expect(jobMap.counts.omitted).toBe(1);
-    // The sample sent 900; only one got a verdict, so 899 sent queries are
-    // unassigned. The one omitted query is not counted as unassigned.
-    expect(jobMap.counts.unassigned).toBe(899);
+    expect(jobMap.counts.deferred).toBe(651);
+    // The tranche sent 250; only one got a verdict, so 249 sent queries are
+    // unassigned. The 651 deferred queries are not counted as unassigned.
+    expect(jobMap.counts.unassigned).toBe(249);
+  });
+});
+
+describe("job verdicts", () => {
+  const jobs: Job[] = [
+    {
+      slug: "buy-tulum",
+      statement: "I want to buy a condo in Tulum",
+      who: "buyer",
+      stage: "buy",
+      language: "en",
+      market: { scope: "local", places: ["Tulum"] },
+      businessFit: "serves",
+      topic: {
+        name: "Tulum condos",
+        kind: "market",
+        intent: "commercial",
+        relevance: "high",
+        coverageKind: "product",
+        offerKey: "Listings",
+        needTerms: ["tulum condos"],
+        localIntent: [],
+        actionHint: "",
+      },
+      queries: [],
+      page: "/properties",
+      reason: "",
+    },
+    {
+      slug: "sell-own-home",
+      statement: "I want to sell my own home",
+      who: "owner",
+      stage: "buy",
+      language: "en",
+      market: { scope: "local", places: ["Tulum"] },
+      businessFit: "does_not_serve",
+      topic: {
+        name: "Home selling",
+        kind: "market",
+        intent: "commercial",
+        relevance: "low",
+        coverageKind: "service",
+        offerKey: "Listings",
+        needTerms: ["sell home"],
+        localIntent: [],
+        actionHint: "",
+      },
+      queries: [],
+      page: null,
+      reason: "",
+    },
+  ];
+  const batch = [{ query: "tulum condos for sale" }, { query: "sell my house tulum" }, { query: "tulum" }];
+
+  it("assigns demand to a served job", () => {
+    const result = parseVerdicts(
+      { verdicts: [{ query: "tulum condos for sale", verdict: "demand", job: "buy-tulum", reason: "buying" }] },
+      batch,
+      jobs
+    );
+    expect(result.rejected).toEqual([]);
+    expect(result.verdicts).toEqual([
+      { query: "tulum condos for sale", verdict: "demand", job: "buy-tulum", reason: "buying" },
+    ]);
+  });
+
+  it("does not let a job the business does not serve own demand", () => {
+    const result = parseVerdicts(
+      { verdicts: [{ query: "sell my house tulum", verdict: "demand", job: "sell-own-home", reason: "" }] },
+      batch,
+      jobs
+    );
+    expect(result.verdicts).toEqual([]);
+    expect(result.rejected[0].reason).toMatch(/does not serve/);
+  });
+
+  it("rejects a verdict that names a job outside the supplied list", () => {
+    const result = parseVerdicts(
+      { verdicts: [{ query: "tulum", verdict: "demand", job: "made-up-job", reason: "" }] },
+      batch,
+      jobs
+    );
+    expect(result.verdicts).toEqual([]);
+    expect(result.rejected[0].reason).toMatch(/no supplied job/);
+  });
+
+  it("accepts a non-demand verdict with no job", () => {
+    const result = parseVerdicts(
+      { verdicts: [{ query: "tulum", verdict: "context", job: null, reason: "a place, not a job" }] },
+      batch,
+      jobs
+    );
+    expect(result.verdicts[0]).toMatchObject({ query: "tulum", verdict: "context", job: null });
   });
 });

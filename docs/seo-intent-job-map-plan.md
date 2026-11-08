@@ -1,4 +1,4 @@
-# Intent and job map workstream — 2026-11-07
+# Intent and job map workstream — 2026-11-08
 
 **Status: active workstream.** It fixes how demand is qualified. It does not change
 the monthly cadence or the propose/accept model in the
@@ -41,137 +41,136 @@ A single keyword is not a job. `tulum` is a place. `casas` is a category noun.
 
 ## The job map (deliverable)
 
-One document per tenant, stored next to the taxonomy and versioned with it.
+One document per tenant, stored on the site profile. It is the only semantic pass:
+the jobs, their markets, their owner pages and their topic fields are decided in it,
+and the topic map is a projection of it.
 
 ```
 Job {
   statement       buyer language: "I want to ..."
   who             audience, language
-  market          places / audience market
-  stage           research | compare | buy | after-sale
-  queries[]       the measured queries that express this job
+  market          scope + places
+  stage           research | compare | buy | after_sale
+  businessFit     serves | does_not_serve | unknown
+  topic {
+    name, kind, intent, relevance, coverageKind, offerKey,
+    needTerms[], localIntent[], actionHint
+  }
+  queries[]       the tranche queries that express this job
   page            the page that does the job, or none
-  businessFit     serves | does not serve | unknown
   reason          why the queries belong to this job
 }
 ```
 
+The job map also carries the site config decided in the same call: `pageTypeRules`,
+`excludePaths` and `newsQueries`.
+
 Rules:
 
-- Every measured query with volume is assigned to one job, or explicitly marked
-  `context`, `noise` or `out-of-market` with a reason.
-- No silent drop: the document reports how many queries were assigned and how many
-  were not.
+- Every query in this cycle's tranche is assigned to one job, or explicitly marked
+  `context`, `noise` or `out-of-market` with a reason. The tranche is the top 250
+  queries by impressions then volume; the rest are **deferred**, counted and
+  processed in a later cycle. A thousand keywords are not a completeness target.
+- Deferred is not demand and is not "unjudged demand": it is work not yet done, and
+  the report states its count, impressions and clicks.
 - A job the business does not serve is not demand, however large the volume.
 - The job map is written in buyer language, not SEO nouns.
+- One topic is one job. The taxonomy is `projectTopicsFromJobs(jobMap.jobs)`; there
+  is no second taxonomy proposal and no merge of jobs that share an owner page.
 
-**Check:** the job map is an internal analysis artifact, not an approval gate. It
-passes when every query with volume is assigned or explicitly marked, every job is
-stated in buyer language, and business fit comes from the business knowledge or is
-marked unknown. A second model pass challenges it for unassigned queries and
-invented jobs. Human acceptance stays where the operating model puts it: on the
-opportunities and tasks, not on the analysis.
+**Check:** the job map passes when every tranche query has a verdict, every job has
+the complete topic contract, its page (or null) is in the supplied inventory, and
+its `offerKey` is a supplied offer. The model re-proposes once with the rejected
+rows named; code never fills a missing semantic field.
 
 ## Phases
 
-### Phase 0 — stop the report from lying (independent)
+### Phase 0 — stop the report from lying (done)
 
 - "Closed" means verified fixed. A finding that was not re-proposed is
-  "superseded", not closed.
+  "no longer proposed" and its row is `parked`, not closed.
 - A confirmed technical finding cannot be deleted by the drafting model; it can be
   deferred with a reason.
-- Acceptance: Susi's 59-page duplicate-title finding is visible and not called
-  closed; every confirmed crawl defect appears in the technical lane.
 
-### Phase 1 — job map pilot (Casamigo)
+### Phase 1 — job map pilot (done)
 
 - Build the job map for Casamigo from business facts, offers/capacity, audience and
-  a query sample of top impressions **plus** top volume.
-- The map must separate: buy/invest in a property, check a specific project, get
-  market data, and change dollars. The last is not a job the business serves.
-- Acceptance: the map reads like buyer language; every query with volume is
-  assigned or explicitly marked; the checks pass and a second model pass finds no
-  unassigned query.
+  a query tranche of top impressions plus top volume.
+- The map separates: buy/invest in a property, check a specific project, get market
+  data, and change dollars. The last is not a job the business serves.
 
-### Phase 2 — taxonomy from jobs
+### Phase 2 — taxonomy from jobs (done)
 
-- Re-propose with the accepted job map as the base. One topic is one job. A topic
-  that aggregates two jobs is a contract rejection, not a `mixed` label.
-- Need terms are the forms buyers use for that job (`casas en venta`, not `casas`).
-- Acceptance: no topic contains queries from two jobs; the Tulum topic excludes
-  `casas de cambio`; Atelier separates restore, buy and learn.
+- The taxonomy is projected from the job map, one topic per job. Devices that
+  reconciled two model outputs — `jobSlug` reconciliation, `missingJobs`, owner-page
+  merging — are gone because there is no second output to reconcile.
+- Need terms are the forms buyers use for that job (`casas en venta`, not `casas`),
+  proposed with the job. Two jobs may share one owner page; that is the model's
+  decision and code does not merge them.
 
-### Phase 3 — carry the judgement into the arithmetic
+### Phase 3 — carry the judgement into the arithmetic (done)
 
-- The review receives a query sample of top impressions and top volume, with the
-  omitted count.
-- The review returns a demand verdict per query: `demand`, `context` or `noise`,
-  alongside the existing `inMarket` verdict.
-- Demand is the sum of qualified queries only. Context and noise are shown, not
-  summed. Unjudged queries stay in demand and are counted as unjudged.
-- Acceptance: Tulum demand is about 2.3k with 532k noise displayed; Atelier's bare
-  `abat-jour` is out of demand; nothing is dropped silently.
+- The job map is two calls: jobs and site config in one, then verdict batches of 80
+  queries against the fixed jobs, each with one retry for missing rows.
+- Demand is judged demand only. Context, noise and out-of-market are shown, not
+  summed. Deferred queries are counted separately and are not demand.
+- Acceptance: Casamigo's Tulum demand excludes `casas de cambio`; Atelier's bare
+  `abat-jour` is not demand; Susi's 914 deferred queries are reported, not counted.
 
-### Phase 4 — board on qualified demand
+### Phase 4 — board on qualified demand (done)
 
-- Score and gate read qualified demand only. Market-only volume is shown next to it,
-  never inside it.
-- Technical findings are ordered by severity and reach.
-- Two proposals on the same job or page are flagged as possible cannibalisation.
-- Acceptance: every top-five proposal rests on qualified demand, and the technical
-  order matches the stated rule.
+- Score and gate read qualified demand only. The gate uses site-level Search Console
+  totals, not the sum of topic memberships, because memberships overlap and miss
+  queries.
+- Technical findings are ordered by severity and reach, and stay separate from
+  content proposals.
+- The board stores what the model drafted. Code does not merge, group or re-target
+  proposals; the critique is advice carried on the row.
 
-### Phase 5 — re-run and compare
+### Phase 5 — re-run and compare (done)
 
-- Re-run the four tenants. Before/after: qualified demand, jobs covered, top five
-  per board.
-- One short memo per tenant. The existing maps and boards stay as the baseline.
+- The four tenants ran on the one-pass pipeline. Before/after: qualified demand,
+  jobs covered, deferred count, top five per board.
+- The existing maps and boards stay as the baseline.
 
 ## Guardrails
 
 - No stoplists of tenant phrases, no per-tenant branches in `lib/`.
 - No code-side inference of intent from words.
-- No taxonomy re-proposal before the job map passes its checks.
-- No new ledger or schema until phases 0–3 are done.
+- No code reconciliation between model outputs: no merging topics by owner page, no
+  filling a missing semantic field, no deriving need terms from query tokens.
+- No new ledger or schema until the logic is stable.
 - Do not change the monthly cadence or the opportunity acceptance gate.
 
 ## Current step
 
-The job map is now a pipeline primitive, not a pilot document. `lib/research/job-map.ts`
-proposes it, checks the contract and stores it on the site profile. The taxonomy
-consumes it: every job with measured demand and a fit of `serves` or `unknown` needs
-exactly one topic whose `job` field is the job slug, and the code re-proposes once when
-a served job has no topic. The topic map qualifies demand by the job verdicts and joins
-each demand query to the topic that rolls up its job, so a project-name query such as
-`torre 25` belongs to its local job without naming the place. Excluded queries stay in
-the report under "Queries the job map excluded from demand", never in demand.
+The one-pass pipeline is in place and has run on all four tenants. The job map
+decides the jobs, markets, pages and topic fields; the taxonomy is projected from
+it; the topic map is built from judged demand; and the boards are re-drafted.
 
-Casamigo's 2026-11 run: 15 jobs, 258/258 queries with volume assigned, 22 qualified
-demand queries, 15 topics, 22 clustered, 252 context/noise/out-of-market excluded.
-Two unknown-fit jobs (Samsara Tulum, Xaman Ha) carry demand and no page, and the
-board shows them as gaps. The same pass ran on the other three tenants:
-
-| Tenant | Jobs | Volume queries assigned | Qualified | Clustered | Excluded | Unjudged |
+| Tenant | Jobs | Tranche assigned | Demand | Clustered | Deferred | Not demand |
 |---|---:|---:|---:|---:|---:|---:|
-| Casamigo | 15 | 258/258 | 22 | 22 | 252 | 0 |
-| Atelier | 12 | 37/37 | 101 | 101 | 63 | 0 |
-| Susi | 20 | 52/52 | 1,125 | 537 | 6 | 1,060 |
-| Oceanic | 3 | 84/84 | 21 | 21 | 64 | 0 |
+| Casamigo | 14 | 274/274 | 21 | 21 | 0 | 253 |
+| Atelier | 13 | 169/169 | 116 | 116 | 0 | 53 |
+| Susi | 24 | 250/250 | 211 | 211 | 914 | 39 |
+| Oceanic | 13 | 85/85 | 42 | 42 | 0 | 43 |
 
-Susi's long tail has no volume and no verdict, so it stays in demand as unjudged and
-the report states the count; the contract only forces a verdict for queries with
-volume. The pilot documents stay as the baseline:
-[job map](casamigo-job-map-2026-11.md) and [row-level CSV](casamigo-job-map-2026-11.csv).
+Susi is the first tenant whose query set exceeds one tranche: 1,164 visible queries,
+250 judged, 914 deferred with 6,275 impressions and 30 clicks. The report states the
+deferred tail and its examples; the next cycle picks it up. The earlier Susi runs
+failed on truncated JSON because jobs and verdicts shared one response; splitting
+the verdicts into batches removed the failure, not a cap.
 
-Next: re-draft the Casamigo board on the qualified map (done, 5 proposals, all held by
-the foundations gate at 29 impressions), then review the three other boards against
-their before/after maps.
+Boards: Casamigo 17 proposals, Atelier 17, Susi 26, Oceanic 13. Casamigo remains
+foundations-first at 39 impressions. Rows that were not re-proposed are reported as
+"no longer proposed" and parked, never closed.
 
 ## Definition of done
 
-Every tenant's demand number is the sum of queries that carry both the market and the
-job; context and noise are visible but excluded; the board's top five rest only on
-qualified demand; and the job map that produced it passed its checks.
+Every tenant's demand number is the sum of queries the model judged as demand for a job
+the business serves; context, noise and out-of-market queries are visible but excluded;
+queries outside the tranche are reported as deferred, never counted; the board's top
+five rest only on qualified demand; and the job map that produced it passed its checks.
 
 ## Out of scope
 

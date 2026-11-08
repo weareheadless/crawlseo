@@ -12,8 +12,9 @@ requirements.
 - **[CrawlSEO simplified execution plan](crawlseo-simplified-execution-plan.md)** —
   how to build it: data layers, AI calls, phases and pilot acceptance.
 - **[Intent and job map workstream](seo-intent-job-map-plan.md)** — the active fix
-  to demand qualification: job map before taxonomy, per-query demand verdicts, and
-  the guardrails that keep it from drifting back into word matching.
+  to demand qualification: one job-map pass, the taxonomy projected from it,
+  per-query demand verdicts in tranches, and the guardrails that keep it from
+  drifting back into word matching.
 
 ## Active operating docs
 

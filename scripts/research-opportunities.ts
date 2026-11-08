@@ -9,7 +9,7 @@
  * the board's copy, targets and confidence come from the evidence rather than
  * from a template. Dry run prints them and writes nothing; execute stores them
  * in the existing Opportunity table. `--ai` adds one critique review, which can
- * challenge or group proposals but cannot add queries, pages or evidence.
+ * challenge a proposal but cannot add queries, pages or evidence.
  */
 
 import { loadEnvConfig } from "@next/env";
@@ -24,7 +24,6 @@ import {
   storeProposals,
   type Proposal,
   type ProposalConfidence,
-  type ProposalGroup,
 } from "@/lib/research/opportunity-generation";
 import { draftProposals, proposalIdentity } from "@/lib/research/opportunity-drafting";
 import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
@@ -101,56 +100,6 @@ function printProposals(proposals: Proposal[]): void {
   }
 }
 
-
-/**
- * Collapse the critique's groups into one board row each. The first member is
- * the primary; the others merge their evidence into it and are closed. A group
- * is presentation advice, so nothing is deleted: the absorbed row keeps its
- * own record and a pointer to the row that absorbed it.
- */
-function mergeGroups(
-  proposals: Proposal[],
-  groups: ProposalGroup[]
-): { kept: Proposal[]; merged: Array<{ title: string; reason: string }>; absorbedKeys: string[] } {
-  const byKey = new Map(proposals.map((proposal) => [proposal.dedupKey, proposal]));
-  const confidenceRank: Record<ProposalConfidence, number> = { high: 3, medium: 2, low: 1 };
-  const absorbed = new Map<string, string>();
-  const groupByPrimary = new Map<string, ProposalGroup>();
-  for (const group of groups) {
-    const members = [...new Set(group.members)].filter((key) => byKey.has(key) && !absorbed.has(key));
-    if (members.length < 2) continue;
-    const [primary, ...rest] = members;
-    groupByPrimary.set(primary, group);
-    for (const key of rest) absorbed.set(key, primary);
-  }
-
-  const kept: Proposal[] = [];
-  const merged: Array<{ title: string; reason: string }> = [];
-  for (const proposal of proposals) {
-    const primaryKey = absorbed.get(proposal.dedupKey);
-    const primary = primaryKey ? byKey.get(primaryKey) : null;
-    if (!primary) {
-      kept.push(proposal);
-      continue;
-    }
-    primary.evidenceRefs = [...new Set([...primary.evidenceRefs, ...proposal.evidenceRefs])].slice(0, 12);
-    for (const source of proposal.sources) {
-      if (!primary.sources.some((existing) => existing.url === source.url)) primary.sources.push(source);
-    }
-    const group = groupByPrimary.get(primary.dedupKey);
-    if (group) {
-      primary.title = group.title;
-      primary.action = group.action;
-    }
-    // The merged row cannot claim more confidence than its weakest member.
-    const confidences = [primary.confidence, proposal.confidence].filter(
-      (value): value is ProposalConfidence => value != null
-    );
-    primary.confidence = confidences.sort((a, b) => confidenceRank[a] - confidenceRank[b])[0] ?? null;
-    merged.push({ title: proposal.title, reason: `merged into “${primary.title}”` });
-  }
-  return { kept, merged, absorbedKeys: [...absorbed.keys()] };
-}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -419,26 +368,23 @@ async function main(): Promise<void> {
       summary: string | null;
       error: string | null;
       decisions: Map<string, { verdict: "keep" | "revise" | "drop"; reason: string }>;
-      groups: ProposalGroup[];
     } = {
       available: false,
       model: draft.model,
       summary: null,
       error: draft.errors.length > 0 ? draft.errors.join("; ") : null,
       decisions: new Map(),
-      groups: [],
     };
     if (args.ai && proposals.length > 0) {
       critique = await critiqueProposals(proposals, map);
       if (!critique.available) process.stderr.write(`critique unavailable: ${critique.error ?? "unknown error"}\n`);
     }
 
-    // The critique groups proposals that are the same job on the same asset.
-    // The group becomes one board row; the absorbed rows are closed with a
-    // pointer, so the audit trail keeps what was proposed.
-    const merged = mergeGroups(proposals, critique.groups);
-    const dropped: Array<{ title: string; reason: string }> = [...merged.merged, ...draft.rejected];
-    const kept: Proposal[] = merged.kept.map((proposal) => {
+    // The model's proposals are stored as drafted. Code does not merge, group
+    // or re-target them; the critique is advice carried on the row, not a
+    // second decision.
+    const dropped: Array<{ title: string; reason: string }> = [...draft.rejected];
+    const kept: Proposal[] = proposals.map((proposal) => {
       const decision = critique.decisions.get(proposal.dedupKey);
       // A critique drop is advice, not an automatic removal. The proposal stays
       // on the board with the drop reason so the owner can decide.
@@ -482,12 +428,6 @@ async function main(): Promise<void> {
     dropped.push(...stored.dropped);
     const keptKeys = kept.map((proposal) => proposal.dedupKey);
 
-    if (merged.absorbedKeys.length > 0) {
-      await db.opportunity.updateMany({
-        where: { projectId: site.projectId, dedupKey: { in: merged.absorbedKeys }, status: "detected" },
-        data: { status: "closed", parkReason: "merged into another proposal" },
-      });
-    }
     // Proposals this run no longer makes are superseded, not deleted: the row
     // and its evidence stay for audit.
     const previousPhase3 = await db.opportunity.findMany({
@@ -499,7 +439,7 @@ async function main(): Promise<void> {
     if (stale.length > 0) {
       await db.opportunity.updateMany({
         where: { id: { in: stale.map((row) => row.id) } },
-        data: { status: "closed", parkReason: "superseded by refreshed proposal" },
+        data: { status: "parked", parkReason: "superseded by refreshed proposal" },
       });
     }
     if (keptKeys.length > 0) {
@@ -524,7 +464,8 @@ async function main(): Promise<void> {
     const changes = {
       updated: kept.filter((proposal) => previousKeys.has(proposal.dedupKey)).length,
       added: kept.filter((proposal) => !previousKeys.has(proposal.dedupKey)).map((proposal) => proposal.title),
-      closed: previousProposals.filter((proposal) => !currentKeys.has(proposal.dedupKey)).map((proposal) => proposal.title),
+      // Not re-proposed this run, not verified fixed. Closure has its own state.
+      noLongerProposed: previousProposals.filter((proposal) => !currentKeys.has(proposal.dedupKey)).map((proposal) => proposal.title),
     };
 
     const report = {

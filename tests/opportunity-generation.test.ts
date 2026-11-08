@@ -180,7 +180,7 @@ describe("proposal validation", () => {
 });
 
 describe("proposal critique", () => {
-  it("groups proposals that touch the same asset when the model is unavailable", async () => {
+  it("flags a shared target as advice when the model is unavailable", async () => {
     const hub = makeProposal({ dedupKey: "hub" });
     const range = makeProposal({
       dedupKey: "range",
@@ -191,12 +191,12 @@ describe("proposal critique", () => {
     const result = await critiqueProposals([hub, range], map);
     expect(result.available).toBe(true);
     expect(result.model).toBe("deterministic");
-    expect(result.groups).toHaveLength(1);
-    expect(result.groups[0].members).toEqual(["hub", "range"]);
-    expect(result.groups[0].title).toBe(hub.title);
+    // Advice on the row, not a merge: both proposals stay on the board.
+    expect(result.decisions.get("range")?.verdict).toBe("revise");
+    expect(result.decisions.get("range")?.reason).toMatch(/Same target/);
   });
 
-  it("does not group proposals on different assets", async () => {
+  it("keeps proposals on different assets independent", async () => {
     const result = await critiqueProposals(
       [
         makeProposal({ dedupKey: "hub" }),
@@ -209,11 +209,44 @@ describe("proposal critique", () => {
       ],
       map
     );
-    expect(result.groups).toHaveLength(0);
+    expect(result.decisions.get("aeo")?.reason ?? "").not.toMatch(/Same target/);
   });
 });
 
 describe("proposal storage", () => {
+  it("reopens a parked proposal instead of treating it as closed", async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const db = {
+      opportunity: {
+        findUnique: async () => ({ id: "opp-parked", status: "parked", parkReason: "superseded by refreshed proposal" }),
+        update: async (args: { data: Record<string, unknown> }) => {
+          updates.push(args.data);
+          return { id: "opp-parked", status: "detected" };
+        },
+        create: async () => {
+          throw new Error("must not create a second row for a parked proposal");
+        },
+      },
+      evidenceEdge: {
+        deleteMany: async () => ({ count: 0 }),
+        upsert: async () => ({ id: "edge" }),
+      },
+    };
+    await storeProposals(db as never, {
+      projectId: "proj-1",
+      siteId: "site-1",
+      domain,
+      map,
+      topicMapRunId: "topic-run-1",
+      proposals: [makeProposal({ dedupKey: "parked-key" })],
+      evidenceIds: new Set(["ev-1", "ev-2"]),
+      firstPartyEvidenceIds: new Set(["ev-1"]),
+      knowledgeEvidenceIds: [],
+      clusters: [],
+    });
+    expect(updates[0]).toEqual({ status: "detected", parkReason: null });
+  });
+
   it("does not rewrite an accepted proposal when it is drafted again", async () => {
     let updated = 0;
     const db = {
@@ -332,6 +365,21 @@ describe("proposal rendering", () => {
     expect(board).toContain("Foundations first");
     expect(board).toContain("HOLD");
     expect(board.indexOf("Fix the sitemap")).toBeLessThan(board.indexOf("Write the luminaire page"));
+  });
+
+  it("says a proposal is no longer proposed, not closed", () => {
+    const board = renderProposalBoard({
+      map,
+      proposals: [makeProposal()],
+      dropped: [],
+      critique: { available: false, model: null, summary: null, error: "none" },
+      changes: { updated: 1, added: [], noLongerProposed: ["Fix the old sitemap"] },
+      technical: [],
+      generatedAt: "2026-11-05T00:00:00Z",
+    });
+    expect(board).toContain("1 no longer proposed");
+    expect(board).toContain("- no longer proposed: Fix the old sitemap");
+    expect(board).not.toContain(" closed.");
   });
 
   it("scores a measured topic and flags a language mismatch", () => {

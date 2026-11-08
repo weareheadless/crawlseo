@@ -2,37 +2,49 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-08T02:11:38.575Z",
+  "generatedAt": "2026-11-08T16:39:12.306Z",
   "jobs": [
     {
-      "slug": "buy-riviera-maya-real-estate",
-      "statement": "I want to buy real estate in the Riviera Maya.",
-      "who": "US, Canadian and Mexican buyers/investors looking at Riviera Maya property",
-      "stage": "buy",
+      "slug": "riviera-maya-real-estate-market",
+      "statement": "I want to understand the Riviera Maya real estate market before buying or investing.",
+      "who": "International buyers and investors researching Riviera Maya property",
+      "stage": "research",
       "language": "en",
       "market": {
         "scope": "local",
         "places": [
-          "Riviera Maya",
-          "Playa del Carmen",
-          "Tulum",
-          "Cancún",
-          "Puerto Morelos",
-          "Cozumel",
-          "Bacalar"
+          "Riviera Maya"
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Riviera Maya real estate market",
+        "kind": "market",
+        "intent": "informational",
+        "relevance": "high",
+        "coverageKind": "content",
+        "offerKey": "Riviera Maya real estate market",
+        "needTerms": [
+          "riviera maya real estate",
+          "mayan riviera real estate",
+          "riviera maya property market"
+        ],
+        "localIntent": [
+          "in riviera maya",
+          "near me"
+        ],
+        "actionHint": "Use homepage and weekly brief to explain Riviera Maya market signals, ROI and risk."
+      },
       "queries": [
         "mayan riviera real estate"
       ],
-      "page": "/properties",
-      "reason": "Broad English demand for Riviera Maya property; listings page serves it."
+      "page": "/",
+      "reason": "Broad regional real-estate research query matches Casamigo homepage market intelligence."
     },
     {
-      "slug": "research-tulum-market",
-      "statement": "I want to understand the Tulum real estate market, including oversupply and correction, before buying.",
-      "who": "Investors researching Tulum before purchase",
+      "slug": "tulum-real-estate-market",
+      "statement": "I want to understand Tulum's real estate market, pricing, and oversupply before investing.",
+      "who": "Investors and buyers evaluating Tulum property",
       "stage": "research",
       "language": "en",
       "market": {
@@ -42,16 +54,34 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Tulum real estate market",
+        "kind": "market",
+        "intent": "informational",
+        "relevance": "high",
+        "coverageKind": "content",
+        "offerKey": "Tulum real estate market",
+        "needTerms": [
+          "tulum real estate market",
+          "tulum property market",
+          "tulum condo prices"
+        ],
+        "localIntent": [
+          "in tulum",
+          "near tulum"
+        ],
+        "actionHint": "Use the Tulum city brief to explain oversupply, price corrections, and risk."
+      },
       "queries": [
         "tulum real estate market"
       ],
-      "page": "/weekly-brief",
-      "reason": "English weekly market brief covers Tulum oversupply/correction."
+      "page": "/es/cities/tulum",
+      "reason": "Tulum market research matches the supplied Tulum city brief."
     },
     {
-      "slug": "research-playa-del-carmen-market",
-      "statement": "I want to understand the Playa del Carmen real estate market before buying.",
-      "who": "Investors researching Playa del Carmen",
+      "slug": "playa-del-carmen-real-estate-market",
+      "statement": "I want to understand Playa del Carmen real estate market conditions before buying.",
+      "who": "Buyers and investors evaluating Playa del Carmen",
       "stage": "research",
       "language": "en",
       "market": {
@@ -61,16 +91,32 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Playa del Carmen real estate market",
+        "kind": "market",
+        "intent": "informational",
+        "relevance": "high",
+        "coverageKind": "content",
+        "offerKey": "Playa del Carmen real estate market",
+        "needTerms": [
+          "playa del carmen real estate market",
+          "playa del carmen property market"
+        ],
+        "localIntent": [
+          "in playa del carmen"
+        ],
+        "actionHint": "Point searchers to the Playa del Carmen city brief and inventory signals."
+      },
       "queries": [
         "playa del carmen real estate market"
       ],
       "page": "/cities/playa-del-carmen",
-      "reason": "English city market analysis for Playa del Carmen."
+      "reason": "Playa del Carmen market research matches the supplied city brief."
     },
     {
       "slug": "buy-property-playa-del-carmen",
-      "statement": "I want to find property for sale in Playa del Carmen, including luxury condos.",
-      "who": "Spanish-speaking buyers/investors in Playa del Carmen",
+      "statement": "Quiero comprar una propiedad o condominio en Playa del Carmen.",
+      "who": "Spanish-speaking buyers and investors looking in Playa del Carmen",
       "stage": "buy",
       "language": "es",
       "market": {
@@ -80,6 +126,25 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Propiedades en venta en Playa del Carmen",
+        "kind": "market",
+        "intent": "transactional",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Propiedades en venta en Playa del Carmen",
+        "needTerms": [
+          "propiedades en venta en playa del carmen",
+          "propiedades en venta playa del carmen",
+          "playa del carmen propiedades en venta",
+          "condominios de lujo playa del carmen"
+        ],
+        "localIntent": [
+          "en playa del carmen",
+          "cerca de mi"
+        ],
+        "actionHint": "Show Playa del Carmen listings and luxury condo collections with AI ratings."
+      },
       "queries": [
         "propiedades en venta en playa del carmen",
         "playa del carmen propiedades en venta",
@@ -87,11 +152,11 @@
         "condominios de lujo playa del carmen"
       ],
       "page": "/es/properties",
-      "reason": "Spanish listings page covers Playa del Carmen property for sale."
+      "reason": "Spanish purchase query with Playa del Carmen place names matches property listings."
     },
     {
       "slug": "buy-luxury-condo-cancun",
-      "statement": "I want to find luxury condos for sale in Cancún.",
+      "statement": "Quiero comprar un condominio de lujo en Cancún.",
       "who": "Spanish-speaking luxury condo buyers in Cancún",
       "stage": "buy",
       "language": "es",
@@ -102,16 +167,34 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Condominios de lujo en Cancún",
+        "kind": "market",
+        "intent": "transactional",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Condominios de lujo en Cancún",
+        "needTerms": [
+          "condominios de lujo en cancun",
+          "departamentos de lujo cancun",
+          "condos de lujo cancun"
+        ],
+        "localIntent": [
+          "en cancun",
+          "frente al mar"
+        ],
+        "actionHint": "Route to Cancún luxury condo listings and city market analysis."
+      },
       "queries": [
         "condominios de lujo en cancun"
       ],
       "page": "/es/properties",
-      "reason": "Spanish listings page includes Cancún luxury condo inventory."
+      "reason": "Luxury condo purchase query names Cancún, a supplied service area."
     },
     {
-      "slug": "buy-presale-condo-puerto-morelos",
-      "statement": "I want to find a pre-sale condo in Puerto Morelos for 2026.",
-      "who": "Investors seeking pre-sale Puerto Morelos condos",
+      "slug": "buy-preconstruction-condo-puerto-morelos",
+      "statement": "I want to buy a pre-sale condo in Puerto Morelos for 2026.",
+      "who": "English-speaking investors considering Puerto Morelos pre-construction",
       "stage": "buy",
       "language": "en",
       "market": {
@@ -121,17 +204,34 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Puerto Morelos pre-sale condos",
+        "kind": "market",
+        "intent": "transactional",
+        "relevance": "high",
+        "coverageKind": "mixed",
+        "offerKey": "Puerto Morelos pre-sale condos",
+        "needTerms": [
+          "presale condo puerto morelos",
+          "pre construction condos puerto morelos",
+          "puerto morelos pre sale 2026"
+        ],
+        "localIntent": [
+          "in puerto morelos"
+        ],
+        "actionHint": "Use the Puerto Morelos pre-construction collection and absorption brief."
+      },
       "queries": [
         "presale condo puerto morelos 2026"
       ],
-      "page": "/properties",
-      "reason": "Listings page includes Puerto Morelos pre-sale inventory."
+      "page": "/collections/puerto-morelos-pre-construction-investing-in-the-next-growth-corridor",
+      "reason": "Pre-sale Puerto Morelos condo query matches the supplied pre-construction collection."
     },
     {
-      "slug": "evaluate-tao-tulum",
-      "statement": "I want to evaluate Tao Tulum condos/lofts as a purchase in Tulum.",
-      "who": "Buyers comparing Tao Tulum units",
-      "stage": "compare",
+      "slug": "buy-tao-tulum-condo",
+      "statement": "I want to buy or evaluate a condo at Tao Tulum.",
+      "who": "English-speaking condo buyers researching Tao Tulum",
+      "stage": "buy",
       "language": "en",
       "market": {
         "scope": "local",
@@ -140,40 +240,39 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Tao Tulum condos",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Tao Tulum condos",
+        "needTerms": [
+          "tao tulum",
+          "tao condos tulum",
+          "tao lofts tulum",
+          "tao condo tulum"
+        ],
+        "localIntent": [
+          "in tulum"
+        ],
+        "actionHint": "Show the Tao Tulum property page with pricing, ROI, and risk signals."
+      },
       "queries": [
-        "tao tulum",
         "tao tulum mexico",
         "tao condos tulum mexico",
+        "tao tulum",
         "tao lofts tulum",
         "tao condo tulum"
       ],
       "page": "/es/property/tao-tulum-tulum",
-      "reason": "Spanish Tao Tulum project page covers the development; queries are English but same project."
+      "reason": "Tao Tulum project queries match the supplied Tao Tulum property page."
     },
     {
-      "slug": "evaluate-samsara-tulum",
-      "statement": "I want to evaluate Samsara Tulum as a potential purchase.",
-      "who": "Buyers comparing Samsara Tulum",
-      "stage": "compare",
-      "language": "en",
-      "market": {
-        "scope": "local",
-        "places": [
-          "Tulum"
-        ]
-      },
-      "businessFit": "unknown",
-      "queries": [
-        "samsara tulum"
-      ],
-      "page": null,
-      "reason": "No Samsara page in inventory; fit not stated."
-    },
-    {
-      "slug": "evaluate-punta-playa-condos",
-      "statement": "I want to evaluate Punta Playa condos in Playa del Carmen.",
-      "who": "Buyers comparing Punta Playa units",
-      "stage": "compare",
+      "slug": "buy-punta-playa-condo",
+      "statement": "I want to buy a condo at Punta Playa in Playa del Carmen.",
+      "who": "English-speaking condo buyers researching Punta Playa",
+      "stage": "buy",
       "language": "en",
       "market": {
         "scope": "local",
@@ -182,17 +281,34 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Punta Playa condos",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Punta Playa condos",
+        "needTerms": [
+          "punta playa condos",
+          "punta playa playa del carmen",
+          "punta playa condominios"
+        ],
+        "localIntent": [
+          "in playa del carmen"
+        ],
+        "actionHint": "Send searchers to the Punta Playa property page."
+      },
       "queries": [
         "punta playa condos"
       ],
       "page": "/property/punta-playa-playa-del-carmen",
-      "reason": "Dedicated Punta Playa project page."
+      "reason": "Punta Playa condo query matches the supplied Punta Playa property page."
     },
     {
-      "slug": "evaluate-torre-25-playa-del-carmen",
-      "statement": "I want to evaluate Torre 25 condos in Playa del Carmen.",
-      "who": "Buyers comparing Torre 25 units",
-      "stage": "compare",
+      "slug": "buy-torre-25-condo",
+      "statement": "Quiero comprar o evaluar un condominio en Torre 25, Playa del Carmen.",
+      "who": "Spanish-speaking condo buyers researching Torre 25",
+      "stage": "buy",
       "language": "es",
       "market": {
         "scope": "local",
@@ -201,56 +317,35 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Torre 25 condominios",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Torre 25 condominios",
+        "needTerms": [
+          "torre 25",
+          "torre 25 playa del carmen",
+          "condominios torre 25"
+        ],
+        "localIntent": [
+          "en playa del carmen"
+        ],
+        "actionHint": "Show the Torre 25 property page with unit and investment details."
+      },
       "queries": [
         "torre 25"
       ],
-      "page": "/property/torre-25-playa-del-carmen",
-      "reason": "Dedicated Torre 25 project page."
+      "page": "/es/property/torre-25-playa-del-carmen",
+      "reason": "Torre 25 project query matches the supplied Torre 25 property page."
     },
     {
-      "slug": "evaluate-ikuku-playa-del-carmen",
-      "statement": "I want to evaluate Ikuku condos for sale in Playa del Carmen.",
-      "who": "Buyers comparing Ikuku units",
-      "stage": "compare",
+      "slug": "buy-elementos-life-cozumel",
+      "statement": "I want to buy or evaluate a condo at Elementos Life in Cozumel.",
+      "who": "English-speaking condo buyers researching Elementos Life",
+      "stage": "buy",
       "language": "en",
-      "market": {
-        "scope": "local",
-        "places": [
-          "Playa del Carmen"
-        ]
-      },
-      "businessFit": "serves",
-      "queries": [
-        "ikuku for sale"
-      ],
-      "page": "/es/property/ikuku-playa-del-carmen",
-      "reason": "Spanish Ikuku project page covers the development."
-    },
-    {
-      "slug": "evaluate-xaman-ha-playa-del-carmen",
-      "statement": "I want to evaluate Xaman Ha condo in Playa del Carmen.",
-      "who": "Buyers comparing Xaman Ha condos",
-      "stage": "compare",
-      "language": "en",
-      "market": {
-        "scope": "local",
-        "places": [
-          "Playa del Carmen"
-        ]
-      },
-      "businessFit": "unknown",
-      "queries": [
-        "xaman ha condo"
-      ],
-      "page": null,
-      "reason": "No Xaman Ha page in inventory; fit not stated."
-    },
-    {
-      "slug": "evaluate-elementos-life-cozumel",
-      "statement": "I want to evaluate Elementos Life condos in Cozumel.",
-      "who": "Buyers comparing Elementos Life units",
-      "stage": "compare",
-      "language": "es",
       "market": {
         "scope": "local",
         "places": [
@@ -258,17 +353,34 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Elementos Life Cozumel condos",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Elementos Life Cozumel condos",
+        "needTerms": [
+          "elementos cozumel",
+          "elementos life cozumel",
+          "elementos life condos"
+        ],
+        "localIntent": [
+          "in cozumel"
+        ],
+        "actionHint": "Use the Elementos Life property page and Cozumel market brief."
+      },
       "queries": [
         "elementos cozumel"
       ],
       "page": "/property/elementos-life-cozumel",
-      "reason": "Dedicated Elementos Life project page."
+      "reason": "Elementos Cozumel query matches the supplied Elementos Life property page."
     },
     {
-      "slug": "evaluate-distrito-norte-cozumel",
-      "statement": "I want to evaluate Distrito Norte condos in Cozumel.",
-      "who": "Buyers comparing Distrito Norte units",
-      "stage": "compare",
+      "slug": "buy-distrito-norte-cozumel",
+      "statement": "Quiero comprar o evaluar un condominio en Distrito Norte, Cozumel.",
+      "who": "Spanish-speaking condo buyers researching Distrito Norte",
+      "stage": "buy",
       "language": "es",
       "market": {
         "scope": "local",
@@ -277,17 +389,70 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Distrito Norte Cozumel",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Distrito Norte Cozumel",
+        "needTerms": [
+          "distrito cozumel",
+          "distrito norte cozumel",
+          "condominios distrito norte cozumel"
+        ],
+        "localIntent": [
+          "en cozumel"
+        ],
+        "actionHint": "Route Distrito Cozumel searches to the Distrito Norte property page."
+      },
       "queries": [
         "distrito cozumel"
       ],
-      "page": "/property/distrito-norte-cozumel",
-      "reason": "Distrito Norte Cozumel project page matches project intent."
+      "page": "/es/property/distrito-norte-cozumel",
+      "reason": "Distrito Cozumel query best matches the supplied Distrito Norte Cozumel page."
     },
     {
-      "slug": "evaluate-musa-del-puerto-puerto-morelos",
-      "statement": "I want to evaluate Musa del Puerto condos in Puerto Morelos.",
-      "who": "Buyers comparing Musa del Puerto units",
-      "stage": "compare",
+      "slug": "buy-ikuku-playa-del-carmen",
+      "statement": "I want to buy a condo at Ikuku in Playa del Carmen.",
+      "who": "English-speaking condo buyers researching Ikuku",
+      "stage": "buy",
+      "language": "en",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "businessFit": "serves",
+      "topic": {
+        "name": "Ikuku Playa del Carmen condos",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Ikuku Playa del Carmen condos",
+        "needTerms": [
+          "ikuku for sale",
+          "ikuku playa del carmen",
+          "ikuku condos"
+        ],
+        "localIntent": [
+          "in playa del carmen"
+        ],
+        "actionHint": "Show the Ikuku property page with pricing and ROI data."
+      },
+      "queries": [
+        "ikuku for sale"
+      ],
+      "page": "/es/property/ikuku-playa-del-carmen",
+      "reason": "Ikuku for-sale query matches the supplied Ikuku property page."
+    },
+    {
+      "slug": "buy-musa-del-puerto-puerto-morelos",
+      "statement": "Quiero comprar o evaluar un condominio en Musa del Puerto, Puerto Morelos.",
+      "who": "Spanish-speaking condo buyers researching Musa del Puerto",
+      "stage": "buy",
       "language": "es",
       "market": {
         "scope": "local",
@@ -296,805 +461,857 @@
         ]
       },
       "businessFit": "serves",
+      "topic": {
+        "name": "Musa del Puerto",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "high",
+        "coverageKind": "product",
+        "offerKey": "Musa del Puerto",
+        "needTerms": [
+          "musa del puerto",
+          "musa del puerto puerto morelos",
+          "musa del puerto condominios"
+        ],
+        "localIntent": [
+          "en puerto morelos"
+        ],
+        "actionHint": "Send searchers to the Musa del Puerto property page."
+      },
       "queries": [
         "musa del puerto"
       ],
-      "page": "/property/musa-del-puerto-puerto-morelos",
-      "reason": "Dedicated Musa del Puerto project page."
+      "page": "/es/property/musa-del-puerto-puerto-morelos",
+      "reason": "Musa del Puerto query matches the supplied property page."
+    },
+    {
+      "slug": "buy-xaman-ha-condo-playa-del-carmen",
+      "statement": "I want to find a condo at Xaman Ha in Playa del Carmen.",
+      "who": "Condo buyers researching Xaman Ha",
+      "stage": "buy",
+      "language": "en",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "businessFit": "unknown",
+      "topic": {
+        "name": "Xaman Ha condos",
+        "kind": "brand",
+        "intent": "commercial",
+        "relevance": "medium",
+        "coverageKind": "product",
+        "offerKey": "Xaman Ha condos",
+        "needTerms": [
+          "xaman ha condo",
+          "xaman ha playa del carmen"
+        ],
+        "localIntent": [
+          "in playa del carmen"
+        ],
+        "actionHint": "Confirm whether Xaman Ha inventory is represented before publishing."
+      },
+      "queries": [
+        "xaman ha condo"
+      ],
+      "page": null,
+      "reason": "Specific Playa del Carmen condo search; no supplied page or offer names Xaman Ha, so fit is unknown."
     }
   ],
   "verdicts": [
     {
       "query": "mayan riviera real estate",
       "verdict": "demand",
-      "job": "buy-riviera-maya-real-estate",
-      "reason": "Riviera Maya property-buying intent; listings page serves it."
+      "job": "riviera-maya-real-estate-market",
+      "reason": "Broad Riviera Maya market research query."
     },
     {
       "query": "tulum real estate market",
       "verdict": "demand",
-      "job": "research-tulum-market",
-      "reason": "Tulum market research intent; English weekly brief covers oversupply."
+      "job": "tulum-real-estate-market",
+      "reason": "Tulum market research query."
     },
     {
       "query": "casa migo",
       "verdict": "context",
       "job": null,
-      "reason": "Brand-name variant, not a job; names business only."
+      "reason": "Brand-like query names the business but not a job."
     },
     {
       "query": "distrito cozumel",
       "verdict": "demand",
-      "job": "evaluate-distrito-norte-cozumel",
-      "reason": "Project-name query for Distrito Norte in Cozumel."
+      "job": "buy-distrito-norte-cozumel",
+      "reason": "Project-like Cozumel query matches Distrito Norte page."
     },
     {
       "query": "punta playa condos",
       "verdict": "demand",
-      "job": "evaluate-punta-playa-condos",
-      "reason": "Specific Punta Playa condo project query."
+      "job": "buy-punta-playa-condo",
+      "reason": "Punta Playa condo purchase research."
     },
     {
       "query": "tao tulum mexico",
       "verdict": "demand",
-      "job": "evaluate-tao-tulum",
-      "reason": "Tao Tulum project evaluation intent."
+      "job": "buy-tao-tulum-condo",
+      "reason": "Tao Tulum project query."
     },
     {
       "query": "presale condo puerto morelos 2026",
       "verdict": "demand",
-      "job": "buy-presale-condo-puerto-morelos",
-      "reason": "Pre-sale Puerto Morelos condo buying intent."
+      "job": "buy-preconstruction-condo-puerto-morelos",
+      "reason": "Puerto Morelos pre-sale condo query."
     },
     {
       "query": "low density development riviera maya comercial - mofu",
       "verdict": "noise",
       "job": null,
-      "reason": "Commercial development query; business serves residential condo/investment content, not this."
+      "reason": "Commercial-development search differs from supplied residential inventory."
     },
     {
       "query": "elementos cozumel",
       "verdict": "demand",
-      "job": "evaluate-elementos-life-cozumel",
-      "reason": "Elementos Life Cozumel project query."
+      "job": "buy-elementos-life-cozumel",
+      "reason": "Elementos Cozumel project query."
     },
     {
       "query": "tao condos tulum mexico",
       "verdict": "demand",
-      "job": "evaluate-tao-tulum",
-      "reason": "Tao Tulum condo project query."
+      "job": "buy-tao-tulum-condo",
+      "reason": "Tao Tulum condo query."
     },
     {
       "query": "casamigo homes",
       "verdict": "context",
       "job": null,
-      "reason": "Brand query, not a buyer job."
+      "reason": "Brand query names the business but not a job."
     },
     {
       "query": "casamigo residence",
       "verdict": "context",
       "job": null,
-      "reason": "Brand query, not a buyer job."
+      "reason": "Brand query names the business but not a job."
     },
     {
       "query": "puerto morelos population",
       "verdict": "context",
       "job": null,
-      "reason": "Names Puerto Morelos but asks population, not real estate."
+      "reason": "Place/demographic query, not a property job."
     },
     {
       "query": "tao tulum",
       "verdict": "demand",
-      "job": "evaluate-tao-tulum",
+      "job": "buy-tao-tulum-condo",
       "reason": "Tao Tulum project query."
     },
     {
       "query": "playa del carmen real estate market",
       "verdict": "demand",
-      "job": "research-playa-del-carmen-market",
-      "reason": "Playa market research intent; city brief serves it."
+      "job": "playa-del-carmen-real-estate-market",
+      "reason": "Playa del Carmen market research query."
     },
     {
       "query": "ikuku for sale",
       "verdict": "demand",
-      "job": "evaluate-ikuku-playa-del-carmen",
-      "reason": "Ikuku project for-sale query."
+      "job": "buy-ikuku-playa-del-carmen",
+      "reason": "Ikuku purchase query."
     },
     {
       "query": "los amigos tulum",
       "verdict": "noise",
       "job": null,
-      "reason": "Different business/name in Tulum; not a Casamigo property job."
+      "reason": "Likely hospitality/restaurant query, not real estate."
     },
     {
       "query": "torre 25",
       "verdict": "demand",
-      "job": "evaluate-torre-25-playa-del-carmen",
+      "job": "buy-torre-25-condo",
       "reason": "Torre 25 project query."
     },
     {
       "query": "tao lofts tulum",
       "verdict": "demand",
-      "job": "evaluate-tao-tulum",
-      "reason": "Tao Tulum loft/project query."
+      "job": "buy-tao-tulum-condo",
+      "reason": "Tao Lofts Tulum query."
     },
     {
       "query": "tao condo tulum",
       "verdict": "demand",
-      "job": "evaluate-tao-tulum",
-      "reason": "Tao Tulum condo project query."
+      "job": "buy-tao-tulum-condo",
+      "reason": "Tao condo Tulum query."
     },
     {
       "query": "xaman ha condo",
       "verdict": "demand",
-      "job": "evaluate-xaman-ha-playa-del-carmen",
-      "reason": "Specific Xaman Ha condo query; no page in inventory."
+      "job": "buy-xaman-ha-condo-playa-del-carmen",
+      "reason": "Specific Playa condo query; no page, fit unknown."
     },
     {
       "query": "samsara tulum",
-      "verdict": "demand",
-      "job": "evaluate-samsara-tulum",
-      "reason": "Samsara Tulum project query; no page in inventory."
+      "verdict": "noise",
+      "job": null,
+      "reason": "Likely hotel/hospitality query, not a supplied property job."
     },
     {
       "query": "musa del puerto",
       "verdict": "demand",
-      "job": "evaluate-musa-del-puerto-puerto-morelos",
+      "job": "buy-musa-del-puerto-puerto-morelos",
       "reason": "Musa del Puerto project query."
     },
     {
       "query": "estratemex",
       "verdict": "noise",
       "job": null,
-      "reason": "Different company/brand; not a Casamigo property job."
+      "reason": "Unrelated brand/business query."
     },
     {
       "query": "green savage playa del carmen",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated Playa business/brand, not a property job."
+      "reason": "Likely non-real-estate local business query."
     },
     {
       "query": "propiedades en venta san miguel de allende",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Property sale in San Miguel de Allende, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "venta de propiedades en méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico property sale, not Riviera Maya-specific."
+      "reason": "National property query without Riviera Maya focus."
     },
     {
       "query": "propiedades en venta en playa del carmen",
       "verdict": "demand",
       "job": "buy-property-playa-del-carmen",
-      "reason": "Playa del Carmen property-buying intent."
+      "reason": "Playa del Carmen property purchase query."
     },
     {
       "query": "playa del carmen propiedades en venta",
       "verdict": "demand",
       "job": "buy-property-playa-del-carmen",
-      "reason": "Playa del Carmen property-buying intent."
+      "reason": "Playa del Carmen property purchase query."
     },
     {
       "query": "propiedades en venta playa del carmen",
       "verdict": "demand",
       "job": "buy-property-playa-del-carmen",
-      "reason": "Playa del Carmen property-buying intent."
+      "reason": "Playa del Carmen property purchase query."
     },
     {
       "query": "propiedades en venta aguascalientes",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Aguascalientes property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta en aguascalientes",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Aguascalientes property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta puebla",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Puebla property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta en queretaro",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Querétaro property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta queretaro",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Querétaro property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta en monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta tijuana",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Tijuana property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta en tijuana",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Tijuana property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta cerca de mi",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me property search; no Riviera Maya market named."
+      "reason": "Local phrase but no Riviera Maya place or specific property job."
     },
     {
       "query": "propiedades en venta en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta y renta",
       "verdict": "context",
       "job": null,
-      "reason": "Generic sale/rent category, not a specific Riviera Maya job."
+      "reason": "Broad sale-and-rent query without specific market or job."
     },
     {
       "query": "propiedades en venta cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "propiedades en venta",
       "verdict": "context",
       "job": null,
-      "reason": "Bare property-for-sale category without market."
+      "reason": "Bare broad property category, no specific market job."
     },
     {
       "query": "propiedades en venta en el estado de mexico",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Estado de México property sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "donde buscar propiedades en venta",
       "verdict": "context",
       "job": null,
-      "reason": "Generic how-to-search query, not a Riviera Maya buyer job."
+      "reason": "General how-to-search query, no Riviera Maya market."
     },
     {
       "query": "casas en venta en méxico baratas",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad cheap-house search in Mexico, outside Riviera Maya niche."
+      "reason": "National houses query without Riviera Maya focus."
     },
     {
       "query": "casas en venta baratas y bonitas",
       "verdict": "context",
       "job": null,
-      "reason": "Generic cheap-house category, no market."
+      "reason": "Generic houses query without specific market."
     },
     {
       "query": "venta de casas economicas en cdmx no remates",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX economy-house sale, outside service area."
+      "reason": "CDMX houses query outside service area."
     },
     {
       "query": "inmuebles24",
       "verdict": "noise",
       "job": null,
-      "reason": "Third-party portal brand; different business."
+      "reason": "Competitor portal brand, not a job."
     },
     {
       "query": "condominios de lujo en guatemala",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guatemala luxury condos, outside market."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en costa rica",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Costa Rica luxury condos, outside market."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo costa rica",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Costa Rica luxury condos, outside market."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en miami",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Miami luxury condos, outside market."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en tijuana",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Tijuana luxury condos, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en cancun",
       "verdict": "demand",
       "job": "buy-luxury-condo-cancun",
-      "reason": "Luxury condo buying intent in Cancún."
+      "reason": "Luxury condo purchase query in Cancún."
     },
     {
       "query": "condominios de lujo en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara luxury condos, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo playa del carmen",
       "verdict": "demand",
       "job": "buy-property-playa-del-carmen",
-      "reason": "Luxury condo buying intent in Playa del Carmen."
+      "reason": "Luxury condo purchase query in Playa del Carmen."
     },
     {
       "query": "condominios de lujo en puerto vallarta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Puerto Vallarta luxury condos, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en puebla",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Puebla luxury condos, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "condominios de lujo en renta tijuana",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Tijuana rental condos, outside service area and rental audience."
+      "reason": "Outside market and rental intent."
     },
     {
       "query": "condominios de lujo",
       "verdict": "context",
       "job": null,
-      "reason": "Bare luxury-condo category without market."
+      "reason": "Bare luxury condo category without market."
     },
     {
       "query": "departamentos de lujo cdmx renta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamento de lujo en venta",
       "verdict": "context",
       "job": null,
-      "reason": "Generic luxury apartment sale, no market."
+      "reason": "Generic luxury apartment sale query, no market."
     },
     {
       "query": "departamentos de lujo planos",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Apartment floor-plan query, not a Riviera Maya buying job."
+      "reason": "Plans/design meaning, not property purchase."
     },
     {
       "query": "departamentos en renta",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Rental audience, not served."
+      "reason": "Rental job, not the purchase job served."
     },
     {
       "query": "inversión inmobiliaria argentina",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Argentina real estate investment, outside market."
+      "reason": "Argentina real-estate investment is outside market."
     },
     {
       "query": "qué es una inversión inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a Riviera Maya investment job."
+      "reason": "Definitional investment query, not a Riviera Maya job."
     },
     {
       "query": "oportunidades inversión inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Generic investment-opportunity query, no market."
+      "reason": "Generic investment opportunity query, no market."
     },
     {
       "query": "plataformas de inversión inmobiliaria",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Generic platform query, not a specific Riviera Maya job."
+      "reason": "Investment-platform query, different job."
     },
     {
       "query": "inversión inmobiliaria chile",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Chile real estate investment, outside market."
+      "reason": "Chile real-estate investment is outside market."
     },
     {
       "query": "curso inversión inmobiliaria",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Course audience, not property buyer."
+      "reason": "Course query, not property purchase or market intelligence."
     },
     {
       "query": "kiva inversión inmobiliaria integral guadalajara fotos",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "Different company and Guadalajara place; not Casamigo."
+      "reason": "Guadalajara brand query outside service area."
     },
     {
       "query": "fideicomisos de inversión inmobiliaria",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Generic trust vehicle query, not a Riviera Maya property job."
+      "reason": "Trust/financial-structure query, different job."
     },
     {
       "query": "inversión inmobiliaria pdf",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Format query for investment information, not a market job."
+      "reason": "Document download query, not a job served."
     },
     {
       "query": "contrato de inversión inmobiliaria",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Generic contract query, not a Riviera Maya buying job."
+      "reason": "Contract query, different job."
     },
     {
       "query": "opiniones de kiva inversión inmobiliaria integral guadalajara",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "Different company/place review query."
+      "reason": "Guadalajara brand query outside service area."
     },
     {
       "query": "fondos de inversión inmobiliaria en méxico",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Fund vehicle query, broad Mexico, not Riviera Maya property buying."
+      "reason": "Fund product query, not Riviera Maya property."
     },
     {
       "query": "que es una inversión inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a Riviera Maya investment job."
+      "reason": "Definitional investment query."
     },
     {
       "query": "que es inversión inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a Riviera Maya investment job."
+      "reason": "Definitional investment query."
     },
     {
       "query": "fondos de inversión inmobiliaria",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Fund audience/vehicle, not served."
+      "reason": "Fund product query, different job."
     },
     {
       "query": "fondo de inversión inmobiliaria",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Fund audience/vehicle, not served."
+      "reason": "Fund product query, different job."
     },
     {
       "query": "am corporativo inversión inmobiliaria",
       "verdict": "noise",
       "job": null,
-      "reason": "Different company/brand."
+      "reason": "Corporate brand query, not a job."
     },
     {
       "query": "inversión inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Bare real estate investment category, no market."
+      "reason": "Broad investment category without market."
     },
     {
       "query": "inversión en inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Bare real estate investment category, no market."
+      "reason": "Broad investment category without market."
     },
     {
       "query": "kiva inversión inmobiliaria integral guadalajara",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "Different company and place."
+      "reason": "Guadalajara brand query outside service area."
     },
     {
       "query": "inversión bienes raíces méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico investment query, not Riviera Maya-specific."
+      "reason": "National investment query, not Riviera Maya-specific."
     },
     {
       "query": "inversiones inmobiliarias contabilidad",
       "verdict": "noise",
       "job": null,
-      "reason": "Accounting topic, different job."
+      "reason": "Accounting query, different meaning."
     },
     {
       "query": "inversiones inmobiliarias ejemplos",
       "verdict": "context",
       "job": null,
-      "reason": "Generic examples query, not a market job."
+      "reason": "Definition/examples query, no market."
     },
     {
       "query": "como invertir en bienes raíces en méxico con poco dinero",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico small-money investment, outside niche."
+      "reason": "General investment education, not a Riviera Maya property job."
     },
     {
       "query": "invertir en bienes raíces desde $100 pesos",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Small-amount investment audience, not served."
+      "reason": "Micro-investment query, different job."
     },
     {
       "query": "crowdfunding inmobiliario",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Crowdfunding model, different audience."
+      "reason": "Crowdfunding product query, different job."
     },
     {
       "query": "departamentos venta en queretaro",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Querétaro apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta queretaro",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Querétaro apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta en querétaro",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Querétaro apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "venta departamentos en monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en monterrey venta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en monterrey en venta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta en monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos venta en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en cdmx venta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta en la cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "guadalajara departamentos en venta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "venta de departamentos en la cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta",
       "verdict": "context",
       "job": null,
-      "reason": "Bare apartment-for-sale category, no market."
+      "reason": "Bare apartment sale category without market."
     },
     {
       "query": "departamentos en venta en",
       "verdict": "context",
       "job": null,
-      "reason": "Incomplete generic apartment-sale query."
+      "reason": "Incomplete broad apartment sale query."
     },
     {
       "query": "en venta departamentos",
       "verdict": "context",
       "job": null,
-      "reason": "Generic apartment-sale category, no market."
+      "reason": "Bare apartment sale category without market."
     },
     {
       "query": "departamentos en venta cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta estado de méxico",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Estado de México apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta tláhuac",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Tláhuac apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta cdmx nuevos",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX new apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "venta de departamentos en cdmx baratos",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX cheap apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "departamentos en venta azcapotzalco",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Azcapotzalco apartment sale, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "inmobiliarias en méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "National agency search, not Riviera Maya-specific."
+      "reason": "National agency search, not a Riviera Maya job."
     },
     {
       "query": "inmobiliaria century 21 mexico df",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "Different agency brand and CDMX market."
+      "reason": "Mexico City competitor agency outside service area."
     },
     {
       "query": "departamentos en méxico renta",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Broad Mexico rental apartments, outside audience."
+      "reason": "Rental job, not purchase."
     },
     {
       "query": "departamentos en méxico baratos",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico cheap apartments, outside niche."
+      "reason": "National apartment category without Riviera Maya focus."
     },
     {
       "query": "departamentos en méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico apartment category, outside Riviera Maya."
+      "reason": "Bare apartment category without market."
     },
     {
       "query": "casas en venta estado de méxico baratas",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Estado de México cheap houses, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "bienes raíces méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico real estate, outside Riviera Maya."
+      "reason": "National real-estate category without specific job."
     },
     {
       "query": "propiedades distributiva",
       "verdict": "noise",
       "job": null,
-      "reason": "Math property meaning, not real estate."
+      "reason": "Math meaning of propiedades, not real estate."
     },
     {
       "query": "propiedades de los exponentes",
       "verdict": "noise",
       "job": null,
-      "reason": "Math property meaning, not real estate."
+      "reason": "Math meaning, not real estate."
     },
     {
       "query": "propiedades físicas de la materia",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades periodicas",
       "verdict": "noise",
       "job": null,
-      "reason": "Chemistry property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades fisicas de la materia",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades químicas",
       "verdict": "noise",
       "job": null,
-      "reason": "Chemistry property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades privadas",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "General/private-property meaning, not a buyer job."
+      "reason": "Ambiguous private-properties phrase, no specific job."
     },
     {
       "query": "propiedades intelectuales",
@@ -1106,107 +1323,107 @@
       "query": "propiedades quimicas",
       "verdict": "noise",
       "job": null,
-      "reason": "Chemistry property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades fisicas",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades de los logaritmos",
       "verdict": "noise",
       "job": null,
-      "reason": "Math property meaning, not real estate."
+      "reason": "Math meaning, not real estate."
     },
     {
       "query": "propiedades privada",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "General/private-property meaning, not a buyer job."
+      "reason": "Ambiguous private-property phrase, no specific job."
     },
     {
       "query": "propiedades físicas",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades extensivas",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades intensivas",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades com",
       "verdict": "noise",
       "job": null,
-      "reason": "Website/domain query, not a real estate job."
+      "reason": "Property-portal brand, not a job."
     },
     {
       "query": "propiedades",
       "verdict": "context",
       "job": null,
-      "reason": "Bare category noun; no specific job or market."
+      "reason": "Bare category noun with ambiguous meaning."
     },
     {
       "query": "propiedades de la materia",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades de materia",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "la propiedades de la materia",
       "verdict": "noise",
       "job": null,
-      "reason": "Science property meaning, not real estate."
+      "reason": "Science meaning, not real estate."
     },
     {
       "query": "propiedades com méxico",
       "verdict": "noise",
       "job": null,
-      "reason": "Website/domain query, not a real estate job."
+      "reason": "Property-portal brand, not a job."
     },
     {
       "query": "propiedades com opiniones",
       "verdict": "noise",
       "job": null,
-      "reason": "Website reviews, not a real estate job."
+      "reason": "Portal review query, not a job."
     },
     {
       "query": "propiedades casa",
       "verdict": "context",
       "job": null,
-      "reason": "Generic property/house category, no market."
+      "reason": "Ambiguous property/house category without market."
     },
     {
       "query": "propiedades com app",
       "verdict": "noise",
       "job": null,
-      "reason": "Website app query, not real estate."
+      "reason": "Portal app query, not a job."
     },
     {
       "query": "propiedades com precios",
       "verdict": "noise",
       "job": null,
-      "reason": "Website pricing query, not real estate."
+      "reason": "Portal price query, not a job."
     },
     {
       "query": "propiedades en inglés",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
       "reason": "Translation query, not a property job."
     },
@@ -1214,55 +1431,55 @@
       "query": "propiedades 24",
       "verdict": "noise",
       "job": null,
-      "reason": "Portal/brand query, not a specific property job."
+      "reason": "Portal brand query, not a job."
     },
     {
       "query": "propiedades com cdmx",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "Portal query with CDMX, not a Casamigo property job."
+      "reason": "CDMX portal query outside service area."
     },
     {
       "query": "mario casas sierra",
       "verdict": "noise",
       "job": null,
-      "reason": "Person name, not real estate."
+      "reason": "Person's name, not real estate."
     },
     {
       "query": "fachada de las casas",
       "verdict": "noise",
       "job": null,
-      "reason": "House-facade topic, not buying."
+      "reason": "House facade query, not property purchase."
     },
     {
       "query": "fachada de casas",
       "verdict": "noise",
       "job": null,
-      "reason": "House-facade topic, not buying."
+      "reason": "House facade query, not property purchase."
     },
     {
       "query": "mario casas",
       "verdict": "noise",
       "job": null,
-      "reason": "Person name, not real estate."
+      "reason": "Person's name, not real estate."
     },
     {
       "query": "fachadas de casas",
       "verdict": "noise",
       "job": null,
-      "reason": "House-facade topic, not buying."
+      "reason": "House facade query, not property purchase."
     },
     {
       "query": "casas de empeño fundacion donde",
       "verdict": "noise",
       "job": null,
-      "reason": "Pawn-shop meaning, not real estate."
+      "reason": "Pawnshop meaning, not real estate."
     },
     {
       "query": "san cristóbal de las casas",
-      "verdict": "noise",
+      "verdict": "out_of_market",
       "job": null,
-      "reason": "City name using 'casas', not a property job."
+      "reason": "Other city, not Riviera Maya."
     },
     {
       "query": "casas de cambio",
@@ -1274,31 +1491,31 @@
       "query": "casas cerca de mi",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me houses, no Riviera Maya market."
+      "reason": "Local houses phrase but no Riviera Maya place."
     },
     {
       "query": "casas de empeño",
       "verdict": "noise",
       "job": null,
-      "reason": "Pawn-shop meaning, not real estate."
+      "reason": "Pawnshop meaning, not real estate."
     },
     {
       "query": "casas de empeños",
       "verdict": "noise",
       "job": null,
-      "reason": "Pawn-shop meaning, not real estate."
+      "reason": "Pawnshop meaning, not real estate."
     },
     {
       "query": "casas de jengibre",
       "verdict": "noise",
       "job": null,
-      "reason": "Gingerbread-house meaning, not real estate."
+      "reason": "Gingerbread houses, not real estate."
     },
     {
       "query": "casas de los famosos",
       "verdict": "noise",
       "job": null,
-      "reason": "Celebrity homes, not a buyer job."
+      "reason": "Celebrity homes content, not property purchase."
     },
     {
       "query": "casas de cambio cerca de mi",
@@ -1322,637 +1539,659 @@
       "query": "casas de empeños cerca de mi",
       "verdict": "noise",
       "job": null,
-      "reason": "Pawn-shop meaning, not real estate."
+      "reason": "Pawnshop meaning, not real estate."
     },
     {
       "query": "casas de empeño cerca de mi",
       "verdict": "noise",
       "job": null,
-      "reason": "Pawn-shop meaning, not real estate."
+      "reason": "Pawnshop meaning, not real estate."
     },
     {
       "query": "las casas de los famosos",
       "verdict": "noise",
       "job": null,
-      "reason": "Celebrity homes, not a buyer job."
+      "reason": "Celebrity homes content, not property purchase."
     },
     {
       "query": "casas",
       "verdict": "context",
       "job": null,
-      "reason": "Bare category noun; no specific job or market."
+      "reason": "Bare category noun, never demand alone."
     },
     {
       "query": "casas en venta méxico",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "Broad Mexico house sale, outside Riviera Maya."
+      "reason": "National houses query without Riviera Maya focus."
     },
     {
       "query": "promociones casas ara",
       "verdict": "noise",
       "job": null,
-      "reason": "Builder/brand promotion, not Casamigo job."
+      "reason": "Builder brand query, not a job."
     },
     {
       "query": "condominios bugambilias",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios marbella",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios la finca",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios san juan",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios ayres",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios río dorado",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios san rafael",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios torres vida",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "marina cerritos condominios",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Marina Cerritos condos, outside service area."
+      "reason": "Cerritos development outside Riviera Maya."
     },
     {
       "query": "condominios magnolias",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "residencial rubí condominios",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "residencial rubi condominios",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios retama",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios que es",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definitional condo query, not purchase."
     },
     {
       "query": "condominios acacias",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios cerca de mi",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me condo search, no Riviera Maya market."
+      "reason": "Local condo phrase but no Riviera Maya place."
     },
     {
       "query": "condominios constitución",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex/place name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "condominios acero",
       "verdict": "noise",
       "job": null,
-      "reason": "Unrelated condo complex name."
+      "reason": "Named development not in supplied inventory."
     },
     {
       "query": "puerta las lomas condominios",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Other residential development, outside service area."
+      "reason": "Other development outside Riviera Maya."
     },
     {
       "query": "condominios",
       "verdict": "context",
       "job": null,
-      "reason": "Bare category noun; no specific job or market."
+      "reason": "Bare category noun, never demand alone."
     },
     {
       "query": "abreviatura de condominio rae",
       "verdict": "noise",
       "job": null,
-      "reason": "Language abbreviation query, not real estate."
+      "reason": "Grammar abbreviation query, not real estate."
     },
     {
       "query": "que es condominio en alquiler",
-      "verdict": "context",
+      "verdict": "noise",
       "job": null,
-      "reason": "Definition/rental concept query, not a buyer job."
+      "reason": "Rental definition query, not purchase."
     },
     {
       "query": "condominio ejemplos",
       "verdict": "context",
       "job": null,
-      "reason": "Definition/examples query, not a market job."
+      "reason": "Definitional condo query, not purchase."
     },
     {
       "query": "condóminos o condominios",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "Spelling/grammar query, not real estate."
+      "reason": "Spelling/definition query, not purchase."
     },
     {
       "query": "condominio significado jurídico",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "Legal meaning query, not a buyer job."
+      "reason": "Legal definition query, not purchase."
     },
     {
       "query": "tipos de condominios",
       "verdict": "context",
       "job": null,
-      "reason": "Condo-type definition query, not a market job."
+      "reason": "Definitional condo query, not purchase."
     },
     {
       "query": "ley de condominios",
       "verdict": "context",
       "job": null,
-      "reason": "Condo-law topic, not a buyer job."
+      "reason": "Condo law research, not a supplied purchase page."
     },
     {
       "query": "rentas departamentos cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos cerca de mi",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me apartments, no Riviera Maya market."
+      "reason": "Local apartment phrase but no Riviera Maya place."
     },
     {
       "query": "rentas de departamentos cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "renta de departamentos cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "rentas de departamentos en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "renta de departamentos en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos renta",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Rental audience, not served."
+      "reason": "Rental job, not purchase."
     },
     {
       "query": "departamentos en renta en",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Rental audience, not served."
+      "reason": "Rental job, not purchase."
     },
     {
       "query": "departamentos rentas",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Rental audience, not served."
+      "reason": "Rental job, not purchase."
     },
     {
       "query": "departamentos en cdmx en renta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos en renta en la cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos en renta en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos en renta cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos en cdmx renta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos cdmx renta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "cdmx departamentos en renta",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "cdmx renta departamentos",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "departamentos",
       "verdict": "context",
       "job": null,
-      "reason": "Bare category noun; no specific job or market."
+      "reason": "Bare category noun, never demand alone."
     },
     {
       "query": "departamentos renta cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX rental apartments, outside market and audience."
+      "reason": "CDMX rental query outside service area."
     },
     {
       "query": "inmobiliaria en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "inmobiliaria drym",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria espacios",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria espacio",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria redonda",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "guadalajara inmobiliaria",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "drym inmobiliaria",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "iad inmobiliaria",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "cadu inmobiliaria",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria la redonda",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria redondo",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "redonda inmobiliaria",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "inmobiliaria en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "inmobiliaria cerca de mí",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me agency search, no Riviera Maya market."
+      "reason": "Local agency phrase but no Riviera Maya place."
     },
     {
       "query": "inmobiliaria cerca de mi",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me agency search, no Riviera Maya market."
+      "reason": "Local agency phrase but no Riviera Maya place."
     },
     {
       "query": "inmobiliaria urbaniza",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Bare category noun; no specific job or market."
+      "reason": "Bare agency category, never demand alone."
     },
     {
       "query": "inmobiliarias cdmx confiables",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX trustworthy-agency search, outside service area."
+      "reason": "CDMX agency query outside service area."
     },
     {
       "query": "mejores inmobiliarias profeco",
-      "verdict": "out_of_market",
+      "verdict": "context",
       "job": null,
-      "reason": "National agency-ranking query, outside local buyer job."
+      "reason": "National agency trust research, not a Riviera Maya job."
     },
     {
       "query": "inmobiliarias confiables",
       "verdict": "context",
       "job": null,
-      "reason": "Generic agency-trust query, no Riviera Maya market."
+      "reason": "Generic agency trust research, no market."
     },
     {
       "query": "lista de inmobiliarias fraudulentas",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "Fraud-list query, different job."
+      "reason": "Fraud-list research, not a supplied property job."
     },
     {
       "query": "inmobiliaria alfa",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Agency brand query, not a job."
     },
     {
       "query": "inmobiliarias en guadalajara",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Guadalajara agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "inmobiliarias en cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX agency search, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "bienes raíces en inglés",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
       "reason": "Translation query, not a property job."
     },
     {
       "query": "bienes raíces en ingles",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
       "reason": "Translation query, not a property job."
     },
     {
       "query": "terrenos en cancun amistad bienes raíces",
-      "verdict": "noise",
+      "verdict": "context",
       "job": null,
-      "reason": "Different company/brand in Cancún; not Casamigo."
+      "reason": "Names a market and agency but unclear job."
     },
     {
       "query": "invertir en bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Generic investment category, no market."
+      "reason": "Generic investment query, no Riviera Maya market."
     },
     {
       "query": "bienes raíces cerca de mí",
       "verdict": "context",
       "job": null,
-      "reason": "Generic near-me real estate, no Riviera Maya market."
+      "reason": "Local real-estate phrase but no Riviera Maya place."
     },
     {
       "query": "cataño bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "geo bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "siglo xxi bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "lomelín bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "que son bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "lomelin bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "bienes raíces que son",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "qué es bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "qué es bienes y raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "qué son bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "que es bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Definition query, not a market job."
+      "reason": "Definition query, not a property job."
     },
     {
       "query": "bienes raíces loewen",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "next bienes raíces",
       "verdict": "noise",
       "job": null,
-      "reason": "Different agency brand."
+      "reason": "Brand query, not a job."
     },
     {
       "query": "bienes y raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Bare real estate category, no market."
+      "reason": "Bare category noun, never demand alone."
     },
     {
       "query": "bienes raíces",
       "verdict": "context",
       "job": null,
-      "reason": "Bare real estate category, no market."
+      "reason": "Bare category noun, never demand alone."
     },
     {
       "query": "inmobiliarias y corredores de bienes raíces sat",
       "verdict": "noise",
       "job": null,
-      "reason": "Tax-authority list query, different job."
+      "reason": "Tax/regulatory agency query, not a property job."
     },
     {
       "query": "bienes raíces inmobiliaria",
       "verdict": "context",
       "job": null,
-      "reason": "Bare real estate/agency category, no market."
+      "reason": "Generic real-estate category, no specific job."
     },
     {
       "query": "bienes raíces hermosillo",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Hermosillo real estate, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "bienes raíces carrera",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Career/education audience, not property buyer."
+      "reason": "Brand/person query, not a job."
     },
     {
       "query": "bienes raíces trabajo",
-      "verdict": "out_of_market",
+      "verdict": "noise",
       "job": null,
-      "reason": "Job-seeking audience, not property buyer."
+      "reason": "Job-seeking query, not property purchase."
     },
     {
       "query": "bienes raíces monterrey",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "Monterrey real estate, outside service area."
+      "reason": "Outside Riviera Maya service area."
     },
     {
       "query": "bienes raíces cdmx",
       "verdict": "out_of_market",
       "job": null,
-      "reason": "CDMX real estate, outside service area."
+      "reason": "Outside Riviera Maya service area."
     }
   ],
-  "summary": "Revised map keeps Riviera Maya buyer/investor jobs, splits specific project evaluations (Tao, Punta Playa, Torre 25, Ikuku, Elementos, Distrito Norte, Musa, Xaman Ha, Samsara), and assigns generic Mexico/rental/other-place queries to context, noise or out_of_market. All measured queries are assigned.",
+  "summary": "Demand centers on Riviera Maya/Tulum/Playa market intelligence and specific Riviera Maya condo purchases (Tao, Punta Playa, Torre 25, Ikuku, Elementos, Distrito Norte, Musa, Xaman Ha). Generic Mexico, rental, agency, competitor and math/science property queries are context, noise or out_of_market.",
+  "pageTypeRules": [],
+  "excludePaths": [
+    "/privacy-notice",
+    "/terms-and-conditions-of-use",
+    "/transparency-cookie-policy",
+    "/es/privacy-notice",
+    "/es/terms-and-conditions-of-use",
+    "/es/transparency-cookie-policy",
+    "/sign-up",
+    "/login",
+    "/property/proptest-es-xyzabc"
+  ],
+  "newsQueries": [
+    "Riviera Maya real estate news 2026",
+    "Tulum condo oversupply market 2026",
+    "Playa del Carmen real estate regulation 2026",
+    "Quintana Roo property tax foreign buyers 2026",
+    "Mexico fideicomiso real estate regulation 2026",
+    "Cancun Puerto Morelos construction permits 2026"
+  ],
   "counts": {
-    "queries": 258,
-    "assigned": 258,
-    "unassigned": 0
+    "queries": 274,
+    "sent": 274,
+    "assigned": 274,
+    "unassigned": 0,
+    "deferred": 0
   }
 }

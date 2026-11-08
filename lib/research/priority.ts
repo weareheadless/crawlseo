@@ -81,8 +81,11 @@ export function foundationsGate(map: TopicMap): {
   clicks: number;
   reason: string;
 } {
-  const impressions = map.clusters.reduce((sum, cluster) => sum + cluster.metrics.impressions, 0);
-  const clicks = map.clusters.reduce((sum, cluster) => sum + cluster.metrics.clicks, 0);
+  // Site-level totals, not the sum of topic memberships: topics overlap and
+  // omit queries, so the cluster sum is a lower bound that can hide the site's
+  // real reach.
+  const impressions = map.site?.impressions ?? map.clusters.reduce((sum, cluster) => sum + cluster.metrics.impressions, 0);
+  const clicks = map.site?.clicks ?? map.clusters.reduce((sum, cluster) => sum + cluster.metrics.clicks, 0);
   // The site is not in the results yet: content cannot be ranked by expected
   // clicks because there are none. A site with impressions but no clicks is a
   // different diagnosis (titles and intent), so it does not open the gate.
