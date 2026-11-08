@@ -300,6 +300,8 @@ export function jaccard(a: string[], b: string[]): number {
 export type ReconcileResult = {
   created: number;
   merged: number;
+  /** Retired clusters whose stable identity returned and were restored. */
+  revived: number;
   superseded: number;
   memberships: number;
 };
@@ -316,12 +318,19 @@ export async function reconcileClusters(
   projectId: string,
   proposals: ClusterProposal[]
 ): Promise<ReconcileResult> {
-  const result: ReconcileResult = { created: 0, merged: 0, superseded: 0, memberships: 0 };
+  const result: ReconcileResult = { created: 0, merged: 0, revived: 0, superseded: 0, memberships: 0 };
 
-  const existing = await db.demandMapCluster.findMany({
-    where: { projectId, supersededAt: null },
-    select: { id: true, slug: true, identityKey: true, name: true, confidence: true },
+  // Read every row, retired ones included. The unique keys are
+  // (projectId, slug) and (projectId, identityKey) across the whole table, so a
+  // slug or identity that belongs to a retired cluster is still taken. Matching
+  // for reconciliation uses only the active rows; the retired ones are read so
+  // a returning cluster revives its row instead of colliding with it.
+  const all = await db.demandMapCluster.findMany({
+    where: { projectId },
+    select: { id: true, slug: true, identityKey: true, name: true, confidence: true, supersededAt: true },
   });
+  const existing = all.filter((row) => row.supersededAt === null);
+  const byIdentity = new Map(all.map((row) => [row.identityKey, row]));
   // Membership is read from evidence so reconciliation never invents members.
   const memberships = await db.evidenceRecord.findMany({
     where: { projectId, kind: "keyword_universe_membership", supersededById: null },
@@ -335,7 +344,7 @@ export async function reconcileClusters(
   }
 
   const touched = new Set<string>();
-  const slugTaken = new Set(existing.map((row) => row.slug));
+  const slugTaken = new Set(all.map((row) => row.slug));
 
   for (const proposal of proposals) {
     const currentMembers = existing
@@ -361,11 +370,29 @@ export async function reconcileClusters(
       });
       result.merged += 1;
     } else {
-      const identityMatch = existing.find((row) => row.identityKey === proposal.identityKey);
+      const identityMatch = byIdentity.get(proposal.identityKey);
       if (identityMatch) {
         slug = identityMatch.slug;
         clusterId = identityMatch.id;
-        result.merged += 1;
+        if (identityMatch.supersededAt) {
+          // The stable identity is back. Restore the row instead of creating a
+          // second one that the unique key would reject. Its businessRelevance
+          // is left alone: a human decision survives retirement.
+          await db.demandMapCluster.update({
+            where: { id: clusterId },
+            data: {
+              name: proposal.name,
+              topicSummary: proposal.topicSummary,
+              intent: proposal.intent,
+              confidence: Math.max(identityMatch.confidence ?? 0, proposal.confidence),
+              supersededAt: null,
+              supersededById: null,
+            },
+          });
+          result.revived += 1;
+        } else {
+          result.merged += 1;
+        }
       } else {
         slug = uniqueSlug(slugify(proposal.name), slugTaken);
         slugTaken.add(slug);

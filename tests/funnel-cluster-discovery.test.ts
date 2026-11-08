@@ -127,12 +127,25 @@ function fakeDb() {
   let counter = 0;
   const db = {
     demandMapCluster: {
-      findMany: vi.fn(async (args: { where: { projectId: string; supersededAt: null } }) =>
-        clusters.filter((row) => row.projectId === args.where.projectId && row.supersededAt == null)
+      findMany: vi.fn(async (args: { where: { projectId: string; supersededAt?: null } }) =>
+        clusters.filter(
+          (row) =>
+            row.projectId === args.where.projectId &&
+            (args.where.supersededAt === undefined || row.supersededAt == null)
+        )
       ),
       create: vi.fn(async (args: { data: Record<string, unknown> }) => {
+        const data = args.data;
+        // Mirror the table's unique keys so a collision fails the test the way
+        // the database fails the monthly cycle.
+        if (clusters.some((row) => row.projectId === data.projectId && row.slug === data.slug)) {
+          throw new Error("Unique constraint failed on the fields: (`projectId`,`slug`)");
+        }
+        if (clusters.some((row) => row.projectId === data.projectId && row.identityKey === data.identityKey)) {
+          throw new Error("Unique constraint failed on the fields: (`projectId`,`identityKey`)");
+        }
         counter += 1;
-        const row = { id: `c-${counter}`, supersededAt: null, supersededById: null, ...args.data };
+        const row = { id: `c-${counter}`, supersededAt: null, supersededById: null, ...data };
         clusters.push(row);
         return { id: row.id };
       }),
@@ -277,6 +290,67 @@ describe("cluster reconciliation", () => {
     expect(retired).toBeTruthy();
     // Retired, not deleted, and never a self-reference.
     expect(retired!.supersededById).not.toBe(retired!.id);
+  });
+
+  it("revives a retired cluster when its stable identity returns", async () => {
+    const { db, clusters } = fakeDb();
+    await reconcileClusters(db, "p1", [proposal()]);
+    await reconcileClusters(db, "p1", [
+      proposal({
+        identityKey: "lexical:boat engine",
+        name: "boat engine",
+        members: ["boat engine repair", "boat engine parts"],
+      }),
+    ]);
+    expect(clusters.find((row) => row.identityKey === "lexical:freediving course")?.supersededAt).not.toBeNull();
+
+    const again = await reconcileClusters(db, "p1", [proposal()]);
+    expect(again.created).toBe(0);
+    expect(again.revived).toBe(1);
+    const matching = clusters.filter((row) => row.identityKey === "lexical:freediving course");
+    expect(matching).toHaveLength(1);
+    expect(matching[0].supersededAt).toBeNull();
+    expect(matching[0].supersededById).toBeNull();
+  });
+
+  it("keeps a human relevance decision when reviving a retired cluster", async () => {
+    const { db, clusters } = fakeDb();
+    await reconcileClusters(db, "p1", [proposal()]);
+    const first = clusters.find((row) => row.identityKey === "lexical:freediving course")!;
+    first.businessRelevance = { relevance: "core", decidedBy: "human" };
+    await reconcileClusters(db, "p1", [
+      proposal({
+        identityKey: "lexical:boat engine",
+        name: "boat engine",
+        members: ["boat engine repair", "boat engine parts"],
+      }),
+    ]);
+
+    await reconcileClusters(db, "p1", [proposal()]);
+    expect(clusters.find((row) => row.identityKey === "lexical:freediving course")?.businessRelevance).toEqual({
+      relevance: "core",
+      decidedBy: "human",
+    });
+  });
+
+  it("gives a new identity a fresh slug when a retired cluster owns the name", async () => {
+    const { db, clusters } = fakeDb();
+    await reconcileClusters(db, "p1", [proposal()]);
+    await reconcileClusters(db, "p1", [
+      proposal({
+        identityKey: "lexical:boat engine",
+        name: "boat engine",
+        members: ["boat engine repair", "boat engine parts"],
+      }),
+    ]);
+
+    const again = await reconcileClusters(db, "p1", [
+      proposal({ identityKey: "serp:freediving-course", members: ["other a", "other b"] }),
+    ]);
+    expect(again.created).toBe(1);
+    const slugs = clusters.map((row) => row.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(slugs).toContain("freediving-course-2");
   });
 
   it("keeps a curated cluster with no members instead of superseding it", async () => {
