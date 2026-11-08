@@ -1,40 +1,39 @@
 # Opportunity board — casamigo.net — 2026-11
 
-Generated 2026-11-07T23:19:26.530Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-08T03:29:26.465Z. Proposals only; no task is created until a human accepts one.
 
-Since the previous run: 6 updated in place, 6 new, 3 closed.
-- new: Create a service page for AI real estate market intelligence
-- new: Add a Tulum condo-project directory to the Tulum market page
-- new: Add AI Overview answer blocks to the Tao Tulum property page
-- new: Add a market-and-inventory answer section to the Playa del Carmen city page
-- new: Normalize H1 structure on property and listing pages
-- new: Add structured data to homepage and site templates
-- closed: Create a market-intelligence hub explaining the AI Rating and indexing city reports
-- closed: Add a citable answer block for the Playa del Carmen market question on the city page
-- closed: Pair the TAO Tulum page with buying-need modifiers and a project facts block
+Since the previous run: 2 updated in place, 3 new, 10 closed.
+- new: Properties hubs and duplicate-title metadata pass
+- new: Property detail page content and link pass
+- new: City-page template, answer block and canonicals
+- closed: Fix duplicate titles and missing H1 on the property listings template
+- closed: Add Spanish local-search sections to the Riviera Maya listings page
+- closed: Create a service page for AI real estate market intelligence
+- closed: Add a Tulum condo-project directory to the Tulum market page
+- closed: Add AI Overview answer blocks to the Tao Tulum property page
+- closed: Add a market-and-inventory answer section to the Playa del Carmen city page
+- closed: Repair broken internal links on the Costera property page
+- closed: Normalize H1 structure on property and listing pages
+- closed: Add self-referencing canonical tags to city pages
+- closed: Add structured data to homepage and site templates
 
 ## Priority order
 
-30 impressions and 0 clicks in the window: the site is not visible enough for content priority. Foundations first.
+29 impressions and 0 clicks in the window: the site is not visible enough for content priority. Foundations first.
 
-1. **Repair broken internal links on the Costera property page** — foundation · technical defect; priority comes from severity and reach, not from clicks
-2. **Add self-referencing canonical tags to city pages** — foundation · technical defect; priority comes from severity and reach, not from clicks
-3. **Fix duplicate titles and missing H1 on the property listings template** — foundation · technical defect; priority comes from severity and reach, not from clicks
-4. **Normalize H1 structure on property and listing pages** — foundation · technical defect; priority comes from severity and reach, not from clicks
-5. **Add structured data to homepage and site templates** — foundation · technical defect; priority comes from severity and reach, not from clicks
-6. **Add AI Overview answer blocks to the Tao Tulum property page** — HOLD — not quantified · only 6 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-7. **Add Spanish local-search sections to the Riviera Maya listings page** — HOLD — not quantified · only 10 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-8. **Add a Tulum condo-project directory to the Tulum market page** — HOLD — not quantified · only 6 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-9. **Add a market-and-inventory answer section to the Playa del Carmen city page** — HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-10. **Add a direct-answer block on Puerto Morelos 2026 presales to the existing collection** — HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-11. **Turn the thin About Us page into the advisory and lead-generation page** — HOLD — not quantified · no measured impressions; demand is market size, not reachable yet
-12. **Create a service page for AI real estate market intelligence** — HOLD — not quantified · only 7 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+1. **Properties hubs and duplicate-title metadata pass** — HOLD — not quantified · only 8 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+2. **Add a presale answer block to the Puerto Morelos pre-construction collection** — HOLD — not quantified · only 8 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+3. **Add a clear advisory services section to About Us** — HOLD — not quantified · no measured impressions; demand is market size, not reachable yet
+4. **Property detail page content and link pass** — HOLD — not quantified · only 5 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+5. **City-page template, answer block and canonicals** — HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
 
 ## Taxonomy review
 
-- `riviera-maya-property-listings` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
-- `playa-del-carmen-real-estate-market-and-condo-listings` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
-- `riviera-maya-real-estate-advisory-and-lead-generation` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
+- `distrito-norte-cozumel` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
+- `torre-25-condos` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
+- `elementos-life-cozumel` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
+- `musa-del-puerto-condos` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
+- `playa-del-carmen-property-for-sale` — queries are in es; the site locale is en. Decide the language architecture before drafting this topic.
 
 ## Lanes
 
@@ -44,155 +43,95 @@ No proposal in this lane.
 
 ### Content & business
 
-#### Add Spanish local-search sections to the Riviera Maya listings page
+#### Properties hubs and duplicate-title metadata pass
 
-- Kind: update; effort: medium; confidence: medium (Search Console shows only 10 impressions at an average position of 82 for the cluster, and the Spanish local terms have no impressions yet. The demand is visible, but the page has not proven it can capture it.)
-- Priority: HOLD — not quantified · only 10 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: The Spanish listings page already exists but the Spanish local queries in the demand set have no impressions. Add area-qualified sections for the terms buyers actually use.
-- Why now: The cluster shows 7,230 monthly searches, mostly Spanish local terms, while the page earns only 10 impressions at an average position of 82.
-- Target: https://www.casamigo.net/es/properties (Spanish local search and area qualifiers)
-- Action: Add sections and internal links for the Spanish demand already in the data: 'condominios cerca de mí', 'propiedades en venta en Playa del Carmen', 'propiedades en venta en Tulum' and similar variants. Add area qualifiers (Playa del Carmen, Tulum, Puerto Morelos, Cozumel, Bacalar) so the page does not rely on the generic 'cerca de mí' phrasing alone.
-- Expected outcome: A Spanish listings page that matches local search wording and area qualifiers, giving the existing page a chance to earn impressions beyond its current position 82.
-- Evidence: 2 reference(s)
+- Kind: update; effort: medium; confidence: medium (Volume of about 210 searches a month with the site already around position 24, but only a handful of impressions recorded so far.)
+- Priority: HOLD — not quantified · only 8 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: The English properties page exists but does not rank for 'mayan riviera real estate' (about 210 searches a month); the few impressions sit on the homepage and the Spanish properties page at position ~24.
+- Why now: Measured demand of roughly 210 searches a month is being answered by an unrelated URL at position ~24, while the English listings page carries no for-sale framing.
+- Target: https://www.casamigo.net/properties (Top of page: for-sale introduction, city links and listing filter entry)
+- Action: Combine the two properties-hub rewrites with the duplicate-title remediation: unique hub titles, for-sale intros and city links, and unique titles across the 122 affected pages while keeping listing grids/filters.
+- Expected outcome: The English listings page becomes the URL that competes for 'mayan riviera real estate' instead of the homepage, with a realistic path from position ~24 into page one.
+- Evidence: 7 reference(s)
+- Critique: keep — Target and action fit the English for-sale hub; measured query and existing Spanish-page impressions support the change.
 
-#### Add a Tulum condo-project directory to the Tulum market page
+#### Add a clear advisory services section to About Us
 
-- Kind: update; effort: medium; confidence: medium (First-party rankings show project-name queries at positions 53 to 92 with only a handful of impressions; the cluster volume is inflated by unrelated cash-exchange queries, so the evidence is directional.)
-- Priority: HOLD — not quantified · only 6 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: Project-name queries already get impressions but land on generic or property pages at positions 53 to 92. Add a project directory section to the existing Tulum market page.
-- Why now: Tao, Samsara and Los Amigos queries are already visible in Search Console, but the Tulum page has no project-level directory and the listings page is picking up some of the demand at low positions.
-- Target: https://www.casamigo.net/es/cities/tulum (Tulum condo-project directory)
-- Action: Add a project directory to the Tulum market page covering Tao, Samsara and Los Amigos. Pair each project name with real-estate need modifiers such as condos for sale, pre-sale, location and investment case, and link to the relevant property pages. Keep cash-exchange and pawn-shop queries out of this section.
-- Expected outcome: A project-led section on the Tulum page that can capture project-name searches and route visitors to the right property pages.
-- Evidence: 4 reference(s)
-
-#### Add a market-and-inventory answer section to the Playa del Carmen city page
-
-- Kind: update; effort: medium; confidence: medium (One first-party impression at position 48 across five queries is directional only, and volume is low, so the upside is real but small.)
-- Priority: HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: The Playa del Carmen city page is the only page on this cluster and earns one impression at position 48 while the cluster's listing queries sit at zero. Give it a market snapshot, a condo inventory module and buyer FAQs so it can serve both market and listing intent.
-- Why now: Five queries with 220 volume map here, but all except one show zero impressions and the page ranks 48 on the single query it appears for. The Spanish listing variants duplicate each other with no impressions, so the page needs a clearer job before any more pages are added.
-- Target: https://www.casamigo.net/cities/playa-del-carmen (market snapshot, condo inventory module and buyer FAQ)
-- Action: On /cities/playa-del-carmen add three blocks: (1) a market snapshot with median price, absorption and inventory figures drawn from the weekly brief; (2) a condo inventory module linking out to the Playa del Carmen property pages; (3) an FAQ answering buyer questions on price bands, presale terms and rental yield. Keep the page in English. Treat the Spanish listing demand as a separate owner decision for /es/cities/playa-del-carmen rather than mixing languages on this page.
-- Expected outcome: The city page starts appearing for Playa del Carmen market and listing queries and passes internal links to the property pages it references.
-- Evidence: 3 reference(s)
-
-#### Turn the thin About Us page into the advisory and lead-generation page
-
-- Kind: update; effort: medium; confidence: low (Near-me agency queries carry volume but no impressions and no advisory qualifier, so the case rests on the core offer, not on measured demand.)
+- Kind: update; effort: small; confidence: low (No Search Console demand is measured for this topic; the case rests on Casamigo's stated advisory services and an About Us page that has not earned visibility.)
 - Priority: HOLD — not quantified · no measured impressions; demand is market size, not reachable yet
-- Summary: /about-us runs 459 words and the cluster's near-me agency queries earn no impressions at all. Build the page around what Casamigo actually sells — real estate and market intelligence, AI-assisted search and lead handling — so the core offer has a landing page.
-- Why now: Four near-me agency queries carry 8,040 measured volume but zero impressions and no advisory qualifier, so this is a positioning fix rather than a volume play. The offer is core and should not be left without a page.
-- Target: https://www.casamigo.net/about-us (services, credentials, service area, process, consultation CTA)
-- Action: Expand /about-us with: the services (real estate intelligence, market intelligence, property listings, AI-powered real estate) and how leads are handled; licensed-and-certified-throughout-Mexico credentials; the service area (Playa del Carmen, Tulum, Cancún, Puerto Morelos, Cozumel, Bacalar, Riviera Maya); how the AI Rating and weekly brief work; and one consultation call to action. Keep it in English and do not chase the generic Spanish near-me terms directly.
-- Expected outcome: The advisory offer has a credible page that can convert branded and direct traffic, and a base to build advisory content on later.
-- Evidence: 3 reference(s)
+- Summary: Advisory is a core Casamigo service, but /about-us is the only page and has no measured visibility. Add a concise section that explains the offer; the case rests on the service, not on search volume.
+- Why now: No Search Console demand is measured, but the business sells advisory and the existing page is unproven. A small section gives the offer a clearer landing target.
+- Target: https://www.casamigo.net/about-us (advisory services)
+- Action: Add a dedicated advisory section to /about-us covering real estate intelligence, market intelligence, AI-assisted analysis and lead generation for Riviera Maya investors. Keep it concise and link to relevant city and property pages.
+- Expected outcome: A clearer page for a core offer, with no volume guarantee.
+- Evidence: 2 reference(s)
+- Critique: keep — Service-led page with no volume dependency; valid business-relevant addition if the advisory offer is accurately described.
 
-#### Create a service page for AI real estate market intelligence
+#### Property detail page content and link pass
 
-- Kind: article; effort: medium; confidence: low (The cluster has only about 20 monthly searches and the homepage already ranks weakly for a few market queries; the page is justified by the service Casamigo sells, not by measured demand.)
-- Priority: HOLD — not quantified · only 7 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: Casamigo sells real estate and market intelligence but has no service or category page for it. Build a small page that explains the offer and links it from the homepage and city pages.
-- Why now: The cluster has coverage only through the homepage and other pages, with no dedicated service page, while the business facts list AI-powered real estate and market intelligence as core services.
-- Target: https://www.casamigo.net/services/ai-real-estate-market-intelligence
-- Action: Create a compact service page covering source-backed city signals, AI Rating, curated synthesis and the human-expertise layer. Explain who it is for, what the buyer gets and how it supports investment decisions. Link to it from the homepage and relevant city pages. The case rests on the core offer, not on search volume.
-- Expected outcome: A dedicated page for the core AI intelligence offer that can be linked, cited and optimized for service and market-intelligence queries.
-- Evidence: 3 reference(s)
+- Kind: update; effort: medium; confidence: low (About 1,000 monthly searches for the development name and a clear need-term gap, but current positions of 53–83 with one impression per query.)
+- Priority: HOLD — not quantified · only 5 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: 'tao tulum' carries about 1,000 monthly searches, yet the page ranks 53–83 and earns one impression per query: the development name is on-page, the condo and loft need terms are not.
+- Why now: This is the largest measured demand in the set and the cluster's own gap note flags development-name queries without need terms, while the page sits on pages six to nine.
+- Target: https://www.casamigo.net/property/tao-tulum-tulum (Title, H1, opening paragraph and unit section)
+- Action: Run one property-detail template pass: add the buyer-need term to title/H1/opening in the page's language, keep project detail, and repair broken internal links across the 13 affected pages.
+- Expected outcome: The page competes for 'tao tulum', 'tao lofts tulum' and 'tao condos tulum mexico' instead of sitting between positions 53 and 83.
+- Evidence: 12 reference(s)
+- Critique: keep — Clear gap between development-name and condo/loft need terms; target page and metadata/FAQ action are appropriate.
 
 ### AEO/GEO
 
-#### Add AI Overview answer blocks to the Tao Tulum property page
+#### Add a presale answer block to the Puerto Morelos pre-construction collection
 
-- Kind: aeo; effort: small; confidence: medium (AI Overview observations show zero citations for the Tao questions while 14 competitors are cited, and the page already ranks for the same project names at positions 53 and 76.)
-- Priority: HOLD — not quantified · only 6 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: Measured AI Overviews for Tao Tulum queries cite competitors, not Casamigo. Add concise answer blocks to the existing Tao property page.
-- Why now: The page already ranks for 'tao tulum' and 'tao tulum mexico', but none of the measured AI Overviews for those questions cite Casamigo while 14 competitors are cited.
-- Target: https://www.casamigo.net/property/tao-tulum-tulum (Tao Tulum answer block)
-- Action: Add short answer blocks to the Tao Tulum page for 'tao tulum', 'tao tulum mexico' and 'tao lofts tulum'. State what Tao is, where it is, the condo formats and the investment case in plain language, using only data the page already supports. Keep each answer self-contained so an AI Overview can quote it.
-- Expected outcome: Answer-ready blocks that give AI Overviews a clear, quotable answer and strengthen the existing Tao property page.
-- Evidence: 2 reference(s)
-
-#### Add a direct-answer block on Puerto Morelos 2026 presales to the existing collection
-
-- Kind: update; effort: small; confidence: low (The case rests on a single query with one impression at position 20 and one AI Overview where 17 competitors are cited and Casamigo is not.)
-- Priority: HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: The presale collection already ranks 20th for 'presale condo puerto morelos 2026' on a single impression, and the same question shows an AI Overview citing 17 competitors and not Casamigo. A short answer block at the top is a low-cost test.
-- Why now: One query, one impression, position 20, plus an AI Overview where the site is absent. The page is close enough to justify a small answer-block test, and no new page is needed.
-- Target: https://www.casamigo.net/collections/puerto-morelos-pre-construction-investing-in-the-next-growth-corridor (direct-answer block at the top)
-- Action: At the top of the Puerto Morelos pre-construction collection, add a 60-90 word answer stating delivery year, price range, unit types and presale payment terms for 2026 presale condos, using only figures the owner can verify from current inventory. Follow it with three short Q&A pairs on deposits, delivery risk and resale. Do not create a new page; the collection already covers the topic.
-- Expected outcome: The collection gains a citable answer for the 2026 presale question and a clearer shot at page-one ranking and AI Overview citation.
+- Kind: aeo; effort: small; confidence: low (The page ranks around position 20 for the query but has a single recorded impression and no AI Overview citation yet, so this is a test.)
+- Priority: HOLD — not quantified · only 8 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: The Puerto Morelos pre-construction collection already ranks around position 20 for 'presale condo puerto morelos 2026' but is not cited in AI Overviews, where 17 competitors appear.
+- Why now: The page and the ranking already exist; the missing piece is a direct answer block that answer engines and snippets can lift, in a question with no citation for Casamigo.
+- Target: https://www.casamigo.net/collections/puerto-morelos-pre-construction-investing-in-the-next-growth-corridor (Opening answer block and short Q&A)
+- Action: Add a 60–90 word answer block at the top of the collection that directly answers what a 2026 presale condo in Puerto Morelos costs, what is delivered and when, and how presale terms work. Follow it with a short Q&A repeating those questions as headings. Keep every claim to what the collection's listings and the published weekly brief support.
+- Expected outcome: The collection holds a citable answer for the presale query, improving its chance of an AI Overview reference and a richer classic snippet.
 - Evidence: 1 reference(s)
+- Critique: keep — Answer block is source-constrained to listings and the weekly brief; the collection already ranks near page 2, so AEO addition is reasonable.
+
+#### City-page template, answer block and canonicals
+
+- Kind: aeo; effort: small; confidence: low (The market question is measured in Search Console and observed in an AI Overview where 14 competitors are cited and Casamigo is not; the page exists, but measured demand is only about ten searches a month.)
+- Priority: HOLD — not quantified · only 1 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: The Playa del Carmen city page exists and runs over 2,500 words, but the market question is answered in an AI Overview where 14 competitors are cited and Casamigo is not, and the page sits near position 92. Add a short, citable answer block at the top.
+- Why now: The market question is already measured in Search Console and appears as an AI Overview question the site is missing from, while the weekly brief already publishes the inventory, absorption and price figures the answer needs.
+- Target: https://www.casamigo.net/cities/playa-del-carmen (Top-of-page answer block and FAQ)
+- Action: Treat city pages as one template pass: add self-canonicals to the seven city pages, create the compact Tulum page in that template, and add the sourced Playa del Carmen answer block/FAQ.
+- Expected outcome: A citable answer passage for the AI Overview and a clearer entry point for a market query where the page currently ranks around position 92.
+- Evidence: 8 reference(s)
+- Critique: revise — Complete the truncated schema/markup instruction and tie every figure to the weekly brief; target and AEO intent are otherwise sound.
 
 ### Technical
 
-#### Repair broken internal links on the Costera property page
-
-- Kind: technical; effort: small; confidence: high (The finding explicitly reports BROKEN_LINK on the sample URL with 13 affected pages.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: The Costera Playa del Carmen property page contains broken links, and 13 pages share the defect. Fix or remove the broken targets so users and crawlers can continue through the listing journey.
-- Why now: Broken links waste crawl budget and interrupt navigation on property pages, which are the site's primary conversion path.
-- Target: https://www.casamigo.net/property/costera-playa-del-carmen (property detail page)
-- Action: Identify the broken href targets on the sample page and the 13 affected pages, update them to valid destination URLs, or remove the links if no replacement exists.
-- Expected outcome: No broken internal links on the affected property pages; crawlers can reach linked inventory and users avoid dead ends.
-- Evidence: 1 reference(s)
-
-#### Add self-referencing canonical tags to city pages
-
-- Kind: technical; effort: small; confidence: high (The finding explicitly reports MISSING_CANONICAL on the sample city URL with 7 affected pages.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: Seven city pages, including Puerto Aventuras, are missing canonical tags. Add self-referencing canonicals to consolidate indexing signals for each city URL.
-- Why now: Missing canonicals on location pages can let parameterized or duplicate variants compete, splitting signals on pages that support local search.
-- Target: https://www.casamigo.net/cities/puerto-aventuras (city page template)
-- Action: Update the city page template to output a self-referencing canonical URL, then verify the seven affected city pages render the correct canonical.
-- Expected outcome: Canonical coverage on all seven city pages, reducing ambiguity for search engines and consolidating ranking signals.
-- Evidence: 1 reference(s)
-
-#### Fix duplicate titles and missing H1 on the property listings template
-
-- Kind: technical; effort: medium; confidence: high (First-party crawl data shows duplicate titles on 122 pages, missing H1s on 14 pages and duplicate descriptions on 8 pages of the same listings template.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: The /properties listing template repeats titles across 122 pages and leaves 14 pages without an H1. This is one template fix, not many page edits.
-- Why now: The listings hub is the main transactional entry point, but the template is sending weak, duplicated page signals to search.
-- Target: https://www.casamigo.net/properties (listings template)
-- Action: Update the property-listings template so each page gets a unique title and meta description, and add one descriptive H1. Keep the listing page structure and data intact; this is a template-level fix across the pages sharing the defect.
-- Expected outcome: Unique titles, descriptions and H1s across the listing template, removing a crawl-level barrier to ranking for property searches.
-- Evidence: 4 reference(s)
-
-#### Normalize H1 structure on property and listing pages
-
-- Kind: technical; effort: medium; confidence: high (The findings explicitly report MULTIPLE_H1 on 37 pages and MISSING_H1 on 14 pages, with sample URLs on the same core templates.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: Thirty-seven property pages have multiple H1 elements and 14 listing pages have no H1. Standardize each page to a single descriptive H1, with supporting headings at H2/H3.
-- Why now: Heading structure is inconsistent across 51 pages in the core inventory and listing paths, weakening topical clarity and accessibility.
-- Target: https://www.casamigo.net/es/property/centurmex-10-playa-del-carmen (property detail template)
-- Action: Audit the property detail and /properties templates, remove duplicate H1 markup, ensure every page renders one H1, and demote other headings to H2/H3.
-- Expected outcome: One H1 per affected page, consistent heading hierarchy, and clearer page-topic signals for search engines and assistive technology.
-- Evidence: 2 reference(s)
-
-#### Add structured data to homepage and site templates
-
-- Kind: technical; effort: medium; confidence: medium (The finding reports MISSING_SCHEMA across 56 pages, but the crawl evidence does not specify which schema types are absent or whether any schema exists on other templates.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: Fifty-six pages, including the homepage, have no schema markup. Implement Organization/WebSite schema on the homepage and appropriate listing schema on property pages.
-- Why now: Structured data helps search engines understand the brand and inventory, and the gap spans the site's most important entry and listing pages.
-- Target: https://www.casamigo.net/ (homepage / global template)
-- Action: Define the schema types to deploy, add JSON-LD to the global template and property templates, and validate with Rich Results Test.
-- Expected outcome: Structured data coverage on the affected pages, improved entity clarity, and eligibility for relevant rich results.
-- Evidence: 1 reference(s)
+No proposal in this lane.
 
 ## Drafting note
 
-Content and AEO: Local Riviera Maya scope only. The listings cluster has a template-level crawl defect on /properties and a Spanish-content gap on /es/properties; the AI intelligence cluster has no service page for a core offer; Tulum project queries are visible but land at positions 53–92 and none of the measured A Three local clusters reviewed, four proposals, none left empty. Playa del Carmen gets two genuinely different jobs: an upgrade to the city page (market snapshot, condo inventory module, buyer FAQs) and one technical delivery on the /properties hub, where duplicate titles span 122 pages and the H1 is
+Content and AEO: Five proposals across four clusters. Riviera Maya for-sale gets two genuinely different jobs: an English for-sale section on the listings page (about 210 searches a month, site currently at position ~24) and a presale answer block on the Puerto Morelos pre-construction collection, which ranks around Four clusters reviewed, all inside the Playa del Carmen service area. Two get work. The Playa del Carmen market page already exists and is substantial, but the site is absent from the AI Overview for the market question and ranks near position 92, so the job is a source-backed answer block on that p Three clusters have work worth doing: two development-name pages need a condo need term, and the Spanish properties page needs to target the measured Spanish property-for-sale queries. No proposal is made for the Casamigo brand cluster because it has no measured query demand in the current window; k Advisory is a core Casamigo offer but unproven: update /about-us with a clear advisory section, low confidence. Samsara Tulum has the strongest measured demand but no Casamigo page and no confirmed inventory, so it gets a one-time title-tag fix on the /properties hub plus an owner decision on a dedi
 
-Technical: Five technical defects warrant delivery: duplicate titles across 122 pages, missing schema on 56 pages, inconsistent H1 structure across 51 pages, broken links on 13 pages, and missing canonicals on 7 city pages. I am not proposing the MISSING_DESCRIPTION and DUPLICATE_DESCRIPTION findings because meta description issues affect snippet presentation rather than indexing, crawl budget, signal consol
+Technical: Reviewed 8 crawl findings across casamigo.net. I propose 3 technical deliveries: duplicate title tags affecting 122 pages, broken internal links on 13 pages, and missing canonical tags on 7 city pages. These defects split ranking signals, waste crawl budget or break navigation. I am not proposing fixes for missing schema, missing/duplicate meta descriptions, multiple H1s or missing H1s: schema and
 
 ## Critique
 
-Critique unavailable: unknown error. The proposals are shown as generated.
+Model: deepseek/deepseek-v4.1-flash-1017.
+
+Most proposals are well-targeted and evidence-led. Revise Torre 25 for Spanish-language need terms/metric clarity, complete the Playa AEO markup instruction, and soften the duplicate-title causality claim. Group property-detail, properties-hub/title and city-page work.
 
 Merged or not stored:
 
-- Add a direct-answer block on Puerto Morelos 2026 presales to the existing collection — no opportunity type for aeo_geo:update
+- Build the missing English Tulum market page — merged into “City-page template, answer block and canonicals”
+- Add condo and for-sale need terms to the Distrito Norte Cozumel page — merged into “Property detail page content and link pass”
+- Rewrite the Torre 25 page around the condo buyer need, not the project name — merged into “Property detail page content and link pass”
+- Add a condo need term to the Elementos Life Cozumel page — merged into “Property detail page content and link pass”
+- Add condo intent to the Musa del Puerto page — merged into “Property detail page content and link pass”
+- Strengthen the Spanish Playa del Carmen property-for-sale page — merged into “Properties hubs and duplicate-title metadata pass”
+- Fix duplicate titles across 122 pages, sampled at /properties — merged into “Properties hubs and duplicate-title metadata pass”
+- Repair broken internal links on property pages — merged into “Property detail page content and link pass”
+- Add self-referencing canonical tags to city pages — merged into “City-page template, answer block and canonicals”
 
 ## Limits
 

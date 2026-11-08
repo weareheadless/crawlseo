@@ -16,6 +16,7 @@ import {
   type TopicMapData,
 } from "@/lib/research/topic-map";
 import type { TopicDefinition } from "@/lib/research/topic-taxonomy";
+import type { JobMap } from "@/lib/research/job-map";
 import { ATELIER_TAXONOMY } from "./fixtures/atelier-taxonomy";
 
 const taxonomy = ATELIER_TAXONOMY;
@@ -551,5 +552,83 @@ describe("page type and owner coverage", () => {
     );
     const cluster = map.clusters[0];
     expect(cluster.coverageFacts).toEqual({ page: true, ranks: true, converts: false });
+  });
+
+  it("gives a job's project-name query to the topic that rolls up the job", () => {
+    const project = {
+      ...taxonomy[0],
+      slug: "torre-25",
+      name: "Torre 25",
+      jobSlug: "evaluate-torre-25",
+      kind: "market" as const,
+      market: { scope: "local" as const, places: ["Playa del Carmen"], localIntent: [] },
+      need: { terms: ["torre 25"] },
+      requireAny: ["torre 25"],
+      terms: ["torre 25"],
+      strongTerms: ["torre 25"],
+      preferredPages: ["/torre-25"],
+      coverageKind: "product" as const,
+    };
+    const jobMap = {
+      version: 1,
+      proposedBy: "ai",
+      model: null,
+      generatedAt: "2026-11-07T00:00:00Z",
+      jobs: [],
+      verdicts: [{ query: "torre 25", verdict: "demand", job: "evaluate-torre-25", reason: "" }],
+      summary: null,
+      counts: { queries: 1, assigned: 1, unassigned: 0 },
+    } as unknown as JobMap;
+    const map = buildTopicMap(
+      data({
+        queries: [query("torre 25", 1, 90)],
+        pages: [page("/torre-25", "Torre 25", "product", 400)],
+      }),
+      [project],
+      undefined,
+      jobMap
+    );
+    expect(map.clusters[0].metrics.queries).toBe(1);
+    expect(map.clusters[0].metrics.volume).toBe(90);
+  });
+
+  it("keeps a query the job map marked as noise out of demand", () => {
+    const lampes = {
+      ...taxonomy[0],
+      slug: "lampes",
+      name: "Lampes",
+      requireAny: ["lampes"],
+      terms: ["lampes"],
+      strongTerms: ["lampes"],
+      preferredPages: ["/lampes"],
+      coverageKind: "product" as const,
+    };
+    const jobMap = {
+      version: 1,
+      proposedBy: "ai",
+      model: null,
+      generatedAt: "2026-11-07T00:00:00Z",
+      jobs: [],
+      verdicts: [
+        { query: "lampes artisanales", verdict: "demand", job: "buy-lamp", reason: "" },
+        { query: "lampes", verdict: "noise", job: null, reason: "category word, not a job" },
+      ],
+      summary: null,
+      counts: { queries: 2, assigned: 2, unassigned: 0 },
+    } as unknown as JobMap;
+    const map = buildTopicMap(
+      data({
+        queries: [query("lampes artisanales", 10, 200), query("lampes", 5, 100)],
+        pages: [page("/lampes", "Lampes", "category", 400)],
+      }),
+      [lampes],
+      undefined,
+      jobMap
+    );
+    expect(map.clusters[0].metrics.queries).toBe(1);
+    expect(map.clusters[0].metrics.volume).toBe(200);
+    expect(map.counts.qualifiedQueries).toBe(1);
+    expect(map.counts.excludedQueries).toBe(1);
+    expect(map.unmapped.find((row) => row.query === "lampes")?.reason).toMatch(/^noise/);
   });
 });

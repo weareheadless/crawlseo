@@ -7,6 +7,7 @@ import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { storeEvidenceRecord, type MetricValue } from "@/lib/funnel/evidence";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext } from "@/lib/site/context";
 import { distinctVolume } from "@/lib/research/keyword-identity";
+import { jobVerdictIndex, type JobMap } from "@/lib/research/job-map";
 import {
   parseMarketScope,
   marketScopeForTopic,
@@ -153,6 +154,12 @@ export type UnmappedQuery = {
   impressions: number;
   volume: number | null;
   reason: string;
+  /**
+   * unowned: qualified demand that no topic owns, the taxonomy's feedback loop.
+   * excluded: the job map marked it context, noise or out of market, so it is
+   * shown for audit but is not demand to place.
+   */
+  kind: "unowned" | "excluded";
 };
 
 export type TopicMapAi = {
@@ -200,6 +207,12 @@ export type TopicMap = {
   ai: TopicMapAi;
   counts: {
     queries: number;
+    /** Queries the job map kept as demand (or every query when no job map is stored). */
+    qualifiedQueries: number;
+    /** Qualified queries the job map did not judge; they stay in demand and are stated. */
+    unjudgedQueries: number;
+    /** Queries the job map marked context, noise or out of market. */
+    excludedQueries: number;
     clusteredQueries: number;
     unmappedQueries: number;
     pages: number;
@@ -677,30 +690,74 @@ export async function loadTopicMapData(
   };
 }
 
-export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], now = new Date()): TopicMap {
+export function buildTopicMap(
+  data: TopicMapData,
+  taxonomy: TopicDefinition[],
+  now = new Date(),
+  jobMap: JobMap | null = null
+): TopicMap {
+  // Demand is qualified before it is clustered. A query the job map marked as
+  // context, noise or out of market is not this business's demand, however
+  // large its volume. Without a job map every query stays in, as before.
+  const verdictIndex = jobVerdictIndex(jobMap);
+  const jobBySlug = new Map((jobMap?.jobs ?? []).map((job) => [job.slug, job]));
+  const excludedQueries = verdictIndex.size > 0
+    ? data.queries.filter((query) => {
+        const verdict = verdictIndex.get(query.query);
+        return verdict != null && verdict.verdict !== "demand";
+      })
+    : [];
+  const qualifiedQueries = verdictIndex.size > 0
+    ? data.queries.filter((query) => {
+        const verdict = verdictIndex.get(query.query);
+        return verdict == null || verdict.verdict === "demand";
+      })
+    : data.queries;
   // The approved taxonomy is normalised here, not by another model call: two
   // topics with one specific owner are merged. The stored taxonomy stays the
   // human-approved draft.
   const stabilized = stabilizeTopicTaxonomy({
     topics: taxonomy,
-    queries: data.queries,
+    queries: qualifiedQueries,
     brandKey: data.site.domain.replace(/^www\./, "").split(".")[0],
   });
   const topics = stabilized.topics;
+  // A topic that rolls up a job owns that job's demand by the job map's own
+  // verdict, not by string matching: "torre 25" names no place, yet the job map
+  // decided it is demand for the Torre 25 job. The code joins the two model
+  // judgments; it does not re-decide the meaning.
+  const topicsByJob = new Map<string, TopicDefinition[]>();
+  for (const topic of topics) {
+    if (!topic.jobSlug) continue;
+    topicsByJob.set(topic.jobSlug, [...(topicsByJob.get(topic.jobSlug) ?? []), topic]);
+  }
   const assignments = new Map<string, Array<{ topic: TopicDefinition; score: number }>>();
-  for (const query of data.queries) {
-    const assigned = assignQuery(query.query, topics);
+  for (const query of qualifiedQueries) {
+    const verdict = verdictIndex.get(query.query);
+    const jobSlug = verdict?.verdict === "demand" ? verdict.job : null;
+    let assigned = assignQuery(query.query, topics);
+    if (jobSlug) {
+      const jobTopics = topicsByJob.get(jobSlug) ?? [];
+      if (jobTopics.length > 0) {
+        // The job map decides which job this query serves. A lexical match to
+        // a topic for a different job must not steal it.
+        assigned = assigned.filter((entry) => !entry.topic.jobSlug || entry.topic.jobSlug === jobSlug);
+        for (const topic of jobTopics) {
+          if (!assigned.some((entry) => entry.topic.slug === topic.slug)) assigned.push({ topic, score: 1 });
+        }
+      }
+    }
     if (assigned.length > 0) assignments.set(query.query, assigned);
   }
 
   const clusters: TopicCluster[] = topics.map((topic) => {
-    const queries = data.queries.filter((query) => assignments.get(query.query)?.some((entry) => entry.topic.slug === topic.slug));
+    const queries = qualifiedQueries.filter((query) => assignments.get(query.query)?.some((entry) => entry.topic.slug === topic.slug));
     // Context-only demand names the topic's market but not its need, and no
     // other topic owns it. It is the taxonomy's own gap signal: a place-scoped
     // topic that leaves real demand unowned is incomplete, and the board says
     // so instead of burying the queries in the global unmapped table.
     const contextOnlyQueries = !isBrandTopic(topic) && topic.market && topic.market.scope !== "international"
-      ? data.queries.filter((query) => {
+      ? qualifiedQueries.filter((query) => {
           const text = normalizeTopicText(query.query);
           if (topicMatchesQuery(topic, query.query)) return false;
           if (!placeMatches(topic, text)) return false;
@@ -776,15 +833,42 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
   // Every unmapped query stays in the map: the reviewer's job includes spotting
   // a missing topic, and the report states how many rows it shows. A slice here
   // once hid real demand from both the report and the review.
-  const unmapped = data.queries
-    .filter((query) => !assignments.has(query.query))
-    .sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0))
-    .map((query) => ({
-      query: query.query,
-      impressions: query.impressions,
-      volume: query.volume,
-      reason: offBusinessReason(query.query),
-    }));
+  const unmapped = [
+    ...qualifiedQueries
+      .filter((query) => !assignments.has(query.query))
+      .map((query) => {
+        const verdict = verdictIndex.get(query.query);
+        if (verdict?.verdict === "demand") {
+          const job = jobBySlug.get(verdict.job ?? "");
+          return {
+            query: query.query,
+            impressions: query.impressions,
+            volume: query.volume,
+            reason: `demand for job "${verdict.job ?? "unknown"}"${job ? ` (businessFit ${job.businessFit})` : ""} but no topic owns it`,
+            kind: "unowned" as const,
+          };
+        }
+        return {
+          query: query.query,
+          impressions: query.impressions,
+          volume: query.volume,
+          reason: offBusinessReason(query.query),
+          kind: "unowned" as const,
+        };
+      }),
+    // Queries the job map removed from demand stay visible with the verdict
+    // that removed them, so the subtraction is auditable.
+    ...excludedQueries.map((query) => {
+      const verdict = verdictIndex.get(query.query);
+      return {
+        query: query.query,
+        impressions: query.impressions,
+        volume: query.volume,
+        reason: `${verdict?.verdict ?? "not demand"}${verdict?.reason ? `: ${verdict.reason}` : ""}`,
+        kind: "excluded" as const,
+      };
+    }),
+  ].sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0));
 
   return {
     siteId: data.site.id,
@@ -818,8 +902,11 @@ export function buildTopicMap(data: TopicMapData, taxonomy: TopicDefinition[], n
     },
     counts: {
       queries: data.queries.length,
+      qualifiedQueries: qualifiedQueries.length,
+      unjudgedQueries: verdictIndex.size > 0 ? qualifiedQueries.filter((query) => !verdictIndex.has(query.query)).length : 0,
+      excludedQueries: excludedQueries.length,
       clusteredQueries: [...assignments.keys()].length,
-      unmappedQueries: data.queries.length - [...assignments.keys()].length,
+      unmappedQueries: unmapped.length,
       pages: data.pages.length,
       news: data.news.length,
     },
@@ -1329,20 +1416,41 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   }
   lines.push("## Unmapped demand");
   lines.push("");
-  if (map.unmapped.length === 0) {
+  const unowned = map.unmapped.filter((query) => query.kind !== "excluded");
+  const excluded = map.unmapped.filter((query) => query.kind === "excluded");
+  if (unowned.length === 0) {
     lines.push("Every query with demand matched a topic.");
   } else {
     // A display bound, not a data bound: the map keeps every unmapped query and
     // the reviewer reads them all. The remainder is stated, never hidden.
-    const shown = map.unmapped.slice(0, UNMAPPED_TABLE_LIMIT);
+    const shown = unowned.slice(0, UNMAPPED_TABLE_LIMIT);
     lines.push("| Query | Impressions | Volume | Why it is unmapped |");
     lines.push("|---|---:|---:|---|");
     for (const query of shown) {
       lines.push(`| ${escapePipe(query.query)} | ${query.impressions} | ${query.volume ?? "—"} | ${escapePipe(query.reason)} |`);
     }
-    if (map.unmapped.length > shown.length) {
+    if (unowned.length > shown.length) {
       lines.push("");
-      lines.push(`- Showing the ${shown.length} unmapped queries with the most impressions; ${map.unmapped.length - shown.length} more are in the map data.`);
+      lines.push(`- Showing the ${shown.length} unmapped queries with the most impressions; ${unowned.length - shown.length} more are in the map data.`);
+    }
+  }
+  lines.push("");
+  lines.push("## Queries the job map excluded from demand");
+  lines.push("");
+  if (excluded.length === 0) {
+    lines.push("The job map excluded no measured query.");
+  } else {
+    lines.push(`- ${excluded.length} measured queries are context, noise or out of market. They stay visible for audit and are not demand.`);
+    const shown = excluded.slice(0, UNMAPPED_TABLE_LIMIT);
+    lines.push("");
+    lines.push("| Query | Impressions | Volume | Verdict |");
+    lines.push("|---|---:|---:|---|");
+    for (const query of shown) {
+      lines.push(`| ${escapePipe(query.query)} | ${query.impressions} | ${query.volume ?? "—"} | ${escapePipe(query.reason)} |`);
+    }
+    if (excluded.length > shown.length) {
+      lines.push("");
+      lines.push(`- Showing the ${shown.length} excluded queries with the most impressions; ${excluded.length - shown.length} more are in the map data.`);
     }
   }
   lines.push("");
@@ -1358,7 +1466,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Counts");
   lines.push("");
-  lines.push(`- Queries: ${map.counts.queries}; clustered: ${map.counts.clusteredQueries}; unmapped: ${map.counts.unmappedQueries}.`);
+  lines.push(`- Queries: ${map.counts.queries}; qualified: ${map.counts.qualifiedQueries} (unjudged: ${map.counts.unjudgedQueries}); clustered: ${map.counts.clusteredQueries}; not demand: ${map.counts.excludedQueries}; unmapped: ${map.counts.unmappedQueries}.`);
   lines.push(`- Pages considered: ${map.counts.pages}; news sources: ${map.counts.news}.`);
   lines.push("");
   lines.push("## Limits");

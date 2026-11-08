@@ -50,6 +50,12 @@ export type TopicNeed = {
 export type TopicDefinition = {
   slug: string;
   name: string;
+  /**
+   * The job this topic rolls up, from the accepted job map. One topic is one
+   * job; membership for the measured window follows the job's query verdicts,
+   * so a project name with no place word still belongs to its local job.
+   */
+  jobSlug?: string;
   /** Brand topics match their name; market topics match market AND need. */
   kind: TopicKind;
   intent: TopicIntent;
@@ -177,12 +183,29 @@ export type TopicTaxonomyInput = {
    */
   currentTaxonomy?: Array<{
     name: string;
+    /** The job this topic rolls up, so a revision keeps the link. */
+    job?: string | null;
     kind: string;
     marketScope?: string | null;
     marketPlaces?: string[];
     localIntent?: string[];
     needTerms?: string[];
     ownerPages?: string[];
+  }>;
+  /**
+   * The accepted job map. One topic is one job; the model names the topic, the
+   * code does not derive it from the job statement.
+   */
+  jobs?: Array<{
+    slug: string;
+    statement: string;
+    stage: string;
+    language: string;
+    marketScope: string;
+    marketPlaces: string[];
+    businessFit: string;
+    queries: string[];
+    page: string | null;
   }>;
 };
 
@@ -449,6 +472,7 @@ export function validateTopic(raw: unknown): { topic: TopicDefinition | null; re
       relevance,
       coverageKind,
       offerKey: text(row.offerKey)?.slice(0, 120) ?? name.slice(0, 120),
+      ...(text(row.job) ? { jobSlug: text(row.job) as string } : {}),
       ...(market ? { market } : {}),
       ...(need ? { need } : {}),
       rationale: text(row.rationale)?.slice(0, 600) ?? "",
@@ -563,19 +587,20 @@ const SYSTEM = [
   "Never put the business's location, service area or brand name in needTerms. The place belongs in marketPlaces; the brand is its own topic.",
   "headTerms are bare terms this topic should own on their own, such as the service name. If the query set contains a bare service term the whole market searches, give it to the topic that should own it as a headTerm. Only add one when the whole term belongs to this topic, and give it to at most one topic.",
   "Different places and different product or service types are different topics. Do not collapse a market into one topic: if the queries separate into houses in one place, condos in another and rentals in a third, those are three topics.",
-  "One topic has one owning page. If two topics would be owned by the same page, they are one topic: merge them instead of listing both.",
+  "One topic has one owning page. Two topics may share one page when they roll up different jobs; do not merge two jobs into one topic. For each topic, set job to the slug of the job it rolls up. A topic with no job is allowed only when no job fits.",
   "For each topic, set memberQueries to between three and eight queries copied exactly from the supplied list. They are the evidence the topic exists; choose the queries that most clearly belong to it.",
   "A query may appear in at most two topics, and only when it genuinely serves both.",
   "Every distinct place or need with measured demand must have a topic. Leave out only queries that are off-business or research noise, and say why in the summary. Do not invent a topic to cover noise.",
   "previousUnmapped lists measured queries that the previous map left with no owning topic. Decide each one: add its missing need term to the topic it belongs to, split a topic, add the topic it needs, or leave it out as off-business and say why in the summary. Never add a term just to claim a query whose intent is different.",
   "currentTaxonomy is the taxonomy in use. Revise it; do not replace it with a fresh guess. Keep a topic whose cited queries it still owns, change only what the unowned demand requires, and return the complete revised taxonomy.",
+  "jobs is the accepted job map. One topic is one job: every job with measured demand and a businessFit of serves or unknown needs exactly one topic, and its job field is that job's slug. Use the job's statement, market, language and page; copy the job's demand queries as memberQueries. An unknown fit still gets a topic because the demand is measured; the board asks the owner to confirm fit. Do not create a topic that aggregates two jobs, and do not create a topic for a job the business does not serve.",
   "If audienceMarket is empty, infer the audience from the site, the audience facts and the query mix, and say so in the summary.",
   "Set ownerPages to the one to three real paths from the supplied inventory that should own the topic. The field must be present. Prefer the page that sells or explains the topic, with real content, over a thin archive: a tag page is never the owner when a service or category page covers the same topic. Return an empty list only when the site truly has no page for the topic, and say so in the rationale.",
   "offerKey must be copied exactly from the supplied offer names, or be the topic name when no offer fits. Do not paraphrase an offer name.",
   "pageTypeRules are required: map the inventory's URL prefixes to home, service, category, product, blog or other. If the inventory mirrors pages in a second language, exclude those paths unless the business targets that language. Exclude legal, checkout and account pages, tag archives, paginated lists and search-result paths.",
   "newsQueries are 4 to 6 search queries in the site language that find current news, events or regulation relevant to this business and its market. Use the current year from today, not a past one.",
-  "Return exactly one JSON object, with no prose around it: { summary, topics: [{ name, kind, marketScope, marketPlaces: string[], localIntent: string[], needTerms: string[], headTerms: string[], intent, relevance, coverageKind, offerKey, rationale, actionHint, memberQueries: string[], ownerPages: string[], exclusive }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
-  "Keep summary under 300 characters, each rationale and actionHint under 160, and at most 12 topics.",
+  "Return exactly one JSON object, with no prose around it: { summary, topics: [{ name, job, kind, marketScope, marketPlaces: string[], localIntent: string[], needTerms: string[], headTerms: string[], intent, relevance, coverageKind, offerKey, rationale, actionHint, memberQueries: string[], ownerPages: string[], exclusive }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
+  "Keep summary under 300 characters, each rationale and actionHint under 160, and at most 24 topics.",
   "kind is brand or market. marketScope is local, national or international. intent is informational, commercial, transactional, local or mixed. relevance is high, medium or low. coverageKind is service, product, content, local, brand, business or mixed.",
 ].join("\n");
 
@@ -623,13 +648,15 @@ export async function proposeTopicTaxonomy(
   rejected: Array<{ title: string; reason: string }>;
   /** Topics the model gave the same owning page, merged into one. */
   merges: Array<{ into: string; merged: string[]; page: string }>;
+  /** Jobs with measured demand that no proposed topic owns. */
+  missingJobs: Array<{ slug: string; statement: string; queries: string[] }>;
   error: string | null;
   model: string | null;
 }> {
   const config = contentWriterConfig();
-  if (!config) return { taxonomy: null, rejected: [], merges: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
+  if (!config) return { taxonomy: null, rejected: [], merges: [], missingJobs: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
   if (input.queries.length === 0) {
-    return { taxonomy: null, rejected: [], merges: [], error: "no measured query to model", model: config.model };
+    return { taxonomy: null, rejected: [], merges: [], missingJobs: [], error: "no measured query to model", model: config.model };
   }
 
   const sample = sampleQueries(input.queries);
@@ -664,6 +691,7 @@ export async function proposeTopicTaxonomy(
       ? { count: previousUnmappedAll.length, sent: previousUnmapped.length, queries: previousUnmapped }
       : null,
     currentTaxonomy: input.currentTaxonomy ?? [],
+    jobs: input.jobs ?? [],
   };
 
   const brandKey = input.business.name ?? input.domain.replace(/^www\./, "").split(".")[0];
@@ -679,6 +707,7 @@ export async function proposeTopicTaxonomy(
     topics: TopicDefinition[];
     rejected: Array<{ title: string; reason: string }>;
     merges: Array<{ into: string; merged: string[]; page: string }>;
+    missingJobs: Array<{ slug: string; statement: string; queries: string[] }>;
     pageTypeRules: TopicPageTypeRule[];
     excludePaths: string[];
     newsQueries: string[];
@@ -691,6 +720,7 @@ export async function proposeTopicTaxonomy(
     const filled: string[] = [];
     const seen = new Set<string>();
     const membersBySlug = new Map<string, string[]>();
+    const jobsBySlug = new Map((input.jobs ?? []).map((job) => [job.slug, job]));
     for (const raw of Array.isArray(record.topics) ? record.topics : []) {
       const row = asRecord(raw);
       const name = text(row.name);
@@ -702,9 +732,20 @@ export async function proposeTopicTaxonomy(
         rejected.push({ title: name, reason: "incomplete classification" });
         continue;
       }
-      const memberQueries = Array.isArray(row.memberQueries)
-        ? [...new Set(row.memberQueries.filter((entry): entry is string => typeof entry === "string").map((entry) => sampleByKey.get(normalizeTerm(entry))).filter((entry): entry is string => Boolean(entry)))]
-        : [];
+      const proposedJob = text(row.job);
+      const job = proposedJob ? jobsBySlug.get(proposedJob) : undefined;
+      if (proposedJob && !job) {
+        rejected.push({ title: name, reason: `job "${proposedJob}" is not in the supplied job map` });
+        continue;
+      }
+      // A job topic's evidence is the job's own demand, not a lexical match:
+      // "torre 25" names no place and no generic need word, yet the job map has
+      // already decided it is demand for the Torre 25 job.
+      const memberQueries = job
+        ? [...new Set(job.queries.map((query) => sampleByKey.get(normalizeTerm(query))).filter((entry): entry is string => Boolean(entry)))]
+        : Array.isArray(row.memberQueries)
+          ? [...new Set(row.memberQueries.filter((entry): entry is string => typeof entry === "string").map((entry) => sampleByKey.get(normalizeTerm(entry))).filter((entry): entry is string => Boolean(entry)))]
+          : [];
       // One cited query is still evidence. Requiring two would delete the
       // branded demand of a listings site ("ikuku for sale") that has no
       // sibling query, which is a real topic with a real page.
@@ -775,6 +816,7 @@ export async function proposeTopicTaxonomy(
           relevance,
           coverageKind: "brand",
           offerKey,
+          ...(job ? { jobSlug: job.slug } : {}),
           rationale: text(row.rationale)?.slice(0, 600) ?? "",
           requireAny: brandTerms,
           terms: brandTerms,
@@ -822,6 +864,7 @@ export async function proposeTopicTaxonomy(
         relevance,
         coverageKind,
         offerKey,
+        ...(job ? { jobSlug: job.slug } : {}),
         market: {
           scope: marketScope,
           places: marketScope === "international" ? [] : places,
@@ -841,8 +884,10 @@ export async function proposeTopicTaxonomy(
       // The cited evidence must satisfy the topic's own contract. A local
       // topic whose cited queries name no place is not local, and a need list
       // that cannot match its own evidence cannot match the market either.
-      // This is arithmetic on the model's own citations, not a guess.
-      if (!memberQueries.some((query) => topicMatchesQuery(definition, query))) {
+      // This is arithmetic on the model's own citations, not a guess. A job
+      // topic is exempt: the job map already decided those queries are demand,
+      // and a project name carries its market without naming the place.
+      if (!job && !memberQueries.some((query) => topicMatchesQuery(definition, query))) {
         rejected.push({ title: name, reason: "cites no query that matches its own market and need" });
         continue;
       }
@@ -862,11 +907,24 @@ export async function proposeTopicTaxonomy(
         rejected.push({ title: `${brandKey} brand`, reason: "brand demand exists but the proposal has no brand topic" });
       }
     }
+    // A job the business serves with measured demand must be owned by a topic.
+    // The link is the model's own `job` field, not a lexical match: a project
+    // name carries its market without naming the place. The code checks that
+    // each served job has a topic; it does not decide what the topic is.
+    const missingJobsFor = (candidate: TopicDefinition[]) => {
+      const covered = new Set(candidate.map((topic) => topic.jobSlug).filter((slug): slug is string => Boolean(slug)));
+      return (input.jobs ?? [])
+        .filter((job) => job.businessFit !== "does_not_serve" && job.queries.length > 0)
+        .filter((job) => !covered.has(job.slug))
+        .map((job) => ({ slug: job.slug, statement: job.statement, queries: job.queries.slice(0, 6) }));
+    };
+
     if (topics.length === 0) {
       return {
         topics,
         rejected,
         merges: [],
+        missingJobs: missingJobsFor(topics),
         pageTypeRules: [],
         excludePaths: [],
         newsQueries: [],
@@ -877,8 +935,10 @@ export async function proposeTopicTaxonomy(
     }
 
     // One topic has one owning page. When the model gives two topics the same
-    // owner, they are one topic: merging keeps both query sets instead of
-    // leaving two rows that fight over a page and split its demand.
+    // owner and the same job, they are one topic: merging keeps both query sets
+    // instead of leaving two rows that fight over a page and split its demand.
+    // Different jobs may share a page; they are not merged, because one topic
+    // is one job.
     const merges: Array<{ into: string; merged: string[]; page: string }> = [];
     const byOwner = new Map<string, TopicDefinition[]>();
     for (const topic of topics) {
@@ -887,11 +947,13 @@ export async function proposeTopicTaxonomy(
       // A brand topic is exempt: it is the name, not a market need, so it may
       // share an about page with a topic without becoming that topic.
       if (!owner || owner === "/" || isBrandTopic(topic)) continue;
-      byOwner.set(owner, [...(byOwner.get(owner) ?? []), topic]);
+      const key = `${owner}\u0000${topic.jobSlug ?? ""}`;
+      byOwner.set(key, [...(byOwner.get(key) ?? []), topic]);
     }
     const removed = new Set<string>();
-    for (const [page, group] of byOwner) {
+    for (const [key, group] of byOwner) {
       if (group.length < 2) continue;
+      const page = key.split("\u0000")[0];
       const relevanceRank = (topic: TopicDefinition) => RELEVANCES.indexOf(topic.relevance);
       const survivor = [...group].sort(
         (a, b) => relevanceRank(a) - relevanceRank(b) || (membersBySlug.get(b.slug)?.length ?? 0) - (membersBySlug.get(a.slug)?.length ?? 0)
@@ -923,6 +985,12 @@ export async function proposeTopicTaxonomy(
       }
     }
 
+    // A job the business serves with measured demand must be owned by a topic.
+    // The code checks whether any proposed topic matches the job's queries; it
+    // does not decide what the topic is. A missing job is a contract gap, not a
+    // silent omission.
+    const missingJobs = missingJobsFor(topics);
+
     const pageTypeRules: TopicPageTypeRule[] = [];
     for (const raw of Array.isArray(record.pageTypeRules) ? record.pageTypeRules : []) {
       const row = asRecord(raw);
@@ -935,6 +1003,7 @@ export async function proposeTopicTaxonomy(
       topics,
       rejected,
       merges,
+      missingJobs,
       pageTypeRules,
       excludePaths: stringList(record.excludePaths, 20).map((path) => (path.startsWith("/") ? path : `/${path}`)),
       newsQueries: Array.isArray(record.newsQueries)
@@ -979,6 +1048,7 @@ export async function proposeTopicTaxonomy(
     const needsCorrection =
       material.length > 0 ||
       unowned.length > 0 ||
+      result.missingJobs.length > 0 ||
       (result.topics.length === 0 && result.rejected.length > 0);
     if (needsCorrection) {
       try {
@@ -990,14 +1060,19 @@ export async function proposeTopicTaxonomy(
             correction: {
               reason: material.length > 0
                 ? "The first proposal left measured queries that name a topic's market but not its need, and no other topic owns them."
-                : unowned.length > 0
-                  ? "The first proposal left measured queries that no topic owns."
-                  : "The first proposal contained topics that do not satisfy the topic contract.",
+                : result.missingJobs.length > 0
+                  ? "The first proposal has no topic that owns one or more jobs the business serves."
+                  : unowned.length > 0
+                    ? "The first proposal left measured queries that no topic owns."
+                    : "The first proposal contained topics that do not satisfy the topic contract.",
               unownedContext: material,
               unownedQueries,
               unownedCount: unowned.length,
+              // A served job with measured demand and no owning topic is a
+              // missing topic, not an unmapped query to clean up later.
+              missingJobs: result.missingJobs,
               rejected: result.rejected,
-              instruction: "Correct the taxonomy. Add the missing need term to the topic, split the topic when the queries are a different need, or add a topic that owns the unowned queries. If a query is off-business or research noise, leave it out and say why in the summary. Never put the place or brand in needTerms. Return the complete corrected taxonomy, not a diff.",
+              instruction: "Correct the taxonomy. Add the missing need term to the topic, split the topic when the queries are a different need, or add a topic that owns the unowned queries or the missing job. One topic is one job: a job in missingJobs needs its own topic. If a query is off-business or research noise, leave it out and say why in the summary. Never put the place or brand in needTerms. Return the complete corrected taxonomy, not a diff.",
             },
           }),
           maxTokens: 32_000,
@@ -1009,12 +1084,15 @@ export async function proposeTopicTaxonomy(
         const second = build(asRecord(corrected));
         if (second.topics.length > 0) {
           const firstRejected = result.rejected.length;
+          const firstMissingJobs = result.missingJobs.length;
           result = second;
           correctionNote = material.length > 0
             ? `Re-proposed once after ${material.length} topic${material.length === 1 ? "" : "s"} left unowned market demand.`
-            : unowned.length > 0
-              ? `Re-proposed once after ${unowned.length} queries matched no topic.`
-              : `Re-proposed once after ${firstRejected} incomplete topic${firstRejected === 1 ? "" : "s"}.`;
+            : firstMissingJobs > 0
+              ? `Re-proposed once after ${firstMissingJobs} served job${firstMissingJobs === 1 ? "" : "s"} had no owning topic.`
+              : unowned.length > 0
+                ? `Re-proposed once after ${unowned.length} queries matched no topic.`
+                : `Re-proposed once after ${firstRejected} incomplete topic${firstRejected === 1 ? "" : "s"}.`;
         }
       } catch {
         // A failed correction keeps the first proposal; the map still reports
@@ -1023,7 +1101,7 @@ export async function proposeTopicTaxonomy(
       }
     }
     if (result.topics.length === 0) {
-      return { taxonomy: null, rejected: result.rejected, merges: [], error: "the review proposed no usable topic", model: config.model };
+      return { taxonomy: null, rejected: result.rejected, merges: [], missingJobs: result.missingJobs, error: "the review proposed no usable topic", model: config.model };
     }
     return {
       taxonomy: {
@@ -1047,6 +1125,7 @@ export async function proposeTopicTaxonomy(
       },
       rejected: result.rejected,
       merges: result.merges,
+      missingJobs: result.missingJobs,
       error: null,
       model: config.model,
     };
@@ -1055,6 +1134,7 @@ export async function proposeTopicTaxonomy(
       taxonomy: null,
       rejected: [],
       merges: [],
+      missingJobs: [],
       error: error instanceof Error ? error.message.slice(0, 400) : String(error).slice(0, 400),
       model: config.model,
     };

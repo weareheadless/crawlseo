@@ -137,10 +137,35 @@ opportunities and tasks, not on the analysis.
 
 ## Current step
 
-The Casamigo pilot is built: [job map](casamigo-job-map-2026-11.md) and
-[row-level CSV](casamigo-job-map-2026-11.csv). It shows 5,540 qualified demand
-against 549,670 reported. Generalize the format to the other three tenants, then wire
-the per-query verdict into the review and the arithmetic.
+The job map is now a pipeline primitive, not a pilot document. `lib/research/job-map.ts`
+proposes it, checks the contract and stores it on the site profile. The taxonomy
+consumes it: every job with measured demand and a fit of `serves` or `unknown` needs
+exactly one topic whose `job` field is the job slug, and the code re-proposes once when
+a served job has no topic. The topic map qualifies demand by the job verdicts and joins
+each demand query to the topic that rolls up its job, so a project-name query such as
+`torre 25` belongs to its local job without naming the place. Excluded queries stay in
+the report under "Queries the job map excluded from demand", never in demand.
+
+Casamigo's 2026-11 run: 15 jobs, 258/258 queries with volume assigned, 22 qualified
+demand queries, 15 topics, 22 clustered, 252 context/noise/out-of-market excluded.
+Two unknown-fit jobs (Samsara Tulum, Xaman Ha) carry demand and no page, and the
+board shows them as gaps. The same pass ran on the other three tenants:
+
+| Tenant | Jobs | Volume queries assigned | Qualified | Clustered | Excluded | Unjudged |
+|---|---:|---:|---:|---:|---:|---:|
+| Casamigo | 15 | 258/258 | 22 | 22 | 252 | 0 |
+| Atelier | 12 | 37/37 | 101 | 101 | 63 | 0 |
+| Susi | 20 | 52/52 | 1,125 | 537 | 6 | 1,060 |
+| Oceanic | 3 | 84/84 | 21 | 21 | 64 | 0 |
+
+Susi's long tail has no volume and no verdict, so it stays in demand as unjudged and
+the report states the count; the contract only forces a verdict for queries with
+volume. The pilot documents stay as the baseline:
+[job map](casamigo-job-map-2026-11.md) and [row-level CSV](casamigo-job-map-2026-11.csv).
+
+Next: re-draft the Casamigo board on the qualified map (done, 5 proposals, all held by
+the foundations gate at 29 impressions), then review the three other boards against
+their before/after maps.
 
 ## Definition of done
 

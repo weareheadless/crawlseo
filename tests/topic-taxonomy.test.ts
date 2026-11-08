@@ -327,6 +327,149 @@ describe("taxonomy proposal", () => {
     expect(payload.currentTaxonomy[0].name).toBe("Tulum condos");
   });
 
+  it("sends the job map to the proposal", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({ topics: [] }));
+    await proposeTopicTaxonomy(input({
+      jobs: [
+        {
+          slug: "buy-tulum",
+          statement: "I want to buy a condo in Tulum",
+          stage: "buy",
+          language: "en",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          businessFit: "serves",
+          queries: ["tulum condos for sale"],
+          page: "/tulum-condos",
+        },
+      ],
+    }));
+    const payload = JSON.parse(String((mocks.chatJson.mock.calls[0][0] as { user: string }).user)) as {
+      jobs: Array<{ statement: string }>;
+    };
+    expect(payload.jobs[0].statement).toBe("I want to buy a condo in Tulum");
+  });
+
+  it("re-proposes when a served job has no owning topic", async () => {
+    mocks.chatJson.mockReset();
+    // The first proposal owns another market, not the served job's demand.
+    mocks.chatJson.mockImplementationOnce(async () => ({
+      topics: [
+        {
+          name: "Playa del Carmen villas",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Playa del Carmen"],
+          localIntent: [],
+          needTerms: ["playa del carmen villas"],
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          offerKey: "Villas",
+          rationale: "Villa buyers search Playa directly.",
+          actionHint: "Check the villa page.",
+          memberQueries: ["playa del carmen villas"],
+          ownerPages: ["/tulum-condos"],
+        },
+      ],
+    }));
+    mocks.chatJson.mockImplementationOnce(async () => ({
+      topics: [
+        {
+          name: "Tulum condos",
+          job: "buy-tulum-condo",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          localIntent: [],
+          needTerms: ["tulum condos"],
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          offerKey: "Condos",
+          rationale: "Buyers search Tulum condos directly.",
+          actionHint: "Check the listing page.",
+          memberQueries: ["tulum condos for sale"],
+          ownerPages: ["/tulum-condos"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input({
+      queries: [
+        { query: "tulum condos for sale", impressions: 40, volume: 300 },
+        { query: "playa del carmen villas", impressions: 5, volume: 50 },
+      ],
+      jobs: [
+        {
+          slug: "buy-tulum-condo",
+          statement: "I want to buy a condo in Tulum",
+          stage: "buy",
+          language: "en",
+          marketScope: "local",
+          marketPlaces: ["Tulum"],
+          businessFit: "serves",
+          queries: ["tulum condos for sale"],
+          page: "/tulum-condos",
+        },
+      ],
+    }));
+    expect(mocks.chatJson).toHaveBeenCalledTimes(2);
+    const correction = JSON.parse(String((mocks.chatJson.mock.calls[1][0] as { user: string }).user)) as {
+      correction: { missingJobs: Array<{ slug: string }>; instruction: string };
+    };
+    expect(correction.correction.missingJobs[0].slug).toBe("buy-tulum-condo");
+    expect(correction.correction.instruction).toMatch(/one topic is one job/i);
+    expect(result.missingJobs).toHaveLength(0);
+    expect(result.taxonomy?.topics.map((row) => row.slug)).toContain("tulum-condos");
+  });
+
+  it("accepts a job topic whose evidence is only a project name", async () => {
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockImplementation(async () => ({
+      topics: [
+        {
+          name: "Torre 25",
+          job: "evaluate-torre-25",
+          kind: "market",
+          marketScope: "local",
+          marketPlaces: ["Playa del Carmen"],
+          localIntent: [],
+          needTerms: ["torre 25"],
+          intent: "commercial",
+          relevance: "high",
+          coverageKind: "product",
+          offerKey: "Condos",
+          rationale: "Buyers evaluate this project before buying.",
+          actionHint: "Check the project page.",
+          memberQueries: ["torre 25"],
+          ownerPages: ["/torre-25"],
+        },
+      ],
+    }));
+    const result = await proposeTopicTaxonomy(input({
+      queries: [{ query: "torre 25", impressions: 1, volume: 90 }],
+      pagePaths: ["/torre-25"],
+      pages: [{ path: "/torre-25", title: "Torre 25", h1: "Torre 25", wordCount: 500 }],
+      jobs: [
+        {
+          slug: "evaluate-torre-25",
+          statement: "I want to evaluate Torre 25 before buying",
+          stage: "research",
+          language: "es",
+          marketScope: "local",
+          marketPlaces: ["Playa del Carmen"],
+          businessFit: "serves",
+          queries: ["torre 25"],
+          page: "/torre-25",
+        },
+      ],
+    }));
+    expect(result.rejected).toHaveLength(0);
+    expect(result.taxonomy?.topics[0].jobSlug).toBe("evaluate-torre-25");
+    expect(result.missingJobs).toHaveLength(0);
+  });
+
   it("does not derive need terms when the model omits them", async () => {
     mocks.chatJson.mockReset();
     mocks.chatJson.mockImplementation(async () => ({

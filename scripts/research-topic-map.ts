@@ -34,6 +34,12 @@ import {
   saveTopicTaxonomy,
   type TopicTaxonomy,
 } from "@/lib/research/topic-taxonomy";
+import {
+  loadJobMap,
+  proposeJobMap,
+  saveJobMap,
+  type JobMap,
+} from "@/lib/research/job-map";
 import { providerCountry } from "@/lib/site/context";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -48,6 +54,7 @@ type Args = {
   ai: boolean;
   refresh: boolean;
   refreshTaxonomy: boolean;
+  refreshJobMap: boolean;
   approveTaxonomy: boolean;
   taxonomyPath?: string;
   out?: string;
@@ -91,7 +98,13 @@ function previousUnmappedQueries(
   const seen = new Set<string>();
   const out: Array<{ query: string; impressions: number; volume: number | null }> = [];
   for (const row of rows) {
-    const query = asRecord(row).query;
+    const record = asRecord(row);
+    // Only qualified demand that no topic owned is feedback for the next
+    // taxonomy. A query the job map marked context, noise or out of market is
+    // not demand to place, so sending it again would ask the model to solve a
+    // problem it already solved.
+    if (record.kind === "excluded") continue;
+    const query = record.query;
     if (typeof query !== "string" || seen.has(query)) continue;
     const current = byQuery.get(query);
     if (!current) continue;
@@ -141,6 +154,7 @@ function parseArgs(argv: string[]): Args {
     ai: flags.has("ai"),
     refresh: flags.has("refresh"),
     refreshTaxonomy: flags.has("refresh-taxonomy"),
+    refreshJobMap: flags.has("refresh-job-map"),
     approveTaxonomy: flags.has("approve-taxonomy"),
     taxonomyPath: values.get("taxonomy"),
     out: values.get("out"),
@@ -186,6 +200,7 @@ async function main(): Promise<void> {
     // The tenant model: imported, stored, or proposed by the model. The
     // pipeline no longer knows a site by name.
     let taxonomy: TopicTaxonomy | null = await loadTopicTaxonomy(db, site.id);
+    let jobMap: JobMap | null = await loadJobMap(db, site.id);
     if (args.taxonomyPath) {
       const raw = JSON.parse(await readFile(args.taxonomyPath, "utf8")) as unknown;
       const parsed = parseTopicTaxonomy(raw, { proposedBy: "human", model: null });
@@ -210,6 +225,7 @@ async function main(): Promise<void> {
     // real demand.
     const currentTaxonomy = (taxonomy?.topics ?? []).map((topic) => ({
       name: topic.name,
+      job: topic.jobSlug ?? null,
       kind: topic.kind ?? (isBrandTopic(topic) ? "brand" : "market"),
       marketScope: topic.market?.scope ?? null,
       marketPlaces: topic.market?.places ?? [],
@@ -225,6 +241,51 @@ async function main(): Promise<void> {
         );
       }
       const rawData = await loadTopicMapData(db, site.id, month, null);
+      // The job map is the primitive: what the buyer is trying to do. The
+      // taxonomy is a roll-up of it, so it is proposed first and only once per
+      // refresh. The checks are programmatic; there is no human gate here.
+      if (!jobMap || args.refreshJobMap) {
+        const proposedJobMap = await proposeJobMap({
+          domain: site.domain,
+          language: rawData.context.language,
+          country: providerCountry(rawData.context),
+          market: rawData.context.market,
+          audienceMarket: rawData.context.audienceMarket,
+          audienceCountry: rawData.context.audienceCountry,
+          audienceCountries: rawData.context.audienceCountries,
+          audienceLanguages: rawData.context.audienceLanguages,
+          business: {
+            name: rawData.fields.businessName ? String((rawData.fields.businessName as { value?: unknown }).value ?? "") || null : null,
+            services: asStringList(rawData.fields.services),
+            location: asString(rawData.fields.location),
+            serviceArea: asStringList(rawData.fields.serviceArea),
+            audience: rawData.context.audience ?? asString(rawData.fields.audienceMotivations),
+            audienceMotivations: asStringList(rawData.fields.audienceMotivations),
+            differentiators: asStringList(rawData.fields.differentiators),
+            concerns: asStringList(rawData.fields.concerns),
+          },
+          offers: rawData.marketScope.offers,
+          pages: [...rawData.pages]
+            .sort((a, b) => b.wordCount - a.wordCount)
+            .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
+          queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
+          previous: jobMap,
+        });
+        if (!proposedJobMap.jobMap) {
+          throw new CliError(`could not propose a job map for ${site.domain}: ${proposedJobMap.error ?? "unknown error"}`, 4);
+        }
+        jobMap = proposedJobMap.jobMap;
+        for (const row of proposedJobMap.rejected) process.stderr.write(`job map row skipped: ${row.title} — ${row.reason}\n`);
+        if (proposedJobMap.unassigned.length > 0) {
+          process.stderr.write(
+            `job map left ${proposedJobMap.unassigned.length} queries with volume unassigned: ${proposedJobMap.unassigned.slice(0, 10).join(", ")}${proposedJobMap.unassigned.length > 10 ? ", …" : ""}\n`
+          );
+        }
+        const jobMapPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-job-map-${month}.json`);
+        await writeFile(jobMapPath, JSON.stringify(jobMap, null, 2), "utf8");
+        if (args.mode === "execute") await saveJobMap(db, site.id, jobMap);
+        process.stderr.write(`job map: ${jobMap.jobs.length} jobs, ${jobMap.counts.assigned}/${jobMap.counts.queries} queries with volume assigned, ${jobMap.counts.unassigned} sent but unassigned, ${jobMap.counts.omitted} not sent; written to ${jobMapPath}\n`);
+      }
       // The previous map is the feedback loop: the code lists the measured
       // queries no topic owned, and the model decides the reason and the fix.
       const previousRun = await db.researchRun.findFirst({
@@ -269,6 +330,17 @@ async function main(): Promise<void> {
         brandTerms: priorBrandTerms,
         previousUnmapped,
         currentTaxonomy,
+        jobs: (jobMap?.jobs ?? []).map((job) => ({
+          slug: job.slug,
+          statement: job.statement,
+          stage: job.stage,
+          language: job.language,
+          marketScope: job.market.scope,
+          marketPlaces: job.market.places,
+          businessFit: job.businessFit,
+          queries: job.queries,
+          page: job.page,
+        })),
       });
       if (!proposed.taxonomy) {
         throw new CliError(`could not propose a topic taxonomy for ${site.domain}: ${proposed.error ?? "unknown error"}`, 4);
@@ -297,7 +369,7 @@ async function main(): Promise<void> {
     }
 
     const data = await loadTopicMapData(db, site.id, month, taxonomy);
-    const map = buildTopicMap(data, taxonomy.topics);
+    const map = buildTopicMap(data, taxonomy.topics, undefined, jobMap);
     const outPath = args.out ?? path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-topic-map-${month}.md`);
 
     if (args.mode === "dry-run") {

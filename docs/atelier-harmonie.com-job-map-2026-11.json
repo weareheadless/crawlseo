@@ -1,0 +1,1327 @@
+{
+  "version": 1,
+  "proposedBy": "ai",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "generatedAt": "2026-11-08T03:37:28.164Z",
+  "jobs": [
+    {
+      "slug": "acheter-creation-lumineuse-artisanale",
+      "statement": "Je veux acheter une lampe ou un luminaire artisanal, souvent unique ou sur mesure.",
+      "who": "Particuliers, décorateurs, hôteliers et restaurateurs cherchant une pièce artisanale.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "Europe",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "luminaire artisanal",
+        "lampes artisanales originales",
+        "lampe artisanale",
+        "luminaire artisanal création",
+        "luminaires artisanaux",
+        "lampe à poser artisanale",
+        "lampes artisanales",
+        "lampe coquelicot",
+        "luminaire fait main",
+        "lampes originales",
+        "éclairage artisanal",
+        "artisan créateur de luminaire",
+        "lampe fait main",
+        "luminaire artisanal français",
+        "suspensions artisanales",
+        "applique murale baladeuse",
+        "création luminaires",
+        "lampe artisanal",
+        "lampes artisanales françaises",
+        "créateur lampe unique",
+        "fabrication lampes artisanales",
+        "suspension artisanale",
+        "lampe à poser bohème",
+        "luminaire sur mesure",
+        "luminaires sur mesure",
+        "fabricant artisanal luminaire",
+        "lampes sur mesure",
+        "artisan créateur de luminaires",
+        "baladeuse murale",
+        "suspensions murales artisanales",
+        "lampe a poser bauhaus",
+        "création luminaire",
+        "devis fabrication luminaire sur mesure",
+        "lampe achat"
+      ],
+      "page": "/lampes",
+      "reason": "Offre de lampes et luminaires artisanaux, dont pièces uniques et sur mesure."
+    },
+    {
+      "slug": "acheter-abat-jour-artisanal",
+      "statement": "Je veux acheter un abat-jour artisanal, pagode ou sur mesure.",
+      "who": "Particuliers et professionnels cherchant un abat-jour décoratif fait main.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "Europe",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "abat jour pagode",
+        "abat-jour pagode moderne",
+        "abats jour pagode",
+        "abat-jour pagode rectangulaire",
+        "abat jour chinois pagode",
+        "abat jour bauhaus",
+        "abat-jour pagode",
+        "abat jour pagode rectangulaire",
+        "abat jour sur mesure",
+        "abat-jour sur mesure"
+      ],
+      "page": "/lampes/abat-jours",
+      "reason": "Création d'abat-jours artisanaux, dont modèles pagode, bauhaus et sur mesure."
+    },
+    {
+      "slug": "faire-restaurer-un-abat-jour",
+      "statement": "Je veux réparer ou faire restaurer un abat-jour abîmé ou ancien.",
+      "who": "Particuliers en Normandie avec un abat-jour taché, cassé ou ancien.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Normandie"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "réparation abat jour",
+        "renover un abat jour",
+        "restaurer un abat jour",
+        "réparer abat-jour cabossé",
+        "renover abat jour",
+        "restauration abat jour",
+        "reparer abat jour",
+        "réparer un abat jour",
+        "renovation abat jour",
+        "restauration abat-jour ancien",
+        "reparation abat jour",
+        "refection abat jour",
+        "rénover un abat jour en tissu"
+      ],
+      "page": "/devis",
+      "reason": "Service local de restauration d'abat-jour, avec demande de devis."
+    },
+    {
+      "slug": "apprendre-a-reparer-un-abat-jour",
+      "statement": "Je cherche comment réparer ou restaurer moi-même un abat-jour.",
+      "who": "Particuliers bricoleurs cherchant un guide.",
+      "stage": "research",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "comment réparer un abat jour",
+        "comment restaurer un abat jour"
+      ],
+      "page": "/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9",
+      "reason": "Article du blog expliquant la restauration d'un abat-jour."
+    },
+    {
+      "slug": "faire-restaurer-un-siege-ou-fauteuil",
+      "statement": "Je veux faire restaurer ou retapisser un fauteuil, une chaise ou un siège.",
+      "who": "Particuliers, décorateurs et hôteliers en Normandie.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Normandie"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "fauteuil restauration",
+        "chaises tapisserie",
+        "fauteuil à tapisser",
+        "fauteuil tapisserie",
+        "fauteuils restauration",
+        "tapissier autour de moi",
+        "fauteuil tapissier",
+        "artisan tapissier autour de moi",
+        "devis siège de restauration",
+        "chaise tapisserie",
+        "tapissier fauteuil",
+        "chaises tapissier",
+        "restauration fauteuils",
+        "tapissier fauteuil autour de moi",
+        "tapisserie siege",
+        "tapisserie de siege",
+        "restauration fauteuil ancien prix"
+      ],
+      "page": "/tapisserie-restauration",
+      "reason": "Service de tapisserie et restauration de sièges en Normandie."
+    },
+    {
+      "slug": "apprendre-a-retapisser-un-fauteuil",
+      "statement": "Je cherche comment retapisser ou restaurer moi-même un fauteuil.",
+      "who": "Particuliers bricoleurs cherchant une méthode.",
+      "stage": "research",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "comment retapisser un fauteuil soi même"
+      ],
+      "page": "/post/r%C3%A9fection-d-un-fauteuil-bridge-en-tapisserie-traditionnelle",
+      "reason": "Article de blog expliquant la réfection d'un fauteuil."
+    },
+    {
+      "slug": "participer-a-un-atelier-diy",
+      "statement": "Je veux participer à un atelier DIY de tapisserie ou d'abat-jour.",
+      "who": "Particuliers en Normandie souhaitant apprendre en petit comité.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Normandie"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "atelier abat jour",
+        "atelier tapisserie fauteuil"
+      ],
+      "page": "/les-ateliers",
+      "reason": "Ateliers DIY de tapisserie et d'abat-jour proposés en Normandie."
+    },
+    {
+      "slug": "acheter-un-kit-diy-lampe",
+      "statement": "Je veux acheter un kit DIY pour fabriquer une lampe moi-même.",
+      "who": "Particuliers en Normandie attirés par le DIY.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Normandie"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "kit lampe",
+        "kit fabrication luminaire",
+        "kit lampe à poser",
+        "kit lampe diy",
+        "diy lampe à poser",
+        "kit fabrication lampe",
+        "kit pour fabriquer une lampe",
+        "kit pour fabriquer une lampe de chevet",
+        "kit lampe à faire soi-même"
+      ],
+      "page": "/product-page/kit-diy-ma-lampe-%C3%A0-poser",
+      "reason": "Kit DIY Ma lampe à poser proposé par l'atelier."
+    },
+    {
+      "slug": "acheter-une-carte-cadeau-artisanat",
+      "statement": "Je veux offrir une carte cadeau artisanat ou décoration.",
+      "who": "Particuliers cherchant un cadeau artisanat.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "carte cadeau artisanat",
+        "carte cadeau artisanat par email",
+        "carte cadeau artisanat à imprimer"
+      ],
+      "page": "/gift-card",
+      "reason": "Cartes cadeaux vendues par l'atelier pour ses créations."
+    },
+    {
+      "slug": "acheter-des-objets-deco-artisanaux",
+      "statement": "Je veux acheter des objets déco artisanaux, notamment des coussins.",
+      "who": "Particuliers et décorateurs cherchant des accessoires faits main.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "Europe",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "coussins artisanaux",
+        "coussin créateur",
+        "coussin fait main"
+      ],
+      "page": "/objets-deco",
+      "reason": "Objets déco artisanaux, dont coussins, proposés par l'atelier."
+    },
+    {
+      "slug": "acheter-du-tissu-d-ameublement",
+      "statement": "Je veux acheter du tissu d'ameublement pour fauteuil ou abat-jour.",
+      "who": "Particuliers et professionnels cherchant des tissus.",
+      "stage": "buy",
+      "language": "fr",
+      "market": {
+        "scope": "national",
+        "places": [
+          "France"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "tissu d’ameublement",
+        "tissu pour fauteuil",
+        "tissus ameublement fauteuil"
+      ],
+      "page": "/les-tissus",
+      "reason": "Tissus et matières proposés à l'atelier."
+    },
+    {
+      "slug": "s-inspirer-sur-l-artisanat-blog",
+      "statement": "Je veux lire des articles de blog sur l'artisanat et la tapisserie.",
+      "who": "Particuliers intéressés par l'artisanat.",
+      "stage": "research",
+      "language": "fr",
+      "market": {
+        "scope": "international",
+        "places": [
+          "France",
+          "International"
+        ]
+      },
+      "businessFit": "serves",
+      "queries": [
+        "blogging artisanat",
+        "blog artisanat",
+        "artisanat et blog",
+        "blog artisan"
+      ],
+      "page": "/blog",
+      "reason": "Blog de l'atelier sur l'artisanat, la tapisserie et les coulisses."
+    }
+  ],
+  "verdicts": [
+    {
+      "query": "luminaire artisanal",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Recherche de luminaire artisanal."
+    },
+    {
+      "query": "kit lampe",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe."
+    },
+    {
+      "query": "plafonnier artisanal",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Type de luminaire non proposé dans l'inventaire."
+    },
+    {
+      "query": "lampes artisanales originales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampes artisanales."
+    },
+    {
+      "query": "atelier harmonie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque, pas un job."
+    },
+    {
+      "query": "lampe artisanale",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe artisanale."
+    },
+    {
+      "query": "abat jour pagode",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode artisanal."
+    },
+    {
+      "query": "réparation abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Restauration d'abat-jour."
+    },
+    {
+      "query": "lustre artisanal",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Type de luminaire non proposé."
+    },
+    {
+      "query": "luminaire artisanal création",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Création de luminaire."
+    },
+    {
+      "query": "luminaires artisanaux",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Luminaires artisanaux."
+    },
+    {
+      "query": "lampadaire artisanal",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Type de luminaire non proposé."
+    },
+    {
+      "query": "fauteuil restauration",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Restauration de fauteuil."
+    },
+    {
+      "query": "lampe à poser artisanale",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe à poser artisanale."
+    },
+    {
+      "query": "blogging artisanat",
+      "verdict": "demand",
+      "job": "s-inspirer-sur-l-artisanat-blog",
+      "reason": "Blog artisanat."
+    },
+    {
+      "query": "kit fabrication luminaire",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY luminaire."
+    },
+    {
+      "query": "lampes artisanales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampes artisanales."
+    },
+    {
+      "query": "comment réparer un abat jour",
+      "verdict": "demand",
+      "job": "apprendre-a-reparer-un-abat-jour",
+      "reason": "Guide de réparation d'abat-jour."
+    },
+    {
+      "query": "renover un abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Rénovation d'abat-jour."
+    },
+    {
+      "query": "lampe coquelicot",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Modèle de lampe de l'atelier."
+    },
+    {
+      "query": "restaurer un abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Restauration d'abat-jour."
+    },
+    {
+      "query": "réparer abat-jour cabossé",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Réparation d'abat-jour."
+    },
+    {
+      "query": "harmonie atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "comment restaurer un abat jour",
+      "verdict": "demand",
+      "job": "apprendre-a-reparer-un-abat-jour",
+      "reason": "Guide de restauration."
+    },
+    {
+      "query": "chaises tapisserie",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Retapissage de chaises."
+    },
+    {
+      "query": "fauteuil à tapisser",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Fauteuil à retapisser."
+    },
+    {
+      "query": "atelier harmony",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "renover abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Rénovation d'abat-jour."
+    },
+    {
+      "query": "restauration abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Restauration d'abat-jour."
+    },
+    {
+      "query": "kit lampe à poser",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe à poser."
+    },
+    {
+      "query": "luminaire fait main",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Luminaire fait main."
+    },
+    {
+      "query": "reparer abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Réparation d'abat-jour."
+    },
+    {
+      "query": "lampes originales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampes originales."
+    },
+    {
+      "query": "coussins artisanaux",
+      "verdict": "demand",
+      "job": "acheter-des-objets-deco-artisanaux",
+      "reason": "Coussins artisanaux."
+    },
+    {
+      "query": "éclairage artisanal",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Éclairage artisanal."
+    },
+    {
+      "query": "harmonie boutique",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "abat jour",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "réparer un abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Réparation d'abat-jour."
+    },
+    {
+      "query": "fauteuil tapisserie",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapisserie de fauteuil."
+    },
+    {
+      "query": "fauteuils restauration",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Restauration de fauteuils."
+    },
+    {
+      "query": "kit lampe diy",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe."
+    },
+    {
+      "query": "fauteuil",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "carte cadeau décoration le mans",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Place hors Normandie (Le Mans)."
+    },
+    {
+      "query": "restauration fauteuil saint-germain-en-laye",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Place hors Normandie."
+    },
+    {
+      "query": "artisan créateur de luminaire",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Artisan créateur de luminaire."
+    },
+    {
+      "query": "lampe fait main",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe fait main."
+    },
+    {
+      "query": "abat-jour pagode moderne",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "canapé",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "carte cadeau artisanat",
+      "verdict": "demand",
+      "job": "acheter-une-carte-cadeau-artisanat",
+      "reason": "Carte cadeau artisanat."
+    },
+    {
+      "query": "luminaire artisanal français",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Luminaire artisanal français."
+    },
+    {
+      "query": "atelier harmonia",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "abats jour pagode",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "l'atelier by harmonie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "suspensions artisanales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Suspensions artisanales."
+    },
+    {
+      "query": "l'harmonie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "latelier du coussin",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Autre enseigne/atelier."
+    },
+    {
+      "query": "tapisserie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "applique murale baladeuse",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Applique murale de l'atelier."
+    },
+    {
+      "query": "création luminaires",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Création de luminaires."
+    },
+    {
+      "query": "tapissier autour de moi",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Recherche d'un tapissier local."
+    },
+    {
+      "query": "fauteuil tapissier",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapissier pour fauteuil."
+    },
+    {
+      "query": "renovation abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Rénovation d'abat-jour."
+    },
+    {
+      "query": "artisan tapissier autour de moi",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Recherche d'un tapissier local."
+    },
+    {
+      "query": "lampe artisanal",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe artisanale."
+    },
+    {
+      "query": "lampes artisanales françaises",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampes artisanales françaises."
+    },
+    {
+      "query": "restauration abat-jour ancien",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Restauration d'abat-jour ancien."
+    },
+    {
+      "query": "carte cadeau artisanat par email",
+      "verdict": "demand",
+      "job": "acheter-une-carte-cadeau-artisanat",
+      "reason": "Carte cadeau artisanat."
+    },
+    {
+      "query": "reparation abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Réparation d'abat-jour."
+    },
+    {
+      "query": "magasin tissu",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de magasin, pas une demande de tissu d'ameublement."
+    },
+    {
+      "query": "suspension atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Ambigu, pas d'intention de job claire."
+    },
+    {
+      "query": "abat-jour pagode rectangulaire",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "refection abat jour",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Réfection d'abat-jour."
+    },
+    {
+      "query": "art et tapisserie",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Tapisserie d'art, pas restauration de sièges."
+    },
+    {
+      "query": "carte cadeau artisanat à imprimer",
+      "verdict": "demand",
+      "job": "acheter-une-carte-cadeau-artisanat",
+      "reason": "Carte cadeau artisanat."
+    },
+    {
+      "query": "atelier abat jour",
+      "verdict": "demand",
+      "job": "participer-a-un-atelier-diy",
+      "reason": "Atelier DIY d'abat-jour."
+    },
+    {
+      "query": "créateur lampe unique",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Créateur de lampe unique."
+    },
+    {
+      "query": "coussin créateur",
+      "verdict": "demand",
+      "job": "acheter-des-objets-deco-artisanaux",
+      "reason": "Coussin créateur."
+    },
+    {
+      "query": "décoration chambre",
+      "verdict": "context",
+      "job": null,
+      "reason": "Thème déco générique."
+    },
+    {
+      "query": "luminaires",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "diy lampe à poser",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe à poser."
+    },
+    {
+      "query": "bouton",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Mercerie/couture, hors offre."
+    },
+    {
+      "query": "carte cadeau décoration sarthe",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Place hors Normandie (Sarthe)."
+    },
+    {
+      "query": "atelier tapisserie fauteuil",
+      "verdict": "demand",
+      "job": "participer-a-un-atelier-diy",
+      "reason": "Atelier DIY de tapisserie."
+    },
+    {
+      "query": "fabrication lampes artisanales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Fabrication de lampes artisanales."
+    },
+    {
+      "query": "kit fabrication lampe",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe."
+    },
+    {
+      "query": "suspension artisanale",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Suspension artisanale."
+    },
+    {
+      "query": "abat jour chinois pagode",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "lampe à poser bohème",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe à poser Bohème."
+    },
+    {
+      "query": "luminaire sur mesure",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Luminaire sur mesure."
+    },
+    {
+      "query": "rectangulaire",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Adjectif isolé, sans intention."
+    },
+    {
+      "query": "tapissier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "luminaires sur mesure",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Luminaires sur mesure."
+    },
+    {
+      "query": "devis siège de restauration",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Devis restauration de siège."
+    },
+    {
+      "query": "chaise tapisserie",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapisserie de chaise."
+    },
+    {
+      "query": "harmony atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "harmoni design",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque/enseigne."
+    },
+    {
+      "query": "harmonie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "tapissier fauteuil",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapissier pour fauteuil."
+    },
+    {
+      "query": "fabricant artisanal luminaire",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Fabricant de luminaire artisanal."
+    },
+    {
+      "query": "atelier phare",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque/produit."
+    },
+    {
+      "query": "abat jour bauhaus",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour Bauhaus."
+    },
+    {
+      "query": "atelier saint pierre",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche d'atelier local, sans job."
+    },
+    {
+      "query": "artisan d art",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie métier générique."
+    },
+    {
+      "query": "atelier sainte adresse",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche d'atelier local, sans job."
+    },
+    {
+      "query": "chambré bebe",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Chambre bébé, hors sujet."
+    },
+    {
+      "query": "tissu d’ameublement",
+      "verdict": "demand",
+      "job": "acheter-du-tissu-d-ameublement",
+      "reason": "Tissu d'ameublement."
+    },
+    {
+      "query": "fauteuil canapé",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégories nues."
+    },
+    {
+      "query": "décoration",
+      "verdict": "context",
+      "job": null,
+      "reason": "Thème générique."
+    },
+    {
+      "query": "blog artisanat",
+      "verdict": "demand",
+      "job": "s-inspirer-sur-l-artisanat-blog",
+      "reason": "Blog artisanat."
+    },
+    {
+      "query": "fauteuil design",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "magasins luminaires",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de magasin, pas une création."
+    },
+    {
+      "query": "kit pour fabriquer une lampe",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe."
+    },
+    {
+      "query": "harmonie decoration",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque/enseigne."
+    },
+    {
+      "query": "couture",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Couture, pas tapisserie/abat-jour."
+    },
+    {
+      "query": "chaises tapissier",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapissier pour chaises."
+    },
+    {
+      "query": "kit pour fabriquer une lampe de chevet",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe de chevet."
+    },
+    {
+      "query": "lampes sur mesure",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampes sur mesure."
+    },
+    {
+      "query": "abat-jour pagode",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "abbat jour",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue/misspelling."
+    },
+    {
+      "query": "art lampe",
+      "verdict": "context",
+      "job": null,
+      "reason": "Ambigu, pas d'intention de job claire."
+    },
+    {
+      "query": "artisan créateur de luminaires",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Artisan créateur de luminaires."
+    },
+    {
+      "query": "artisanat et blog",
+      "verdict": "demand",
+      "job": "s-inspirer-sur-l-artisanat-blog",
+      "reason": "Blog artisanat."
+    },
+    {
+      "query": "baladeuse murale",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Baladeuse murale."
+    },
+    {
+      "query": "blog artisan",
+      "verdict": "demand",
+      "job": "s-inspirer-sur-l-artisanat-blog",
+      "reason": "Blog artisan."
+    },
+    {
+      "query": "harmonie l'atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "inspiration atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche d'inspiration générique."
+    },
+    {
+      "query": "refection fauteuil monaco",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Place hors Normandie (Monaco)."
+    },
+    {
+      "query": "renovation canape",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Canapé non proposé."
+    },
+    {
+      "query": "restauration fauteuils",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Restauration de fauteuils."
+    },
+    {
+      "query": "suspensions murales artisanales",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Suspensions murales artisanales."
+    },
+    {
+      "query": "tissu pour fauteuil",
+      "verdict": "demand",
+      "job": "acheter-du-tissu-d-ameublement",
+      "reason": "Tissu pour fauteuil."
+    },
+    {
+      "query": "tissus ameublement fauteuil",
+      "verdict": "demand",
+      "job": "acheter-du-tissu-d-ameublement",
+      "reason": "Tissus d'ameublement."
+    },
+    {
+      "query": "lampe a poser bauhaus",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Lampe à poser Bauhaus."
+    },
+    {
+      "query": "abat jour pagode rectangulaire",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour pagode."
+    },
+    {
+      "query": "coussin fait main",
+      "verdict": "demand",
+      "job": "acheter-des-objets-deco-artisanaux",
+      "reason": "Coussin fait main."
+    },
+    {
+      "query": "restauration meuble bois fécamp",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Restauration de meuble, pas de siège."
+    },
+    {
+      "query": "réfection fauteuil monaco",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Place hors Normandie (Monaco)."
+    },
+    {
+      "query": "tapissier fauteuil autour de moi",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Recherche d'un tapissier local."
+    },
+    {
+      "query": "création luminaire",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Création de luminaire."
+    },
+    {
+      "query": "artdecosenegal.com artisans coussins",
+      "verdict": "out_of_market",
+      "job": null,
+      "reason": "Site/audience Sénégal, hors marché."
+    },
+    {
+      "query": "abat jour pagode leroy merlin",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Recherche d'un produit Leroy Merlin, pas l'atelier."
+    },
+    {
+      "query": "atelier",
+      "verdict": "context",
+      "job": null,
+      "reason": "Mot générique."
+    },
+    {
+      "query": "boutique harmonie",
+      "verdict": "context",
+      "job": null,
+      "reason": "Recherche de marque."
+    },
+    {
+      "query": "kit lampe à faire soi-même",
+      "verdict": "demand",
+      "job": "acheter-un-kit-diy-lampe",
+      "reason": "Kit DIY lampe."
+    },
+    {
+      "query": "materiel pour abat jour",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Achat de matériel non proposé."
+    },
+    {
+      "query": "rénover un abat jour en tissu",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-abat-jour",
+      "reason": "Rénovation d'abat-jour en tissu."
+    },
+    {
+      "query": "devis fabrication luminaire sur mesure",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Devis luminaire sur mesure."
+    },
+    {
+      "query": "fauteil",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue/misspelling."
+    },
+    {
+      "query": "tapisserie siege",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapisserie de siège."
+    },
+    {
+      "query": "lampe achat",
+      "verdict": "demand",
+      "job": "acheter-creation-lumineuse-artisanale",
+      "reason": "Achat de lampe."
+    },
+    {
+      "query": "customer need definition",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Requête générique hors sujet."
+    },
+    {
+      "query": "restauration meuble ancien",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Restauration de meuble, pas de siège."
+    },
+    {
+      "query": "corpus de sources",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Hors sujet."
+    },
+    {
+      "query": "maison normande décoration",
+      "verdict": "context",
+      "job": null,
+      "reason": "Thème déco/place, sans job."
+    },
+    {
+      "query": "abat-jour",
+      "verdict": "context",
+      "job": null,
+      "reason": "Catégorie nue."
+    },
+    {
+      "query": "tenue sexie",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Hors sujet."
+    },
+    {
+      "query": "abat jour sur mesure",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour sur mesure."
+    },
+    {
+      "query": "sans ambiguite mot fleche",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Hors sujet."
+    },
+    {
+      "query": "tenue",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Hors sujet."
+    },
+    {
+      "query": "tapisserie de siege",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Tapisserie de siège."
+    },
+    {
+      "query": "comment retapisser un fauteuil soi même",
+      "verdict": "demand",
+      "job": "apprendre-a-retapisser-un-fauteuil",
+      "reason": "Guide pour retapisser un fauteuil."
+    },
+    {
+      "query": "abat-jour sur mesure",
+      "verdict": "demand",
+      "job": "acheter-abat-jour-artisanal",
+      "reason": "Abat-jour sur mesure."
+    },
+    {
+      "query": "restauration fauteuil ancien prix",
+      "verdict": "demand",
+      "job": "faire-restaurer-un-siege-ou-fauteuil",
+      "reason": "Prix restauration fauteuil."
+    },
+    {
+      "query": "rénovation appartement ancien",
+      "verdict": "noise",
+      "job": null,
+      "reason": "Rénovation d'appartement, hors offre."
+    }
+  ],
+  "summary": "L'atelier sert des jobs de création/achat de luminaires et abat-jours, restauration locale d'abat-jours et de sièges, ateliers/kit DIY, cartes cadeaux, objets déco, tissus et blog. Les requêtes de marque, catégories nues, autres métiers/places ou matériel non proposé sont écartées.",
+  "counts": {
+    "queries": 37,
+    "assigned": 37,
+    "unassigned": 0
+  }
+}

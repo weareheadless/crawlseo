@@ -1,0 +1,872 @@
+{
+  "jobs": [
+    {
+      "who": "US/Canadian condo buyer or investor",
+      "page": "/playa-del-carmen-condos-sale",
+      "slug": "buy-condo-playa-del-carmen",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "reason": "Condo purchase demand in Playa; page is the city condo sale hub.",
+      "queries": [
+        "playa del carmen condos for sale",
+        "buy a condo in playa del carmen",
+        "condos for sale playa del carmen",
+        "playa del carmen real estate condos for sale",
+        "iplaya residential condos"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Playa del Carmen.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home or property buyer",
+      "page": "/homes-for-sale-in-playa-del-carmen",
+      "slug": "buy-property-playa-del-carmen",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "reason": "Broad Playa property purchase intent; page covers homes for sale.",
+      "queries": [
+        "playa del carmen real estate"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home or property in Playa del Carmen.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian condo buyer or investor",
+      "page": "/tulum-condos-sale",
+      "slug": "buy-condo-tulum",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Tulum"
+        ]
+      },
+      "reason": "Tulum condo purchase demand; page is the city condo sale hub.",
+      "queries": [
+        "condos for sale in tulum mexico"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Tulum.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home or property buyer",
+      "page": "/homes-for-sale-in-tulum",
+      "slug": "buy-property-tulum",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Tulum"
+        ]
+      },
+      "reason": "Broad Tulum property purchase intent; page covers homes for sale.",
+      "queries": [
+        "tulum homes for sale",
+        "real estate tulum mexico"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home or property in Tulum.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian condo buyer or investor",
+      "page": "/puerto-morelos-condos-sale",
+      "slug": "buy-condo-puerto-morelos",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Puerto Morelos"
+        ]
+      },
+      "reason": "Puerto Morelos condo purchase demand; page is the condo sale hub.",
+      "queries": [
+        "condos for sale in puerto morelos",
+        "condos for sale in puerto morelos mexico",
+        "condo for sale in puerto morelos",
+        "puerto morelos condos"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Puerto Morelos.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home or property buyer",
+      "page": "/puerto-morelos-real-estate",
+      "slug": "buy-property-puerto-morelos",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Puerto Morelos"
+        ]
+      },
+      "reason": "Broad Puerto Morelos property purchase intent; page covers real estate.",
+      "queries": [
+        "puerto morelos real estate"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home or property in Puerto Morelos.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home, condo or villa buyer",
+      "page": "/homes-for-sale-in-puerto-aventuras",
+      "slug": "buy-property-puerto-aventuras",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Puerto Aventuras"
+        ]
+      },
+      "reason": "Puerto Aventuras property demand, including specific listings; location page covers the area.",
+      "queries": [
+        "homes for sale in puerto aventuras",
+        "condo puerto aventuras",
+        "casa playa vista",
+        "quinta del sol puerto aventuras",
+        "puerto aventuras real estate",
+        "condos for sale puerto aventuras",
+        "puerto aventuras condos for sale",
+        "condos for sale in puerto aventuras",
+        "puerto aventuras homes for sale",
+        "condo for sale in puerto aventuras",
+        "houses for sale in puerto aventuras",
+        "real estate in puerto aventuras",
+        "real estate puerto aventuras",
+        "house for sale puerto aventuras",
+        "homes for sale puerto aventuras",
+        "luxury real estate puerto aventuras",
+        "home for sale in puerto aventuras",
+        "house for sale in puerto aventuras",
+        "puerto aventuras casas",
+        "puerto aventuras gated community",
+        "homes for sale in puerto aventuras mexico",
+        "puerto aventuras marina homes"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home, condo or villa in Puerto Aventuras.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian condo buyer or investor",
+      "page": "/akumal-condos-sale",
+      "slug": "buy-condo-akumal",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Akumal"
+        ]
+      },
+      "reason": "Akumal condo purchase demand; page is the condo sale hub.",
+      "queries": [
+        "akumal condos for sale",
+        "condos for sale in akumal mexico",
+        "condos for sale akumal"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Akumal.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home or property buyer",
+      "page": "/homes-for-sale-in-akumal",
+      "slug": "buy-property-akumal",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Akumal"
+        ]
+      },
+      "reason": "Broad Akumal property purchase intent; page covers homes for sale.",
+      "queries": [
+        "akumal real estate",
+        "akumal homes for sale"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home or property in Akumal.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian condo buyer or investor",
+      "page": "/cozumel-condos-sale",
+      "slug": "buy-condo-cozumel",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Cozumel"
+        ]
+      },
+      "reason": "Cozumel condo purchase demand; page is the condo sale hub.",
+      "queries": [
+        "condo for sale cozumel",
+        "cozumel condo for sale"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Cozumel.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian home or property buyer",
+      "page": "/homes-for-sale-in-cozumel",
+      "slug": "buy-property-cozumel",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Cozumel"
+        ]
+      },
+      "reason": "Broad Cozumel property purchase intent; page covers homes for sale.",
+      "queries": [
+        "cozumel real estate"
+      ],
+      "language": "en",
+      "statement": "I want to buy a home or property in Cozumel.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian beachfront buyer",
+      "page": "/puerto-morelos-beachfront",
+      "slug": "buy-beachfront-puerto-morelos",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Puerto Morelos"
+        ]
+      },
+      "reason": "Beachfront condo demand in Puerto Morelos; page covers beachfront properties.",
+      "queries": [
+        "oceanfront condos for sale puerto morelos"
+      ],
+      "language": "en",
+      "statement": "I want to buy an oceanfront or beachfront condo in Puerto Morelos.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian budget beachfront buyer",
+      "page": "/post/beachfront-homes-for-sale-under-100k-in-mexico-exploring-the-reality-and-alternatives-in-riviera-m",
+      "slug": "research-beachfront-under-100k",
+      "stage": "research",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico",
+          "Riviera Maya"
+        ]
+      },
+      "reason": "Budget beachfront research; page addresses the under-$100K reality and alternatives.",
+      "queries": [
+        "beachfront homes for sale under $100k",
+        "beachfront homes for sale under $100k in mexico",
+        "beachfront homes for sale under $100k in mexico zillow"
+      ],
+      "language": "en",
+      "statement": "I want to know whether beachfront homes under $100K exist in Mexico/Riviera Maya.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian budget condo buyer/investor",
+      "page": "/post/playa-del-carmen-condos-for-sale-under-200k-a-smart-investment-for-north-american-buyers",
+      "slug": "buy-condo-under-200k-playa-del-carmen",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "reason": "Under-$200K Playa condo demand; page targets North American buyers.",
+      "queries": [
+        "playa del carmen condos for sale under $200k"
+      ],
+      "language": "en",
+      "statement": "I want to buy a condo in Playa del Carmen under $200K.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian renter or relocator",
+      "page": "/apartments-for-rent-in-playa-del-carmen",
+      "slug": "rent-condo-playa-del-carmen",
+      "stage": "buy",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "reason": "Playa rental demand; page is the apartment rental hub.",
+      "queries": [
+        "playa del carmen rentals",
+        "playa del carmen condo rental",
+        "playa del carmen condos for rent"
+      ],
+      "language": "en",
+      "statement": "I want to rent an apartment or condo in Playa del Carmen.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian real estate investor",
+      "page": "/post/your-complete-playa-del-carmen-real-estate-investment-guide",
+      "slug": "invest-playa-del-carmen",
+      "stage": "research",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ]
+      },
+      "reason": "Playa investment and market research; page is the investment guide.",
+      "queries": [
+        "playa del carmen real estate investment",
+        "playa del carmen real estate market"
+      ],
+      "language": "en",
+      "statement": "I want to invest in Playa del Carmen real estate and understand its market.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian buyer or relocator",
+      "page": "/post/discover-puerto-aventuras-gated-community-a-haven-of-safety-in-the-riviera-maya",
+      "slug": "research-safety-puerto-aventuras",
+      "stage": "research",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Puerto Aventuras"
+        ]
+      },
+      "reason": "Safety research for Puerto Aventuras; page covers the gated community's safety.",
+      "queries": [
+        "is puerto aventuras safe"
+      ],
+      "language": "en",
+      "statement": "I want to know whether Puerto Aventuras is safe.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian relocator, retiree or buyer",
+      "page": "/post/top-hospitals-in-cancun-and-riviera-maya-a-guide-to-world-class-healthcare-in-mexico",
+      "slug": "research-healthcare-cancun-en",
+      "stage": "research",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Cancun",
+          "Riviera Maya"
+        ]
+      },
+      "reason": "Healthcare research for Cancun/Riviera Maya; page is the hospital guide.",
+      "queries": [
+        "hospitals in cancun mexico",
+        "hospital in cancun mexico",
+        "cancun hospital",
+        "cancun hospitals",
+        "best hospital in cancun",
+        "cancun hospital for tourists",
+        "galenia hospital cancun"
+      ],
+      "language": "en",
+      "statement": "I want to understand hospitals and healthcare in Cancun/Riviera Maya.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "US/Canadian buyer or investor",
+      "page": "/post/the-sargassum-deficit-what-the-2026-ecological-crisis-means-for-riviera-maya-real-estate",
+      "slug": "research-sargassum-riviera-maya",
+      "stage": "research",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Tulum",
+          "Riviera Maya"
+        ]
+      },
+      "reason": "Sargassum risk research for buyers; page addresses ecological risk and real estate.",
+      "queries": [
+        "tulum sargassum",
+        "sargassum riviera maya"
+      ],
+      "language": "en",
+      "statement": "I want to understand sargassum risk for Riviera Maya/Tulum property.",
+      "businessFit": "serves"
+    },
+    {
+      "who": "Spanish-speaking relocator, retiree or buyer",
+      "page": null,
+      "slug": "research-healthcare-cancun-es",
+      "stage": "research",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Cancun",
+          "Riviera Maya"
+        ]
+      },
+      "reason": "Spanish-language healthcare research; no Spanish hospital page in inventory.",
+      "queries": [
+        "hospitales cancun"
+      ],
+      "language": "es",
+      "statement": "Quiero entender hospitales y atención médica en Cancún/Riviera Maya.",
+      "businessFit": "serves"
+    }
+  ],
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "counts": {
+    "queries": 52,
+    "assigned": 52,
+    "unassigned": 0,
+    "omitted": 231
+  },
+  "summary": "Mapped real-estate purchase, rental, investment, safety, healthcare, and sargassum-research jobs the site can serve. Bare places are context; car rentals are noise; US local hospital intent is out_of_market. Puerto Aventuras property queries are assigned to the PA property job.",
+  "version": 1,
+  "verdicts": [
+    {
+      "job": null,
+      "query": "hospital near me",
+      "reason": "US local healthcare intent; not Mexico/Riviera Maya real estate.",
+      "verdict": "out_of_market"
+    },
+    {
+      "job": "research-beachfront-under-100k",
+      "query": "beachfront homes for sale under $100k",
+      "reason": "Budget beachfront research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-akumal",
+      "query": "akumal real estate",
+      "reason": "Akumal property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-playa-del-carmen",
+      "query": "playa del carmen condos for sale",
+      "reason": "Playa condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "hospitals in cancun mexico",
+      "reason": "Cancun healthcare research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-puerto-morelos",
+      "query": "condos for sale in puerto morelos",
+      "reason": "Puerto Morelos condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "hospital in cancun mexico",
+      "reason": "Cancun healthcare research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-puerto-morelos",
+      "query": "condos for sale in puerto morelos mexico",
+      "reason": "Puerto Morelos condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-es",
+      "query": "hospitales cancun",
+      "reason": "Spanish-language Cancun healthcare research.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-playa-del-carmen",
+      "query": "playa del carmen real estate",
+      "reason": "Broad Playa property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-beachfront-under-100k",
+      "query": "beachfront homes for sale under $100k in mexico",
+      "reason": "Budget beachfront research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-akumal",
+      "query": "akumal condos for sale",
+      "reason": "Akumal condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "invest-playa-del-carmen",
+      "query": "playa del carmen real estate investment",
+      "reason": "Playa investment research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "cancun hospital",
+      "reason": "Cancun healthcare research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-puerto-morelos",
+      "query": "condo for sale in puerto morelos",
+      "reason": "Puerto Morelos condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "galenia hospital cancun",
+      "reason": "Specific Cancun hospital research; page covers hospitals.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "casa playa vista",
+      "reason": "Specific Puerto Aventuras villa listing demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-cozumel",
+      "query": "condo for sale cozumel",
+      "reason": "Cozumel condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-playa-del-carmen",
+      "query": "buy a condo in playa del carmen",
+      "reason": "Playa condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "invest-playa-del-carmen",
+      "query": "playa del carmen real estate market",
+      "reason": "Playa market research for investors.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-safety-puerto-aventuras",
+      "query": "is puerto aventuras safe",
+      "reason": "Puerto Aventuras safety research.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-beachfront-puerto-morelos",
+      "query": "oceanfront condos for sale puerto morelos",
+      "reason": "Puerto Morelos beachfront condo demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "cancun hospitals",
+      "reason": "Cancun healthcare research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "rent-condo-playa-del-carmen",
+      "query": "playa del carmen rentals",
+      "reason": "Playa rental demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-cozumel",
+      "query": "cozumel condo for sale",
+      "reason": "Cozumel condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-tulum",
+      "query": "condos for sale in tulum mexico",
+      "reason": "Tulum condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "homes for sale in puerto aventuras",
+      "reason": "Puerto Aventuras property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "quinta del sol puerto aventuras",
+      "reason": "Specific Puerto Aventuras condo listing demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-akumal",
+      "query": "akumal homes for sale",
+      "reason": "Akumal home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-playa-del-carmen",
+      "query": "iplaya residential condos",
+      "reason": "Specific Playa condo project demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-tulum",
+      "query": "tulum homes for sale",
+      "reason": "Tulum home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-cozumel",
+      "query": "cozumel real estate",
+      "reason": "Broad Cozumel property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-akumal",
+      "query": "condos for sale in akumal mexico",
+      "reason": "Akumal condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "rent-condo-playa-del-carmen",
+      "query": "playa del carmen condo rental",
+      "reason": "Playa condo rental demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-playa-del-carmen",
+      "query": "condos for sale playa del carmen",
+      "reason": "Playa condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "condo puerto aventuras",
+      "reason": "Puerto Aventuras condo/property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-puerto-morelos",
+      "query": "puerto morelos condos",
+      "reason": "Puerto Morelos condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "rent-condo-playa-del-carmen",
+      "query": "playa del carmen condos for rent",
+      "reason": "Playa condo rental demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-morelos",
+      "query": "puerto morelos real estate",
+      "reason": "Broad Puerto Morelos property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "best hospital in cancun",
+      "reason": "Cancun healthcare research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-healthcare-cancun-en",
+      "query": "cancun hospital for tourists",
+      "reason": "Cancun hospital research; page covers hospitals.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-beachfront-under-100k",
+      "query": "beachfront homes for sale under $100k in mexico zillow",
+      "reason": "Budget beachfront research job.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-under-200k-playa-del-carmen",
+      "query": "playa del carmen condos for sale under $200k",
+      "reason": "Under-$200K Playa condo demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": null,
+      "query": "playa del carmen",
+      "reason": "Bare place name; no specific job.",
+      "verdict": "context"
+    },
+    {
+      "job": null,
+      "query": "riviera maya",
+      "reason": "Bare place name; no specific job.",
+      "verdict": "context"
+    },
+    {
+      "job": "buy-property-tulum",
+      "query": "real estate tulum mexico",
+      "reason": "Tulum property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-playa-del-carmen",
+      "query": "playa del carmen real estate condos for sale",
+      "reason": "Playa condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": null,
+      "query": "car rentals in playa del carmen",
+      "reason": "Shares Playa place but car rentals are a different job.",
+      "verdict": "noise"
+    },
+    {
+      "job": "research-sargassum-riviera-maya",
+      "query": "tulum sargassum",
+      "reason": "Sargassum risk research for Tulum property.",
+      "verdict": "demand"
+    },
+    {
+      "job": "research-sargassum-riviera-maya",
+      "query": "sargassum riviera maya",
+      "reason": "Sargassum risk research for Riviera Maya property.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-condo-akumal",
+      "query": "condos for sale akumal",
+      "reason": "Akumal condo purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": null,
+      "query": "xcalacoco playa del carmen",
+      "reason": "Bare neighborhood name; no specific job.",
+      "verdict": "context"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras real estate",
+      "reason": "Puerto Aventuras property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "condos for sale puerto aventuras",
+      "reason": "Puerto Aventuras condo/property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras condos for sale",
+      "reason": "Puerto Aventuras condo/property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "condos for sale in puerto aventuras",
+      "reason": "Puerto Aventuras condo/property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras homes for sale",
+      "reason": "Puerto Aventuras home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "condo for sale in puerto aventuras",
+      "reason": "Puerto Aventuras condo/property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "houses for sale in puerto aventuras",
+      "reason": "Puerto Aventuras house purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "real estate in puerto aventuras",
+      "reason": "Puerto Aventuras property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "real estate puerto aventuras",
+      "reason": "Puerto Aventuras property purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "house for sale puerto aventuras",
+      "reason": "Puerto Aventuras house purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "homes for sale puerto aventuras",
+      "reason": "Puerto Aventuras home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "luxury real estate puerto aventuras",
+      "reason": "Puerto Aventuras luxury property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "home for sale in puerto aventuras",
+      "reason": "Puerto Aventuras home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "house for sale in puerto aventuras",
+      "reason": "Puerto Aventuras house purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras casas",
+      "reason": "Spanish term for Puerto Aventuras homes demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras gated community",
+      "reason": "Puerto Aventuras gated-community property demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "homes for sale in puerto aventuras mexico",
+      "reason": "Puerto Aventuras home purchase demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": "buy-property-puerto-aventuras",
+      "query": "puerto aventuras marina homes",
+      "reason": "Puerto Aventuras marina home demand.",
+      "verdict": "demand"
+    },
+    {
+      "job": null,
+      "query": "puerto aventuras",
+      "reason": "Bare place name; no specific job.",
+      "verdict": "context"
+    }
+  ],
+  "proposedBy": "ai",
+  "generatedAt": "2026-11-08T04:18:29.206Z"
+}
