@@ -1,6 +1,6 @@
 # Opportunity board — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-08T19:39:19.125Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-08T20:50:00.087Z. Proposals only; no task is created until a human accepts one.
 
 Since the previous run: 10 updated in place, 7 new, 2 no longer proposed.
 - new: Test : placer « boutique » dans le titre de la page /shop
@@ -19,10 +19,10 @@ Since the previous run: 10 updated in place, 7 new, 2 no longer proposed.
 
 1. **Compléter la fiche du kit DIY avec « fabrication » et « luminaire »** — ≈14.8 clicks/month at the measured position · position 8.6 (page 1) · 369 impressions in the window · 140 monthly market demand · 100% intent fit
 2. **Test : placer « boutique » dans le titre de la page /shop** — ≈13.2 clicks/month at the measured position · position 6.0 (page 1) · 329 impressions in the window · 40 monthly market demand · 100% intent fit
-3. **Ajouter « réparer un abat-jour » à l'article de restauration** — ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
-4. **Réécrire /lampes avec le vocabulaire « luminaire artisanal »** — ≈6.8 clicks/month at the measured position · position 40.5 (page 3+) · 1350 impressions in the window · 470 monthly market demand · 100% intent fit
-5. **Catégorie abat-jours : structurer la demande pagode** — ≈3.0 clicks/month at the measured position · position 14.6 (page 2) · 198 impressions in the window · 460 monthly market demand · 100% intent fit
-6. **Page sièges : ajouter les sections fauteuil et tapissier** — ≈1.4 clicks/month at the measured position · position 25.8 (page 3+) · 276 impressions in the window · 2040 monthly market demand · 100% intent fit
+3. **Réécrire /lampes avec le vocabulaire « luminaire artisanal »** — ≈6.8 clicks/month at the measured position · position 40.5 (page 3+) · 1350 impressions in the window · 470 monthly market demand · 100% intent fit
+4. **Catégorie abat-jours : structurer la demande pagode** — ≈3.0 clicks/month at the measured position · position 14.6 (page 2) · 198 impressions in the window · 460 monthly market demand · 100% intent fit
+5. **Page sièges : ajouter les sections fauteuil et tapissier** — ≈1.4 clicks/month at the measured position · position 25.8 (page 3+) · 276 impressions in the window · 2040 monthly market demand · 100% intent fit
+6. **Ajouter « réparer un abat-jour » à l'article de restauration** — ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
 7. **Ajouter une canonical aux pages de livraison** — foundation · technical defect; priority comes from severity and reach, not from clicks
 8. **Réparer les liens cassés de la fiche Baladeuse à franges** — foundation · technical defect; priority comes from severity and reach, not from clicks
 9. **Descriptions dupliquées sur 59 pages, à commencer par /sieges** — foundation · technical defect; priority comes from severity and reach, not from clicks
@@ -67,18 +67,6 @@ No proposal in this lane.
 - Evidence: 4 reference(s)
 - Critique: revise — Volumes faibles (27+39) et « atelier harmony » n'est qu'une graphie anglaise : garder la marque exacte, ajouter « boutique » et mesurer avant de conclure.
 
-#### Ajouter « réparer un abat-jour » à l'article de restauration
-
-- Kind: update; effort: small; confidence: medium (L'article est déjà en positions 5 à 9 sur ces requêtes avec 22 clics et n'utilise pourtant pas les termes « réparer/réparation » : le gain est réel mais incrémental, la page étant déjà visible.)
-- Priority: ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
-- Summary: L'article sur la restauration en contrecollé se classe en positions 5 à 9 et génère 22 clics, mais n'emploie jamais « réparer » ni « réparation », alors que ces formulations pèsent près de 300 impressions. La page est bonne : il manque le vocabulaire et un chemin vers le devis.
-- Why now: Le cluster est déjà visible et proche du top 5 ; les requêtes « réparation » sont à portée immédiate, sans nouvelle page à créer.
-- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Corps de l'article : nouvelle section et FAQ de fin)
-- Action: Ajouter une section « Réparer ou restaurer un abat-jour ? » et une FAQ reprenant les formulations mesurées (« comment réparer un abat jour », « réparer un abat-jour cabossé », « rénover un abat jour »), avec les étapes concrètes. Terminer par un encart décrivant le service de restauration d'abat-jour de l'atelier, sa zone Normandie et un lien vers /devis.
-- Expected outcome: Progression sur les requêtes « réparation/réparer » (aujourd'hui positions 9 à 11) et meilleure conversion de l'article vers la demande de devis.
-- Evidence: 4 reference(s)
-- Critique: keep — Page déjà en positions 5-9 : il manque seulement le vocabulaire « réparer » et un chemin vers /devis. Section et FAQ pertinentes, sans refonte.
-
 #### Réécrire /lampes avec le vocabulaire « luminaire artisanal »
 
 - Kind: update; effort: small; confidence: high (Les données de recherche first-party montrent 1 350 impressions sur le cluster, une page déjà présente en positions 30 à 65, et des mots (« luminaire », « artisanal ») qui n'apparaissent nulle part dans les pages associées.)
@@ -114,6 +102,18 @@ No proposal in this lane.
 - Expected outcome: Sortir « fauteuil restauration » et « fauteuil à tapisser » de la page 2 et convertir les recherches locales en demandes de devis.
 - Evidence: 5 reference(s)
 - Critique: revise — /sieges et /tapisserie-restauration viseraient le même intent : définir les rôles, confirmer l'URL FR (seule /en/... est fournie) avant d'ajouter les blocs.
+
+#### Ajouter « réparer un abat-jour » à l'article de restauration
+
+- Kind: update; effort: small; confidence: medium (L'article est déjà en positions 5 à 9 sur ces requêtes avec 22 clics et n'utilise pourtant pas les termes « réparer/réparation » : le gain est réel mais incrémental, la page étant déjà visible.)
+- Priority: ≈7.9 clicks/month at the measured position · position 8.7 (page 1) · 566 impressions in the window · 230 monthly market demand · 35% intent fit
+- Summary: L'article sur la restauration en contrecollé se classe en positions 5 à 9 et génère 22 clics, mais n'emploie jamais « réparer » ni « réparation », alors que ces formulations pèsent près de 300 impressions. La page est bonne : il manque le vocabulaire et un chemin vers le devis.
+- Why now: Le cluster est déjà visible et proche du top 5 ; les requêtes « réparation » sont à portée immédiate, sans nouvelle page à créer.
+- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Corps de l'article : nouvelle section et FAQ de fin)
+- Action: Ajouter une section « Réparer ou restaurer un abat-jour ? » et une FAQ reprenant les formulations mesurées (« comment réparer un abat jour », « réparer un abat-jour cabossé », « rénover un abat jour »), avec les étapes concrètes. Terminer par un encart décrivant le service de restauration d'abat-jour de l'atelier, sa zone Normandie et un lien vers /devis.
+- Expected outcome: Progression sur les requêtes « réparation/réparer » (aujourd'hui positions 9 à 11) et meilleure conversion de l'article vers la demande de devis.
+- Evidence: 4 reference(s)
+- Critique: keep — Page déjà en positions 5-9 : il manque seulement le vocabulaire « réparer » et un chemin vers /devis. Section et FAQ pertinentes, sans refonte.
 
 #### Page ateliers : faire d'/les-ateliers la cible des requêtes atelier
 

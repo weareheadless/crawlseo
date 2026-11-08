@@ -49,9 +49,11 @@ listing keywords.
 ### Atelier — the healthiest tenant and the most decision-ready board
 
 - 116 of 169 queries are judged demand, with 4,066 impressions and 62 clicks.
-- The click estimates are believable because measured reach exists: sièges and
-  fauteuils about 10 clicks/month at position 25.8, pagode shades about 7 at
-  14.6, the DIY kit about 5.6 at 8.6.
+- The click estimates are believable because measured reach exists: the DIY kit
+  about 15 clicks/month at position 8.6, the shop title test about 13 at 6.0,
+  `/lampes` about 7 from 1,350 impressions at 40.5. Sièges forecasts only about
+  1.4 because it has 276 impressions at 25.8, even though the market term is
+  large; the estimate is current reach, not the upside of fixing it.
 - The map's own diagnosis is vocabulary, not demand: `fauteuil` and `tapissier`
   are missing from the sièges page, `luminaire artisanal` from `/lampes`
   (position 40.5), and `fabrication` from the kit product page.
