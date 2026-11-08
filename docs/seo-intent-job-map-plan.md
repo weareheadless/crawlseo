@@ -68,11 +68,14 @@ The job map also carries the site config decided in the same call: `pageTypeRule
 Rules:
 
 - Every query in this cycle's tranche is assigned to one job, or explicitly marked
-  `context`, `noise` or `out-of-market` with a reason. The tranche is the top 250
-  queries by impressions then volume; the rest are **deferred**, counted and
-  processed in a later cycle. A thousand keywords are not a completeness target.
+  `context`, `noise` or `out-of-market` with a reason. The tranche is 250 queries,
+  **unjudged first**, highest impressions then volume inside that pool.
+- Verdicts accumulate. A verdict is carried forward while its query is in the
+  window, and the next cycle spends its tranche on queries that have never been
+  judged. Only when no unjudged query remains does the cycle re-validate the
+  oldest verdicts. Over cycles the whole window is covered; nothing is dropped.
 - Deferred is not demand and is not "unjudged demand": it is work not yet done, and
-  the report states its count, impressions and clicks.
+  the report states its count, impressions and clicks. The tail shrinks each cycle.
 - A job the business does not serve is not demand, however large the volume.
 - The job map is written in buyer language, not SEO nouns.
 - One topic is one job. The taxonomy is `projectTopicsFromJobs(jobMap.jobs)`; there
@@ -121,7 +124,13 @@ rows named; code never fills a missing semantic field.
 
 - Score and gate read qualified demand only. The gate uses site-level Search Console
   totals, not the sum of topic memberships, because memberships overlap and miss
-  queries.
+  queries. Expected clicks start from measured impressions; market volume is shown
+  beside the estimate, never multiplied into it.
+- Among scored proposals, a money page (a service, product or buyer job) comes
+  before a content page even when the content page has more projected clicks: a
+  buyer page at 10 clicks is worth more than an informational page at 24. A
+  content-led business marks its core work as a business proposal to enter the
+  money track; no tenant branch is needed.
 - Technical findings are ordered by severity and reach, and stay separate from
   content proposals.
 - The board stores what the model drafted. Code does not merge, group or re-target
@@ -148,22 +157,24 @@ The one-pass pipeline is in place and has run on all four tenants. The job map
 decides the jobs, markets, pages and topic fields; the taxonomy is projected from
 it; the topic map is built from judged demand; and the boards are re-drafted.
 
-| Tenant | Jobs | Tranche assigned | Demand | Clustered | Deferred | Not demand |
+| Tenant | Jobs | Judged | Demand | Clustered | Deferred | Not demand |
 |---|---:|---:|---:|---:|---:|---:|
 | Casamigo | 14 | 274/274 | 21 | 21 | 0 | 253 |
 | Atelier | 13 | 169/169 | 116 | 116 | 0 | 53 |
-| Susi | 24 | 250/250 | 211 | 211 | 914 | 39 |
+| Susi | 24 | 500/1164 | 404 | 404 | 664 | 96 |
 | Oceanic | 13 | 85/85 | 42 | 42 | 0 | 43 |
 
-Susi is the first tenant whose query set exceeds one tranche: 1,164 visible queries,
-250 judged, 914 deferred with 6,275 impressions and 30 clicks. The report states the
-deferred tail and its examples; the next cycle picks it up. The earlier Susi runs
-failed on truncated JSON because jobs and verdicts shared one response; splitting
-the verdicts into batches removed the failure, not a cap.
+Susi is the first tenant whose query set exceeds one tranche. Its second cycle judged
+the next 250 unjudged queries and carried the first 250: judged 500, demand 404,
+deferred 664. Two more cycles cover the rest, after which the oldest verdicts are
+re-validated. The earlier Susi runs failed on truncated JSON because jobs and verdicts
+shared one response; splitting the verdicts into batches removed the failure, not a
+cap.
 
-Boards: Casamigo 17 proposals, Atelier 17, Susi 26, Oceanic 13. Casamigo remains
+Boards: Casamigo 17 proposals, Atelier 17, Susi 28, Oceanic 13. Casamigo remains
 foundations-first at 39 impressions. Rows that were not re-proposed are reported as
-"no longer proposed" and parked, never closed.
+"no longer proposed" and parked, never closed. A re-proposal of a verified closure
+is reported for regression checking, not reopened silently.
 
 ## Definition of done
 

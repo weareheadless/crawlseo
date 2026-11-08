@@ -17,7 +17,7 @@ still sit next to the model's map in the same UI.
 |---|---|---:|---:|---:|---:|
 | Casamigo | 39 impressions, 0 clicks | 14 | 21 | 0 | 17 |
 | Atelier | 4,066 impressions, 62 clicks | 13 | 116 | 0 | 17 |
-| Susi | 29,533 impressions, 181 clicks | 24 | 211 | 914 | 26 |
+| Susi | 29,533 impressions, 181 clicks | 24 | 404 | 664 | 28 |
 | Oceanic | 4 impressions, 0 clicks | 13 | 42 | 0 | 13 |
 
 The demand map renders one row per modelled topic with its intent, relevance,
@@ -59,25 +59,25 @@ listing keywords.
   canonical on delivery pages, broken links on the Baladeuse product page.
 - Work the top six, in order. Nothing in the board needs a second opinion.
 
-### Susi — the strongest demand and the most misleading first row
+### Susi — the largest map, and coverage now accumulates
 
-- 1,164 visible queries, only 250 judged; 914 are deferred (6,275 impressions,
-  30 clicks). The deferred examples include `homes for sale in cozumel mexico`
-  and `apartments for rent in playa del carmen mexico`, so the board is
-  explicitly incomplete rather than exhaustive.
-- The 24 topics are the right ones: Playa del Carmen condos (24 queries), named
-  developments (23), rentals (16), Puerto Morelos condos (14), Tulum villas
-  (10), plus investment, financing, hospitals and market/regulation context.
-- Priorities 2–10 are sound: Playa condos at 27.4, Tulum villas at 65.3,
-  rentals at 604 words, Cozumel at 59.7, Puerto Morelos hubs on page three.
-- The board now starts with the named-development directory (≈25 clicks from
-  1,681 impressions at position 16.5), the hospital guide (≈24 from 1,701
-  impressions at 6.5) and the rentals page (≈17 from 1,107 at 18.7). Those
-  estimates use measured impressions; market demand is shown next to them.
-  Before the scoring fix the hospital row read ≈17,081 clicks because market
+- 1,164 visible queries. The second cycle judged the next 250 unjudged queries
+  and carried the first 250: 500 judged, 404 demand, 664 still deferred.
+  Coverage accumulates; two more cycles cover the window, then the oldest
+  verdicts are re-validated. Nothing is dropped.
+- The 24 topics are the right ones: Playa del Carmen condos, named developments,
+  rentals, Puerto Morelos condos, Tulum villas, plus investment, financing,
+  hospitals and market/regulation context.
+- The board now starts with buyer pages only: the Polo 88 listing page (≈32
+  clicks from 2,119 impressions at 16.1), rentals (≈23 from 1,556 at 17.7),
+  Puerto Morelos condos (≈13 from 2,499 at 63.2), Playa condos (≈10 from 1,919
+  at 28.1). Estimates use measured impressions; market demand is shown beside
+  them.
+- The hospital and safety guides are still on the board, but at 22–23, after
+  every scored money page. They are relocation support, not the first commercial
+  build. Before the ordering fix the hospital row was second because it had more
+  impressions; before the scoring fix it read ≈17,081 clicks because market
   volume was multiplied into the estimate.
-- Hospital content is relocation support, not the first commercial build; the
-  named-development directory and the rentals page are the buyer jobs.
 
 ### Oceanic — foundations only, and the map already says why
 
@@ -122,6 +122,21 @@ stored data repaired.
    topic; the counts and coverage are shown as facts beside it. Stored rows whose
    summary was a lexical "N queries sharing the phrase" were repaired.
 
+## Tranche accumulation and ordering
+
+Two further changes came out of the readiness review:
+
+- **Coverage accumulates.** Verdicts are carried forward across cycles, and each
+  cycle's 250-query tranche takes unjudged queries first. Only when none remain
+  does it re-validate the oldest verdicts. Susi's second cycle moved from 250 to
+  500 judged without re-asking the first tranche; the deferred tail fell from 914
+  to 664.
+- **Money before content.** Among scored proposals, a buyer/service page comes
+  before an informational page even when the latter has more projected clicks.
+  Susi's top nine are now buyer pages; the hospital and safety guides moved to
+  22–23. A content-led tenant can mark its core work as a business proposal to
+  enter the money track, so the rule is not a tenant branch.
+
 ## What the review changes
 
 - Casamigo and Oceanic remain foundations-first; the one-pass map strengthens
@@ -129,5 +144,7 @@ stored data repaired.
 - Atelier's board is ready to work as drafted.
 - Susi's board is now ordered by measured reach: the development directory,
   hospitals and rentals lead. Work them in that order.
-- The next cycle's first job is the deferred Susi tail, not new topic
-  discovery. 914 queries with real buyer language are still unjudged.
+- The next cycle's first job is the remaining Susi tail, not new topic
+  discovery. The tranche now takes unjudged queries first, so that happens
+  without a manual step: 664 queries with real buyer language are still unjudged
+  and the next 250 are the ones that accumulate.

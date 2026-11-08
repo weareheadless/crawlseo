@@ -215,6 +215,8 @@ export type TopicMap = {
   };
   counts: {
     queries: number;
+    /** Queries with a job-map verdict, carried or judged this cycle. */
+    judgedQueries: number;
     /** Queries the job map judged as demand (or every query when no job map is stored). */
     qualifiedQueries: number;
     /** Queries outside this cycle's tranche; not counted as demand. */
@@ -922,6 +924,7 @@ export function buildTopicMap(
     deferred,
     counts: {
       queries: data.queries.length,
+      judgedQueries: data.queries.length - deferredQueries.length,
       qualifiedQueries: qualifiedQueries.length,
       deferredQueries: deferredQueries.length,
       excludedQueries: excludedQueries.length,
@@ -1487,7 +1490,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   if (map.deferred.count === 0) {
     lines.push("Every measured query was in this cycle's tranche.");
   } else {
-    lines.push(`- ${map.deferred.count} queries (${map.deferred.impressions} impressions, ${map.deferred.clicks} clicks) were outside this cycle's tranche. They are not counted as demand and are not judged yet; they are processed in a later cycle.`);
+    lines.push(`- ${map.deferred.count} queries (${map.deferred.impressions} impressions, ${map.deferred.clicks} clicks) are unjudged. They are not counted as demand. Each cycle judges unjudged queries first, so coverage accumulates and this tail shrinks; no query is dropped.`);
     if (map.deferred.examples.length > 0) {
       lines.push(`- Examples: ${map.deferred.examples.map((query) => `“${query}”`).join(", ")}.`);
     }
@@ -1505,7 +1508,7 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push("");
   lines.push("## Counts");
   lines.push("");
-  lines.push(`- Site window: ${map.site.impressions} impressions, ${map.site.clicks} clicks. Queries: ${map.counts.queries}; judged demand: ${map.counts.qualifiedQueries}; deferred: ${map.counts.deferredQueries}; clustered: ${map.counts.clusteredQueries}; not demand: ${map.counts.excludedQueries}; unmapped: ${map.counts.unmappedQueries}.`);
+  lines.push(`- Site window: ${map.site.impressions} impressions, ${map.site.clicks} clicks. Queries: ${map.counts.queries}; judged: ${map.counts.judgedQueries}; judged demand: ${map.counts.qualifiedQueries}; deferred: ${map.counts.deferredQueries}; clustered: ${map.counts.clusteredQueries}; not demand: ${map.counts.excludedQueries}; unmapped: ${map.counts.unmappedQueries}.`);
   lines.push(`- Pages considered: ${map.counts.pages}; news sources: ${map.counts.news}.`);
   lines.push("");
   lines.push("## Limits");

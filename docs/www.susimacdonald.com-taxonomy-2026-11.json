@@ -2,7 +2,7 @@
   "version": 1,
   "proposedBy": "ai",
   "model": "deepseek/deepseek-v4.1-flash-1017",
-  "generatedAt": "2026-11-08T17:35:21.154Z",
+  "generatedAt": "2026-11-08T20:10:18.025Z",
   "topics": [
     {
       "slug": "buy-condo-riviera-maya",
@@ -41,7 +41,7 @@
           "condos for sale in riviera maya"
         ]
       },
-      "rationale": "Broad Riviera Maya condo searches need a collection page; /riviera-maya-condos-sale sells the inventory.",
+      "rationale": "Broad Riviera Maya condo demand maps to the supplied Riviera Maya condo collection and place pages.",
       "requireAny": [
         "riviera maya condos",
         "riviera maya condos for sale",
@@ -107,7 +107,7 @@
           "condos playa del carmen"
         ]
       },
-      "rationale": "Repeated Playa condo sale searches match the dedicated condo page.",
+      "rationale": "Playa condo demand is served by the supplied Playa condo collection with English, French and sale variants.",
       "requireAny": [
         "playa del carmen condos for sale",
         "condos for sale playa del carmen",
@@ -181,7 +181,7 @@
           "playa del carmen beachfront homes for sale"
         ]
       },
-      "rationale": "Playa house and villa searches are served by the dedicated house-sale page.",
+      "rationale": "House, home and villa searches map to the supplied Playa houses and villas page.",
       "requireAny": [
         "playa del carmen homes for sale",
         "homes for sale in playa del carmen",
@@ -255,7 +255,7 @@
           "tulum mexico property for sale"
         ]
       },
-      "rationale": "Tulum condo and property queries map directly to the Tulum condo sale page.",
+      "rationale": "Tulum condo, property and real-estate searches map to the supplied Tulum condo page.",
       "requireAny": [
         "tulum condos for sale",
         "condos for sale tulum",
@@ -330,7 +330,7 @@
           "tulum mexico houses for sale"
         ]
       },
-      "rationale": "House and villa searches in Tulum are served by the dedicated house-sale page.",
+      "rationale": "Tulum house, home and villa demand maps to the supplied Tulum houses and villas page.",
       "requireAny": [
         "tulum homes for sale",
         "homes for sale in tulum mexico",
@@ -408,7 +408,7 @@
           "beach condos for sale puerto morelos"
         ]
       },
-      "rationale": "Puerto Morelos condo queries match the dedicated condo page.",
+      "rationale": "Puerto Morelos condo demand, including presale and beachfront variants, maps to the supplied condo page.",
       "requireAny": [
         "puerto morelos condos for sale",
         "condos for sale in puerto morelos",
@@ -481,7 +481,7 @@
           "puerto morelos beachfront"
         ]
       },
-      "rationale": "Puerto Morelos property and beach-house searches are covered by the real-estate page.",
+      "rationale": "Puerto Morelos real-estate and property searches map to the supplied homes page.",
       "requireAny": [
         "puerto morelos real estate",
         "puerto morelos property",
@@ -550,7 +550,7 @@
           "akumal real estate"
         ]
       },
-      "rationale": "Akumal condo and real-estate searches match the Akumal condo page.",
+      "rationale": "Akumal condo and real-estate demand maps to the supplied Akumal condo page.",
       "requireAny": [
         "akumal condos for sale",
         "condos for sale akumal",
@@ -620,7 +620,7 @@
           "akumal property for sale"
         ]
       },
-      "rationale": "Akumal house and home queries are served by the Akumal homes page.",
+      "rationale": "Akumal house, home and villa searches map to the supplied Akumal homes page.",
       "requireAny": [
         "akumal homes for sale",
         "homes for sale akumal",
@@ -695,7 +695,7 @@
           "real estate in cozumel"
         ]
       },
-      "rationale": "Cozumel condo and real-estate searches map to the Cozumel condo page.",
+      "rationale": "Cozumel condo and real-estate demand maps to the supplied Cozumel condo page.",
       "requireAny": [
         "cozumel condos for sale",
         "condos for sale in cozumel",
@@ -772,7 +772,7 @@
           "cozumel villas for sale"
         ]
       },
-      "rationale": "Cozumel home and house queries match the Cozumel house-sale page.",
+      "rationale": "Cozumel house, home and villa searches map to the supplied Cozumel house page.",
       "requireAny": [
         "cozumel homes for sale",
         "homes for sale in cozumel",
@@ -843,7 +843,7 @@
           "puerto aventuras beachfront"
         ]
       },
-      "rationale": "Puerto Aventuras condo and beachfront queries match the beachfront sale page.",
+      "rationale": "Puerto Aventuras condo and beachfront demand maps to the supplied beachfront page.",
       "requireAny": [
         "puerto aventuras real estate",
         "puerto aventuras condos for sale",
@@ -922,7 +922,7 @@
           "puerto aventuras casas"
         ]
       },
-      "rationale": "Puerto Aventuras house and home searches are served by the homes page.",
+      "rationale": "Puerto Aventuras house, home and villa searches map to the supplied homes page.",
       "requireAny": [
         "homes for sale in puerto aventuras",
         "puerto aventuras homes for sale",
@@ -998,7 +998,7 @@
           "bacalar property for sale"
         ]
       },
-      "rationale": "Bacalar condo and real-estate queries match the Bacalar condo page.",
+      "rationale": "Bacalar condo and real-estate demand maps to the supplied Bacalar condo page.",
       "requireAny": [
         "bacalar condos for sale",
         "condos for sale in bacalar mexico",
@@ -1067,7 +1067,7 @@
           "riviera maya beachfront"
         ]
       },
-      "rationale": "Riviera Maya beachfront searches match the dedicated beachfront page.",
+      "rationale": "Beachfront and oceanfront demand maps to the supplied Riviera Maya beachfront page.",
       "requireAny": [
         "riviera maya beachfront homes for sale",
         "beachfront homes for sale in riviera maya mexico",
@@ -1117,7 +1117,8 @@
           "Playa del Carmen",
           "Tulum",
           "Puerto Aventuras",
-          "Cozumel"
+          "Cozumel",
+          "Puerto Morelos"
         ],
         "localIntent": [
           "gated community",
@@ -1136,7 +1137,7 @@
           "villas in gated communities riviera maya"
         ]
       },
-      "rationale": "Luxury and gated-community searches map to the luxury collection page.",
+      "rationale": "Luxury villa and gated-community demand maps to the supplied luxury properties page.",
       "requireAny": [
         "riviera maya luxury real estate",
         "luxury real estate riviera maya",
@@ -1189,7 +1190,8 @@
           "Riviera Maya",
           "Playa del Carmen",
           "Tulum",
-          "Cancun"
+          "Cancun",
+          "Cozumel"
         ],
         "localIntent": [
           "under $200k",
@@ -1210,7 +1212,7 @@
           "caribbean homes for sale under $200 000"
         ]
       },
-      "rationale": "Under-$200K and under-$100K searches are served by the affordable condo collection.",
+      "rationale": "Under-$200K condo and cheap beach-house demand maps to the supplied under-$200K page.",
       "requireAny": [
         "condos for sale under 200k",
         "riviera maya condos under 200k",
@@ -1268,7 +1270,8 @@
       "market": {
         "scope": "local",
         "places": [
-          "Playa del Carmen"
+          "Playa del Carmen",
+          "Playacar"
         ],
         "localIntent": [
           "long term",
@@ -1296,7 +1299,7 @@
           "playacar rental"
         ]
       },
-      "rationale": "Playa rental searches match the apartments-for-rent page and rental listings.",
+      "rationale": "Long-term, monthly and apartment rental demand maps to the supplied Playa rental page.",
       "requireAny": [
         "playa del carmen rentals",
         "playa del carmen condo rental",
@@ -1384,7 +1387,8 @@
         "places": [
           "Playa del Carmen",
           "Riviera Maya",
-          "Tulum"
+          "Tulum",
+          "Puerto Morelos"
         ],
         "localIntent": [
           "rental income",
@@ -1403,7 +1407,7 @@
           "is puerto morelos a good investment comercial - mofu"
         ]
       },
-      "rationale": "Investment-intent queries are served by the Playa investment guide.",
+      "rationale": "Investment, ROI and presale research maps to the supplied Playa del Carmen investment guide.",
       "requireAny": [
         "playa del carmen real estate investment",
         "real estate investment in playa del carmen",
@@ -1476,7 +1480,7 @@
           "sargassum riviera maya"
         ]
       },
-      "rationale": "Market, PDU and sargassum update searches need current expert content.",
+      "rationale": "Market, PDU and sargassum research maps to the supplied 2026 PDU update article.",
       "requireAny": [
         "playa del carmen real estate market",
         "riviera maya real estate market",
@@ -1551,7 +1555,7 @@
           "best bank for expats mexico"
         ]
       },
-      "rationale": "Financing and expat banking queries are served by financing and bank-account guides.",
+      "rationale": "Mortgage, bank-account and fideicomiso research maps to the supplied Mexico financing guide.",
       "requireAny": [
         "mexico home equity lending market",
         "construction loan mexico",
@@ -1626,7 +1630,7 @@
           "safety in riviera maya"
         ]
       },
-      "rationale": "Safety and crime queries are answered by the Riviera Maya safety guide.",
+      "rationale": "Safety, crime and scam-verification research maps to the supplied Riviera Maya safety article.",
       "requireAny": [
         "is puerto aventuras safe",
         "is puerto aventuras mexico safe",
@@ -1677,7 +1681,8 @@
         "scope": "local",
         "places": [
           "Cancun",
-          "Riviera Maya"
+          "Riviera Maya",
+          "Playa del Carmen"
         ],
         "localIntent": [
           "near me",
@@ -1701,7 +1706,7 @@
           "hospitales cancun"
         ]
       },
-      "rationale": "Hospital and healthcare searches are served by the Cancun/Riviera Maya healthcare guide.",
+      "rationale": "Hospital and healthcare research maps to the supplied Cancun and Riviera Maya hospital guide.",
       "requireAny": [
         "hospital near me",
         "hospitals in cancun mexico",
@@ -1778,7 +1783,8 @@
           "Puerto Aventuras",
           "Akumal",
           "Cozumel",
-          "Bacalar"
+          "Bacalar",
+          "Cancun"
         ],
         "localIntent": [
           "pre-construction",
@@ -1809,7 +1815,7 @@
           "sonni playa del carmen"
         ]
       },
-      "rationale": "Named development queries need product listing pages and price/status detail.",
+      "rationale": "Named-development demand maps to the supplied listing index and individual development pages.",
       "requireAny": [
         "polo88",
         "casa playa vista",
@@ -1897,24 +1903,20 @@
   ],
   "pageTypeRules": [],
   "excludePaths": [
-    "/privacy-policy",
-    "/es/privacy-policy",
-    "/profile/",
-    "/es/profile/",
-    "/blog/tags/",
-    "/es/blog/tags/",
-    "/blog/hashtags/",
-    "/es/blog/hashtags/",
-    "/blog/page/",
-    "/es/blog/page/"
+    "/^/(es/)?privacy-policy/?$",
+    "/^/(es/)?blog/page/",
+    "/^/(es/)?blog/tags/",
+    "/^/(es/)?blog/hashtags/",
+    "/^/(es/)?profile/.*/events/?$",
+    "/^/(es/)?search"
   ],
   "newsQueries": [
     "Riviera Maya real estate news 2026",
-    "Tulum real estate regulation 2026",
-    "Playa del Carmen PDU 2026 update",
-    "Mexico foreign property ownership rules 2026",
-    "Quintana Roo real estate market news",
-    "sargassum Riviera Maya real estate impact 2026"
+    "Playa del Carmen PDU 2026 real estate regulation",
+    "Mexico fideicomiso rules for foreign buyers 2026",
+    "Tulum construction permits and real estate regulation 2026",
+    "Quintana Roo sargassum 2026 real estate impact",
+    "Mexico mortgage rates for foreign buyers 2026"
   ],
-  "summary": "Mapped 24 jobs for US/Canadian buyers in Riviera Maya real estate: place-specific condo and house/villa purchase, beachfront, luxury, under-$200K, rental, investment, finance, safety, healthcare, market/regulation, and named developments. Site config separates home, category, product listing, blog and service paths."
+  "summary": "Kept the 24-job map for US/Canadian buyers in Riviera Maya real estate, preserving carried demand for place-specific condos, homes and villas, beachfront, luxury, under-$200K, rentals, investment, finance, safety, healthcare, market regulation and named developments. Site config separates home, service, category, product, blog and other paths."
 }

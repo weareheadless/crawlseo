@@ -195,7 +195,9 @@ async function main(): Promise<void> {
       const jobMapPath = path.join("docs", `${site.domain.replace(/[^a-z0-9.-]+/gi, "-")}-job-map-${month}.json`);
       await writeFile(jobMapPath, JSON.stringify(jobMap, null, 2), "utf8");
       if (args.mode === "execute") await saveJobMap(db, site.id, jobMap);
-      process.stderr.write(`job map: ${jobMap.jobs.length} jobs, ${jobMap.counts.assigned}/${jobMap.counts.sent} tranche queries assigned, ${jobMap.counts.unassigned} unassigned, ${jobMap.counts.deferred} deferred; written to ${jobMapPath}\n`);
+      process.stderr.write(
+        `job map: ${jobMap.jobs.length} jobs, ${jobMap.counts.assigned}/${jobMap.counts.sent} tranche queries assigned, ${jobMap.counts.judged}/${jobMap.counts.queries} judged so far (${jobMap.counts.carried} carried), ${jobMap.counts.deferred} unjudged; written to ${jobMapPath}\n`
+      );
     }
     if (!jobMap) throw new CliError(`no job map for ${site.domain}`, 4);
 

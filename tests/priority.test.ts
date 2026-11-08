@@ -117,6 +117,24 @@ describe("proposal priority", () => {
     expect(foundation.track).toBe("foundation");
   });
 
+  it("puts a scored money page before a scored content page with more clicks", () => {
+    const content = {
+      proposal: proposal({ lane: "content_business", kind: "article" }),
+      priority: proposalPriority(
+        proposal({ lane: "content_business", kind: "article" }),
+        cluster({ intent: "informational", metrics: { ...cluster().metrics, impressions: 5_000, position: 6 } }),
+        gateOff
+      ),
+    };
+    const money = {
+      proposal: proposal({ kind: "update" }),
+      priority: proposalPriority(proposal({ kind: "update" }), cluster({ metrics: { ...cluster().metrics, impressions: 900, position: 20 } }), gateOff),
+    };
+    expect(content.priority.score!).toBeGreaterThan(money.priority.score!);
+    expect(money.priority.track).toBe("money");
+    expect(comparePriority(money, content, gateOff)).toBeLessThan(0);
+  });
+
   it("orders foundations first only when the site is invisible", () => {
     const content = { proposal: proposal(), priority: proposalPriority(proposal(), cluster(), gateOn) };
     const technical = {

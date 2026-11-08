@@ -168,14 +168,18 @@ export function comparePriority(
   gate: { needed: boolean }
 ): number {
   // Foundations lead when the site is invisible. Otherwise measured work leads,
-  // then foundations, then unmeasured money, then unmeasured content. A cheap
-  // high-confidence defect beats a page with 23 impressions and no evidence.
+  // and within it a page that can earn leads comes before pure audience growth:
+  // a buyer page with fewer projected clicks is worth more than an informational
+  // page with more. Foundations follow, then unmeasured money, then unmeasured
+  // content. A content-led business marks its core work as a business proposal,
+  // which the model can do without a tenant branch here.
   const rank = (item: { priority: ProposalPriority }) => {
     if (gate.needed && item.priority.track === "foundation") return 0;
-    if (item.priority.score != null) return 1;
-    if (item.priority.track === "foundation") return 2;
-    if (item.priority.track === "money") return 3;
-    return 4;
+    if (item.priority.score != null && item.priority.track === "money") return 1;
+    if (item.priority.score != null) return 2;
+    if (item.priority.track === "foundation") return 3;
+    if (item.priority.track === "money") return 4;
+    return 5;
   };
   const rankDiff = rank(a) - rank(b);
   if (rankDiff !== 0) return rankDiff;

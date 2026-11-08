@@ -65,6 +65,12 @@ export type JobVerdict = {
   /** The job slug for a `demand` verdict; null otherwise. */
   job: string | null;
   reason: string;
+  /**
+   * When the model last judged this query. Verdicts are carried across cycles,
+   * so coverage accumulates; the oldest verdicts are the ones re-validated when
+   * the unjudged pool is smaller than the tranche.
+   */
+  judgedAt?: string;
 };
 
 export type JobMap = {
@@ -90,6 +96,10 @@ export type JobMap = {
     unassigned: number;
     /** Queries outside the tranche, deferred to a later cycle. */
     deferred: number;
+    /** Queries in the window with a verdict, carried or judged this cycle. */
+    judged: number;
+    /** Verdicts carried from previous cycles without asking the model again. */
+    carried: number;
   };
 };
 
@@ -187,6 +197,66 @@ function pathKey(path: string): string {
   return path.trim().replace(/%[0-9a-f]{2}/gi, (match) => match.toUpperCase());
 }
 
+export type TrancheSelection = {
+  /** The queries this cycle sends to the model. */
+  tranche: Array<{ query: string; impressions: number; volume: number | null }>;
+  /** Prior verdicts that stay as they are, outside this cycle's tranche. */
+  carried: JobVerdict[];
+  /** How many tranche queries are a refresh of an existing verdict. */
+  revalidated: number;
+  /** How many tranche queries had never been judged. */
+  fresh: number;
+};
+
+/**
+ * This cycle's tranche. Unjudged queries come first, highest demand first, so
+ * every cycle extends coverage instead of re-asking the same head. Only when
+ * the unjudged pool is smaller than the tranche does the cycle spend the
+ * remaining slots on the oldest verdicts; that keeps a fully judged map from
+ * going stale without ever crowding out a query nobody has judged yet.
+ *
+ * The whole query set is never dropped: a verdict is carried forward while its
+ * query is still in the window, and `deferred` counts what remains unjudged.
+ */
+export function selectTranche(
+  queries: Array<{ query: string; impressions: number; volume: number | null }>,
+  previous: JobVerdict[] | null | undefined,
+  limit = JOB_SAMPLE_LIMIT
+): TrancheSelection {
+  const inWindow = new Set(queries.map((query) => query.query));
+  const rowByQuery = new Map(queries.map((query) => [query.query, query]));
+  const prior = new Map<string, JobVerdict>();
+  for (const verdict of previous ?? []) {
+    if (!inWindow.has(verdict.query)) continue;
+    prior.set(verdict.query, verdict);
+  }
+  const unjudged = queries.filter((query) => !prior.has(query.query));
+  const fresh = sampleForJobs(unjudged, limit);
+  const chosen = new Set(fresh.map((query) => query.query));
+  let revalidated = 0;
+  if (fresh.length < limit) {
+    const oldest = [...prior.values()]
+      .filter((verdict) => !chosen.has(verdict.query))
+      .sort((a, b) => {
+        const age = (a.judgedAt ?? "").localeCompare(b.judgedAt ?? "");
+        if (age !== 0) return age;
+        const left = rowByQuery.get(a.query)?.impressions ?? 0;
+        const right = rowByQuery.get(b.query)?.impressions ?? 0;
+        if (left !== right) return right - left;
+        return a.query.localeCompare(b.query);
+      })
+      .slice(0, limit - fresh.length);
+    for (const verdict of oldest) {
+      const row = rowByQuery.get(verdict.query);
+      if (row) fresh.push(row);
+      chosen.add(verdict.query);
+      revalidated += 1;
+    }
+  }
+  const carried = [...prior.values()].filter((verdict) => !chosen.has(verdict.query));
+  return { tranche: fresh, carried, revalidated, fresh: fresh.length - revalidated };
+}
+
 const SYSTEM = [
   "You map search demand to the jobs people are trying to do for this business.",
   "A job is what the searcher is trying to accomplish, in their words: 'I want to buy a condo in Tulum', 'I want to check whether this project is legitimate', 'I want to learn to freedive'. A keyword is not a job.",
@@ -199,7 +269,7 @@ const SYSTEM = [
   "queries is this cycle's tranche, not the whole query set: list the tranche queries that express this job. A later call assigns every tranche query to a verdict.",
   "Do not create a job for a query the business does not serve.",
   "Also return the site config: pageTypeRules (map the inventory's URL prefixes to home, service, category, product, blog or other; exclude legal, checkout, account, tag, pagination and search paths), excludePaths, and newsQueries (4 to 6 searches in the site language that find current news or regulation for this business).",
-  "previous lists the job map in use. Revise it; do not replace it with a fresh guess. Keep a job whose queries it still explains.",
+  "previous lists the job map in use, including the measured queries each job already owns. Revise it; do not replace it with a fresh guess. Keep a job whose carried queries still express it: verdicts from earlier cycles are carried forward and are not sent again, so a job may cite a query outside this cycle's tranche when previous lists it.",
   "Return exactly one JSON object: { summary, jobs: [{ slug, statement, who, stage, language, marketScope, marketPlaces, businessFit, topic: { name, kind, intent, relevance, coverageKind, offerKey, needTerms, localIntent, actionHint }, queries, page, reason }], pageTypeRules: [{ type, pattern }], excludePaths: [], newsQueries: [] }.",
   "Keep summary under 400 characters, each reason and actionHint under 200, at most 24 jobs.",
 ].join("\n");
@@ -261,13 +331,17 @@ export function parseVerdicts(
 export function parseJobMap(
   record: Record<string, unknown>,
   input: Pick<JobMapInput, "pages" | "queries" | "offers">,
-  meta: { proposedBy: "ai" | "human"; model: string | null; generatedAt?: string }
+  meta: { proposedBy: "ai" | "human"; model: string | null; generatedAt?: string },
+  tranche?: Array<{ query: string; impressions: number; volume: number | null }>,
+  citeable?: Array<{ query: string; impressions: number; volume: number | null }>
 ): { jobMap: JobMap; rejected: Array<{ title: string; reason: string }> } {
   const rejected: Array<{ title: string; reason: string }> = [];
-  // This cycle's tranche: only these queries can be cited or judged. A query
-  // outside it is deferred, not silently treated as understood.
-  const sample = sampleForJobs(input.queries);
+  // This cycle's tranche: only these queries can be judged. A job may also cite
+  // a query it already owned in a previous cycle, so carried jobs survive a
+  // cycle whose tranche is full of newer demand.
+  const sample = tranche ?? sampleForJobs(input.queries);
   const sampleByKey = new Map(sample.map((query) => [query.query.toLowerCase(), query.query]));
+  const citeableByKey = new Map([...(citeable ?? sample)].map((query) => [query.query.toLowerCase(), query.query]));
   const pageSet = new Set(input.pages.map((page) => pathKey(page.path)));
   const offerKeys = new Set(input.offers.map((offer) => offer.offer));
   const jobs: Job[] = [];
@@ -335,10 +409,10 @@ export function parseJobMap(
       continue;
     }
     const queries = stringList(row.queries, 60)
-      .map((query) => sampleByKey.get(query.toLowerCase()))
+      .map((query) => citeableByKey.get(query.toLowerCase()))
       .filter((query): query is string => Boolean(query));
     if (queries.length === 0) {
-      rejected.push({ title: statement, reason: "cites no tranche query" });
+      rejected.push({ title: statement, reason: "cites no measured query" });
       continue;
     }
     seen.add(slug);
@@ -404,6 +478,8 @@ export function parseJobMap(
         assigned,
         unassigned,
         deferred: input.queries.length - sample.length,
+        judged: assigned,
+        carried: 0,
       },
     },
     rejected,
@@ -428,8 +504,23 @@ export async function proposeJobMap(
   if (!config) return { jobMap: null, rejected: [], unassigned: [], error: "CONTENT_LLM_API_KEY is not configured", model: null };
   if (input.queries.length === 0) return { jobMap: null, rejected: [], unassigned: [], error: "no measured query to model", model: null };
 
-  const sample = sampleForJobs(input.queries);
+  const now = new Date().toISOString();
+  const selection = selectTranche(input.queries, input.previous?.verdicts);
+  const sample = selection.tranche;
   const sampleQueries = sample.map((query) => query.query);
+  // A job kept from a previous cycle may cite a query that is carried rather
+  // than judged again; those queries are still measured evidence for the job.
+  const windowByQuery = new Map(input.queries.map((query) => [query.query, query]));
+  const sampleSet = new Set(sampleQueries);
+  const citeable = [...sample];
+  for (const job of input.previous?.jobs ?? []) {
+    for (const query of job.queries) {
+      const row = windowByQuery.get(query);
+      if (!row || sampleSet.has(query)) continue;
+      citeable.push(row);
+      sampleSet.add(query);
+    }
+  }
   const payload = {
     domain: input.domain,
     language: input.language,
@@ -454,11 +545,13 @@ export async function proposeJobMap(
             marketPlaces: job.market.places,
             businessFit: job.businessFit,
             topic: job.topic,
+            queries: job.queries,
             page: job.page,
           })),
         }
       : null,
-    queriesDeferred: Math.max(0, input.queries.length - sample.length),
+    queriesNotSent: Math.max(0, input.queries.length - sample.length),
+    queriesAlreadyJudged: selection.carried.length + selection.revalidated,
   };
 
   // Phase 1: the jobs and the site config. One call; the response is small.
@@ -473,18 +566,30 @@ export async function proposeJobMap(
       timeoutMs: 600_000,
       jsonMode: false,
     });
-    return parseJobMap({ ...asRecord(parsed), verdicts: [] }, input, { proposedBy: "ai", model: config.model });
+    return parseJobMap({ ...asRecord(parsed), verdicts: [] }, input, { proposedBy: "ai", model: config.model }, sample, citeable);
   };
 
   let jobsResult: ReturnType<typeof parseJobMap> | null = null;
   let error: string | null = null;
+  const carriedDemandJobs = new Set(
+    selection.carried.filter((verdict) => verdict.verdict === "demand" && verdict.job).map((verdict) => verdict.job as string)
+  );
   try {
     jobsResult = await jobsRun();
-    if (jobsResult.jobMap.jobs.length === 0 || jobsResult.rejected.length > 0) {
+    const missingCarried = [...carriedDemandJobs].filter(
+      (slug) => !jobsResult?.jobMap.jobs.some((job) => job.slug === slug)
+    );
+    if (jobsResult.jobMap.jobs.length === 0 || jobsResult.rejected.length > 0 || missingCarried.length > 0) {
       const corrected = await jobsRun({
         reason: "The first job proposal was incomplete.",
-        rejected: jobsResult.rejected,
-        instruction: "Return the complete job list. Every job needs the topic contract, a supplied offer key and a tranche query it expresses.",
+        rejected: [
+          ...jobsResult.rejected,
+          ...missingCarried.map((slug) => ({
+            title: slug,
+            reason: "this job still owns judged demand carried from a previous cycle; keep it or explain why that demand is no longer served",
+          })),
+        ],
+        instruction: "Return the complete job list. Every job needs the topic contract, a supplied offer key and a measured query it expresses.",
       });
       if (corrected.jobMap.jobs.length > 0) jobsResult = corrected;
     }
@@ -496,6 +601,18 @@ export async function proposeJobMap(
   }
 
   const jobs = jobsResult.jobMap.jobs;
+  const stillMissing = [...carriedDemandJobs].filter((slug) => !jobs.some((job) => job.slug === slug));
+  if (stillMissing.length > 0) {
+    // Dropping the job would turn judged demand into unowned demand. Failing the
+    // run keeps the stored map and the next cycle honest instead of losing it.
+    return {
+      jobMap: null,
+      rejected: jobsResult.rejected,
+      unassigned: sampleQueries,
+      error: `job proposal dropped jobs that still own judged demand: ${stillMissing.join(", ")}`,
+      model: config.model,
+    };
+  }
   const verdictPayload = {
     domain: input.domain,
     language: input.language,
@@ -556,15 +673,25 @@ export async function proposeJobMap(
   const assignedSet = new Set(verdicts.map((verdict) => verdict.query));
   const assigned = sampleQueries.filter((query) => assignedSet.has(query)).length;
   const unassigned = sampleQueries.filter((query) => !assignedSet.has(query));
+  // Coverage accumulates: verdicts from earlier cycles stay, and the ones
+  // judged now replace them. Only queries in the current window are carried.
+  const stamped = verdicts.map((verdict) => ({ ...verdict, judgedAt: now }));
+  const merged = new Map<string, JobVerdict>();
+  for (const verdict of selection.carried) merged.set(verdict.query, verdict);
+  for (const verdict of stamped) merged.set(verdict.query, verdict);
+  const window = new Set(input.queries.map((query) => query.query));
+  const allVerdicts = [...merged.values()].filter((verdict) => window.has(verdict.query));
   const jobMap: JobMap = {
     ...jobsResult.jobMap,
-    verdicts,
+    verdicts: allVerdicts,
     counts: {
       queries: input.queries.length,
       sent: sample.length,
       assigned,
       unassigned: unassigned.length,
-      deferred: input.queries.length - sample.length,
+      deferred: input.queries.length - allVerdicts.length,
+      judged: allVerdicts.length,
+      carried: selection.carried.length,
     },
   };
   return { jobMap, rejected, unassigned, error, model: config.model };
@@ -594,8 +721,16 @@ export async function loadJobMap(db: JobMapDb, siteId: string): Promise<JobMap |
   const counts = asRecord(record.counts);
   if (typeof counts.sent !== "number") return null;
   if (record.jobs.some((job) => !asRecord(asRecord(job).topic).name)) return null;
+  const generatedAt = typeof record.generatedAt === "string" ? record.generatedAt : new Date().toISOString();
+  const verdicts = (record.verdicts as JobVerdict[]).map((verdict) => ({
+    ...verdict,
+    // A map stored before this field was added has no age; treat it as the
+    // map's own date so the oldest verdicts are re-validated first.
+    judgedAt: verdict.judgedAt ?? generatedAt,
+  }));
   return {
     ...(record as unknown as JobMap),
+    verdicts,
     pageTypeRules: Array.isArray(record.pageTypeRules) ? (record.pageTypeRules as JobMap["pageTypeRules"]) : [],
     excludePaths: Array.isArray(record.excludePaths) ? (record.excludePaths as string[]) : [],
     newsQueries: Array.isArray(record.newsQueries) ? (record.newsQueries as string[]) : [],

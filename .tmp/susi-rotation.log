@@ -1,0 +1,117 @@
+job map: 24 jobs, 250/250 tranche queries assigned, 500/1164 judged so far (250 carried), 664 unjudged; written to docs/www.susimacdonald.com-job-map-2026-11.json
+www.susimacdonald.com — topic map 2026-11
+queries 1164 · clustered 404 · unmapped 0 · pages 461 · news 20
+AI: available (deepseek/deepseek-v4.1-flash-1017)
+
+- Cancun and Riviera Maya hospitals [hospitals-healthcare-cancun-riviera-maya] · informational · high · scope local · q 23 · imp 1915 · vol 1220040 · coverage strong
+    page: https://www.susimacdonald.com/post/top-hospitals-in-cancun-and-riviera-maya-a-guide-to-world-class-healthcare-in-mexico
+    gap: Queries mention 'near' (2 queries, 1260 impressions) but no matched page does.
+    gap: Queries mention 'best' (7 queries, 511 impressions) but no matched page does.
+- Puerto Morelos condos for sale [buy-condo-puerto-morelos] · commercial · high · scope local · q 21 · imp 2499 · vol 690 · coverage strong
+    page: https://www.susimacdonald.com/es/puerto-morelos-condos-sale
+    gap: Queries mention 'mexico' (2 queries, 312 impressions) but no matched page does.
+    gap: Queries mention 'oceanfront' (2 queries, 168 impressions) but no matched page does.
+- Named Riviera Maya condo developments [named-condo-development-research] · commercial · high · scope local · q 48 · imp 2119 · vol 30 · coverage strong
+    page: https://www.susimacdonald.com/es/real-estate-listings
+    gap: Queries mention 'playa' (12 queries, 512 impressions) but no matched page does.
+    gap: Queries mention 'polo88' (1 query, 430 impressions) but no matched page does.
+- Playa del Carmen condos for sale [buy-condo-playa-del-carmen] · commercial · high · scope local · q 37 · imp 1919 · vol 3520 · coverage strong
+    page: https://www.susimacdonald.com/es/playa-del-carmen-condos-sale
+    gap: Queries mention 'mexico' (4 queries, 134 impressions) but no matched page does.
+    gap: Queries mention 'apartments' (2 queries, 92 impressions) but no matched page does.
+- Playa del Carmen apartments and condos for rent [rent-condo-apartment-playa-del-carmen] · transactional · high · scope local · q 44 · imp 1556 · vol 600 · coverage strong
+    page: https://www.susimacdonald.com/apartments-for-rent-in-playa-del-carmen
+    gap: Queries mention 'rental' (7 queries, 270 impressions) but no matched page does.
+    gap: Queries mention 'apartment' (5 queries, 255 impressions) but no matched page does.
+- Akumal condos for sale [buy-condo-akumal] · commercial · high · scope local · q 13 · imp 1243 · vol 340 · coverage strong
+    page: https://www.susimacdonald.com/akumal-condos-sale
+    gap: Queries mention 'quintana' (1 query, 32 impressions) but no matched page does.
+    gap: Queries mention 'remax' (1 query, 11 impressions) but no matched page does.
+- Cozumel condos for sale [buy-condo-cozumel] · commercial · high · scope local · q 11 · imp 944 · vol 1230 · coverage strong
+    page: https://www.susimacdonald.com/cozumel-condos-sale
+    gap: Queries mention 'real' (4 queries, 336 impressions) but no matched page does.
+    gap: Queries mention 'estate' (4 queries, 336 impressions) but no matched page does.
+- Playa del Carmen and Riviera Maya real estate investment [invest-playa-del-carmen-riviera-maya] · commercial · high · scope local · q 11 · imp 788 · vol 10 · coverage strong
+    page: https://www.susimacdonald.com/post/your-complete-playa-del-carmen-real-estate-investment-guide
+    gap: Queries mention 'properties' (1 query, 103 impressions) but no matched page does.
+    gap: Queries mention 'riviera' (4 queries, 83 impressions) but no matched page does.
+- Riviera Maya condos under $200K [buy-affordable-condo-under-200k] · commercial · high · scope local · q 4 · imp 162 · vol 10 · coverage strong
+    page: https://www.susimacdonald.com/es/riviera-maya-condos-sale-under-200k
+    gap: Queries mention 'homes' (3 queries, 421 impressions) but no matched page does.
+    gap: Queries mention 'mexico' (3 queries, 371 impressions) but no matched page does.
+- Tulum houses and villas for sale [buy-house-villa-tulum] · commercial · high · scope local · q 19 · imp 748 · vol 2400 · coverage strong
+    page: https://www.susimacdonald.com/tulum-house-sale
+    gap: Queries mention 'mexico' (7 queries, 271 impressions) but no matched page does.
+    gap: Queries mention 'beach' (1 query, 65 impressions) but no matched page does.
+- Puerto Aventuras condos and beachfront for sale [buy-condo-beachfront-puerto-aventuras] · commercial · high · scope local · q 8 · imp 678 · vol 20 · coverage strong
+    page: https://www.susimacdonald.com/puerto-aventuras-beachfront-sale
+    gap: Queries mention 'real' (3 queries, 270 impressions) but no matched page does.
+    gap: Queries mention 'estate' (3 queries, 270 impressions) but no matched page does.
+- Tulum condos for sale [buy-condo-tulum] · commercial · high · scope local · q 17 · imp 638 · vol 720 · coverage strong
+    page: https://www.susimacdonald.com/es/tulum-condos-sale
+    gap: Queries mention 'mexico' (5 queries, 258 impressions) but no matched page does.
+    gap: Queries mention 'property' (3 queries, 57 impressions) but no matched page does.
+- Riviera Maya safety and crime [safety-crime-riviera-maya] · informational · high · scope local · q 17 · imp 521 · vol 70 · coverage strong
+    page: https://www.susimacdonald.com/post/how-safe-is-the-riviera-maya-the-truth-behind-the-headlines
+    gap: Queries mention 'puerto' (2 queries, 205 impressions) but no matched page does.
+    gap: Queries mention 'aventuras' (2 queries, 205 impressions) but no matched page does.
+- Mexico property financing and banking [finance-banking-mexico] · commercial · high · scope local · q 14 · imp 245 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/post/home-financing-mexico-yes-you-can
+    gap: Queries mention 'bank' (7 queries, 140 impressions) but no matched page does.
+    gap: Queries mention 'playa' (4 queries, 132 impressions) but no matched page does.
+- Riviera Maya condos for sale [buy-condo-riviera-maya] · commercial · high · scope local · q 7 · imp 456 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/es/riviera-maya-condos-sale
+    gap: Queries mention 'condo' (1 query, 32 impressions) but no matched page does.
+    gap: Queries mention 'vendre' (1 query, 32 impressions) but no matched page does.
+- Puerto Aventuras houses and villas for sale [buy-house-villa-puerto-aventuras] · commercial · high · scope local · q 9 · imp 444 · vol 140 · coverage strong
+    page: https://www.susimacdonald.com/es/homes-for-sale-in-puerto-aventuras
+    gap: Queries mention 'house' (2 queries, 81 impressions) but no matched page does.
+    gap: Queries mention 'houses' (1 query, 47 impressions) but no matched page does.
+- Riviera Maya real estate market and regulation updates [market-conditions-regulation-riviera-maya] · informational · high · scope local · q 7 · imp 263 · vol 710 · coverage strong
+    page: https://www.susimacdonald.com/post/navigating-the-2026-playa-del-carmen-pdu-update-strategic-implications-for-real-estate-and-wealth-a
+    gap: Queries mention 'housing' (4 queries, 60 impressions) but no matched page does.
+    gap: Queries mention 'tulum' (3 queries, 23 impressions) but no matched page does.
+- Riviera Maya beachfront property for sale [buy-beachfront-riviera-maya] · commercial · high · scope local · q 11 · imp 363 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/riviera-maya-beachfront-sale
+    gap: Queries mention 'playa' (3 queries, 128 impressions) but no matched page does.
+    gap: Queries mention 'carmen' (3 queries, 128 impressions) but no matched page does.
+- Playa del Carmen houses and villas for sale [buy-house-villa-playa-del-carmen] · commercial · high · scope local · q 16 · imp 357 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/playa-del-carmen-house-sale
+    gap: Queries mention 'homes' (5 queries, 171 impressions) but no matched page does.
+    gap: Queries mention 'mexico' (2 queries, 37 impressions) but no matched page does.
+- Akumal homes and villas for sale [buy-house-villa-akumal] · commercial · medium · scope local · q 12 · imp 614 · vol 170 · coverage strong
+    page: https://www.susimacdonald.com/es/homes-for-sale-in-akumal
+    gap: Queries mention 'houses' (3 queries, 103 impressions) but no matched page does.
+    gap: Queries mention 'property' (1 query, 48 impressions) but no matched page does.
+- Riviera Maya luxury real estate [buy-luxury-riviera-maya] · commercial · medium · scope local · q 9 · imp 359 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/es/riviera-maya-luxury-real-estate
+    gap: Queries mention 'akumal' (1 query, 158 impressions) but no matched page does.
+    gap: Queries mention 'morelos' (3 queries, 80 impressions) but no matched page does.
+- Bacalar condos for sale [buy-condo-bacalar] · commercial · medium · scope local · q 4 · imp 252 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/bacalar-condos-sale
+    gap: Queries mention 'mexico' (1 query, 103 impressions) but no matched page does.
+    gap: Queries mention 'real' (1 query, 24 impressions) but no matched page does.
+- Cozumel houses and villas for sale [buy-house-villa-cozumel] · commercial · medium · scope local · q 9 · imp 247 · vol 0 · coverage strong
+    page: https://www.susimacdonald.com/cozumel-house-sale
+    gap: Queries mention 'homes' (3 queries, 119 impressions) but no matched page does.
+    gap: Queries mention 'mexico' (3 queries, 74 impressions) but no matched page does.
+- Puerto Morelos homes and villas for sale [buy-house-villa-puerto-morelos] · commercial · medium · scope local · q 4 · imp 235 · vol 720 · coverage strong
+    page: https://www.susimacdonald.com/es/puerto-morelos-real-estate
+    gap: Queries mention 'beach' (1 query, 87 impressions) but no matched page does.
+    gap: Queries mention 'house' (1 query, 87 impressions) but no matched page does.
+
+Unmapped demand:
+- beachfront homes for sale under $100k (961 impressions) — context: Broad beachfront-price query lacks Riviera Maya or Mexico market specificity.
+- tulum real estate (327 impressions) — context: Generic Tulum real estate; no specific condo or house job.
+- playa del carmen real estate (252 impressions) — context: Generic Playa del Carmen real estate; no specific condo or house job.
+- puerto aventuras (166 impressions) — context: Bare place name; context only, not demand.
+- tulum mexico real estate (122 impressions) — context: Generic Tulum Mexico property search; no specific condo or house job.
+- assisted living in riviera maya (107 impressions) — context: Senior-living query names Riviera Maya but not the hospital/healthcare job.
+- cancun hospital for tourists (101 impressions) — out_of_market: Hospital query aimed at tourists, not family/retirement healthcare audience.
+- carmen del playa real estate (97 impressions) — context: Generic Playa del Carmen real estate word order; no specific property job.
+- riviera maya things to do (95 impressions) — noise: Riviera Maya tourism/activities intent, not real estate.
+- real estate carmen del playa (92 impressions) — context: Generic Playa del Carmen real estate word order; no specific property job.
+
+stored: 0 created, 24 updated, 0 superseded, 375 memberships
+run: cmw54vbzu00qjoyhpgq2zrktw
+report: docs/www.susimacdonald.com-topic-map-2026-11.md

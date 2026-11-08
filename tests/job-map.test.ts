@@ -5,8 +5,10 @@ import {
   parseJobMap,
   parseVerdicts,
   sampleForJobs,
+  selectTranche,
   type Job,
   type JobMapInput,
+  type JobVerdict,
 } from "@/lib/research/job-map";
 
 function input(overrides: Partial<JobMapInput> = {}): JobMapInput {
@@ -77,7 +79,7 @@ describe("job map parsing", () => {
     );
     expect(rejected).toHaveLength(0);
     expect(jobMap.jobs).toHaveLength(1);
-    expect(jobMap.counts).toEqual({ queries: 2, sent: 2, assigned: 2, unassigned: 0, deferred: 0 });
+    expect(jobMap.counts).toEqual({ queries: 2, sent: 2, assigned: 2, unassigned: 0, deferred: 0, judged: 2, carried: 0 });
     expect(jobVerdictIndex(jobMap).get("casas de cambio")?.verdict).toBe("noise");
   });
 
@@ -246,5 +248,73 @@ describe("job verdicts", () => {
       jobs
     );
     expect(result.verdicts[0]).toMatchObject({ query: "tulum", verdict: "context", job: null });
+  });
+});
+
+describe("tranche accumulation", () => {
+  const queries = Array.from({ length: 500 }, (_, index) => ({
+    query: `query ${index}`,
+    impressions: 500 - index,
+    volume: (500 - index) * 10,
+  }));
+
+  function verdicts(count: number, dayOffset = 0): JobVerdict[] {
+    return Array.from({ length: count }, (_, index) => ({
+      query: `query ${index}`,
+      verdict: "context" as const,
+      job: null,
+      reason: "",
+      judgedAt: new Date(Date.UTC(2026, 0, 1 + dayOffset + index)).toISOString(),
+    }));
+  }
+
+  it("judges unjudged queries first and only re-validates when they run out", () => {
+    const selection = selectTranche(queries, verdicts(300));
+    expect(selection.tranche).toHaveLength(250);
+    expect(selection.fresh).toBe(200);
+    expect(selection.revalidated).toBe(50);
+    expect(selection.carried).toHaveLength(250);
+    // Every unjudged query is in the tranche; no judged one displaced it.
+    for (let index = 300; index < 500; index += 1) {
+      expect(selection.tranche.some((row) => row.query === `query ${index}`)).toBe(true);
+    }
+    // The 50 oldest verdicts are refreshed first.
+    expect(selection.tranche.some((row) => row.query === "query 0")).toBe(true);
+    expect(selection.tranche.some((row) => row.query === "query 299")).toBe(false);
+  });
+
+  it("re-validates the oldest half once every query has a verdict", () => {
+    const selection = selectTranche(queries, verdicts(500));
+    expect(selection.tranche).toHaveLength(250);
+    expect(selection.fresh).toBe(0);
+    expect(selection.revalidated).toBe(250);
+    expect(selection.carried).toHaveLength(250);
+    expect(selection.tranche[0].query).toBe("query 0");
+  });
+
+  it("carries only verdicts whose query is still in the window", () => {
+    const prior = [...verdicts(300), { query: "gone query", verdict: "demand" as const, job: "j", reason: "" }];
+    const selection = selectTranche(queries, prior);
+    expect(selection.carried.some((verdict) => verdict.query === "gone query")).toBe(false);
+  });
+
+  it("grows judged coverage across cycles until the tail is gone", () => {
+    // Simulate three cycles: each carries the prior verdicts forward.
+    let prior: JobVerdict[] = [];
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      const selection = selectTranche(queries, prior);
+      prior = [
+        ...selection.carried,
+        ...selection.tranche.map((row) => ({
+          query: row.query,
+          verdict: "context" as const,
+          job: null,
+          reason: "",
+          judgedAt: new Date(Date.UTC(2026, 2, 1 + cycle)).toISOString(),
+        })),
+      ];
+    }
+    const judged = new Set(prior.map((verdict) => verdict.query));
+    expect(judged.size).toBe(500);
   });
 });
