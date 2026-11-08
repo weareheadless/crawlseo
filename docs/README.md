@@ -21,6 +21,10 @@ requirements.
 - [Agent workflow](architecture/centralized-intelligence/agent-workflow.md)
 - [Business knowledge writers](business-knowledge-writers.md)
 
+## Reviews
+
+- [Analyst review — 2026-11](analyst-review-2026-11.md)
+
 ## Active contracts
 
 - [Atelier monthly bundle pilot](pilot-atelier-bundle.md)

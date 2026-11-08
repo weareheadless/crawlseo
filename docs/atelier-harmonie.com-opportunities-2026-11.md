@@ -1,32 +1,33 @@
 # Opportunity board — atelier-harmonie.com — 2026-11
 
-Generated 2026-11-07T23:19:29.342Z. Proposals only; no task is created until a human accepts one.
+Generated 2026-11-08T14:56:45.013Z. Proposals only; no task is created until a human accepts one.
 
-Since the previous run: 13 updated in place, 2 new, 2 closed.
-- new: Ajouter une section « comment réparer un abat-jour » à l'article existant
-- new: Fiche du kit DIY : couvrir « fabrication » et « fabriquer une lampe »
-- closed: Ajouter un bloc de réponses « comment réparer un abat-jour » sur l'article de restauration existant
-- closed: Accueil : affirmer le métier, le lieu et la variante « Atelier Harmony »
+Since the previous run: 8 updated in place, 4 new, 4 closed.
+- new: Hub /lampes : intégrer « luminaire artisanal » et « fait main » pour sortir de la position 41
+- new: Page tapisserie : intégrer « tapissier » et « chaises » et ancrer la Normandie
+- new: Générer et soumettre un sitemap XML pour les pages indexables
+- new: Pass technique balises : titles uniques et canoniques
+- closed: Ajouter des réponses AEO sur 'luminaire artisanal' à /lampes
+- closed: /sieges: tapissier content and unique meta description
+- closed: Rendre la page carte cadeau convaincante avant les fêtes
+- closed: Technical metadata head-tag batch
 
 ## Priority order
 
-2792 impressions and 46 clicks in the window: the site has measured reach, so content can be ranked by expected clicks.
+2306 impressions and 31 clicks in the window: the site has measured reach, so content can be ranked by expected clicks.
 
-1. **Page /sieges : reprendre le vocabulaire « tapissier » et « chaises »** — ≈7.1 clicks/month at the measured position · position 25.7 (page 3+) · 2040 monthly demand · 70% intent fit
-2. **Remonter la fiche Pagode Vermillon en page 1 sur « abat jour pagode »** — ≈6.9 clicks/month at the measured position · position 15.8 (page 2) · 460 monthly demand · 100% intent fit
-3. **Ajouter une section « comment réparer un abat-jour » à l'article existant** — ≈6.4 clicks/month at the measured position · position 8.7 (page 1) · 230 monthly demand · 70% intent fit
-4. **Fiche du kit DIY : couvrir « fabrication » et « fabriquer une lampe »** — ≈5.6 clicks/month at the measured position · position 9.4 (page 1) · 140 monthly demand · 100% intent fit
-5. **Page ateliers : dates de sessions, réservation et « atelier abat-jour »** — ≈5.6 clicks/month at the measured position · position 9.4 (page 1) · 140 monthly demand · 100% intent fit
-6. **Page /lampes : intégrer « luminaire artisanal » et « lampes artisanales »** — ≈1.9 clicks/month at the measured position · position 42.9 (page 3+) · 380 monthly demand · 100% intent fit
-7. **Étoffer la page Suspensions artisanales et la relier au hub Lampes** — ≈0.9 clicks/month at the measured position · position 43.9 (page 3+) · 178 monthly demand · 100% intent fit
-8. **Faire de /lampes/lampes-a-poser une vraie page catégorie « artisanale »** — ≈0.6 clicks/month at the measured position · position 26.3 (page 3+) · 111 monthly demand · 100% intent fit
-9. **Ajouter une balise canonical auto-référente sur les pages sans canonical** — foundation · technical defect; priority comes from severity and reach, not from clicks
-10. **Corriger les liens cassés vers la page produit Baladeuse à franges L'Ondine** — foundation · technical defect; priority comes from severity and reach, not from clicks
-11. **Dédoublonner les titres des pages catégories paginées en anglais** — foundation · technical defect; priority comes from severity and reach, not from clicks
-12. **Corriger les meta descriptions dupliquées (59 pages, dont /sieges)** — foundation · technical defect; priority comes from severity and reach, not from clicks
-13. **Compléter la page Carte cadeau : envoi par email et version imprimable** — not quantified · only 30 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-14. **Étoffer la page abat-jours pour viser « abat jour » et « abat-jour sur mesure »** — not quantified · only 23 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-15. **Confirmer la vente de coussins artisanaux avant d'investir la page Objets déco** — not quantified · only 31 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+1. **Hub abat-jours et décision sur-mesure** — ≈15.8 clicks/month at the measured position · position 15.3 (page 2) · 1050 monthly demand · 100% intent fit
+2. **Page tapisserie : intégrer « tapissier » et « chaises » et ancrer la Normandie** — ≈10.2 clicks/month at the measured position · position 26.2 (page 3+) · 2040 monthly demand · 100% intent fit
+3. **Article abat-jour : mise à jour éditoriale et blocs de réponse** — ≈7.6 clicks/month at the measured position · position 9.2 (page 1) · 190 monthly demand · 100% intent fit
+4. **Page kit DIY : parler de « fabrication de luminaire » et de « fabriquer une lampe »** — ≈5.6 clicks/month at the measured position · position 8.6 (page 1) · 140 monthly demand · 100% intent fit
+5. **Hub /lampes : intégrer « luminaire artisanal » et « fait main » pour sortir de la position 41** — ≈2.4 clicks/month at the measured position · position 40.9 (page 3+) · 470 monthly demand · 100% intent fit
+6. **Corriger les liens cassés dans le parcours produit** — foundation · technical defect; priority comes from severity and reach, not from clicks
+7. **Générer et soumettre un sitemap XML pour les pages indexables** — foundation · technical defect; priority comes from severity and reach, not from clicks
+8. **Pass technique balises : titles uniques et canoniques** — foundation · technical defect; priority comes from severity and reach, not from clicks
+9. **Renforcer la page Ateliers pour capter « atelier abat jour » et « atelier tapisserie fauteuil »** — not quantified · only 13 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+10. **Étoffer la page Tissus (146 mots) pour porter « tissu pour fauteuil »** — not quantified · only 10 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+11. **Renforcer la section coussins de la page Objets déco** — not quantified · only 31 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+12. **Transformer l'article fauteuil en guide pas à pas « retapisser soi-même »** — not quantified · no measured impressions; demand is market size, not reachable yet
 
 ## Lanes
 
@@ -36,126 +37,113 @@ No proposal in this lane.
 
 ### Content & business
 
-#### Page /sieges : reprendre le vocabulaire « tapissier » et « chaises »
+#### Hub abat-jours et décision sur-mesure
 
-- Kind: update; effort: medium; confidence: medium (Les relevés montrent des impressions réelles sur « fauteuil restauration », « chaises tapisserie » et « fauteuil à tapisser » vers /sieges, mais à des positions lointaines : le lien avec le vocabulaire manquant est directionnel.)
-- Priority: ≈7.1 clicks/month at the measured position · position 25.7 (page 3+) · 2040 monthly demand · 70% intent fit
-- Summary: La restauration de sièges porte la plus grosse demande du site (2 040 de volume cumulé, 212 impressions) mais /sieges se classe 19e sur « fauteuil restauration » et 79e sur « chaises tapisserie ». Les requêtes « tapissier » (45 impressions) et « chaises » (34 impressions) ne trouvent aucune correspondance sur la page. Le champ lexical tapissier et le mot chaises manquent.
-- Why now: Les requêtes locales « tapissier autour de moi » et « artisan tapissier autour de moi » se classent déjà 1re : la page est identifiée localement, il reste à couvrir le vocabulaire métier pour transformer cette reconnaissance.
-- Target: https://www.atelier-harmonie.com/sieges (Contenu et intertitres du service)
-- Action: Reprendre le contenu de /sieges autour de « tapissier », « tapisserie traditionnelle » et « chaises », ajouter un paragraphe sur le métier et la zone Normandie / Saint-Pierre-en-Port, et mailler vers /tapisserie-restauration et /les-ateliers pour la phrase « fauteuil à tapisser ». Ne pas viser de requête hors zone.
-- Expected outcome: Positions améliorées sur les requêtes tapissier et chaises, et meilleure captation de la demande locale déjà proche de la première position.
+- Kind: cluster_hub; effort: medium; confidence: low (La demande pagode est mesurée (390 de volume, 146 impressions), mais elle repose aujourd'hui sur une seule fiche produit en position 10 à 15 ; la page catégorie, très courte, n'obtient aucune impression.)
+- Priority: ≈15.8 clicks/month at the measured position · position 15.3 (page 2) · 1050 monthly demand · 100% intent fit
+- Summary: La page catégorie ne compte que 150 mots et n'obtient aucune impression, alors que les requêtes pagode pèsent 390 de volume et 146 impressions, portées par une seule fiche produit qui plafonne en position 10 à 15.
+- Why now: La demande pagode est déjà mesurée et c'est une fiche produit isolée qui la capte, en page 2. Une page collection solide peut récupérer ces requêtes et desservir toutes les variantes d'abat-jours.
+- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Corps de page et sections collections)
+- Action: D'abord valider si le sur-mesure existe (conditions, délais, tarifs). Ensuite refondre /lampes/abat-jours sur le pagode sans promettre le sur-mesure ; si validé, ajouter la section/page sur-mesure et le maillage depuis le hub.
+- Expected outcome: Capter les requêtes pagode sur une page collection pérenne et faire remonter la marque de la position moyenne de 15 vers le top 10.
 - Evidence: 5 reference(s)
+- Critique: revise — Le titre inclut « sur mesure » alors que l'action ne le traite pas et que l'offre n'est pas confirmée. Recentrer sur pagode ; décider sur-mesure séparément.
 
-#### Remonter la fiche Pagode Vermillon en page 1 sur « abat jour pagode »
+#### Page tapisserie : intégrer « tapissier » et « chaises » et ancrer la Normandie
 
-- Kind: update; effort: small; confidence: medium (La fiche reçoit déjà des impressions sur « abat jour pagode » mais stagne en position 15 : les données montrent un déficit de position, pas un gain encore acquis.)
-- Priority: ≈6.9 clicks/month at the measured position · position 15.8 (page 2) · 460 monthly demand · 100% intent fit
-- Summary: Le cluster pèse 460 recherches et 143 impressions, mais la fiche plafonne en position 15,8 avec zéro clic. La page existe et capte déjà les impressions : c'est un problème de position et de contenu, pas de couverture.
-- Why now: La fiche est en page 2 sur un terme à 390 recherches/mois et les variantes « moderne » et « rectangulaire » pointent vers elle sans être traitées. Gagner quelques places suffit à convertir des impressions déjà présentes.
-- Target: https://www.atelier-harmonie.com/product-page/abat-jour-pagode-vermillon (Title, meta, H1, description produit et courte FAQ)
-- Action: Réécrire title, meta et H1 autour de « abat-jour pagode » et « abat-jour pagode moderne ». Ajouter un bloc descriptif : forme, dimensions, matières, type d'ampoule et de douille, entretien, puis une FAQ courte. Mailler depuis /lampes/abat-jours et /lampes. Ne mentionner le format rectangulaire que si l'atelier le propose réellement : c'est une décision de l'owner, pas une page à créer d'office.
-- Expected outcome: Passer de la page 2 à la page 1 sur « abat jour pagode » et couvrir les variantes déjà rattachées à la fiche.
+- Kind: update; effort: medium; confidence: medium (Le volume du cluster est important et les positions relevées sont réelles, mais les impressions restent faibles : la demande existe sans que la page la capte aujourd'hui.)
+- Priority: ≈10.2 clicks/month at the measured position · position 26.2 (page 3+) · 2040 monthly demand · 100% intent fit
+- Summary: Le cluster sièges pèse 2 040 de volume mais la page ne récolte que 208 impressions, autour de la position 26. Les requêtes « fauteuil restauration » (480) et « fauteuil à tapisser » (1 000) sont à peine touchées, et les mots « tapissier » (6 requêtes) et « chaises » (2 requêtes) sont absents de la page.
+- Why now: La recherche locale « tapissier autour de moi » place déjà l'atelier en tête : le signal local existe, il n'est pas repris dans le contenu de la page.
+- Target: https://www.atelier-harmonie.com/tapisserie-restauration
+- Action: Restructurer la page avec un intertitre « Tapissier à Saint-Pierre-en-Port, en Normandie » et employer les mots « tapissier », « tapisserie traditionnelle » et « chaises ». Ajouter une section « Faire retapisser un fauteuil » expliquant le déroulé, un bloc sur la zone d'intervention en Normandie, des liens internes cohérents et un appel au devis.
+- Expected outcome: Se positionner sur la famille « fauteuil restauration / fauteuil à tapisser » et transformer la bonne position locale en contacts qualifiés en Normandie.
 - Evidence: 4 reference(s)
+- Critique: keep — La page tapisserie est le bon hub pour tapissier/fauteuil/chaises ; le contenu et l'ancrage Normandie correspondent à l'offre. Volume faible sur chaises mais pertinent.
 
-#### Ajouter une section « comment réparer un abat-jour » à l'article existant
+#### Article abat-jour : mise à jour éditoriale et blocs de réponse
 
-- Kind: update; effort: small; confidence: high (Les positions relevées placent déjà cette page entre la 5e et la 9e place sur les requêtes de réparation d'abat-jour : l'ajout du vocabulaire manquant répond directement à une demande mesurée.)
-- Priority: ≈6.4 clicks/month at the measured position · position 8.7 (page 1) · 230 monthly demand · 70% intent fit
-- Summary: L'article sur la restauration d'abat-jour en contrecollé se classe déjà entre la 5e et la 9e position sur les requêtes de réparation, mais n'emploie jamais les mots « réparer » ou « réparation ». Or 124 impressions portent sur « réparer » et 103 sur « réparation », dont les questions « comment réparer » et « comment restaurer ». Il manque une section explicative pas-à-pas, pas une nouvelle page.
-- Why now: La page capte déjà la demande à bonne position ; le vocabulaire manquant l'empêche de répondre aux questions formulées, alors que la demande est mesurée dès aujourd'hui.
-- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9 (Section explicative réparation et remise en forme)
-- Action: Ajouter une section H2 « Comment réparer un abat-jour ? » couvrant les cas courants (tache, plastique jauni, abat-jour cabossé), les étapes de remise en forme et de recollage, puis un encadré renvoyant vers le service de restauration en Normandie et vers /devis. Employer explicitement « réparation », « réparer » et « rénover » dans le corps et les intertitres, sans changer l'URL.
-- Expected outcome: La page répond aux questions de réparation et consolide ses positions déjà bonnes, avec un passage plus clair vers la demande de devis local.
+- Kind: update; effort: small; confidence: low (Les requêtes de réparation génèrent des impressions avec des positions de 7 à 11, mais le vocabulaire manque : le gain attendu est incrémental, pas un changement d'échelle.)
+- Priority: ≈7.6 clicks/month at the measured position · position 9.2 (page 1) · 190 monthly demand · 100% intent fit
+- Summary: L'article sur la restauration d'abat-jour se classe entre la position 7 et la position 11 sur « réparation abat jour », « réparer abat-jour cabossé » et « renover un abat jour », mais n'emploie jamais les mots « réparation » ni « réparer » (103 et 77 impressions). Le trafic reste faible pour un service vendu par l'atelier.
+- Why now: La page est déjà bien positionnée : ajouter les termes manquants et un appel au devis est un correctif court avec un effet immédiat possible.
+- Target: https://www.atelier-harmonie.com/post/l-art-de-la-restauration-comment-redonner-vie-%C3%A0-un-abat-jour-en-contrecoll%C3%A9
+- Action: Livrer ensemble sur la même URL : ajouter le vocabulaire réparation/réparer, l'intertitre et la section Normandie, puis le bloc « En résumé » et les étapes. Un seul passage évite la duplication et aligne le contenu avec les questions IA.
+- Expected outcome: Couvrir les requêtes « réparation / réparer un abat jour » déjà proches du top 10 et orienter les visiteurs vers la demande de devis.
 - Evidence: 4 reference(s)
+- Critique: keep — Mots-clés réparation absents alors que la page est déjà proche du top 10 ; l'ajout d'intertitre, section Normandie et lien devis est ciblé et non redondant.
 
-#### Fiche du kit DIY : couvrir « fabrication » et « fabriquer une lampe »
+#### Page kit DIY : parler de « fabrication de luminaire » et de « fabriquer une lampe »
 
-- Kind: update; effort: small; confidence: medium (La fiche se classe 5,5e sur « kit lampe » mais 16,4e sur « kit fabrication luminaire » : l'écart porte sur un mot absent de la page, ce qui rend l'action plausible sans être certaine.)
-- Priority: ≈5.6 clicks/month at the measured position · position 9.4 (page 1) · 140 monthly demand · 100% intent fit
-- Summary: La fiche du kit « Ma lampe à poser » se classe 5,5e sur « kit lampe » (110 recherches par mois) mais seulement 16,4e sur « kit fabrication luminaire ». Le mot « fabrication » n'apparaît pas sur la page. Enrichir la fiche (contenu du kit, étapes de fabrication, niveau requis) et la relier aux ateliers en Normandie.
-- Why now: Le socle de la fiche est déjà bon sur « kit lampe » : l'écart se joue sur un seul champ lexical, ce qui en fait une correction peu coûteuse à fort effet potentiel.
-- Target: https://www.atelier-harmonie.com/product-page/kit-diy-ma-lampe-%C3%A0-poser (Description produit et contenu du kit)
-- Action: Enrichir la fiche du kit : contenu exact, étapes de fabrication illustrées, niveau requis, lien vers les ateliers en Normandie ; introduire « fabrication », « fabriquer une lampe » et « luminaire » dans le texte et les intertitres. Conserver l'URL et le title existants.
-- Expected outcome: La fiche devient visible sur les requêtes de fabrication de luminaire, en plus de « kit lampe », et alimente la page ateliers.
+- Kind: update; effort: small; confidence: medium (La page se classe déjà en position 5 sur « kit lampe » et les requêtes fabrication ont des impressions mesurées, mais le volume additionnel reste modeste.)
+- Priority: ≈5.6 clicks/month at the measured position · position 8.6 (page 1) · 140 monthly demand · 100% intent fit
+- Summary: La page kit se classe en position 5 sur « kit lampe » (158 impressions), mais les requêtes « kit fabrication luminaire » (54 impressions, position 16,7) et « fabrication lampe » ne trouvent aucun vocabulaire correspondant sur la page. Le kit est un atelier local en Normandie, pas seulement un produit.
+- Why now: La page est déjà proche du top 5 sur la requête principale : compléter le champ lexical fabrication est un ajustement court.
+- Target: https://www.atelier-harmonie.com/product-page/kit-diy-ma-lampe-%C3%A0-poser
+- Action: Ajouter une section « La fabrication d'une lampe, étape par étape » avec les mots « fabrication », « fabriquer une lampe » et « lampe à faire soi-même ». Décrire le contenu du kit et le niveau requis, rappeler l'atelier en Normandie et renvoyer vers /les-ateliers pour les sessions en petit comité.
+- Expected outcome: Couvrir « kit fabrication luminaire » et les formulations proches, et mieux convertir les visiteurs déjà convaincus par l'offre de kit.
 - Evidence: 4 reference(s)
+- Critique: keep — La page kit ranke déjà sur kit lampe ; ajouter le vocabulaire fabrication/fabriquer une lampe et le lien ateliers est cohérent. Pas de gamme non confirmée.
 
-#### Page ateliers : dates de sessions, réservation et « atelier abat-jour »
+#### Hub /lampes : intégrer « luminaire artisanal » et « fait main » pour sortir de la position 41
 
-- Kind: update; effort: small; confidence: low (La seule requête d'atelier mesurée ne totalise qu'une impression et touche la page d'accueil : il s'agit d'un test, pas d'une demande établie.)
-- Priority: ≈5.6 clicks/month at the measured position · position 9.4 (page 1) · 140 monthly demand · 100% intent fit
-- Summary: Les requêtes d'atelier sont très minoritaires face aux requêtes de kit, et la page /les-ateliers n'apparaît pas sur « atelier abat jour ». Ajout des dates de sessions, du détail de réservation (petit comité, places limitées) et du vocabulaire atelier abat-jour et tapisserie. L'offre existe et se vend : le test repose sur l'offre, pas sur le volume mesuré.
-- Why now: L'offre d'ateliers est un service vendu en Normandie et déjà mis en avant ; la page reste pourtant absente sur ses propres termes, ce qui se corrige sans attendre une hausse de la demande.
-- Target: https://www.atelier-harmonie.com/les-ateliers (Bloc dates, réservation et déroulé des ateliers)
-- Action: Ajouter à /les-ateliers un bloc dates de sessions et réservation (petit comité, places limitées), le déroulé de l'atelier abat-jour et de l'atelier tapisserie, et employer explicitement « atelier abat-jour » et « atelier tapisserie » dans les intertitres ; renvoyer vers /devis ou le formulaire d'inscription.
-- Expected outcome: La page ateliers devient trouvable sur ses propres termes et convertit mieux grâce aux dates et modalités de réservation visibles.
-- Evidence: 1 reference(s)
-
-#### Page /lampes : intégrer « luminaire artisanal » et « lampes artisanales »
-
-- Kind: update; effort: medium; confidence: medium (Les impressions sur « luminaire artisanal » et « lampes artisanales originales » viennent déjà de /lampes, mais à des positions lointaines : le lien avec le vocabulaire manquant reste directionnel.)
-- Priority: ≈1.9 clicks/month at the measured position · position 42.9 (page 3+) · 380 monthly demand · 100% intent fit
-- Summary: La page /lampes totalise près de 1 100 impressions mais se classe en moyenne au-delà de la 40e position. Les requêtes « luminaire artisanal » (85 impressions, 56e) et « lampes artisanales originales » (46 impressions, 12,8e) n'y trouvent pas le vocabulaire attendu : ni « luminaire », ni « artisanal » ne structurent le contenu. Refonte du texte d'introduction et des intertitres autour du fait main 
-- Why now: « lampes artisanales originales » est à portée de la première page (12,8e) : c'est le gain le plus rapide du cluster avant que les concurrents ne se consolident sur ces termes.
-- Target: https://www.atelier-harmonie.com/lampes (Introduction et titres de sections)
-- Action: Réécrire l'introduction et les intertitres de /lampes autour de « luminaire artisanal », « lampe artisanale » et « fait main en Normandie » ; ajouter un paragraphe sur le savoir-faire d'abat-jouriste et les pièces uniques ; mailler vers les fiches produits (phare, baladeuse, pagode) et vers /lampes/abat-jours. Conserver « artisanales » dans le title actuel.
-- Expected outcome: Positions améliorées sur les requêtes « artisanal » et « luminaire » ; /lampes devient la porte d'entrée commerciale des créations plutôt qu'une simple liste de produits.
+- Kind: update; effort: medium; confidence: medium (Les données de recherche montrent des positions de 12 à 56 sur ces requêtes avec des impressions réelles, mais aucun clic : l'écart de vocabulaire est mesuré, le gain reste à confirmer.)
+- Priority: ≈2.4 clicks/month at the measured position · position 40.9 (page 3+) · 470 monthly demand · 100% intent fit
+- Summary: Le hub /lampes ne fait que 342 mots et se classe autour de la position 41 avec 1 100 impressions et aucun clic. Les requêtes « luminaire artisanal » (344 impressions, position 56) et les formulations « artisanal / fait main » ne sont couvertes par aucune page, alors qu'elles représentent l'essentiel de la demande du cluster.
+- Why now: La demande est déjà mesurée et la page reçoit des impressions sans clic : il manque le vocabulaire attendu, pas le trafic.
+- Target: https://www.atelier-harmonie.com/lampes
+- Action: Réécrire l'intro et les intertitres du hub autour de « luminaire artisanal », « lampe artisanale » et « fait main en Normandie ». Ajouter un paragraphe sur la fabrication en atelier et les pièces uniques, puis mailler vers les catégories existantes /lampes/lampes-a-poser, /lampes/suspensions, /lampes/abat-jours et /lampes/lampes-upcycling. Terminer par un bloc de créations et un lien vers le devis.
+- Expected outcome: Faire entrer la page dans le top 30 sur la famille « luminaire artisanal » et convertir une partie des 1 100 impressions déjà enregistrées, aujourd'hui sans clic.
 - Evidence: 4 reference(s)
+- Critique: keep — Cible correcte et intention claire : le hub /lampes est mince et les requêtes artisanales/fait main sont dans le périmètre. Le maillage vers les catégories et le devis est cohérent.
 
-#### Étoffer la page Suspensions artisanales et la relier au hub Lampes
+#### Renforcer la page Ateliers pour capter « atelier abat jour » et « atelier tapisserie fauteuil »
 
-- Kind: update; effort: medium; confidence: medium (La page touche déjà ses requêtes (178 impressions) mais reste en positions 37 à 78 avec 0 clic et seulement 152 mots : le potentiel est mesuré, pas garanti.)
-- Priority: ≈0.9 clicks/month at the measured position · position 43.9 (page 3+) · 178 monthly demand · 100% intent fit
-- Summary: La page /lampes/suspensions ne compte que 152 mots et se classe entre la 37e et la 78e position sur ses propres requêtes, alors que le hub /lampes capte déjà les impressions. Le travail porte sur le contenu de la page et son maillage interne.
-- Why now: La demande est déjà mesurée (178 impressions, 0 clic) sans qu'aucune page ne convertisse : le sujet est visible mais la page qui devrait le porter est trop maigre pour se classer.
-- Target: https://www.atelier-harmonie.com/lampes/suspensions (Contenu principal et maillage interne)
-- Action: Réécrire et allonger /lampes/suspensions : introduction sur la suspension artisanale (matières, formats, possibilité de sur-mesure), descriptions des modèles déjà en ligne, bloc de questions fréquentes, puis liens croisés depuis /lampes et depuis chaque fiche suspension.
-- Expected outcome: Faire remonter la page des positions 37-78 vers la première page sur « suspension artisanale » et « suspensions artisanales », et récupérer les premiers clics.
-- Evidence: 4 reference(s)
+- Kind: update; effort: small; confidence: medium (Les requêtes atelier sont peu nombreuses mais se classent déjà en page 2 sur d'autres pages du site : l'intérêt est là, la page dédiée ne le capte pas encore.)
+- Priority: not quantified · only 13 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: La page /les-ateliers (721 mots) existe mais ne ressort pas : les requêtes d'atelier se classent sur l'accueil, /sieges et /lampes/abat-jours, entre la position 11 et la position 35. Le contenu doit être consolidé sur la page dédiée avant d'espérer des réservations.
+- Why now: Les deux requêtes d'atelier génèrent déjà des impressions, mais elles atterrissent sur des pages qui ne décrivent pas l'atelier : ces visites ne peuvent pas se transformer en réservations.
+- Target: https://www.atelier-harmonie.com/les-ateliers (Contenu principal et bloc réservation)
+- Action: Réécrire /les-ateliers autour de deux sections claires, atelier abat-jour et atelier tapisserie fauteuil : ce que l'on y fait, niveau requis (débutant accepté, pas besoin d'être bricoleur), durée, tarif, places limitées en petit comité, prochaines dates. Ajouter des liens internes depuis /sieges et /lampes/abat-jours vers cette page, puis aligner title, H1 et meta sur « atelier abat-jour » et « atelier tapisserie » en Normandie.
+- Expected outcome: La page /les-ateliers devient celle qui se classe sur les deux requêtes atelier et reçoit les demandes de réservation normandes, à la place de l'accueil et des pages catégories.
+- Evidence: 6 reference(s)
+- Critique: keep — La page ateliers existe et doit porter les requêtes d'atelier ; structurer abat-jour/tapisserie et aligner title/meta est cohérent. Les liens depuis les hubs sont utiles.
 
-#### Faire de /lampes/lampes-a-poser une vraie page catégorie « artisanale »
+#### Étoffer la page Tissus (146 mots) pour porter « tissu pour fauteuil »
 
-- Kind: update; effort: medium; confidence: medium (La page reçoit des impressions mais se situe entre les positions 26 et 40, et les requêtes du cluster sont de faible volume : les données orientent l'action sans la garantir.)
-- Priority: ≈0.6 clicks/month at the measured position · position 26.3 (page 3+) · 111 monthly demand · 100% intent fit
-- Summary: La page ne fait que 154 mots et se situe en position 26 en moyenne sur 111 impressions. « lampe à poser artisanale » (55 impressions) n'est porté par aucune page du cluster ; appliques et baladeuses se dispersent en petites fiches.
-- Why now: La couverture est partielle : la page existe mais son contenu ne peut pas tenir la requête « artisanale », la plus exposée du cluster. Étoffer une page déjà indexée coûte moins qu'ouvrir de nouvelles fiches.
-- Target: https://www.atelier-harmonie.com/lampes/lampes-a-poser (Title, H1 et contenu principal (sections par famille de luminaires))
-- Action: Étoffer la page : introduction sur le fait main en Normandie et les finitions, puis une section par famille (lampes à poser, baladeuses, appliques murales) avec liens vers les fiches concernées. Intégrer « artisanale » dans le title et le H1, garder un lien vers le kit DIY qui performe déjà. Objectif : une page hub qui regroupe baladeuses et appliques au lieu de les multiplier.
-- Expected outcome: Sortir de la page 3 sur « lampe à poser artisanale » et faire de la page un point d'entrée qui distribue vers les fiches.
-- Evidence: 4 reference(s)
-
-#### Compléter la page Carte cadeau : envoi par email et version imprimable
-
-- Kind: update; effort: small; confidence: medium (La page est déjà en page 2 sur les trois requêtes, entre les positions 11 et 30, mais avec seulement 3 à 4 impressions chacune : signal directionnel, volume faible.)
-- Priority: not quantified · only 30 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: La page /gift-card se classe déjà entre la 11e et la 30e position sur trois requêtes d'achat, mais avec 3 à 4 impressions chacune. Un complément ciblé sur les modalités d'envoi et d'impression suffit à exploiter cette base.
-- Why now: Les requêtes sont transactionnelles et la page est déjà en page 2 : c'est le moment où un ajout de contenu convertit sans reconstruire la page.
-- Target: https://www.atelier-harmonie.com/gift-card (Modalités et questions fréquentes)
-- Action: Ajouter sur /gift-card un bloc explicite sur la réception par email et sur la version imprimable, un court bloc de questions fréquentes (validité, usage en atelier, objets concernés), et un lien depuis /les-ateliers et /shop.
-- Expected outcome: Gagner des positions sur « carte cadeau artisanat par email » et « carte cadeau artisanat à imprimer » et transformer les quelques visites déjà présentes.
+- Kind: update; effort: small; confidence: low (Les volumes sont très faibles, quelques impressions par requête : c'est un test appuyé sur des positions 1 et 2 obtenues par l'accueil, pas par la page tissus.)
+- Priority: not quantified · only 10 impressions (below the 100 reach threshold); demand is market size, not reachable yet
+- Summary: La page /les-tissus ne compte que 146 mots et ne porte pas les requêtes : les positions 1 et 2 sur « tissu d'ameublement », « tissu pour fauteuil » et « tissus ameublement fauteuil » sont obtenues par l'accueil. Le sujet est dans le périmètre national de l'offre, mais la page ne le démontre pas.
+- Why now: Les positions 1 et 2 prouvent que le sujet est le bon ; sans contenu sur la page dédiée, la visibilité reste accrochée à l'accueil et ne mène pas vers la boutique.
+- Target: https://www.atelier-harmonie.com/les-tissus (Contenu principal)
+- Action: Compléter /les-tissus : présenter les tissus et matières réellement proposés par l'atelier, leurs usages (siège, fauteuil, abat-jour), l'entretien, les critères de choix, avec photos et liens vers /tapisserie-restauration et /shop. Faire valider la liste des tissus disponibles par l'atelier avant publication, sans annoncer de gamme non confirmée.
+- Expected outcome: /les-tissus devient la page de référence du site sur les tissus d'ameublement et récupère les positions aujourd'hui portées par l'accueil.
 - Evidence: 3 reference(s)
+- Critique: keep — La page tissus est trop mince et le sujet est dans le périmètre. Compléter avec des matières validées et éviter de dupliquer l'accueil qui ranke déjà.
 
-#### Étoffer la page abat-jours pour viser « abat jour » et « abat-jour sur mesure »
+#### Renforcer la section coussins de la page Objets déco
 
-- Kind: update; effort: medium; confidence: medium (La page est déjà 3e sur « abat jour » mais ne récolte que 19 impressions malgré un volume très élevé, et aucune page ne couvre « sur mesure » : le signal est directionnel, pas un gain démontré.)
-- Priority: not quantified · only 23 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: La page /lampes/abat-jours ne compte que 150 mots. Elle ranke 3e sur « abat jour » mais ne récolte que 19 impressions, alors que le terme pèse 49 500 recherches et que « abat-jour sur mesure » (590) n'est couvert par aucune page. Le contenu est trop mince pour transformer une bonne position en visibilité.
-- Why now: La position est déjà acquise sur le head term : il manque du contenu et un titre aligné, pas des liens. Chaque mois sans contenu laisse passer la demande la plus forte du site.
-- Target: https://www.atelier-harmonie.com/lampes/abat-jours (Title, meta, H1 et contenu principal (dont une section « abat-jour sur mesure »))
-- Action: Réécrire la page : H1 et title avec « abat-jour » et « abat-jour sur mesure », introduction de 300 mots sur la création artisanale en Normandie, sections forme/dimensions, matières, finitions, sur mesure et entretien, maillage vers les fiches Pagode et Tambour. Vérifier au passage l'indexation et la correspondance titre/requête, puis suivre les impressions sur les deux orthographes.
-- Expected outcome: Faire remonter les impressions sur « abat jour » et ouvrir la visibilité sur « abat-jour sur mesure », aujourd'hui sans page dédiée.
-- Evidence: 4 reference(s)
-
-#### Confirmer la vente de coussins artisanaux avant d'investir la page Objets déco
-
-- Kind: business; effort: small; confidence: low (31 impressions et 3 clics seulement, et les coussins n'apparaissent pas dans les services fournis : la demande est trop faible pour trancher sans l'avis du propriétaire.)
+- Kind: update; effort: small; confidence: low (Le volume total est faible (31 impressions) et la page se classe déjà bien sur deux requêtes : le gain attendu est modeste, d'où un test plutôt qu'un chantier.)
 - Priority: not quantified · only 31 impressions (below the 100 reach threshold); demand is market size, not reachable yet
-- Summary: La page /objets-deco se classe 10e sur « coussins artisanaux » et 3e sur « coussin créateur », mais les coussins ne figurent pas dans les services fournis. La question est de savoir si la gamme existe réellement.
-- Why now: La page travaille déjà des requêtes coussins avec un titre qui les revendique : il faut valider l'offre avant d'aller plus loin, ou réaligner la page.
-- Target: https://www.atelier-harmonie.com/objets-deco (Offre et gamme)
-- Action: Décider si les coussins sont réellement vendus. Si oui, les ajouter à la liste des offres et détailler la page /objets-deco (matières, formats, lien avec les tissus) ; si non, réorienter la page vers les objets déco et les tissus effectivement proposés.
-- Expected outcome: Une page /objets-deco alignée sur l'offre réelle, sans promesse de produit non vendu et sans perdre le classement déjà acquis sur « coussin créateur ».
-- Evidence: 4 reference(s)
+- Summary: La page /objets-deco (299 mots) se classe 3e sur « coussin créateur » mais seulement 54e sur « coussin fait main », et 10e sur « coussins artisanaux » (22 impressions). Le contenu coussins est trop mince pour défendre ces positions.
+- Why now: « coussins artisanaux » est la requête la plus exposée du lot et la page est déjà en haut de page 2 : quelques paragraphes peuvent suffire à passer en première page.
+- Target: https://www.atelier-harmonie.com/objets-deco (Section coussins)
+- Action: Développer la partie coussins : matières et garnissages réellement proposés, fait main en Normandie, entretien, dimensions, lien vers /les-tissus et /shop. Ajouter trois ou quatre questions fréquentes et des textes alternatifs descriptifs sur les photos. Confirmer avec l'atelier la gamme de coussins réellement disponible avant d'écrire.
+- Expected outcome: La page gagne des positions sur « coussin fait main » et sécurise « coussins artisanaux » en première page.
+- Evidence: 3 reference(s)
+- Critique: keep — Section coussins trop mince pour défendre les positions ; développer matières, entretien, FAQ et alt text est pertinent, sous réserve de valider la gamme.
+
+#### Transformer l'article fauteuil en guide pas à pas « retapisser soi-même »
+
+- Kind: update; effort: medium; confidence: low (Les données montrent 320 recherches pour une seule requête et zéro impression pour la page actuelle : la demande est réelle, mais la visibilité n'est pas prouvée, donc c'est un test.)
+- Priority: not quantified · no measured impressions; demand is market size, not reachable yet
+- Summary: L'article existant est un récit de réfection, pas un mode d'emploi. La mise à jour ajoute une réponse directe et des étapes concrètes pour la requête « comment retapisser un fauteuil soi même », avec renvoi vers l'offre de tapisserie et les ateliers.
+- Why now: La requête est mesurée à 320 recherches, mais la page actuelle n'obtient aucune impression et aucun clic : elle existe sans capter la demande.
+- Target: https://www.atelier-harmonie.com/post/r%C3%A9fection-d-un-fauteuil-bridge-en-tapisserie-traditionnelle (En tête d'article et section pas à pas « Comment retapisser un fauteuil soi-même »)
+- Action: Réécrire l'introduction pour répondre directement à la question, puis ajouter une section structurée en étapes : outils, dégarnissage, remplacement de la garniture, sanglage, pose du tissu, finitions. Conserver le récit de la réfection comme illustration et ajouter un lien vers la page tapisserie-restauration et les ateliers DIY. Ne pas créer de nouvelle page.
+- Expected outcome: La page commence à répondre à la requête mesurée et peut gagner des impressions ; elle devient aussi une ressource pratique claire pour les visiteurs intéressés par la tapisserie.
+- Evidence: 2 reference(s)
+- Critique: keep — L'article existant est narratif ; le transformer en guide pas à pas répond à l'intention « comment retapisser soi-même » sans créer de nouvelle page.
 
 ### AEO/GEO
 
@@ -163,59 +151,59 @@ No proposal in this lane.
 
 ### Technical
 
-#### Ajouter une balise canonical auto-référente sur les pages sans canonical
+#### Corriger les liens cassés dans le parcours produit
 
-- Kind: technical; effort: small; confidence: high (Le défaut est mesuré sur 17 pages et la correction est un ajout de balise standard.)
+- Kind: technical; effort: small; confidence: high (Le finding BROKEN_LINK confirme un lien cassé sur 8 pages ; le correctif exact dépend de la cible, mais le défaut est certain.)
 - Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: 17 pages, dont /livraison, n'ont pas de balise canonical. Cela expose le site à des variantes d'URL indexées et à une dilution des signaux.
-- Why now: Les pages sans canonical, notamment les pages institutionnelles comme la livraison, peuvent être indexées sous plusieurs URLs (paramètres, versions) et créer des doublons qui affaiblissent le classement.
-- Target: https://www.atelier-harmonie.com/livraison (Pages institutionnelles)
-- Action: Ajouter une balise <link rel="canonical"> auto-référente sur chaque page concernée, avec une URL absolue, en minuscules et sans paramètres de tracking. Auditer les pages avec paramètres pour pointer vers la version propre.
-- Expected outcome: Consolidation des signaux sur les URLs de référence et réduction des doublons d'indexation.
+- Summary: 8 pages, dont la page Baladeuse à franges L'Ondine, exposent un lien cassé. Identifier la cible, mettre à jour le lien ou ajouter une redirection 301.
+- Why now: Un lien cassé sur 8 pages gaspille le crawl et interrompt le parcours vers la conversion.
+- Target: https://www.atelier-harmonie.com/product-page/baladeuse-a-franges-l-ondine-version-verte (Maillage interne)
+- Action: Crawler la page et les 8 pages concernées, identifier l'URL cible en erreur ; corriger le href ou rediriger en 301 vers l'équivalent le plus proche ; contrôler les liens internes sortants.
+- Expected outcome: Plus de 404 dans le parcours ; crawl et autorité interne préservés.
 - Evidence: 1 reference(s)
+- Critique: keep — Liens cassés dans le parcours produit : correction ciblée ou 301 est nécessaire et bien rattachée à la page exemplaire.
 
-#### Corriger les liens cassés vers la page produit Baladeuse à franges L'Ondine
+#### Générer et soumettre un sitemap XML pour les pages indexables
 
-- Kind: technical; effort: small; confidence: high (Le défaut est localisé sur 8 pages avec une URL cible précise.)
+- Kind: technical; effort: medium; confidence: high (Le finding MISSING_SITEMAP est explicite et porte sur 50 pages du même site.)
 - Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: 8 pages contiennent un lien cassé vers /product-page/baladeuse-a-franges-l-ondine-version-verte. Cela interrompt la navigation et gaspille le budget de crawl.
-- Why now: Un lien cassé sur une fiche produit est une perte de trafic directe et un signal négatif pour les robots ; plus il reste, plus il affecte l'expérience et le crawl.
-- Target: https://www.atelier-harmonie.com/product-page/baladeuse-a-franges-l-ondine-version-verte (Fiche produit)
-- Action: Identifier les 8 pages sources, remplacer le lien cassé par l'URL valide du produit (ou une redirection 301 si l'URL a changé), et vérifier les autres liens internes vers ce produit.
-- Expected outcome: Navigation rétablie, suppression des erreurs 404 dans le crawl et conservation du maillage interne vers la fiche produit.
+- Summary: Le crawl remonte 50 pages sans sitemap. Mettre en place un sitemap XML à jour, référencé dans robots.txt et soumis dans Search Console, pour améliorer la découverte et le suivi des pages.
+- Why now: Sans sitemap, la découverte des pages dépend uniquement du maillage interne ; 50 pages sont déjà concernées.
+- Target: https://www.atelier-harmonie.com/sieges (Indexation)
+- Action: Auditer les URLs canoniques et indexables, générer un sitemap XML, le déclarer dans robots.txt et le soumettre dans Google Search Console et Bing Webmaster Tools ; vérifier l'absence d'URL noindex, redirigées ou paramétrées.
+- Expected outcome: Les pages indexables sont découvertes plus rapidement et leur couverture peut être suivie ; réduction du risque d'URL oubliées.
 - Evidence: 1 reference(s)
+- Critique: revise — Tâche sitewide utile, mais la cible /sieges est inadaptée : le sitemap doit viser le site, robots.txt et Search Console, pas une page produit.
 
-#### Dédoublonner les titres des pages catégories paginées en anglais
+#### Pass technique balises : titles uniques et canoniques
 
-- Kind: technical; effort: medium; confidence: high (Le défaut est identifié sur 45 pages et la correction est un paramétrage de template.)
+- Kind: technical; effort: medium; confidence: high (Le finding DUPLICATE_TITLE est explicite et couvre 45 pages.)
 - Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: 45 pages, dont /en/category/all-products?page=2, partagent le même title. Cela dilue les signaux et peut empêcher la bonne indexation des pages de pagination.
-- Why now: Les titles dupliqués sur les pages de catégories paginées créent de la concurrence interne et réduisent la pertinence des pages dans les résultats de recherche.
-- Target: https://www.atelier-harmonie.com/en/category/all-products?page=2 (Catégories paginées)
-- Action: Générer des titles uniques pour chaque page de pagination en intégrant le numéro de page (ex. « All products – Page 2 ») et/ou un attribut canonical approprié. Vérifier également la version française si la même pagination existe.
-- Expected outcome: Titles distincts, meilleure compréhension des pages par les moteurs et réduction de la cannibalisation entre pages de pagination.
-- Evidence: 1 reference(s)
-
-#### Corriger les meta descriptions dupliquées (59 pages, dont /sieges)
-
-- Kind: technical; effort: small; confidence: medium (Le défaut est mesuré sur 59 pages dont /sieges ; le gain de clics n'est pas chiffré, d'où une confiance moyenne malgré la certitude du défaut.)
-- Priority: foundation · technical defect; priority comes from severity and reach, not from clicks
-- Summary: Un même descriptif est partagé par 59 pages du site, dont /sieges, la page qui porte la plus forte demande du site. Les résultats de recherche ne peuvent pas distinguer ces pages entre elles, ce qui pèse sur le taux de clic d'un service déjà en progression. Une seule passe de correction suffit pour tout le lot.
-- Why now: La page /sieges est justement celle que la mise à jour de contenu doit faire remonter : corriger le descriptif en même temps évite de renvoyer du trafic vers un résultat banalisé.
-- Target: https://www.atelier-harmonie.com/sieges
-- Action: Réécrire d'abord la meta description de /sieges autour du service de restauration de sièges et fauteuils en Normandie, puis traiter les 58 autres pages concernées par le même descriptif. Une seule livraison pour l'ensemble du lot, avec vérification de l'unicité après correction.
-- Expected outcome: Descriptifs distincts sur les 59 pages, meilleure différenciation des résultats de recherche et taux de clic préservé sur la page sièges.
-- Evidence: 1 reference(s)
+- Summary: 45 pages partagent le même titre, dont /en/category/all-products?page=2. Différencier les titres par catégorie et par page, ou traiter les pages de pagination selon leur rôle.
+- Why now: 45 pages avec un titre identique peuvent se concurrencer dans les résultats et brouiller la sélection de l'URL pertinente.
+- Target: https://www.atelier-harmonie.com/en/category/all-products?page=2 (Balises SEO)
+- Action: Traiter en un seul passage les templates : générer des titles uniques par catégorie/pagination et ajouter les canoniques auto-référentes sur les pages indexables, en vérifiant hreflang et cohérence avec le sitemap.
+- Expected outcome: Titres distincts, meilleure compréhension des pages par les moteurs et réduction des doublons de résultats.
+- Evidence: 2 reference(s)
+- Critique: keep — Les titres dupliqués sur catégories/pagination sont un vrai problème technique ; audit du template et titles uniques sont la bonne approche.
 
 ## Drafting note
 
-Content and AEO: Les quatre clusters mesurés portent une demande réelle et bénéficient déjà d'une couverture forte : le travail proposé porte donc sur la visibilité, pas sur la création de pages. Luminaires artisanaux (portée internationale) : la page /lampes existe mais se classe au-delà de la 40e position, une ref Trois clusters sur quatre sont déjà visibles en page 1 ou 2 : le travail utile n'est donc pas de créer des pages (les chemins existent tous) mais d'étoffer des pages trop courtes et de corriger un défaut de gabarit. Je propose : (1) la page /lampes/abat-jours, qui ranke 3e sur « abat jour » avec seu Quatre clusters examinés. Suspensions et plafonniers : la page catégorie existe mais plafonne en positions 37 à 78 avec 178 impressions et aucun clic — deux travaux distincts proposés (renforcer la page, puis trancher la question du plafonnier). Cartes cadeaux : la page est déjà en page 2 sur ses tr
+Content and AEO: Les quatre clusters sont couverts et visibles : le travail porte sur l'enrichissement de pages existantes, pas sur des créations de pages. Sont proposés : le hub /lampes (vocabulaire « luminaire artisanal » et « fait main »), l'article abat-jour (vocabulaire réparation + blocs de réponse IA, en test Sur les quatre clusters, deux méritent un chantier. Les abat-jours artisanaux portent une demande pagode mesurée (390 de volume, 146 impressions) mais la page catégorie de 150 mots ne capte rien : refonte de hub, plus une décision d'offre sur le sur-mesure (590 de volume, aucune impression). La répa Trois chantiers retenus, tous sur des pages existantes : la page Ateliers, la page Tissus et la page Objets déco. Pour les ateliers, le vrai problème est que les requêtes se classent sur l'accueil, /sieges et /lampes/abat-jours, pas sur /les-ateliers. Pour les tissus, la page ne fait que 146 mots al Un seul cluster est fourni : « Retapisser un fauteuil soi-même ». Sa couverture est forte, mais sa visibilité est nulle : l'article existant raconte une réfection de fauteuil et ne répond pas étape par étape à la requête mesurée. Je propose donc une seule mise à jour de cette page, sans nouvel asset
 
-Technical: 4 défauts techniques prioritaires retenus sur 8 constats. Le sitemap manquant, l'absence de canonical, les liens cassés et les titles dupliqués affectent directement l'indexation, le crawl ou le maillage. Les autres constats (descriptions dupliquées ou manquantes, schéma manquant, H1 manquant) sont écartés : ils relèvent de l'optimisation éditoriale ou de l'enrichissement et ne bloquent ni l'index
+Technical: Quatre corrections techniques sont retenues, car elles touchent la découverte, la consolidation des signaux ou la navigation : sitemap absent (50 pages), titres dupliqués (45 pages), canoniques manquantes (17 pages) et liens cassés (8 pages). Je ne propose pas les descriptions dupliquées ou manquantes, le schéma absent ni le H1 manquant : les preuves fournies les situent en optimisation d'extrait,
 
 ## Critique
 
-Critique unavailable: unknown error. The proposals are shown as generated.
+Model: deepseek/deepseek-v4.1-flash-1017.
+
+La majorité des propositions sont pertinentes. À revoir : le hub abat-jours (sur-mesure non confirmé) et le sitemap (cible /sieges inadaptée). Regrouper l'article abat-jour avec ses blocs AEO, le hub abat-jours avec la décision sur-mesure, et les corrections de titres/canoniques.
+
+Merged or not stored:
+
+- Blocs de réponse sur l'article abat-jour pour les questions posées aux IA — merged into “Article abat-jour : mise à jour éditoriale et blocs de réponse”
+- Décider si l'atelier propose l'abat-jour sur mesure — merged into “Hub abat-jours et décision sur-mesure”
+- Ajouter des canoniques auto-référentes sur les pages sans canonical — merged into “Pass technique balises : titles uniques et canoniques”
 
 ## Limits
 
