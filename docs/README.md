@@ -25,6 +25,7 @@ requirements.
 ## Reviews
 
 - [Analyst review — 2026-11](analyst-review-2026-11.md)
+- [SEO review — 2026-11 one-pass run](seo-review-2026-11-one-pass.md)
 
 ## Active contracts
 
