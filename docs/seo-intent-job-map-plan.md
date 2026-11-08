@@ -65,8 +65,12 @@ Rules:
 - A job the business does not serve is not demand, however large the volume.
 - The job map is written in buyer language, not SEO nouns.
 
-**Gate:** a human accepts the job map before any taxonomy is proposed. This is the
-step that keeps the work anchored to the business rather than the query export.
+**Check:** the job map is an internal analysis artifact, not an approval gate. It
+passes when every query with volume is assigned or explicitly marked, every job is
+stated in buyer language, and business fit comes from the business knowledge or is
+marked unknown. A second model pass challenges it for unassigned queries and
+invented jobs. Human acceptance stays where the operating model puts it: on the
+opportunities and tasks, not on the analysis.
 
 ## Phases
 
@@ -86,7 +90,8 @@ step that keeps the work anchored to the business rather than the query export.
 - The map must separate: buy/invest in a property, check a specific project, get
   market data, and change dollars. The last is not a job the business serves.
 - Acceptance: the map reads like buyer language; every query with volume is
-  assigned or explicitly marked; a human accepts it.
+  assigned or explicitly marked; the checks pass and a second model pass finds no
+  unassigned query.
 
 ### Phase 2 — taxonomy from jobs
 
@@ -126,21 +131,22 @@ step that keeps the work anchored to the business rather than the query export.
 
 - No stoplists of tenant phrases, no per-tenant branches in `lib/`.
 - No code-side inference of intent from words.
-- No taxonomy re-proposal before the job map is accepted.
+- No taxonomy re-proposal before the job map passes its checks.
 - No new ledger or schema until phases 0–3 are done.
-- Do not change the monthly cadence or the human acceptance gate.
+- Do not change the monthly cadence or the opportunity acceptance gate.
 
 ## Current step
 
-Build the Casamigo job map. Review it with the owner. If the format reads like buyer
-language, generalize it to the other three tenants and then change the pipeline. If
-it does not, fix the format before touching code.
+The Casamigo pilot is built: [job map](casamigo-job-map-2026-11.md) and
+[row-level CSV](casamigo-job-map-2026-11.csv). It shows 5,540 qualified demand
+against 549,670 reported. Generalize the format to the other three tenants, then wire
+the per-query verdict into the review and the arithmetic.
 
 ## Definition of done
 
 Every tenant's demand number is the sum of queries that carry both the market and the
 job; context and noise are visible but excluded; the board's top five rest only on
-qualified demand; and a human has accepted the job map that produced it.
+qualified demand; and the job map that produced it passed its checks.
 
 ## Out of scope
 

@@ -1,0 +1,275 @@
+query,impressions,volume,cluster,bucket,job
+casas,0,550000,,context_category,Category word without a market or a job
+las casas de los famosos,0,450000,,noise_other_meaning,Different job or different meaning
+inmuebles24,0,246000,,noise_other_meaning,Different job or different meaning
+casas de cambio cerca de mi,0,110000,tulum-real-estate-market-and-condo-projects,noise_other_meaning,Different job or different meaning
+casas de cambio cerca de mí,0,110000,tulum-real-estate-market-and-condo-projects,noise_other_meaning,Different job or different meaning
+casas de cambios cerca de mi,0,110000,tulum-real-estate-market-and-condo-projects,noise_other_meaning,Different job or different meaning
+casas de empeño cerca de mi,0,110000,tulum-real-estate-market-and-condo-projects,noise_other_meaning,Different job or different meaning
+casas de empeños cerca de mi,0,110000,tulum-real-estate-market-and-condo-projects,noise_other_meaning,Different job or different meaning
+casas de los famosos,0,110000,,noise_other_meaning,Different job or different meaning
+departamentos,0,110000,,context_category,Category word without a market or a job
+casas de empeño,0,90500,,noise_other_meaning,Different job or different meaning
+casas de empeños,0,90500,,noise_other_meaning,Different job or different meaning
+casas de jengibre,0,90500,,noise_other_meaning,Different job or different meaning
+casas cerca de mi,0,74000,tulum-real-estate-market-and-condo-projects,context_local_unplaced,Local intent without a place; could be anywhere
+casas de cambio,0,74000,,noise_other_meaning,Different job or different meaning
+san cristóbal de las casas,0,60500,,out_of_market,Another city or country
+casas de empeño fundacion donde,0,49500,,noise_other_meaning,Different job or different meaning
+cdmx departamentos en renta,0,40500,,out_of_market,Another city or country
+cdmx renta departamentos,0,40500,,out_of_market,Another city or country
+departamentos cdmx renta,0,40500,,out_of_market,Another city or country
+departamentos en cdmx en renta,0,40500,,out_of_market,Another city or country
+departamentos en cdmx renta,0,40500,,out_of_market,Another city or country
+departamentos en renta cdmx,0,40500,,out_of_market,Another city or country
+departamentos en renta en cdmx,0,40500,,out_of_market,Another city or country
+departamentos en renta en la cdmx,0,40500,,out_of_market,Another city or country
+fachada de casas,0,40500,,noise_other_meaning,Different job or different meaning
+fachada de las casas,0,40500,,noise_other_meaning,Different job or different meaning
+fachadas de casas,0,40500,,noise_other_meaning,Different job or different meaning
+mario casas,0,40500,,noise_other_meaning,Different job or different meaning
+mario casas sierra,0,40500,,noise_other_meaning,Different job or different meaning
+departamentos en renta,0,33100,,context_category,Category word without a market or a job
+departamentos en renta en,0,33100,,context_category,Category word without a market or a job
+departamentos renta,0,33100,,context_category,Category word without a market or a job
+departamentos rentas,0,33100,,context_category,Category word without a market or a job
+inmobiliaria,0,27100,,context_category,Category word without a market or a job
+la propiedades de la materia,0,27100,,noise_other_meaning,Different job or different meaning
+propiedades de la materia,0,27100,,noise_other_meaning,Different job or different meaning
+propiedades de materia,0,27100,,noise_other_meaning,Different job or different meaning
+condominios,0,22200,,context_category,Category word without a market or a job
+propiedades,0,22200,,context_category,Category word without a market or a job
+renta de departamentos cdmx,0,22200,,out_of_market,Another city or country
+renta de departamentos en cdmx,0,22200,,out_of_market,Another city or country
+rentas de departamentos cdmx,0,22200,,out_of_market,Another city or country
+rentas de departamentos en cdmx,0,22200,,out_of_market,Another city or country
+departamentos cerca de mi,0,18100,tulum-real-estate-market-and-condo-projects,context_local_unplaced,Local intent without a place; could be anywhere
+bienes raíces,0,14800,,context_category,Category word without a market or a job
+bienes y raíces,0,14800,,context_category,No market and no job
+departamentos en venta cdmx,0,14800,,out_of_market,Another city or country
+propiedades com,0,9900,,context_category,Category word without a market or a job
+propiedades intensivas,0,9900,,noise_other_meaning,Different job or different meaning
+puerta las lomas condominios,0,9900,,out_of_market,Another city or country
+rentas departamentos cdmx,0,9900,,out_of_market,Another city or country
+condominios acero,0,8100,,out_of_market,Another city or country
+condominios constitución,0,8100,,out_of_market,Another city or country
+departamentos en venta,0,8100,,context_category,Category word without a market or a job
+departamentos en venta en,0,8100,,context_category,Category word without a market or a job
+en venta departamentos,0,8100,,context_category,Category word without a market or a job
+inmobiliaria urbaniza,0,8100,,noise_portal_competitor,"Portal, competitor or agency brand"
+propiedades extensivas,0,8100,,noise_other_meaning,Different job or different meaning
+propiedades físicas,0,8100,,noise_other_meaning,Different job or different meaning
+condominios cerca de mi,0,6600,riviera-maya-property-listings,context_local_unplaced,Local intent without a place; could be anywhere
+inmobiliaria cerca de mi,0,6600,riviera-maya-real-estate-advisory-and-lead-generation,context_local_unplaced,Local intent without a place; could be anywhere
+inmobiliaria cerca de mí,0,6600,riviera-maya-real-estate-advisory-and-lead-generation,context_local_unplaced,Local intent without a place; could be anywhere
+propiedades de los logaritmos,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades fisicas,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades intelectuales,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades privada,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades privadas,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades quimicas,0,6600,,noise_other_meaning,Different job or different meaning
+propiedades de los exponentes,0,5400,,noise_other_meaning,Different job or different meaning
+propiedades distributiva,0,5400,,noise_other_meaning,Different job or different meaning
+propiedades fisicas de la materia,0,5400,,noise_other_meaning,Different job or different meaning
+propiedades físicas de la materia,0,5400,,noise_other_meaning,Different job or different meaning
+propiedades periodicas,0,5400,,noise_other_meaning,Different job or different meaning
+propiedades químicas,0,5400,,noise_other_meaning,Different job or different meaning
+condominios acacias,0,4400,,out_of_market,Another city or country
+inmobiliaria cdmx,0,4400,,out_of_market,Another city or country
+inmobiliaria en cdmx,0,4400,,out_of_market,Another city or country
+inmobiliarias en cdmx,0,4400,,out_of_market,Another city or country
+next bienes raíces,0,4400,,noise_portal_competitor,"Portal, competitor or agency brand"
+condominios que es,0,3600,,context_info,"Informational or dictionary intent, not this market"
+condominios retama,0,3600,,out_of_market,Another city or country
+departamentos en cdmx venta,0,3600,,out_of_market,Another city or country
+departamentos en venta en cdmx,0,3600,,out_of_market,Another city or country
+departamentos en venta en guadalajara,0,3600,,out_of_market,Another city or country
+departamentos en venta en la cdmx,0,3600,,out_of_market,Another city or country
+departamentos en venta guadalajara,0,3600,,out_of_market,Another city or country
+departamentos venta en guadalajara,0,3600,,out_of_market,Another city or country
+guadalajara departamentos en venta,0,3600,,out_of_market,Another city or country
+venta de departamentos en la cdmx,0,3600,,out_of_market,Another city or country
+condominios magnolias,0,2900,,out_of_market,Another city or country
+residencial rubi condominios,0,2900,,out_of_market,Another city or country
+residencial rubí condominios,0,2900,,out_of_market,Another city or country
+bienes raíces loewen,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+cadu inmobiliaria,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+condominios san rafael,0,2400,,out_of_market,Another city or country
+condominios torres vida,0,2400,,out_of_market,Another city or country
+departamentos en monterrey en venta,0,2400,,out_of_market,Another city or country
+departamentos en monterrey venta,0,2400,,out_of_market,Another city or country
+departamentos en venta en monterrey,0,2400,,out_of_market,Another city or country
+departamentos en venta monterrey,0,2400,,out_of_market,Another city or country
+iad inmobiliaria,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+inmobiliaria century 21 mexico df,0,2400,,out_of_market,Another city or country
+inmobiliaria la redonda,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+inmobiliaria redondo,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+marina cerritos condominios,0,2400,,out_of_market,Another city or country
+redonda inmobiliaria,0,2400,,noise_portal_competitor,"Portal, competitor or agency brand"
+venta departamentos en monterrey,0,2400,,out_of_market,Another city or country
+condominios ayres,0,1900,,out_of_market,Another city or country
+condominios la finca,0,1900,,out_of_market,Another city or country
+condominios río dorado,0,1900,,out_of_market,Another city or country
+condominios san juan,0,1900,,out_of_market,Another city or country
+departamentos en venta en querétaro,0,1900,,out_of_market,Another city or country
+departamentos en venta queretaro,0,1900,,out_of_market,Another city or country
+departamentos venta en queretaro,0,1900,,out_of_market,Another city or country
+drym inmobiliaria,0,1900,,noise_portal_competitor,"Portal, competitor or agency brand"
+guadalajara inmobiliaria,0,1900,,out_of_market,Another city or country
+inmobiliaria drym,0,1900,,noise_portal_competitor,"Portal, competitor or agency brand"
+inmobiliaria en guadalajara,0,1900,,out_of_market,Another city or country
+inmobiliaria espacio,0,1900,,noise_portal_competitor,"Portal, competitor or agency brand"
+inmobiliaria espacios,0,1900,,noise_portal_competitor,"Portal, competitor or agency brand"
+inmobiliaria guadalajara,0,1900,,out_of_market,Another city or country
+inmobiliaria redonda,0,1900,,context_category,Category word without a market or a job
+inmobiliarias en guadalajara,0,1900,,out_of_market,Another city or country
+condominios bugambilias,0,1600,,out_of_market,Another city or country
+condominios marbella,0,1600,,out_of_market,Another city or country
+departamentos renta cdmx,0,1600,,out_of_market,Another city or country
+torre 25,1,1600,,served_project,Evaluate a named Riviera Maya project
+bienes raíces que son,0,1000,,context_info,"Informational or dictionary intent, not this market"
+departamentos en venta azcapotzalco,0,1000,,out_of_market,Another city or country
+inmobiliaria alfa,0,1000,,noise_portal_competitor,"Portal, competitor or agency brand"
+lista de inmobiliarias fraudulentas,0,1000,,noise_portal_competitor,"Portal, competitor or agency brand"
+lomelin bienes raíces,0,1000,,noise_portal_competitor,"Portal, competitor or agency brand"
+lomelín bienes raíces,0,1000,,noise_portal_competitor,"Portal, competitor or agency brand"
+que es bienes raíces,0,1000,,context_info,"Informational or dictionary intent, not this market"
+que son bienes raíces,0,1000,,context_info,"Informational or dictionary intent, not this market"
+qué es bienes raíces,0,1000,,context_info,"Informational or dictionary intent, not this market"
+qué es bienes y raíces,0,1000,,context_info,"Informational or dictionary intent, not this market"
+qué son bienes raíces,0,1000,,context_info,"Informational or dictionary intent, not this market"
+samsara tulum,1,1000,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+tao tulum,1,1000,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+cataño bienes raíces,0,880,,context_category,Category word without a market or a job
+geo bienes raíces,0,880,,noise_portal_competitor,"Portal, competitor or agency brand"
+kiva inversión inmobiliaria integral guadalajara,0,880,,context_info,"Informational or dictionary intent, not this market"
+siglo xxi bienes raíces,0,880,,noise_portal_competitor,"Portal, competitor or agency brand"
+bienes raíces cerca de mí,0,720,riviera-maya-real-estate-advisory-and-lead-generation,context_local_unplaced,Local intent without a place; could be anywhere
+bienes raíces en ingles,0,720,,context_info,"Informational or dictionary intent, not this market"
+bienes raíces en inglés,0,720,,context_info,"Informational or dictionary intent, not this market"
+invertir en bienes raíces,0,720,,context_info,"Informational or dictionary intent, not this market"
+ley de condominios,0,720,,context_info,"Informational or dictionary intent, not this market"
+terrenos en cancun amistad bienes raíces,0,720,riviera-maya-real-estate-advisory-and-lead-generation,served_property_buy,Buy/invest in a property
+venta de departamentos en cdmx baratos,0,720,,out_of_market,Another city or country
+inmobiliarias confiables,0,590,,noise_portal_competitor,"Portal, competitor or agency brand"
+propiedades en venta,0,590,,context_category,Category word without a market or a job
+bienes raíces cdmx,0,480,,out_of_market,Another city or country
+inversión en inmobiliaria,0,480,,context_category,Category word without a market or a job
+inversión inmobiliaria,0,480,,context_info,"Informational or dictionary intent, not this market"
+bienes raíces monterrey,0,390,,out_of_market,Another city or country
+crowdfunding inmobiliario,0,390,,context_info,"Informational or dictionary intent, not this market"
+bienes raíces trabajo,0,320,,noise_portal_competitor,"Portal, competitor or agency brand"
+elementos cozumel,1,320,riviera-maya-property-listings,served_project,Evaluate a named Riviera Maya project
+inmobiliarias en méxico,0,320,,noise_portal_competitor,"Portal, competitor or agency brand"
+bienes raíces carrera,0,260,,noise_portal_competitor,"Portal, competitor or agency brand"
+bienes raíces hermosillo,0,260,,out_of_market,Another city or country
+mejores inmobiliarias profeco,0,260,,out_of_market,Another city or country
+propiedades com cdmx,0,260,,out_of_market,Another city or country
+venta de casas economicas en cdmx no remates,0,260,,out_of_market,Another city or country
+departamentos en venta cdmx nuevos,0,210,,out_of_market,Another city or country
+inmobiliarias cdmx confiables,0,210,,out_of_market,Another city or country
+mayan riviera real estate,7,210,,gap_english,"Buy/invest, English, no page"
+propiedades 24,0,210,,context_category,Category word without a market or a job
+tao tulum mexico,1,210,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+departamentos en méxico,0,170,,context_category,Category word without a market or a job
+musa del puerto,1,170,,served_project,Evaluate a named Riviera Maya project
+propiedades en inglés,0,170,,context_category,Category word without a market or a job
+propiedades en venta cdmx,0,170,,out_of_market,Another city or country
+casas en venta baratas y bonitas,0,140,,context_category,Category word without a market or a job
+bienes raíces inmobiliaria,0,110,,context_category,Category word without a market or a job
+casas en venta estado de méxico baratas,0,110,,out_of_market,Another city or country
+invertir en bienes raíces desde $100 pesos,0,110,,context_info,"Informational or dictionary intent, not this market"
+promociones casas ara,0,110,,context_category,Category word without a market or a job
+propiedades en venta y renta,0,110,,context_category,Category word without a market or a job
+casas en venta en méxico baratas,0,90,,context_category,Category word without a market or a job
+condominios de lujo,0,70,,context_category,Category word without a market or a job
+departamentos en venta tláhuac,0,70,,out_of_market,Another city or country
+distrito cozumel,3,70,riviera-maya-property-listings,served_project,Evaluate a named Riviera Maya project
+los amigos tulum,1,70,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+propiedades com precios,0,70,,context_category,Category word without a market or a job
+propiedades en venta cerca de mi,0,70,riviera-maya-property-listings,context_local_unplaced,Local intent without a place; could be anywhere
+propiedades en venta en guadalajara,0,70,,out_of_market,Another city or country
+propiedades en venta en monterrey,0,70,,out_of_market,Another city or country
+propiedades en venta en tijuana,0,70,,out_of_market,Another city or country
+propiedades en venta guadalajara,0,70,,out_of_market,Another city or country
+propiedades en venta monterrey,0,70,,out_of_market,Another city or country
+propiedades en venta tijuana,0,70,,out_of_market,Another city or country
+tipos de condominios,0,70,,context_info,"Informational or dictionary intent, not this market"
+am corporativo inversión inmobiliaria,0,50,,context_info,"Informational or dictionary intent, not this market"
+condominio significado jurídico,0,50,,context_info,"Informational or dictionary intent, not this market"
+propiedades com app,0,50,,context_category,Category word without a market or a job
+propiedades en venta en queretaro,0,50,,out_of_market,Another city or country
+propiedades en venta queretaro,0,50,,out_of_market,Another city or country
+condóminos o condominios,0,40,,context_info,"Informational or dictionary intent, not this market"
+fondo de inversión inmobiliaria,0,40,,context_info,"Informational or dictionary intent, not this market"
+fondos de inversión inmobiliaria,0,40,,context_info,"Informational or dictionary intent, not this market"
+inmobiliarias y corredores de bienes raíces sat,0,40,,noise_portal_competitor,"Portal, competitor or agency brand"
+playa del carmen propiedades en venta,0,40,riviera-maya-property-listings,served_property_buy,Buy/invest in a property
+propiedades en venta aguascalientes,0,40,,out_of_market,Another city or country
+propiedades en venta en aguascalientes,0,40,,out_of_market,Another city or country
+propiedades en venta en playa del carmen,0,40,riviera-maya-property-listings,served_property_buy,Buy/invest in a property
+propiedades en venta playa del carmen,0,40,riviera-maya-property-listings,served_property_buy,Buy/invest in a property
+propiedades en venta puebla,0,40,,out_of_market,Another city or country
+venta de propiedades en méxico,0,40,,context_category,Category word without a market or a job
+casas en venta méxico,0,30,,context_category,Category word without a market or a job
+departamentos de lujo planos,0,30,,context_info,"Informational or dictionary intent, not this market"
+departamentos en méxico renta,0,30,,context_category,Category word without a market or a job
+green savage playa del carmen,1,30,playa-del-carmen-real-estate-market-and-condo-listings,noise_other_meaning,Different job or different meaning
+propiedades casa,0,30,,context_category,Category word without a market or a job
+propiedades en venta san miguel de allende,0,30,,out_of_market,Another city or country
+que es inversión inmobiliaria,0,30,,context_info,"Informational or dictionary intent, not this market"
+que es una inversión inmobiliaria,0,30,,context_info,"Informational or dictionary intent, not this market"
+bienes raíces méxico,0,20,,noise_portal_competitor,"Portal, competitor or agency brand"
+como invertir en bienes raíces en méxico con poco dinero,0,20,,context_info,"Informational or dictionary intent, not this market"
+condominio ejemplos,0,20,,context_info,"Informational or dictionary intent, not this market"
+contrato de inversión inmobiliaria,0,20,,context_info,"Informational or dictionary intent, not this market"
+departamento de lujo en venta,0,20,,context_category,No market and no job
+estratemex,1,20,,noise_other_meaning,Different job or different meaning
+fondos de inversión inmobiliaria en méxico,0,20,,context_info,"Informational or dictionary intent, not this market"
+opiniones de kiva inversión inmobiliaria integral guadalajara,0,20,,context_info,"Informational or dictionary intent, not this market"
+propiedades com opiniones,0,20,,context_category,Category word without a market or a job
+abreviatura de condominio rae,0,10,,context_info,"Informational or dictionary intent, not this market"
+condominios de lujo en cancun,0,10,riviera-maya-property-listings,served_property_buy,Buy/invest in a property
+condominios de lujo en guadalajara,0,10,,out_of_market,Another city or country
+condominios de lujo en miami,0,10,,out_of_market,Another city or country
+condominios de lujo en puebla,0,10,,out_of_market,Another city or country
+condominios de lujo en puerto vallarta,0,10,,out_of_market,Another city or country
+condominios de lujo en renta tijuana,0,10,,out_of_market,Another city or country
+condominios de lujo en tijuana,0,10,,out_of_market,Another city or country
+condominios de lujo playa del carmen,0,10,riviera-maya-property-listings,served_property_buy,Buy/invest in a property
+curso inversión inmobiliaria,0,10,,context_info,"Informational or dictionary intent, not this market"
+departamentos de lujo cdmx renta,0,10,,out_of_market,Another city or country
+departamentos en méxico baratos,0,10,,context_category,Category word without a market or a job
+departamentos en venta estado de méxico,0,10,,out_of_market,Another city or country
+donde buscar propiedades en venta,0,10,,context_info,"Informational or dictionary intent, not this market"
+fideicomisos de inversión inmobiliaria,0,10,,context_info,"Informational or dictionary intent, not this market"
+inversiones inmobiliarias contabilidad,0,10,,context_info,"Informational or dictionary intent, not this market"
+inversiones inmobiliarias ejemplos,0,10,,context_info,"Informational or dictionary intent, not this market"
+inversión inmobiliaria argentina,0,10,,context_info,"Informational or dictionary intent, not this market"
+inversión inmobiliaria chile,0,10,,context_info,"Informational or dictionary intent, not this market"
+inversión inmobiliaria pdf,0,10,,context_info,"Informational or dictionary intent, not this market"
+kiva inversión inmobiliaria integral guadalajara fotos,0,10,,context_info,"Informational or dictionary intent, not this market"
+oportunidades inversión inmobiliaria,0,10,,context_info,"Informational or dictionary intent, not this market"
+plataformas de inversión inmobiliaria,0,10,,context_info,"Informational or dictionary intent, not this market"
+playa del carmen real estate market,1,10,riviera-maya-property-listings,served_market_intel,Understand the market
+propiedades en venta en el estado de mexico,0,10,,out_of_market,Another city or country
+que es condominio en alquiler,0,10,,context_info,"Informational or dictionary intent, not this market"
+qué es una inversión inmobiliaria,0,10,,context_info,"Informational or dictionary intent, not this market"
+tao condos tulum mexico,1,10,riviera-maya-property-listings,served_project,Evaluate a named Riviera Maya project
+tulum real estate market,4,10,riviera-maya-property-listings,served_market_intel,Understand the market
+casa migo,3,,casamigo,served_brand,Casamigo brand
+casamigo homes,1,,casamigo,served_brand,Casamigo brand
+casamigo residence,1,,casamigo,served_brand,Casamigo brand
+condominios de lujo costa rica,0,0,,context_category,Category word without a market or a job
+condominios de lujo en costa rica,0,0,,context_category,Category word without a market or a job
+condominios de lujo en guatemala,0,0,,context_category,Category word without a market or a job
+ikuku for sale,1,,,served_project,Evaluate a named Riviera Maya project
+inversión bienes raíces méxico,0,,,noise_portal_competitor,"Portal, competitor or agency brand"
+low density development riviera maya comercial - mofu,1,,riviera-maya-ai-real-estate-market-intelligence,context_info,"Commercial development query, not a buyer job"
+presale condo puerto morelos 2026,1,,puerto-morelos-presale-condos-and-market-intelligence,served_property_buy,Buy/invest in a property
+propiedades com méxico,0,,,context_category,Category word without a market or a job
+puerto morelos population,1,,riviera-maya-ai-real-estate-market-intelligence,context_info,"Demographic information, not a buyer job"
+punta playa condos,2,,,served_project,Evaluate a named Riviera Maya project
+tao condo tulum,1,,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+tao lofts tulum,1,,tulum-real-estate-market-and-condo-projects,served_project,Evaluate a named Riviera Maya project
+xaman ha condo,1,,,served_project,Evaluate a named Riviera Maya project
