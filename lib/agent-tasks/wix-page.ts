@@ -275,7 +275,6 @@ export async function runWixPageTask(taskId: string) {
     const output = await runAgent([
       "opencode",
       "run",
-      "--dir", directory,
       "--agent", "build",
       "--model", process.env.OPENCODE_AGENT_MODEL?.trim() || "openrouter/deepseek/deepseek-v4.1-flash-1017",
       "--format", "json",

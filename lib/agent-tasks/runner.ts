@@ -307,7 +307,6 @@ export async function runAgentTask(taskId: string) {
     await new Promise<void>((resolve, reject) => {
       const args = [
         "run",
-        "--dir", worktreePath,
         "--agent", "build",
         "--model", process.env.OPENCODE_AGENT_MODEL?.trim() || "openrouter/deepseek/deepseek-v4.1-flash-1017",
         "--format", "json",
