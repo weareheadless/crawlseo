@@ -7,6 +7,7 @@ import { ApiKeysSection } from "@/components/settings/api-keys-section";
 import { getResearchConfig } from "@/lib/research/policy";
 import { OperationsConfigForm } from "@/components/settings/operations-config-form";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
+import { DeliveryConfigForm } from "@/components/settings/delivery-config-form";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -37,7 +38,7 @@ export default async function SettingsPage({ params }: Props) {
       },
     },
   });
-  if (!site) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   // Check API key status
   const [apiKeys, platformGrant, operations, deliveryConfig] = await Promise.all([
@@ -118,15 +119,17 @@ export default async function SettingsPage({ params }: Props) {
 
         {/* External API Keys */}
         <OperationsConfigForm siteId={siteId} initial={{ cadence: operations.cadence, enabled: operations.enabled, monthlyBudget: operations.monthlyBudget, autoDraft: operations.autoDraft, autoAgent: operations.autoAgent, revision: operations.policy?.revision ?? 0 }} />
-        <section className="panel p-5">
-          <h2 className="font-heading text-lg font-semibold">Delivery connection</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Recorded configuration only; this page does not contact the delivery bridge.</p>
-          {deliveryConfig ? <dl className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
-            <div><dt className="text-muted-foreground">Status</dt><dd>{deliveryConfig.enabled ? "Enabled" : "Disabled"}</dd></div>
-            <div><dt className="text-muted-foreground">Configured adapters</dt><dd>{Array.isArray(deliveryConfig.adapters) ? deliveryConfig.adapters.filter((adapter): adapter is string => typeof adapter === "string").join(", ") || "None" : "None"}</dd></div>
-            <div><dt className="text-muted-foreground">Bridge alias</dt><dd>{deliveryConfig.bridgeAlias || "Not configured"}</dd></div>
-          </dl> : <p className="mt-3 text-sm text-muted-foreground">No delivery connection is recorded.</p>}
-        </section>
+        <DeliveryConfigForm
+          siteId={siteId}
+          initial={{
+            bridgeAlias: deliveryConfig?.bridgeAlias ?? "",
+            adapters: Array.isArray(deliveryConfig?.adapters)
+              ? deliveryConfig.adapters.filter((adapter): adapter is "wix_embed" | "wix_blog" | "manual" =>
+                  adapter === "wix_embed" || adapter === "wix_blog" || adapter === "manual")
+              : ["wix_embed", "wix_blog"],
+            enabled: deliveryConfig?.enabled ?? true,
+          }}
+        />
         <ApiKeysSection initialStatus={apiKeyStatus} />
 
         {/* Data summary */}
