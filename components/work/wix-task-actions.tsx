@@ -12,12 +12,14 @@ export function WixTaskActions({
   kind,
   route,
   publishedUrl,
+  hasPage = false,
 }: {
   taskId: string;
   status: string;
   kind: string;
   route: string | null;
   publishedUrl: string | null;
+  hasPage?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,6 +103,44 @@ export function WixTaskActions({
   }
 
   if (status === "FAILED") {
+    if (!hasPage) {
+      return (
+        <div className="space-y-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              setBusy("retry");
+              setError(null);
+              try {
+                const reset = await fetch(`/crawlseo/api/agent-tasks/${taskId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: "READY" }),
+                });
+                const resetBody = await reset.json().catch(() => ({}));
+                if (!reset.ok) throw new Error(resetBody.error ?? "Could not reset the task");
+                const run = await fetch(`/crawlseo/api/agent-tasks/${taskId}/run`, { method: "POST" });
+                const runBody = await run.json().catch(() => ({}));
+                if (!run.ok) throw new Error(runBody.error ?? "Could not start the agent");
+                router.refresh();
+              } catch (caught) {
+                setError(caught instanceof Error ? caught.message : "Could not start the agent");
+              } finally {
+                setBusy(null);
+              }
+            }}
+            disabled={busy !== null}
+          >
+            {spinner("retry") ?? <Play className="size-3" />}
+            Run agent again
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            The run produced no page, so there is nothing to review yet. Start it again.
+          </p>
+          {error && <p className="text-[11px] text-danger">{error}</p>}
+        </div>
+      );
+    }
     return (
       <div className="space-y-2">
         <Button

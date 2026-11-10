@@ -95,6 +95,7 @@ export default async function AgentTaskPage({ params }: Props) {
             kind={task.kind}
             route={route}
             publishedUrl={task.publishedUrl}
+            hasPage={Boolean(html)}
           />
         </div>
         {task.status === "AWAITING_TARGET" && (
