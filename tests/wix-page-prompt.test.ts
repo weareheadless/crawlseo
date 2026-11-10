@@ -29,12 +29,25 @@ describe("Wix page prompt", () => {
     expect(prompt).toContain("PAGE ROUTE: /condos");
     expect(prompt).toContain("LANGUAGE: fr");
     expect(prompt).toContain("Un paragraphe.");
-    expect(prompt).toContain("Write exactly one file, page.html");
+    expect(prompt).toContain("Write page.html in the current directory, plus design-notes.md");
   });
 
   it("says the route is assigned before delivery when none exists", () => {
     const prompt = buildWixPagePrompt({ ...input, route: "(assigned before delivery)" });
     expect(prompt).toContain("PAGE ROUTE: (assigned before delivery)");
+  });
+
+  it("carries the stored design reference and asks for the notes it used", () => {
+    const prompt = buildWixPagePrompt({
+      ...input,
+      design: { repoPath: "/srv/repo", palette: ["#87475b"], fonts: ["Libre Caslon Text"], notes: "Thin rules, no cards." },
+      liveUrl: "https://example.com",
+    });
+    expect(prompt).toContain("/srv/repo");
+    expect(prompt).toContain("#87475b");
+    expect(prompt).toContain("Libre Caslon Text");
+    expect(prompt).toContain("Thin rules, no cards.");
+    expect(prompt).toContain("design-notes.md");
   });
 });
 

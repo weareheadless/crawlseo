@@ -90,7 +90,7 @@ export function buildWixPagePrompt(input: {
     designLines,
     "",
     "DELIVERABLE",
-    "Write exactly one file, page.html, in the current directory. Do not create or modify any other file.",
+    "Write page.html in the current directory, plus design-notes.md. Do not create or modify any other file.",
     "",
     "The file is a fragment, not a document. Its single root element must be:",
     `<section ${marker}${routeAttribute}>`,
@@ -107,7 +107,7 @@ export function buildWixPagePrompt(input: {
     "",
     "Also write design-notes.md in the current directory: a short list of the palette, fonts, spacing and component patterns you used, and the file or page where you found each. Do not invent tokens.",
     "",
-    "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce the HTML only.",
+    "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce page.html and design-notes.md only.",
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",
   ].filter(Boolean).join("\n");
 }
