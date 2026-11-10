@@ -5,6 +5,8 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { canTransitionAgentTask } from "@/lib/agent-tasks/transitions";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { preflightTechnicalTarget, type TargetPreflight } from "@/lib/delivery/preflight";
+import { createWixPageTaskForAction } from "@/lib/agent-tasks/wix-page";
+import { createWixArticleTaskForAction } from "@/lib/agent-tasks/wix-article";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -15,7 +17,16 @@ function record(value: unknown): Record<string, unknown> {
 export async function createAgentTaskForAction(
   actionId: string,
   operatorInstructions?: string,
-  options: { preflight?: TargetPreflight } = {},
+  options: {
+    preflight?: TargetPreflight;
+    /**
+     * Which delivery lane the work belongs to. Content work defaults to the
+     * page lane; an article proposal goes to Wix Blog. Technical fixes keep
+     * the repository lane because they change site code, not page content.
+     */
+    lane?: "page" | "article" | "component";
+    route?: string | null;
+  } = {},
 ) {
   const action = await db.researchAction.findUnique({
     where: { id: actionId },
@@ -32,6 +43,28 @@ export async function createAgentTaskForAction(
   if (action.status !== "APPROVED" && action.status !== "DRAFT_READY" && !["ELIGIBLE", "QUEUED"].includes(action.preparationStatus)) {
     throw new ResearchServiceError("The action is not eligible for preparation", 409);
   }
+
+  // A new page has no target yet, so it takes the page lane. An action that
+  // already names a page is an update to that page and keeps the component
+  // lane, which edits the page's own source instead of replacing it.
+  const lane = options.lane ?? (
+    action.format === "article" || action.kind === "article" || isWixBlogTarget(action.targetUrl)
+      ? "article"
+      : isTechnicalSeoAction(action) || action.targetUrl
+        ? "component"
+        : "page"
+  );
+  if (lane === "page") {
+    return createWixPageTaskForAction({
+      actionId,
+      operatorInstructions,
+      route: options.route ?? null,
+    });
+  }
+  if (lane === "article") {
+    return createWixArticleTaskForAction({ actionId, operatorInstructions });
+  }
+
   const evidence = record(action.evidence);
   const preflight = options.preflight ?? await preflightTechnicalTarget({
     siteId: action.siteId,
@@ -122,7 +155,7 @@ export async function createAgentTaskIfEligible(
       source: true,
       kind: true,
       evidence: true,
-      site: { select: { domain: true } },
+      site: { select: { domain: true, siteDeliveryConfig: { select: { enabled: true } } } },
       agentTasks: {
         where: { status: { notIn: ["CLOSED", "COMPLETED", "FAILED", "CANCELLED"] } },
         select: { id: true },
@@ -159,8 +192,8 @@ export async function createAgentTaskIfEligible(
     status: action.status,
     source: action.source,
     kind: action.kind,
-    siteDomain: action.site.domain,
     hasOpenTask: action.agentTasks.length > 0,
+    hasDelivery: Boolean(action.site.siteDeliveryConfig?.enabled),
   });
   if (!decision.eligible) return { created: false, reason: decision.reason };
 
@@ -185,7 +218,7 @@ export async function listAgentTasks(siteId: string, limit = 50) {
 export async function updateAgentTask(
   taskId: string,
   input: {
-    status?: "READY" | "RUNNING" | "AWAITING_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "COMMITTED" | "PUBLISHING" | "PUBLISHED" | "CLOSED" | "COMPLETED" | "FAILED" | "CANCELLED";
+    status?: "READY" | "RUNNING" | "AWAITING_REVIEW" | "AWAITING_TARGET" | "CHANGES_REQUESTED" | "APPROVED" | "COMMITTED" | "PUBLISHING" | "PUBLISHED" | "CLOSED" | "COMPLETED" | "FAILED" | "CANCELLED";
     result?: unknown;
     errorCode?: string | null;
     branch?: string | null;
@@ -193,6 +226,7 @@ export async function updateAgentTask(
     commitSha?: string | null;
     publishedUrl?: string | null;
     bridgeReceiptId?: string | null;
+    route?: string | null;
   },
 ) {
   const task = await db.agentTask.findUnique({ where: { id: taskId }, select: { id: true, status: true } });
@@ -212,6 +246,7 @@ export async function updateAgentTask(
       ...(input.commitSha !== undefined ? { commitSha: input.commitSha } : {}),
       ...(input.publishedUrl !== undefined ? { publishedUrl: input.publishedUrl } : {}),
       ...(input.bridgeReceiptId !== undefined ? { bridgeReceiptId: input.bridgeReceiptId } : {}),
+      ...(input.route !== undefined ? { route: input.route } : {}),
       ...(input.status === "RUNNING" ? { startedAt: now } : {}),
       ...(input.status === "CLOSED" ? { closedAt: now } : {}),
       ...(input.status && ["COMPLETED", "FAILED", "CANCELLED"].includes(input.status)

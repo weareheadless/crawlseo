@@ -60,6 +60,9 @@ describe("agent task transitions", () => {
     expect(canTransitionAgentTask("CHANGES_REQUESTED", "RUNNING")).toBe(true);
     expect(canTransitionAgentTask("CHANGES_REQUESTED", "APPROVED")).toBe(true);
     expect(canTransitionAgentTask("AWAITING_REVIEW", "APPROVED")).toBe(true);
+    expect(canTransitionAgentTask("AWAITING_REVIEW", "AWAITING_TARGET")).toBe(true);
+    expect(canTransitionAgentTask("AWAITING_TARGET", "PUBLISHING")).toBe(true);
+    expect(canTransitionAgentTask("APPROVED", "PUBLISHING")).toBe(true);
     expect(canTransitionAgentTask("APPROVED", "COMMITTED")).toBe(true);
     expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHING", "PUBLISHED")).toBe(true);

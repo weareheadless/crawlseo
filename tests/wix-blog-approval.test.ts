@@ -42,11 +42,12 @@ describe("Wix Blog exact candidate approval", () => {
     expect(coverage.record).toHaveBeenCalledWith("draft-1");
   });
 
-  it("rejects approval if the Action target is not a Wix Blog post", async () => {
+  it("approves a new article even before it has a public post URL", async () => {
     mocks.findUnique.mockResolvedValue({ ...draft, action: { ...draft.action, targetUrl: "https://example.com/about" } });
-    await expect(approveWixBlogUpdateForDraft("draft-1", "owner-1"))
-      .rejects.toBeInstanceOf(WixBlogDeliveryError);
-    expect(mocks.updateMany).not.toHaveBeenCalled();
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    const result = await approveWixBlogUpdateForDraft("draft-1", "owner-1");
+    expect(result).toMatchObject({ draftId: "draft-1", actionRevision: 3 });
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
   });
 
   it("does not approve a Wix candidate when HelloAda owns site execution", async () => {

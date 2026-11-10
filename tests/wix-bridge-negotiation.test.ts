@@ -29,7 +29,7 @@ describe("runtime Wix bridge negotiation", () => {
     expect(h.execFile.mock.calls[0][1]).toContain("inspect");
   });
 
-  it("does not promote host-only update-snippet even when a bridge declares adjacent embed support", async () => {
+  it("allows update-snippet when the bridge explicitly declares it", async () => {
     vi.stubEnv("WIX_BRIDGE_ROOT", "/tmp/wix-bridge-capability-fixture");
     h.state.response = {
       contract: "wix-bridge-generic-v1",
@@ -38,9 +38,21 @@ describe("runtime Wix bridge negotiation", () => {
     vi.resetModules();
     const { assertNegotiatedWixBridgeOperations } = await import("@/lib/bridge/client");
 
-    await expect(assertNegotiatedWixBridgeOperations("fixture", ["read_embed", "update_snippet"]))
-      .rejects.toThrow(/update_snippet/);
+    await expect(assertNegotiatedWixBridgeOperations("fixture", ["read_embed", "update_snippet"])).resolves.toBeUndefined();
     expect(h.execFile).toHaveBeenCalledTimes(1);
     expect(h.execFile.mock.calls[0][1]).toContain("inspect");
+  });
+
+  it("still blocks update-snippet when a bridge omits it", async () => {
+    vi.stubEnv("WIX_BRIDGE_ROOT", "/tmp/wix-bridge-capability-fixture");
+    h.state.response = {
+      contract: "wix-bridge-generic-v1",
+      capabilities: { inspect: true, read_embed: true, write_embed: true },
+    };
+    vi.resetModules();
+    const { assertNegotiatedWixBridgeOperations } = await import("@/lib/bridge/client");
+
+    await expect(assertNegotiatedWixBridgeOperations("fixture", ["read_embed", "update_snippet"]))
+      .rejects.toThrow(/update_snippet/);
   });
 });

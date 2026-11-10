@@ -23,6 +23,7 @@ import { runPrelaunchResearch } from "@/lib/dataforseo/prelaunch-runner";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
+import { resumeWixPageDelivery, runWixPageTask } from "@/lib/agent-tasks/wix-page";
 import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
@@ -207,7 +208,16 @@ async function executeJob(
       if (!job.siteId) throw new JobExecutionError("AGENT_SITE_REQUIRED");
       const agentTaskId = text(payload.agentTaskId, "");
       if (!agentTaskId) throw new JobExecutionError("AGENT_TASK_ID_REQUIRED");
-      await runAgentTask(agentTaskId);
+      const agentTask = await db.agentTask.findUnique({ where: { id: agentTaskId }, select: { kind: true } });
+      if (agentTask?.kind === "wix_page") await runWixPageTask(agentTaskId);
+      else await runAgentTask(agentTaskId);
+      return;
+    }
+    case JobKind.WIX_DELIVERY: {
+      if (!job.siteId) throw new JobExecutionError("AGENT_SITE_REQUIRED");
+      const agentTaskId = text(payload.agentTaskId, "");
+      if (!agentTaskId) throw new JobExecutionError("AGENT_TASK_ID_REQUIRED");
+      await resumeWixPageDelivery(agentTaskId);
       return;
     }
     case JobKind.ARTICLE_KEYWORD_RESEARCH: {

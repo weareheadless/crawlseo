@@ -285,7 +285,13 @@ function AutomationRow({
   siteId: string;
 }) {
   const actionId = typeof item.actionId === "string" ? item.actionId : null;
+  const taskId = typeof item.taskId === "string" ? item.taskId : null;
   const action = actionId ? actions.find((candidate) => candidate.id === actionId) : null;
+  const href = taskId
+    ? `/sites/${siteId}/agent-tasks/${taskId}`
+    : actionId
+      ? `/sites/${siteId}/actions/${actionId}`
+      : null;
   const status = typeof item.status === "string" ? item.status : kind === "skipped" ? "skipped" : "unknown";
   const reason = typeof item.reason === "string" ? item.reason.replaceAll("_", " ") : null;
   const error = typeof item.error === "string" ? item.error : null;
@@ -294,9 +300,9 @@ function AutomationRow({
     <div className="flex flex-wrap items-start justify-between gap-2 px-5 py-3 text-sm">
       <div>
         <p className="font-medium">
-          {action ? (
-            <Link href={`/sites/${siteId}/actions/${action.id}`} className="underline decoration-border underline-offset-2 hover:text-primary">
-              {action.title}
+          {href ? (
+            <Link href={href} className="underline decoration-border underline-offset-2 hover:text-primary">
+              {action?.title ?? (taskId ? "Open agent task" : actionId ?? "Open action")}
             </Link>
           ) : actionId ?? "Unknown action"}
         </p>

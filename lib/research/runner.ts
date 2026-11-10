@@ -15,7 +15,8 @@ import {
 } from "@/lib/research/service";
 import { createAgentTaskForAction } from "@/lib/agent-tasks/service";
 import { isSupersededByExternalAuthority } from "@/lib/research/execution-authority";
-import { generateDraftForAction } from "@/lib/research/content";
+import { generateDraftForAction, generateWixBlogUpdateDraftForAction } from "@/lib/research/content";
+import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
@@ -88,6 +89,7 @@ export async function automateRunActions(input: {
   siteDomain: string;
   autoDraft: boolean;
   autoAgent: boolean;
+  hasDelivery: boolean;
   connectorExecutor?: string | null;
 }) {
   const actions = await db.researchAction.findMany({
@@ -162,11 +164,16 @@ export async function automateRunActions(input: {
         drafts.push({ actionId: action.id, status: "skipped", reason: "not_ready" });
       } else {
         try {
-          const draft = await generateDraftForAction(
-            action.id,
-            "Generated automatically from the site research policy. Review the draft and its evidence before publishing.",
-            { requireApproval: false },
-          );
+          const draft = isWixBlogTarget(action.targetUrl)
+            ? await generateWixBlogUpdateDraftForAction(
+                action.id,
+                "Generated automatically from the site research policy. Review the draft and its evidence before publishing.",
+              )
+            : await generateDraftForAction(
+                action.id,
+                "Generated automatically from the site research policy. Review the draft and its evidence before publishing.",
+                { requireApproval: false },
+              );
           drafts.push({ actionId: action.id, status: "created", draftId: draft.id });
           status = "DRAFT_READY";
         } catch (error) {
@@ -187,8 +194,8 @@ export async function automateRunActions(input: {
       status,
       source: action.source,
       kind: action.kind,
-      siteDomain: input.siteDomain,
       hasOpenTask: action.agentTasks.length > 0,
+      hasDelivery: input.hasDelivery,
     });
     if (!decision.eligible) {
       skipped.push({ actionId: action.id, reason: decision.reason });
@@ -249,6 +256,7 @@ export async function runResearchRun(runId: string) {
           researchPolicy: { select: { autoDraft: true, autoAgent: true, maxSources: true, monthlyBudget: true,
             goals: true, recencyDays: true, revision: true, enabled: true, providers: true } },
           siteProfile: { select: { constraints: true } },
+          siteDeliveryConfig: { select: { enabled: true } },
         },
       },
       findings: { select: { id: true } },
@@ -728,6 +736,7 @@ export async function runResearchRun(runId: string) {
           siteDomain: site.domain,
           autoDraft: policy.autoDraft,
           autoAgent: policy.autoAgent,
+          hasDelivery: Boolean(site.siteDeliveryConfig?.enabled),
           connectorExecutor: site.connectorBinding
             ? site.connectorBinding.status === "ACTIVE" ? site.connectorBinding.executor : "inactive-connector"
             : null,

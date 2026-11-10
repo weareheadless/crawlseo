@@ -27,8 +27,9 @@ export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridge
     verify: operations.verify === true,
     read_embed: operations.read_embed === true,
     write_embed: operations.write_embed === true,
-    // Generic v1 has no update-snippet operation. Host-only commands are not promoted.
-    update_snippet: false,
+    // Generic v1 advertises whether it can update an existing embed. The host
+    // does not promote a host-only command on its own.
+    update_snippet: operations.update_snippet === true,
     // The legacy editor revision probe uses a private endpoint, not generic v1.
     private_editor_revision: false,
     cms: operations.cms === true,
@@ -77,8 +78,20 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "update-snippet",
-  options: { siteRepo?: string; apply?: boolean; snippetId?: string; htmlFile?: string; preserveScope?: boolean; extraArgs?: string[] } = {},
+  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "snippets" | "update-snippet" | "create-snippet" | "read-embed" | "write-embed",
+  options: {
+    siteRepo?: string;
+    apply?: boolean;
+    snippetId?: string;
+    htmlFile?: string;
+    preserveScope?: boolean;
+    name?: string;
+    route?: string;
+    allPages?: boolean;
+    position?: "HEAD" | "BODY_START" | "BODY_END";
+    category?: string;
+    extraArgs?: string[];
+  } = {},
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -90,6 +103,11 @@ function runBridge(
       ...(options.siteRepo ? ["--site-repo", options.siteRepo] : []),
       ...(options.snippetId ? ["--snippet", options.snippetId] : []),
       ...(options.htmlFile ? ["--html-file", options.htmlFile] : []),
+      ...(options.name ? ["--name", options.name] : []),
+      ...(options.route ? ["--route", options.route] : []),
+      ...(options.allPages ? ["--all-pages"] : []),
+      ...(options.position ? ["--position", options.position] : []),
+      ...(options.category ? ["--category", options.category] : []),
       ...(options.preserveScope ? ["--preserve-scope"] : []),
       ...(options.apply ? ["--apply"] : []),
       ...(options.extraArgs ?? []),
@@ -153,6 +171,34 @@ export async function readBridgeSnippet(alias: string, snippetId: string) {
   return runBridge(alias, "snippet", { snippetId });
 }
 
+/**
+ * Read an embed by id without requiring it in the site manifest. This is the
+ * generic read path for embeds CrawlSEO created through the API.
+ */
+export async function readBridgeEmbed(alias: string, snippetId: string) {
+  return runBridge(alias, "read-embed", { snippetId });
+}
+
+/** List every custom embed on the site, including ones outside the manifest. */
+export async function listBridgeSnippets(alias: string) {
+  return runBridge(alias, "snippets");
+}
+
+/**
+ * Write an embed by id without requiring it in the site manifest. The bridge
+ * refuses any embed whose name lacks the CrawlSEO prefix, so a human's embed is
+ * never overwritten.
+ */
+export async function writeBridgeEmbed(
+  alias: string,
+  snippetId: string,
+  htmlFile: string,
+  route: string,
+  apply = false,
+) {
+  return runBridge(alias, "write-embed", { snippetId, htmlFile, route, apply });
+}
+
 export async function updateBridgeSnippet(
   alias: string,
   snippetId: string,
@@ -164,5 +210,32 @@ export async function updateBridgeSnippet(
     htmlFile,
     preserveScope: true,
     apply,
+  });
+}
+
+export type CreateBridgeSnippetInput = {
+  name: string;
+  htmlFile: string;
+  route?: string;
+  allPages?: boolean;
+  position?: "HEAD" | "BODY_START" | "BODY_END";
+  category?: string;
+  apply?: boolean;
+};
+
+/**
+ * Create a Custom Embed through the documented Wix API. The bridge guards the
+ * HTML with the exact route because Wix applies a new embed site-wide and its
+ * page filter is read-only. Callers must negotiate `write_embed` first.
+ */
+export async function createBridgeSnippet(alias: string, input: CreateBridgeSnippetInput) {
+  return runBridge(alias, "create-snippet", {
+    name: input.name,
+    htmlFile: input.htmlFile,
+    route: input.route,
+    allPages: input.allPages,
+    position: input.position ?? "BODY_END",
+    category: input.category ?? "FUNCTIONAL",
+    apply: input.apply ?? false,
   });
 }

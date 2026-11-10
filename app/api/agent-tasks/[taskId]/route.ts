@@ -32,7 +32,7 @@ export async function GET(
 }
 
 const schema = z.object({
-  status: z.enum(["READY", "RUNNING", "AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "COMMITTED", "PUBLISHING", "PUBLISHED", "CLOSED", "COMPLETED", "FAILED", "CANCELLED"]).optional(),
+  status: z.enum(["READY", "RUNNING", "AWAITING_REVIEW", "AWAITING_TARGET", "CHANGES_REQUESTED", "APPROVED", "COMMITTED", "PUBLISHING", "PUBLISHED", "CLOSED", "COMPLETED", "FAILED", "CANCELLED"]).optional(),
   result: z.unknown().optional(),
   errorCode: z.string().trim().max(120).nullable().optional(),
   branch: z.string().trim().max(200).nullable().optional(),
@@ -40,6 +40,7 @@ const schema = z.object({
   commitSha: z.string().trim().max(80).nullable().optional(),
   publishedUrl: z.string().trim().max(2_000).nullable().optional(),
   bridgeReceiptId: z.string().trim().max(200).nullable().optional(),
+  route: z.string().trim().max(500).nullable().optional(),
 });
 
 export async function PATCH(

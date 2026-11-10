@@ -20,15 +20,19 @@ export async function POST(
     return Response.json({ error: EXTERNAL_EXECUTION_MESSAGE }, { status: 409 });
   }
   let instructions = "";
+  let lane: "page" | "article" | undefined;
+  let route: string | null = null;
   try {
-    const body = await req.json() as { instructions?: unknown };
+    const body = await req.json() as { instructions?: unknown; lane?: unknown; route?: unknown };
     instructions = typeof body.instructions === "string" ? body.instructions.trim().slice(0, 4_000) : "";
+    lane = body.lane === "page" || body.lane === "article" ? body.lane : undefined;
+    route = typeof body.route === "string" && body.route.trim() ? body.route.trim().slice(0, 500) : null;
   } catch {
     // Empty body is valid.
   }
 
   try {
-    const task = await createAgentTaskForAction(actionId, instructions || undefined);
+    const task = await createAgentTaskForAction(actionId, instructions || undefined, { lane, route });
     return Response.json({ task }, { status: 201 });
   } catch (error) {
     if (error instanceof ResearchServiceError) {

@@ -14,9 +14,12 @@ export async function POST(
   if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
-    select: { id: true, siteId: true, status: true },
+    select: { id: true, siteId: true, status: true, kind: true },
   });
   if (!task) return Response.json({ error: "Agent task not found" }, { status: 404 });
+  if (task.kind === "wix_article") {
+    return Response.json({ error: "An article task publishes from its draft; there is no agent run" }, { status: 409 });
+  }
   if (!["READY", "CHANGES_REQUESTED"].includes(task.status)) {
     return Response.json({ error: `Agent task is ${task.status}; only READY or CHANGES_REQUESTED tasks can run` }, { status: 409 });
   }

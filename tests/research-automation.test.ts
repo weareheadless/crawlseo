@@ -1,56 +1,46 @@
 import { describe, expect, it } from "vitest";
 import { autoAgentDecision } from "@/lib/research/automation";
 
+const base = {
+  targetUrl: "https://www.example.com/apartments-for-rent",
+  format: "page_update",
+  status: "DRAFT_READY",
+  hasOpenTask: false,
+  hasDelivery: true,
+};
+
 describe("research automation", () => {
-  it("allows a non-blog page on a site with an agent target", () => {
-    expect(autoAgentDecision({
-      targetUrl: "https://www.susimacdonald.com/apartments-for-rent-in-playa",
-      format: "page_update",
-      status: "DRAFT_READY",
-      siteDomain: "www.susimacdonald.com",
-      hasOpenTask: false,
-    })).toEqual({ eligible: true });
+  it("allows a page on a site with a delivery configuration", () => {
+    expect(autoAgentDecision(base)).toEqual({ eligible: true });
   });
 
-  it("does not create agent tasks for Wix Blog posts", () => {
-    expect(autoAgentDecision({
-      targetUrl: "https://www.susimacdonald.com/post/can-americans-buy-property-in-mexico",
-      format: "page_update",
-      status: "DRAFT_READY",
-      siteDomain: "www.susimacdonald.com",
-      hasOpenTask: false,
-    })).toEqual({ eligible: false, reason: "blog_target" });
+  it("allows an article, which publishes through Wix Blog", () => {
+    expect(autoAgentDecision({ ...base, format: "article", targetUrl: null })).toEqual({ eligible: true });
   });
 
   it("allows a technical crawl fix even when the target is a blog URL", () => {
     expect(autoAgentDecision({
-      targetUrl: "https://www.susimacdonald.com/post/can-americans-buy-property-in-mexico",
-      format: "page_update",
-      status: "DRAFT_READY",
+      ...base,
+      targetUrl: "https://www.example.com/post/can-americans-buy-property-in-mexico",
       source: "crawl_issue",
       kind: "fix_technical_issue",
-      siteDomain: "www.susimacdonald.com",
-      hasOpenTask: false,
     })).toEqual({ eligible: true });
   });
 
-  it("does not create an agent task without a configured site target", () => {
+  it("does not create a technical task without a mapped target", () => {
     expect(autoAgentDecision({
-      targetUrl: "https://www.atelier-harmonie.com/",
-      format: "page_update",
-      status: "DRAFT_READY",
-      siteDomain: "unknown.example",
-      hasOpenTask: false,
-    })).toEqual({ eligible: false, reason: "no_agent_target" });
+      ...base,
+      targetUrl: null,
+      source: "crawl_issue",
+      kind: "fix_technical_issue",
+    })).toEqual({ eligible: false, reason: "no_target" });
+  });
+
+  it("does not create an agent task without a delivery configuration", () => {
+    expect(autoAgentDecision({ ...base, hasDelivery: false })).toEqual({ eligible: false, reason: "no_agent_target" });
   });
 
   it("skips actions that already have an open task", () => {
-    expect(autoAgentDecision({
-      targetUrl: "https://www.susimacdonald.com/apartments-for-rent-in-playa",
-      format: "page_update",
-      status: "APPROVED",
-      siteDomain: "www.susimacdonald.com",
-      hasOpenTask: true,
-    })).toEqual({ eligible: false, reason: "open_task" });
+    expect(autoAgentDecision({ ...base, hasOpenTask: true })).toEqual({ eligible: false, reason: "open_task" });
   });
 });

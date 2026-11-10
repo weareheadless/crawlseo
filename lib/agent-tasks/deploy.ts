@@ -1,9 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ResearchServiceError } from "@/lib/research/service";
-import { updateResearchAction } from "@/lib/research/service";
+import { markActionVerified } from "@/lib/research/action-status";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { commitAgentTask } from "@/lib/agent-tasks/commit";
 import {
@@ -14,6 +13,8 @@ import {
 import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
 
 const execFileAsync = promisify(execFile);
+
+export { markActionVerified };
 
 async function resolveEmbedTarget(
   siteId: string,
@@ -47,28 +48,6 @@ async function resolveEmbedTarget(
     "Could not determine a unique embed target. Select the target manually.",
     409,
   );
-}
-
-export async function markActionVerified(actionId: string | null) {
-  if (!actionId) return;
-  const action = await db.researchAction.findUnique({
-    where: { id: actionId },
-    select: { id: true, status: true },
-  });
-  if (!action || ["VERIFIED", "FULFILLED", "DISMISSED", "FAILED"].includes(action.status)) return;
-
-  const pathByStatus: Record<string, ResearchActionStatus[]> = {
-    PROPOSED: ["APPROVED", "DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
-    APPROVED: ["DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
-    DRAFTING: ["DRAFT_READY", "DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
-    DRAFT_READY: ["DELIVERY_APPROVED", "DELIVERING", "DELIVERED", "VERIFIED"],
-    DELIVERY_APPROVED: ["DELIVERING", "DELIVERED", "VERIFIED"],
-    DELIVERING: ["DELIVERED", "VERIFIED"],
-    DELIVERED: ["VERIFIED"],
-  };
-  for (const status of pathByStatus[action.status] ?? []) {
-    await updateResearchAction(action.id, { status }, "agent-deploy");
-  }
 }
 
 export async function approveAndDeployAgentTask(taskId: string, requestedTargetKey?: string) {

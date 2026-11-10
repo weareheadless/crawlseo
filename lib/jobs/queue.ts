@@ -11,6 +11,8 @@ export type EnqueueJobInput = {
   payload?: Record<string, unknown>;
   idempotencyKey: string;
   maxAttempts?: number;
+  /** Wait this long before the first claim. Used for a route probe. */
+  delaySeconds?: number;
 };
 
 export function sourceForJobKind(kind: JobKind): SyncSource {
@@ -29,6 +31,7 @@ export function sourceForJobKind(kind: JobKind): SyncSource {
     case JobKind.RESEARCH_RUN:
       return SyncSource.RESEARCH;
     case JobKind.AGENT_TASK:
+    case JobKind.WIX_DELIVERY:
       return SyncSource.AGENT;
   }
 }
@@ -40,6 +43,9 @@ export async function enqueueJob(input: EnqueueJobInput) {
   }
   const maxAttempts = Math.max(1, Math.min(input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS, 10));
   const payload = input.payload ?? {};
+  const nextAttemptAt = input.delaySeconds && input.delaySeconds > 0
+    ? new Date(Date.now() + input.delaySeconds * 1_000)
+    : new Date();
 
   // Existing work remains site-scoped. Domainless project research may use a
   // project-only job; a partial index dedupes only rows without a site.
@@ -49,7 +55,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
     if (existing) return existing;
     try {
       return await db.job.create({ data: { projectId: input.projectId, siteId: null, kind: input.kind,
-        payload: payload as Prisma.InputJsonValue, idempotencyKey, maxAttempts } });
+        payload: payload as Prisma.InputJsonValue, idempotencyKey, maxAttempts, nextAttemptAt } });
     } catch (error) {
       if ((error as { code?: string }).code === "P2002") {
         const winner = await db.job.findFirst({ where: { projectId: input.projectId, siteId: null, kind: input.kind, idempotencyKey } });
@@ -79,6 +85,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
         payload: payload as Prisma.InputJsonValue,
         idempotencyKey,
         maxAttempts,
+        nextAttemptAt,
       },
     });
   } catch (error) {

@@ -33,13 +33,14 @@ export async function listAgentArtifacts(taskId: string) {
 
 export async function addAgentArtifact(
   taskId: string,
-  input: { kind: string; content?: string | null; url?: string | null },
+  input: { kind: string; content?: string | null; url?: string | null; maxChars?: number },
 ) {
+  const limit = Math.max(1_000, Math.min(input.maxChars ?? 100_000, 1_000_000));
   return db.agentTaskArtifact.create({
     data: {
       taskId,
       kind: input.kind.slice(0, 80),
-      content: input.content?.slice(0, 100_000) ?? null,
+      content: input.content?.slice(0, limit) ?? null,
       url: input.url?.slice(0, 2_000) ?? null,
     },
   });

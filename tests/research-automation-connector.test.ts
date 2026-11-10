@@ -31,7 +31,8 @@ describe("HelloAda-owned Action automation", () => {
   it.each(["CANCELLED", "READY", "QUEUED", "BLOCKED"])("does not revive or re-emit a %s preparation", async (state) => {
     mocks.researchAction.findMany.mockResolvedValue([action(state)]);
     const result = await automateRunActions({ runId: "run-1", siteDomain: "example.com",
-      autoDraft: true, autoAgent: true, connectorExecutor: "helloada" });
+      autoDraft: true, autoAgent: true,
+        hasDelivery: true, connectorExecutor: "helloada" });
 
     expect(result.skipped).toContainEqual({ actionId: "action-1", reason: `preparation_already_${state.toLowerCase()}` });
     expect(mocks.researchAction.updateMany).not.toHaveBeenCalled();
@@ -42,7 +43,8 @@ describe("HelloAda-owned Action automation", () => {
 
   it("claims eligibility once from NONE and emits one connector event", async () => {
     const result = await automateRunActions({ runId: "run-1", siteDomain: "example.com",
-      autoDraft: true, autoAgent: true, connectorExecutor: "helloada" });
+      autoDraft: true, autoAgent: true,
+        hasDelivery: true, connectorExecutor: "helloada" });
 
     expect(result).toMatchObject({ drafts: [], agentTasks: [], skipped: [] });
     expect(mocks.researchAction.updateMany).toHaveBeenCalledWith({
@@ -56,7 +58,8 @@ describe("HelloAda-owned Action automation", () => {
 
   it("does not prepare HelloAda work through another executor's policy", async () => {
     const result = await automateRunActions({ runId: "run-1", siteDomain: "example.com",
-      autoDraft: true, autoAgent: true, connectorExecutor: "wix" });
+      autoDraft: true, autoAgent: true,
+        hasDelivery: true, connectorExecutor: "wix" });
 
     expect(result.skipped).toContainEqual({ actionId: "action-1", reason: "site_has_another_active_executor" });
     expect(mocks.researchAction.updateMany).not.toHaveBeenCalled();
@@ -66,7 +69,8 @@ describe("HelloAda-owned Action automation", () => {
   it("automatic policy marks preparation eligibility without creating a draft or task", async () => {
     mocks.researchAction.findMany.mockResolvedValue([{ ...action("NONE"), automationMode: "AUTOMATIC", projectId: null }]);
     const result = await automateRunActions({ runId: "run-1", siteDomain: "example.com",
-      autoDraft: true, autoAgent: true, connectorExecutor: "crawlseo-agent" });
+      autoDraft: true, autoAgent: true,
+        hasDelivery: true, connectorExecutor: "crawlseo-agent" });
     expect(mocks.researchAction.updateMany).toHaveBeenCalledWith({
       where: { id: "action-1", revision: 4, status: "PROPOSED", preparationStatus: "NONE" },
       data: { preparationStatus: "ELIGIBLE" },

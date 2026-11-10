@@ -104,7 +104,11 @@ proposed → accepted → task → agent-prepared → human-confirmed → delive
 - The human accepts, parks or rejects.
 - Only acceptance creates a task.
 - Agent preparation is optional and never publishes.
-- Human confirms delivery.
+- Human confirms delivery once. After that confirmation the agent performs the
+  mechanical steps (create the embed, write the content, publish the article)
+  without asking for a second click. A new Wix page is the one manual step: Wix
+  has no page-creation API, so the human creates the blank page at the route the
+  task names, and the worker resumes delivery when it answers.
 - Outcome is measured and feeds the next cycle.
 
 ## Cost and storage
@@ -141,7 +145,8 @@ For an active site:
 - generic news summaries with no business action;
 - question coverage presented as measured AEO visibility;
 - article ideas that are rephrased old recommendations;
-- automatic acceptance, publication or delivery;
+- automatic acceptance, or publication and delivery without a human
+  confirmation;
 - manufacturing ideas to fill a quota;
 - a single score that hides business ideas below technical fixes;
 - paid retries that duplicate a stored monthly bundle.

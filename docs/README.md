@@ -18,6 +18,7 @@ requirements.
 
 ## Active operating docs
 
+- [Wix delivery loop](wix-delivery-loop.md)
 - [Agent coordination](agent-coordination.md)
 - [Agent workflow](architecture/centralized-intelligence/agent-workflow.md)
 - [Business knowledge writers](business-knowledge-writers.md)

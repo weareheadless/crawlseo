@@ -49,9 +49,8 @@ export async function approveWixBlogUpdateForDraft(contentDraftId: string, userI
   });
   if (!draft?.action) throw new WixBlogDeliveryError("A linked ResearchAction is required", 404);
   await assertWixBlogExecutor(draft.siteId);
-  if (!draft.action.targetUrl || !blogSlugFromUrl(draft.action.targetUrl)) {
-    throw new WixBlogDeliveryError("This action is not a Wix Blog target", 409);
-  }
+  // A new article has no post URL yet: the slug comes from the draft and the
+  // post is created on delivery. An update still targets an existing post.
   const hash = wixCandidateHash(draft);
   const saved = await db.contentDraft.updateMany({
     where: { id: draft.id, updatedAt: draft.updatedAt, action: { is: { revision: draft.action.revision } } },
@@ -549,11 +548,36 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
   }
   const cfg = await configForSite(draft.siteId);
   if (!cfg) throw new WixBlogDeliveryError("Wix Blog credentials are not configured for this site", 503);
-  if (!draft.action?.targetUrl) throw new WixBlogDeliveryError("This action has no Wix Blog target", 409);
-  const slug = blogSlugFromUrl(draft.action.targetUrl);
-  if (!slug) throw new WixBlogDeliveryError("The action target is not a Wix Blog post URL", 409);
+  if (!draft.action) throw new WixBlogDeliveryError("A linked ResearchAction is required", 409);
 
-  const existing = await readWixBlogPostBySlug(slug, cfg);
+  // A post created by this pipeline is published from its own draft id, not by
+  // looking a slug up in the published collection. An existing post keeps the
+  // slug lookup.
+  const createdDraft = await db.delivery.findFirst({
+    where: { actionId: draft.action.id, draftId: draft.id, platform: "wix_blog", status: "DRAFT_VERIFIED" },
+    orderBy: { createdAt: "desc" },
+    select: { externalId: true },
+  });
+  let existing: { id: string; title: string; slug: string };
+  if (createdDraft?.externalId) {
+    const saved = await wixRequest<{ draftPost?: { id?: string; title?: string; seoSlug?: string } }>(
+      cfg,
+      "GET",
+      `/blog/v3/draft-posts/${encodeURIComponent(createdDraft.externalId)}`,
+    );
+    if (!saved.draftPost?.id) throw new WixBlogDeliveryError("The Wix Blog draft could not be read back", 502);
+    existing = {
+      id: saved.draftPost.id,
+      title: saved.draftPost.title ?? draft.title,
+      slug: saved.draftPost.seoSlug ?? draft.slug,
+    };
+  } else {
+    if (!draft.action.targetUrl) throw new WixBlogDeliveryError("This action has no Wix Blog target", 409);
+    const slug = blogSlugFromUrl(draft.action.targetUrl);
+    if (!slug) throw new WixBlogDeliveryError("The action target is not a Wix Blog post URL", 409);
+    existing = await readWixBlogPostBySlug(slug, cfg);
+  }
+  const slug = existing.slug;
   const title = existing.title || draft.title;
   let importedCover: Awaited<ReturnType<typeof importCover>>;
   try {
@@ -612,6 +636,9 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
     );
   }
 
+  const liveUrl = draft.action.targetUrl && blogSlugFromUrl(draft.action.targetUrl)
+    ? draft.action.targetUrl
+    : `https://${draft.site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}/post/${encodeURIComponent(slug)}`;
   const delivery = await db.delivery.create({
     data: {
       actionId: draft.action.id,
@@ -624,11 +651,29 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
         post_id: existing.id,
         title,
         slug,
-        live_url: draft.action.targetUrl,
+        live_url: liveUrl,
         readback_verified: true,
       },
     },
   });
+  // A new article gains its public URL here, so later updates target the post
+  // instead of creating another one.
+  if (!draft.action.targetUrl || !blogSlugFromUrl(draft.action.targetUrl)) {
+    await db.researchAction.update({ where: { id: draft.action.id }, data: { targetUrl: liveUrl } });
+  }
   await markActionVerified(draft.action.id);
   return delivery;
+}
+
+/**
+ * One human action: approve this exact draft and publish it.
+ *
+ * A new article is created in Wix Blog first, then published from its own draft
+ * id. An existing post is patched and published. The approval hash is bound to
+ * the reviewed candidate, so an edit between review and click still fails.
+ */
+export async function approveAndPublishWixBlogDraft(contentDraftId: string, userId: string) {
+  await approveWixBlogUpdateForDraft(contentDraftId, userId);
+  await createWixBlogDraftForDraft(contentDraftId);
+  return publishWixBlogUpdateForDraft(contentDraftId, userId);
 }
