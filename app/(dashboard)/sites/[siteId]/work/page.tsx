@@ -35,7 +35,7 @@ export default async function WorkPage({ params }: Props) {
   if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, domain: true, projectId: true } });
-  if (!site) redirect("/sites");
+  if (!site || site.userId !== userId) redirect("/sites");
 
   if (!site.projectId) {
     return (
@@ -51,9 +51,15 @@ export default async function WorkPage({ params }: Props) {
     );
   }
 
-  const [tasks, acceptedAll] = await Promise.all([
+  const [tasks, acceptedAll, deliveryTasks] = await Promise.all([
     listTasks(db, site.projectId),
     listOpportunities(db, { projectId: site.projectId, statuses: ["accepted", "in_progress"] }),
+    db.agentTask.findMany({
+      where: { siteId, status: { notIn: ["CLOSED", "COMPLETED", "CANCELLED"] } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, title: true, kind: true, status: true, route: true, publishedUrl: true },
+    }),
   ]);
   // An accepted opportunity that already has a task is shown once, as the task.
   const taskedOpportunities = new Set(tasks.map((task) => task.opportunityId));
@@ -72,7 +78,38 @@ export default async function WorkPage({ params }: Props) {
         actions={<RefreshFunnelButton siteId={siteId} />}
       />
 
-      {tasks.length === 0 && accepted.length === 0 ? (
+      {deliveryTasks.length > 0 && (
+        <section className="panel mb-5 overflow-hidden">
+          <div className="border-b border-border/60 p-5">
+            <h2 className="font-heading text-lg font-semibold">Delivery tasks</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Agent-prepared pages and articles. Open one to review the exact deliverable and confirm delivery once.
+            </p>
+          </div>
+          <div className="divide-y divide-border/40">
+            {deliveryTasks.map((task) => (
+              <Link
+                key={task.id}
+                href={`/sites/${siteId}/agent-tasks/${task.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 transition hover:bg-muted/20"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{task.title}</p>
+                  <p className="mt-0.5 font-data text-[10px] uppercase text-muted-foreground">
+                    {task.kind === "wix_article" ? "Wix Blog article" : task.kind === "wix_page" ? "Wix page" : task.kind}
+                    {task.route ? ` · ${task.route}` : ""}
+                  </p>
+                </div>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 font-data text-[10px] uppercase text-muted-foreground">
+                  {task.status.toLowerCase().replaceAll("_", " ")}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {tasks.length === 0 && accepted.length === 0 && deliveryTasks.length === 0 ? (
         <EmptyState
           title="No tasks yet"
           description="Tasks are created by accepting an opportunity. Open the board, read the reason, and accept the ones worth playing."
