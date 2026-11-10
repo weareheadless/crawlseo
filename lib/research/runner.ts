@@ -172,7 +172,9 @@ export async function automateRunActions(input: {
             : await generateDraftForAction(
                 action.id,
                 "Generated automatically from the site research policy. Review the draft and its evidence before publishing.",
-                { requireApproval: false },
+                // A new page has no body to diagnose, so write page copy rather
+                // than a page_update brief.
+                { requireApproval: false, forceArticle: !action.targetUrl },
               );
           drafts.push({ actionId: action.id, status: "created", draftId: draft.id });
           status = "DRAFT_READY";

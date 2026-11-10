@@ -37,6 +37,7 @@ function db(overrides: Record<string, unknown> = {}) {
     baseline: { findMany: vi.fn().mockResolvedValue([]) },
     outcomeObservation: { findMany: vi.fn().mockResolvedValue([]) },
     demandMapCluster: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn().mockResolvedValue(null), count: vi.fn().mockResolvedValue(0) },
+    researchAction: { findFirst: vi.fn().mockResolvedValue(null) },
     site: { findUnique: vi.fn().mockResolvedValue(null) },
     project: { findUnique: vi.fn().mockResolvedValue(null) },
   };

@@ -28,7 +28,7 @@ export async function POST(
       const published = await approveAndPublishWixArticle(taskId, userId);
       return Response.json({ status: "published", task: published });
     }
-    const result = await approveAndDeliverWixPage(taskId);
+    const result = await approveAndDeliverWixPage(taskId, userId);
     if (result.status === "awaiting_target") {
       return Response.json(result, { status: 202 });
     }

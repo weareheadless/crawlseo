@@ -8,8 +8,8 @@ import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { agentTimeouts } from "@/lib/agent-tasks/timeouts";
 import { markActionVerified } from "@/lib/research/action-status";
+import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 import { ResearchServiceError } from "@/lib/research/service";
-import { generateDraftForAction } from "@/lib/research/content";
 import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
@@ -76,10 +76,10 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
     throw new ResearchServiceError("An open agent task already exists for this action", 409);
   }
 
-  let draft = action.drafts[0] ?? null;
-  if (!draft) {
-    draft = await generateDraftForAction(action.id, input.operatorInstructions, { requireApproval: false });
-  }
+  // A page task does not generate a draft here. A page_update draft is a
+  // diagnosis of an existing page, not page copy; when no draft exists the
+  // agent writes from the recommendation and evidence.
+  const draft = action.drafts[0] ?? null;
 
   const task = await db.agentTask.create({
     data: {
@@ -351,7 +351,7 @@ async function deliver(task: {
   actionId: string | null;
   draftId: string | null;
   route: string | null;
-}) {
+}, confirmedBy: string | null = null) {
   if (!task.route) throw new ResearchServiceError("The task has no page route", 409);
   const html = await latestPageHtml(task.id);
   const marker = markerFor(task.id);
@@ -400,6 +400,7 @@ async function deliver(task: {
       console.error("Wix page delivery receipt could not be stored:", error);
     }
     await markActionVerified(task.actionId).catch(() => undefined);
+    await markOpportunityTaskDelivered(task.id, confirmedBy).catch(() => undefined);
     return updateAgentTask(task.id, {
       status: "PUBLISHED",
       publishedUrl: result.url,
@@ -427,7 +428,7 @@ async function deliver(task: {
  * missing Wix page parks the task in AWAITING_TARGET, and the worker resumes
  * when the human has created it. No second click is required.
  */
-export async function approveAndDeliverWixPage(taskId: string) {
+export async function approveAndDeliverWixPage(taskId: string, confirmedBy: string | null = null) {
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
     select: { id: true, siteId: true, actionId: true, draftId: true, route: true, status: true, kind: true, title: true, result: true },
@@ -473,7 +474,7 @@ export async function approveAndDeliverWixPage(taskId: string) {
     return { status: "awaiting_target" as const, route: task.route, url, httpStatus };
   }
 
-  const published = await deliver(task);
+  const published = await deliver(task, confirmedBy);
   return { status: "published" as const, task: published };
 }
 

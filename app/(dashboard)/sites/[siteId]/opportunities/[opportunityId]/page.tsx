@@ -150,6 +150,8 @@ export default async function OpportunityDetailPage({ params }: Props) {
               opportunityId={detail.id}
               taskId={detail.task.id}
               status={detail.task.status}
+              agentTaskId={detail.agentTask?.id ?? null}
+              agentTaskStatus={detail.agentTask?.status ?? null}
             />
           </div>
         ) : (

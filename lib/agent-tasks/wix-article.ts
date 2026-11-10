@@ -4,6 +4,7 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { generateDraftForAction, generateWixBlogUpdateDraftForAction } from "@/lib/research/content";
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { approveAndPublishWixBlogDraft } from "@/lib/delivery/wix-blog";
+import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 
 /**
  * The article lane. There is no page and no embed: the reviewed draft is the
@@ -90,6 +91,7 @@ export async function approveAndPublishWixArticle(taskId: string, userId: string
     const delivery = await approveAndPublishWixBlogDraft(task.draftId, userId);
     const payload = (delivery.payload ?? {}) as Record<string, unknown>;
     const liveUrl = typeof payload.live_url === "string" ? payload.live_url : null;
+    await markOpportunityTaskDelivered(task.id, userId).catch(() => undefined);
     return updateAgentTask(task.id, {
       status: "PUBLISHED",
       publishedUrl: liveUrl,

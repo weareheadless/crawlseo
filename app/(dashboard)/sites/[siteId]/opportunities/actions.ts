@@ -9,6 +9,7 @@ import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { recordAgentPreparation, confirmHumanStep } from "@/lib/funnel/join";
 import { acceptOpportunityForSite } from "@/lib/funnel/accept";
 import { decideOpportunity } from "@/lib/funnel/opportunity";
+import { prepareOpportunityWithAgent } from "@/lib/agent-tasks/opportunity-task";
 
 /**
  * Funnel actions. Detection is automatic; these are the human decisions the
@@ -71,6 +72,22 @@ export async function acceptOpportunityAction(
   revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
   revalidatePath(`/sites/${siteId}/work`);
   redirect(`/sites/${siteId}/opportunities/${opportunityId}?task=${taskId}`);
+}
+
+/**
+ * Turn an accepted opportunity into a page or article task the agent can
+ * prepare. The funnel task stays the human's record; this creates the action
+ * and agent task that actually deliver.
+ */
+export async function prepareOpportunityWithAgentAction(
+  siteId: string,
+  opportunityId: string,
+) {
+  await requireSiteAccess(siteId);
+  const task = await prepareOpportunityWithAgent(opportunityId, siteId);
+  revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
+  revalidatePath(`/sites/${siteId}/work`);
+  redirect(`/sites/${siteId}/agent-tasks/${task.id}`);
 }
 
 export async function confirmTaskStepAction(

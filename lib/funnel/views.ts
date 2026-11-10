@@ -31,6 +31,7 @@ export type FunnelDb = Pick<
   | "demandMapCluster"
   | "site"
   | "project"
+  | "researchAction"
 >;
 
 export type EvidenceLeg = "why" | "how";
@@ -128,6 +129,14 @@ export type OpportunityDetail = OpportunityRow & {
       afterObservedAt: Date;
       measuredBy: string;
     }>;
+  } | null;
+  /** The agent delivery task connected to this opportunity, when one exists. */
+  agentTask: {
+    id: string;
+    kind: string;
+    status: string;
+    route: string | null;
+    publishedUrl: string | null;
   } | null;
 };
 
@@ -401,6 +410,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
     orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "desc" }],
     select: {
       id: true,
+      projectId: true,
       type: true,
       status: true,
       dimension: true,
@@ -438,7 +448,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
   return opportunities.map((row) => {
     const rowEdges = edges.filter((edge) => edge.toId === row.id);
     const first = rowEdges.map((edge) => evidenceById.get(edge.fromId)).find((value): value is RawEvidence => Boolean(value));
-    const canonical = parsePersistedDecision(row.recommendationDecision);
+  const canonical = parsePersistedDecision(row.recommendationDecision);
     const legacy = decisionFromScoreInputs(row.scoreInputs);
     const proposal = parseOpportunityProposal(row.recommendationDecision);
     return {
@@ -469,6 +479,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     where: { id: opportunityId },
     select: {
       id: true,
+      projectId: true,
       type: true,
       status: true,
       dimension: true,
@@ -519,6 +530,17 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       humanConfirmedBy: true,
       humanConfirmedAt: true,
       plan: true,
+    },
+  });
+
+  const linkedAction = await db.researchAction.findFirst({
+    where: { projectId: row.projectId, dedupeKey: `opportunity:${opportunityId}` },
+    select: {
+      agentTasks: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, kind: true, status: true, route: true, publishedUrl: true },
+      },
     },
   });
 
@@ -592,6 +614,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
           })),
         }
       : null,
+    agentTask: linkedAction?.agentTasks[0] ?? null,
   };
 }
 
