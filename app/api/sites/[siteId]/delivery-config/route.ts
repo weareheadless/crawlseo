@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 
 const schema = z.object({
   bridgeAlias: z.string().trim().min(1).max(120),
+  repoPath: z.string().trim().max(500).nullable().optional(),
   adapters: z.array(z.enum(["wix_embed", "wix_blog", "manual"])).min(1).max(3),
   enabled: z.boolean().default(true),
 });

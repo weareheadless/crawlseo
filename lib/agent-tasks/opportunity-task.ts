@@ -32,10 +32,11 @@ export type PreparedOpportunityTask = {
 export async function prepareOpportunityWithAgent(
   opportunityId: string,
   siteId: string,
+  options: { route?: string | null } = {},
 ): Promise<PreparedOpportunityTask> {
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { id: true, projectId: true },
+    select: { id: true, projectId: true, domain: true },
   });
   if (!site) throw new ResearchServiceError("Site not found", 404);
   const opportunity = await db.opportunity.findUnique({
@@ -70,14 +71,19 @@ export async function prepareOpportunityWithAgent(
       ? "page"
       : "component";
 
-  let route: string | null = null;
-  if (lane === "page" && targetUrl) {
+  // A human can correct the route (the page they actually published). That
+  // correction wins over the route the model proposed.
+  let route: string | null = options.route?.trim() || null;
+  if (!route && lane === "page" && targetUrl) {
     try {
       route = new URL(targetUrl).pathname.replace(/\/+$/, "") || null;
     } catch {
       route = null;
     }
   }
+  const effectiveTargetUrl = route
+    ? `https://${site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}${route}`
+    : targetUrl;
 
   const dedupeKey = `opportunity:${opportunity.id}`;
   const recommendationText = typeof recommendation.action === "string" && recommendation.action.trim()
@@ -100,7 +106,7 @@ export async function prepareOpportunityWithAgent(
       format: lane === "article" ? "article" : "page_update",
       title: opportunity.title,
       recommendation: recommendationText,
-      targetUrl,
+      targetUrl: effectiveTargetUrl,
       priority: Math.max(1, Math.min(100, opportunity.scoreValue ?? 50)),
       evidence: evidence as never,
       status: "APPROVED",
@@ -111,7 +117,7 @@ export async function prepareOpportunityWithAgent(
     update: {
       status: "APPROVED",
       preparationStatus: "QUEUED",
-      targetUrl,
+      targetUrl: effectiveTargetUrl,
       recommendation: recommendationText,
       priority: Math.max(1, Math.min(100, opportunity.scoreValue ?? 50)),
       evidence: evidence as never,

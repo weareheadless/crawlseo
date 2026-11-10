@@ -1002,6 +1002,10 @@ model SiteProfile {
   services    Json?
   competitors Json?
   brandVoice  String?
+  /// Stored design reference for generated pages: palette, fonts, notes and
+  /// where they came from. Extracted from the site repo or the live site, and
+  /// editable by a human.
+  design      Json?
   constraints Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1513,6 +1517,9 @@ model SiteDeliveryConfig {
   id          String   @id @default(cuid())
   siteId      String   @unique
   bridgeAlias String
+  /// The site's connected source repository, read by the page agent for its
+  /// design tokens and component patterns. Never modified by a page task.
+  repoPath    String?
   adapters    Json?
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())

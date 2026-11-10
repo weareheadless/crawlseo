@@ -8,6 +8,8 @@ import { getResearchConfig } from "@/lib/research/policy";
 import { OperationsConfigForm } from "@/components/settings/operations-config-form";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { DeliveryConfigForm } from "@/components/settings/delivery-config-form";
+import { DesignProfileForm } from "@/components/settings/design-profile-form";
+import { getStoredDesignProfile } from "@/lib/design/profile";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -41,7 +43,7 @@ export default async function SettingsPage({ params }: Props) {
   if (!site || site.userId !== userId) redirect("/sites");
 
   // Check API key status
-  const [apiKeys, platformGrant, operations, deliveryConfig] = await Promise.all([
+  const [apiKeys, platformGrant, operations, deliveryConfig, designProfile] = await Promise.all([
     db.apiKey.findMany({
       where: { userId },
       select: { provider: true, updatedAt: true },
@@ -61,6 +63,7 @@ export default async function SettingsPage({ params }: Props) {
       : Promise.resolve(null),
     getResearchConfig(siteId),
     getSiteDeliveryConfig(siteId),
+    getStoredDesignProfile(siteId),
   ]);
   const apiKeyStatus: Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }> = {
     dataforseo: { connected: false },
@@ -123,6 +126,7 @@ export default async function SettingsPage({ params }: Props) {
           siteId={siteId}
           initial={{
             bridgeAlias: deliveryConfig?.bridgeAlias ?? "",
+            repoPath: deliveryConfig?.repoPath ?? "",
             adapters: Array.isArray(deliveryConfig?.adapters)
               ? deliveryConfig.adapters.filter((adapter): adapter is "wix_embed" | "wix_blog" | "manual" =>
                   adapter === "wix_embed" || adapter === "wix_blog" || adapter === "manual")
@@ -130,6 +134,7 @@ export default async function SettingsPage({ params }: Props) {
             enabled: deliveryConfig?.enabled ?? true,
           }}
         />
+        <DesignProfileForm siteId={siteId} initial={designProfile} />
         <ApiKeysSection initialStatus={apiKeyStatus} />
 
         {/* Data summary */}

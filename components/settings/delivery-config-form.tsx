@@ -11,10 +11,11 @@ export function DeliveryConfigForm({
   initial,
 }: {
   siteId: string;
-  initial: { bridgeAlias: string; adapters: Adapter[]; enabled: boolean };
+  initial: { bridgeAlias: string; repoPath: string; adapters: Adapter[]; enabled: boolean };
 }) {
   const router = useRouter();
   const [bridgeAlias, setBridgeAlias] = useState(initial.bridgeAlias);
+  const [repoPath, setRepoPath] = useState(initial.repoPath);
   const [adapters, setAdapters] = useState<Adapter[]>(initial.adapters);
   const [enabled, setEnabled] = useState(initial.enabled);
   const [saving, setSaving] = useState(false);
@@ -36,7 +37,7 @@ export function DeliveryConfigForm({
       const response = await fetch(`/crawlseo/api/sites/${siteId}/delivery-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bridgeAlias, adapters, enabled }),
+        body: JSON.stringify({ bridgeAlias, repoPath: repoPath.trim() || null, adapters, enabled }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error ?? "Could not save the delivery configuration");
@@ -66,6 +67,18 @@ export function DeliveryConfigForm({
           placeholder="site-alias"
           className="mt-1 block w-full rounded-lg border border-border bg-background p-2 font-data text-sm"
         />
+      </label>
+      <label className="block text-sm">
+        Source repository (read-only for the page agent)
+        <input
+          value={repoPath}
+          onChange={(event) => setRepoPath(event.target.value)}
+          placeholder="/home/admin/site-repo"
+          className="mt-1 block w-full rounded-lg border border-border bg-background p-2 font-data text-sm"
+        />
+        <span className="mt-1 block text-[10px] text-muted-foreground">
+          The page agent reads this repository for its palette, fonts and component patterns. It never modifies it.
+        </span>
       </label>
       <div className="flex flex-wrap gap-4">
         {(["wix_embed", "wix_blog", "manual"] as const).map((adapter) => (

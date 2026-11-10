@@ -8,19 +8,22 @@ export async function getSiteDeliveryConfig(siteId: string) {
 
 export async function saveSiteDeliveryConfig(
   siteId: string,
-  input: { bridgeAlias: string; adapters: DeliveryAdapterName[]; enabled?: boolean },
+  input: { bridgeAlias: string; repoPath?: string | null; adapters: DeliveryAdapterName[]; enabled?: boolean },
 ) {
   const adapters = input.adapters.filter((adapter, index, all) => all.indexOf(adapter) === index);
+  const repoPath = input.repoPath?.trim() || null;
   return db.siteDeliveryConfig.upsert({
     where: { siteId },
     create: {
       siteId,
       bridgeAlias: input.bridgeAlias.trim(),
+      repoPath,
       adapters,
       enabled: input.enabled ?? true,
     },
     update: {
       bridgeAlias: input.bridgeAlias.trim(),
+      repoPath,
       adapters,
       enabled: input.enabled ?? true,
     },

@@ -13,6 +13,7 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
+import { designProfileForSite } from "@/lib/design/profile";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -51,7 +52,8 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
           id: true,
           domain: true,
           connectorBinding: { select: { executor: true, status: true } },
-          siteProfile: { select: { language: true, country: true } },
+          siteProfile: { select: { language: true, country: true, design: true } },
+          siteDeliveryConfig: { select: { repoPath: true } },
         },
       },
       drafts: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -97,6 +99,8 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
     },
   });
 
+  const design = await designProfileForSite(action.site.id, action.site.siteDeliveryConfig?.repoPath ?? null);
+
   // The marker is the task id, so the prompt is written once the id exists.
   const prompt = buildWixPagePrompt({
     taskId: task.id,
@@ -119,6 +123,17 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
           markdown: draft.markdown,
         }
       : null,
+    design: design
+      ? {
+          repoPath: design.repoPath ?? action.site.siteDeliveryConfig?.repoPath ?? null,
+          palette: design.palette,
+          fonts: design.fonts,
+          notes: design.notes,
+        }
+      : action.site.siteDeliveryConfig?.repoPath
+        ? { repoPath: action.site.siteDeliveryConfig.repoPath, palette: [], fonts: [], notes: "" }
+        : null,
+    liveUrl: `https://${action.site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}`,
     operatorInstructions: input.operatorInstructions,
   });
   return db.agentTask.update({ where: { id: task.id }, data: { prompt } });
@@ -284,6 +299,10 @@ export async function runWixPageTask(taskId: string) {
     ], directory, onOutput);
 
     const html = await readFile(path.join(directory, "page.html"), "utf8").catch(() => "");
+    const designNotes = await readFile(path.join(directory, "design-notes.md"), "utf8").catch(() => "");
+    if (designNotes.trim()) {
+      await addAgentArtifact(task.id, { kind: "design_notes", content: designNotes.slice(0, 20_000) });
+    }
     const problems = pageProblems(html, task.id);
     if (problems.length > 0) {
       await addAgentMessage(task.id, `The page was not deliverable:\n- ${problems.join("\n- ")}`, "SYSTEM");

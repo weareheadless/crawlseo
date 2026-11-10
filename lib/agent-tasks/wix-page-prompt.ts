@@ -1,5 +1,13 @@
 export const MAX_PAGE_BYTES = 400_000;
 
+/** The stored design facts a page task must follow. */
+export type DesignReference = {
+  repoPath: string | null;
+  palette: string[];
+  fonts: string[];
+  notes: string;
+};
+
 export function markerFor(taskId: string): string {
   return `data-crawlseo-task="${taskId}"`;
 }
@@ -23,10 +31,31 @@ export function buildWixPagePrompt(input: {
     metaDescription: string;
     markdown: string;
   } | null;
+  design?: DesignReference | null;
+  liveUrl?: string | null;
   operatorInstructions?: string;
 }): string {
   const marker = markerFor(input.taskId);
   const routeAttribute = input.route.startsWith("(") ? "" : ` data-crawlseo-page="${input.route}"`;
+  const design = input.design;
+  const designLines = [
+    "DESIGN REFERENCE",
+    design?.repoPath
+      ? `Repository (read-only, do not modify): ${design.repoPath}`
+      : "No repository is configured for this site.",
+    design?.palette.length
+      ? `Palette already in use: ${design.palette.join(", ")}`
+      : "No stored palette. Derive it from the repository or the live site.",
+    design?.fonts.length
+      ? `Fonts already in use: ${design.fonts.join(", ")}`
+      : "No stored fonts. Derive them from the repository or the live site.",
+    design?.notes ? `Design notes: ${design.notes}` : "",
+    design?.repoPath
+      ? "Read the repository's custom elements, page styles and components before writing. Reuse its palette, typography, spacing, radii, button and card patterns."
+      : "Read the live site's rendered styles before writing.",
+    input.liveUrl ? `Live site for rendered reference: ${input.liveUrl}` : "",
+    "Do not invent a new visual language. If the reference is ambiguous, choose the closest existing token rather than a new colour or font.",
+  ].filter(Boolean).join("\n");
   const evidence = JSON.stringify(input.action.evidence ?? {}, null, 2).slice(0, 12_000);
   const draft = input.draft
     ? [
@@ -58,6 +87,8 @@ export function buildWixPagePrompt(input: {
     "CONTENT DRAFT",
     draft,
     "",
+    designLines,
+    "",
     "DELIVERABLE",
     "Write exactly one file, page.html, in the current directory. Do not create or modify any other file.",
     "",
@@ -71,7 +102,10 @@ export function buildWixPagePrompt(input: {
     "- Internal links only to paths that exist on this site. Do not invent URLs.",
     "- No <html>, <head>, <body>, <iframe>, external fonts, external scripts, tracking pixels, or forms that submit.",
     "- Write in the page language. Keep the buyer's wording for the target query; do not translate it into marketing jargon.",
+    "- Use the design reference's colours and fonts. Do not substitute a new palette or typeface.",
     "- The Wix page is blank and this embed replaces its content container, so this section is the whole page. It must stand on its own.",
+    "",
+    "Also write design-notes.md in the current directory: a short list of the palette, fonts, spacing and component patterns you used, and the file or page where you found each. Do not invent tokens.",
     "",
     "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce the HTML only.",
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",

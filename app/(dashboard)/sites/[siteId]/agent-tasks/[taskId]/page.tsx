@@ -41,7 +41,7 @@ export default async function AgentTaskPage({ params }: Props) {
       site: { select: { id: true, domain: true } },
       action: { select: { id: true, title: true, targetUrl: true, primaryQuery: true, status: true } },
       draft: { select: { id: true, title: true, metaTitle: true, metaDescription: true, excerpt: true, markdown: true } },
-      artifacts: { where: { kind: "page_html" }, orderBy: { createdAt: "desc" }, take: 1 },
+      artifacts: { where: { kind: { in: ["page_html", "design_notes"] } }, orderBy: { createdAt: "desc" }, take: 4 },
       messages: { orderBy: { createdAt: "asc" }, take: 40 },
     },
   });
@@ -53,7 +53,10 @@ export default async function AgentTaskPage({ params }: Props) {
   const progressLines = Array.isArray(progress.lines)
     ? progress.lines.map((line) => record(line)).filter((line) => typeof line.message === "string")
     : [];
-  const html = task.kind === "wix_page" ? task.artifacts[0]?.content ?? null : null;
+  const html = task.kind === "wix_page"
+    ? task.artifacts.find((artifact) => artifact.kind === "page_html")?.content ?? null
+    : null;
+  const designNotes = task.artifacts.find((artifact) => artifact.kind === "design_notes")?.content ?? null;
   const route = task.route;
   const pageTitle = task.draft?.metaTitle || task.draft?.title || task.title;
   const pageDescription = task.draft?.metaDescription ?? "";
@@ -128,6 +131,18 @@ export default async function AgentTaskPage({ params }: Props) {
             </p>
           </div>
           <iframe title="Delivered page preview" srcDoc={html} sandbox="" className="h-[680px] w-full bg-white" />
+        </section>
+      )}
+
+      {designNotes && (
+        <section className="panel p-5">
+          <h2 className="font-heading text-base font-semibold">Design notes</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            The tokens the agent used and where it found them. Save anything worth reusing in the site&apos;s design reference.
+          </p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-4 text-xs leading-6">
+            {designNotes}
+          </pre>
         </section>
       )}
 
