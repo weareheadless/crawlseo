@@ -12,6 +12,7 @@ describe("Wix bridge capability negotiation", () => {
       verify: false,
       read_embed: false,
       write_embed: false,
+      write_packet: false,
       disable_embed: false,
       update_snippet: false,
       private_editor_revision: false,
