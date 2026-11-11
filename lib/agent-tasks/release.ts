@@ -139,6 +139,7 @@ export async function approveAndReleaseAgentTask(
       id: true,
       siteId: true,
       status: true,
+      kind: true,
       title: true,
       actionId: true,
       actionRevision: true,
@@ -176,6 +177,12 @@ export async function approveAndReleaseAgentTask(
   }
   if (options.reRelease && !requestedTargetKey) {
     throw new ResearchServiceError("A re-release must name the embed target it corrects", 409);
+  }
+  if (task.kind === "wix_page" || task.kind === "wix_article") {
+    throw new ResearchServiceError(
+      "Only code and embed tasks can be released through the repository; page and article tasks use their delivery lane",
+      409,
+    );
   }
   if (task.connectorGeneration !== null) {
     throw new ResearchServiceError("Wix code publication is unsupported for connector-bound Actions until the generic bridge capability is qualified", 409);
