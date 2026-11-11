@@ -10,7 +10,7 @@ import {
   createBridgeSnippet,
   listBridgeSnippets,
   readBridgeEmbed,
-  writeBridgeEmbed,
+  writeBridgePacket,
 } from "@/lib/bridge/client";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -253,7 +253,7 @@ export async function deliverWixPageComponent(input: {
     let created = false;
     if (current) {
       id = current.id;
-      await writeBridgeEmbed(alias, id, file, route, true);
+      await writeBridgePacket(alias, id, file, true);
     } else {
       const receipt = await createBridgeSnippet(alias, {
         name: packet.name,
@@ -263,8 +263,8 @@ export async function deliverWixPageComponent(input: {
         category: "ESSENTIAL",
         apply: true,
         loadOnce: true,
-      }) as { snippetId?: string; id?: string };
-      id = String(receipt.snippetId ?? receipt.id ?? "");
+      }) as { customEmbedId?: string; snippetId?: string; id?: string };
+      id = String(receipt.customEmbedId ?? receipt.snippetId ?? receipt.id ?? "");
       if (!id) throw new WixEarlyPacketError("The bridge did not return the new packet embed id", 502);
       created = true;
     }
