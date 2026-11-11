@@ -7,6 +7,7 @@ import { commitAgentTask } from "@/lib/agent-tasks/commit";
 import { markActionVerified } from "@/lib/agent-tasks/deploy";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { addAgentArtifact } from "@/lib/agent-tasks/chat";
+import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { selectReleaseTargetKey } from "@/lib/delivery/target-selection";
 import { isTechnicalSeoAction } from "@/lib/agent-tasks/targets";
@@ -493,6 +494,19 @@ export async function approveAndReleaseAgentTask(
         verification,
       } : null,
     },
+  });
+  // The funnel row is what the opportunities board reads. Page and article
+  // deliveries already close it; a code release used to skip this step, so a
+  // published page stayed in the open list with an accepted opportunity.
+  await markOpportunityTaskDelivered(task.id, null).catch(async (error) => {
+    console.error("[release] opportunity delivery sync failed", error);
+    await addAgentArtifact(task.id, {
+      kind: "opportunity_sync_failed",
+      content: JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        recordedAt: new Date().toISOString(),
+      }),
+    }).catch(() => undefined);
   });
   return {
     task: closed,

@@ -58,7 +58,8 @@ const h = vi.hoisted(() => {
       return { stdout: "", stderr: "" };
     },
   });
-  return { state, db, addAgentArtifact, updateAgentTask, execFile };
+  const markOpportunityTaskDelivered = vi.fn(async () => undefined);
+  return { state, db, addAgentArtifact, updateAgentTask, execFile, markOpportunityTaskDelivered };
 });
 
 vi.mock("node:child_process", async () => {
@@ -70,6 +71,9 @@ vi.mock("@/lib/agent-tasks/commit", () => ({ commitAgentTask: vi.fn(async () => 
 vi.mock("@/lib/agent-tasks/deploy", () => ({ markActionVerified: vi.fn(async () => undefined) }));
 vi.mock("@/lib/agent-tasks/service", () => ({ updateAgentTask: h.updateAgentTask }));
 vi.mock("@/lib/agent-tasks/chat", () => ({ addAgentArtifact: h.addAgentArtifact }));
+vi.mock("@/lib/agent-tasks/opportunity-task", () => ({
+  markOpportunityTaskDelivered: h.markOpportunityTaskDelivered,
+}));
 vi.mock("@/lib/site-delivery/config", () => ({ getSiteDeliveryConfig: vi.fn(async () => ({ enabled: true, adapters: [] })) }));
 vi.mock("@/lib/agent-tasks/targets", () => ({ isTechnicalSeoAction: vi.fn(() => true) }));
 vi.mock("@/lib/delivery/target-selection", () => ({ selectEmbedTargetKey: vi.fn() }));
@@ -121,6 +125,7 @@ beforeEach(() => {
   h.db.researchAction.findUnique.mockClear();
   h.addAgentArtifact.mockClear();
   h.updateAgentTask.mockClear();
+  h.markOpportunityTaskDelivered.mockClear();
   (publishWixSite as unknown as ReturnType<typeof vi.fn>).mockClear();
 });
 
@@ -134,6 +139,7 @@ describe("public Wix release concurrency and receipt boundaries", () => {
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(publishWixSite).toHaveBeenCalledTimes(1);
     expect(h.state.task.status).toBe("CLOSED");
+    expect(h.markOpportunityTaskDelivered).toHaveBeenCalledWith("task-release-1", null);
   });
 
   it("does not mislabel a lost local receipt as not-started or publish again", async () => {
