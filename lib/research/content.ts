@@ -243,7 +243,9 @@ export async function generateWixBlogUpdateDraftForAction(
   const existing = await readWixBlogPostBySlug(decodeURIComponent(slug), cfg);
   return generateDraftForAction(
     actionId,
-    instructions || "Make a targeted update to the existing Wix Blog post. Preserve its title, URL, introduction, established facts, structure, and useful detail. Only add or strengthen what the action requires. Do not add cost comparisons, statistics, or new FAQs unless they are already in the current post or evidence.",
+    // The action decides whether the title, H1 or introduction changes; the
+    // update only preserves what the action did not ask to change.
+    instructions || "Make a targeted update to the existing Wix Blog post. Keep its URL. Preserve established facts and useful detail, and keep the existing title, introduction and structure unless the action asks for them to change. Only add or strengthen what the action requires. Do not add cost comparisons, statistics, or new FAQs unless they are already in the current post or evidence.",
     {
       requireApproval: false,
       forceArticle: true,

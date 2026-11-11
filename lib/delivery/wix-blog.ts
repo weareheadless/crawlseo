@@ -359,7 +359,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     where: { id: contentDraftId },
     include: {
       site: { select: { id: true, domain: true } },
-      action: { select: { id: true, format: true, primaryQuery: true, status: true } },
+      action: { select: { id: true, format: true, primaryQuery: true, status: true, targetUrl: true } },
     },
   });
   if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
@@ -384,6 +384,32 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     orderBy: { createdAt: "desc" },
   });
   if (existing) return existing;
+
+  // An action that names an existing post updates that post. Creating a draft
+  // here would publish a second post at the new slug and leave the original
+  // untouched, so the delivery points at the post's own draft instead.
+  const targetSlug = draft.action.targetUrl ? blogSlugFromUrl(draft.action.targetUrl) : null;
+  if (targetSlug) {
+    const post = await readWixBlogPostBySlug(targetSlug, cfg);
+    return db.delivery.create({
+      data: {
+        actionId: draft.action.id,
+        draftId: draft.id,
+        platform: "wix_blog",
+        externalId: post.id,
+        status: "DRAFT_VERIFIED",
+        verifiedAt: new Date(),
+        payload: {
+          draft_id: post.id,
+          post_id: post.id,
+          slug: post.slug,
+          mode: "update_existing",
+          language: cfg.language,
+          readback_verified: true,
+        },
+      },
+    });
+  }
 
   if (await slugExists(cfg, draft.slug)) {
     throw new WixBlogDeliveryError(`A Wix Blog post or draft already uses slug ${draft.slug}`, 409);
@@ -578,7 +604,9 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
     existing = await readWixBlogPostBySlug(slug, cfg);
   }
   const slug = existing.slug;
-  const title = existing.title || draft.title;
+  // The approved draft carries the title the update asked for; the existing
+  // post keeps its slug, so only the address of the post is preserved.
+  const title = draft.title || existing.title;
   let importedCover: Awaited<ReturnType<typeof importCover>>;
   try {
     importedCover = await importCover(cfg, draft);
