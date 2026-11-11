@@ -122,6 +122,7 @@ export function buildWixPagePrompt(input: {
     multiLocale
       ? "- Write each page from scratch in its own language, as a native copywriter for that market. Do not translate one page into the other: the examples, the phrasing, the search wording and the cultural references must be the ones a buyer in that language actually uses. A sentence that reads like a translation is a defect."
       : "- Write in the page language. Keep the buyer's wording for the target query; do not translate it into marketing jargon.",
+    "- Write every visible string in that page's language, including headings, filter labels, empty states and calls to action. A page must not contain a sentence in another language.",
     "- Use the design reference's colours and fonts. Do not substitute a new palette or typeface.",
     "- The Wix page is blank and this embed replaces its content container, so this section is the whole page. It must stand on its own.",
     "",

@@ -182,16 +182,27 @@ export async function createPreviewArtifact(
   const sections = components.map(({ file, tag, source, configurable, modes }) => {
     // One block per config variant, so every market or locale the page can
     // render is reviewable together. `mode="all"` on a single mount would
-    // otherwise render only the hero.
+    // otherwise render only the hero. Each block is labelled with its own
+    // language and carries `lang`, so the two are never mistaken for one page.
     const render = configurable && variants.length > 0
-      ? variants.map((variant) => `
-    <section class="preview-block">
-      <div class="preview-label">${label(file)} · ${label(variant.name)}${previewPath ? ` · ${label(previewPath)}` : ""}</div>
-      <${tag} ${shared}${modes ? ' mode="all"' : ""} config="${escapeHtml(JSON.stringify(variant.config))}"></${tag}>
-    </section>`).join("\n")
+      ? variants.map((variant) => {
+          const config = variant.config && typeof variant.config === "object" && !Array.isArray(variant.config)
+            ? variant.config as Record<string, unknown>
+            : {};
+          const locale = typeof config.locale === "string" ? config.locale.trim().toLowerCase() : "";
+          const language = locale ? languageName(locale) : variant.name;
+          return `
+    <section class="preview-block"${locale ? ` lang="${escapeHtml(locale)}"` : ""}>
+      <div class="preview-label">
+        <span class="preview-locale">${label(language)}</span>
+        <span class="preview-meta">${label(variant.name)} · ${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</span>
+      </div>
+      <${tag} ${shared}${locale ? ` lang="${escapeHtml(locale)}"` : ""}${modes ? ' mode="all"' : ""} config="${escapeHtml(JSON.stringify(variant.config))}"></${tag}>
+    </section>`;
+        }).join("\n")
       : `
     <section class="preview-block">
-      <div class="preview-label">${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</div>
+      <div class="preview-label"><span class="preview-meta">${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</span></div>
       <${tag} ${shared}></${tag}>
     </section>`;
     return `${render}
@@ -206,18 +217,32 @@ export async function createPreviewArtifact(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CrawlSEO preview</title>
 <style>
-  body{margin:0;background:#f3f1eb;color:#222;font:14px/1.5 Arial,sans-serif}
-  .preview-note{padding:12px 18px;background:#111;color:#fff;font-size:12px}
-  .preview-block{border-bottom:1px solid #d9d4c7;padding:0}
-  .preview-label{padding:8px 18px;background:#e7e1d4;color:#6c6558;font:10px/1.4 monospace;text-transform:uppercase;letter-spacing:.08em}
+  body{margin:0;background:#e9e5da;color:#222;font:14px/1.5 Arial,sans-serif}
+  .preview-note{padding:14px 18px;background:#111;color:#fff;font-size:12px;line-height:1.5}
+  .preview-block{border-top:12px solid #111;padding:0}
+  .preview-block:first-of-type{border-top:0}
+  .preview-label{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:11px 18px;background:#111;color:#fff;font:600 11px/1.4 monospace;text-transform:uppercase;letter-spacing:.08em;box-shadow:0 3px 12px rgba(0,0,0,.28)}
+  .preview-locale{padding:3px 9px;border-radius:999px;background:#f6e995;color:#1b1b1b;font-weight:700}
+  .preview-meta{color:#b9b4a7}
 </style>
 </head>
 <body>
-<div class="preview-note">Preview of the changed page and component. Page copy comes from the page's own config; live Wix data, listings and page chrome are not loaded. Every config variant is shown.</div>
+<div class="preview-note">Preview of the changed page and component. Page copy comes from the page's own config; live Wix data, listings and page chrome are not loaded. Each language is a separate block with its own header.</div>
 ${sections}
 </body>
 </html>`;
   await addAgentArtifact(taskId, { kind: "preview_html", content: html });
+}
+
+/** The language's own name, e.g. "Español", so a block header is readable. */
+function languageName(code: string): string {
+  try {
+    const name = new Intl.DisplayNames([code], { type: "language" }).of(code);
+    if (name) return name.replace(/^./, (character) => character.toUpperCase());
+  } catch {
+    // An unusual tag keeps its code; the header is still a separator.
+  }
+  return code;
 }
 
 function escapeHtml(value: string): string {
