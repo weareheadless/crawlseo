@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
+import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 
 export async function GET(
   _req: Request,
@@ -8,6 +9,9 @@ export async function GET(
   const userId = await getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { taskId } = await params;
+  if (!(await userOwnsAgentTask(taskId, userId))) {
+    return Response.json({ error: "Agent task not found" }, { status: 404 });
+  }
   const artifact = await db.agentTaskArtifact.findFirst({
     where: { taskId, kind: "preview_html" },
     orderBy: { createdAt: "desc" },

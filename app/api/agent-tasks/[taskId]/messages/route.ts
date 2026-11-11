@@ -8,6 +8,7 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { z } from "zod";
 import { ZodError } from "zod";
 import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
+import { acceptsAgentFollowUp, followUpTargetStatus } from "@/lib/agent-tasks/transitions";
 
 const schema = z.object({ content: z.string().trim().min(1).max(20_000) });
 
@@ -39,17 +40,26 @@ export async function POST(
   if (!(await userOwnsAgentTask(taskId, userId))) return Response.json({ error: "Agent task not found" }, { status: 404 });
   try {
     const { content } = schema.parse(await req.json());
-    const message = await addAgentMessage(taskId, content, "HUMAN");
     const task = await db.agentTask.findUnique({
       where: { id: taskId },
-      select: { status: true, siteId: true },
+      select: { status: true, siteId: true, kind: true },
     });
+    const message = await addAgentMessage(taskId, content, "HUMAN");
     let systemMessage = null;
     let jobId: string | null = null;
+    let queued = false;
     if (task) {
-      if (["AWAITING_REVIEW", "APPROVED", "COMMITTED", "PUBLISHED", "CLOSED"].includes(task.status)) {
-        await updateAgentTask(taskId, { status: "CHANGES_REQUESTED", errorCode: null });
+      // A correction reopens the task for a run instead of leaving it in a
+      // review or published state where the worker would refuse to start.
+      let status = task.status;
+      if (acceptsAgentFollowUp(status)) {
+        const target = followUpTargetStatus(status);
+        if (target !== status) {
+          await updateAgentTask(taskId, { status: target, errorCode: null });
+          status = target;
+        }
       }
+      const runnable = task.kind !== "wix_article" && ["READY", "CHANGES_REQUESTED"].includes(status);
       const activeJob = await db.job.findFirst({
         where: {
           siteId: task.siteId,
@@ -59,7 +69,7 @@ export async function POST(
         },
         select: { id: true },
       });
-      if (!activeJob) {
+      if (runnable && !activeJob) {
         const job = await enqueueJob({
           siteId: task.siteId,
           kind: JobKind.AGENT_TASK,
@@ -68,14 +78,21 @@ export async function POST(
           maxAttempts: 1,
         });
         jobId = job.id;
+        queued = true;
       }
       systemMessage = await addAgentMessage(
         taskId,
-        jobId ? "Follow-up requested. Agent run queued." : "Follow-up requested. The agent is already running.",
+        queued
+          ? "Follow-up requested. Agent run queued."
+          : activeJob
+            ? "Follow-up requested. The agent is already running."
+            : task.kind === "wix_article"
+              ? "Note saved. An article task publishes from its draft; there is no separate agent run."
+              : "Note saved. The task cannot run in its current state.",
         "SYSTEM",
       );
     }
-    return Response.json({ message, systemMessage, reopened: Boolean(systemMessage), jobId }, { status: 201 });
+    return Response.json({ message, systemMessage, queued, jobId }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return Response.json({ error: error.issues[0]?.message ?? "Invalid message" }, { status: 400 });

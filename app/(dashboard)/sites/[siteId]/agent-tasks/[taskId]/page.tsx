@@ -5,6 +5,9 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { userOwnsAgentTask } from "@/lib/auth/research-action-access";
 import { PageHeader } from "@/components/ui/page-header";
 import { WixTaskActions } from "@/components/work/wix-task-actions";
+import { AgentRunConsole } from "@/components/work/agent-run-console";
+import { readAgentProgress } from "@/lib/agent-tasks/progress";
+import { latestAgentRunJob } from "@/lib/agent-tasks/service";
 
 interface Props {
   params: Promise<{ siteId: string; taskId: string }>;
@@ -45,7 +48,7 @@ export default async function AgentTaskPage({ params }: Props) {
         where: {
           OR: [
             { kind: { startsWith: "page_html" } },
-            { kind: { in: ["design_notes", "navigation_notes", "navigation_edits"] } },
+            { kind: { in: ["preview_html", "design_notes", "navigation_notes", "navigation_edits"] } },
           ],
         },
         orderBy: { createdAt: "desc" },
@@ -58,14 +61,13 @@ export default async function AgentTaskPage({ params }: Props) {
 
   const route = task.route;
   const result = record(task.result);
-  const progress = record(result.progress);
   const awaitingTarget = record(result.awaitingTarget);
   const awaitingPlacement = record(result.awaitingPlacement);
   const delivery = record(result.delivery);
   const componentTag = typeof delivery.tag === "string" ? delivery.tag : null;
-  const progressLines = Array.isArray(progress.lines)
-    ? progress.lines.map((line) => record(line)).filter((line) => typeof line.message === "string")
-    : [];
+  const agentProgress = readAgentProgress(task.result);
+  const previewArtifact = task.artifacts.find((artifact) => artifact.kind === "preview_html") ?? null;
+  const latestJob = await latestAgentRunJob(task.id);
   const pageArtifacts = task.kind === "wix_page"
     ? task.artifacts.filter((artifact) => artifact.kind === "page_html" || artifact.kind.startsWith("page_html:"))
     : [];
@@ -124,10 +126,12 @@ export default async function AgentTaskPage({ params }: Props) {
         }
       />
 
-      <section className="panel p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="font-data text-[10px] uppercase tracking-wide text-muted-foreground">
+      {/* The actions stay reachable while the run and its preview scroll past:
+          approving and running used to mean scrolling back to the top. */}
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 space-y-0.5">
+            <p className="truncate font-data text-[10px] uppercase tracking-wide text-muted-foreground">
               {task.kind === "wix_article"
                 ? "Wix Blog article"
                 : componentTag
@@ -136,7 +140,7 @@ export default async function AgentTaskPage({ params }: Props) {
               {route ? ` · ${route}` : ""}
             </p>
             {task.action?.primaryQuery && (
-              <p className="text-sm text-muted-foreground">Target query: {task.action.primaryQuery}</p>
+              <p className="truncate text-[11px] text-muted-foreground">Query: {task.action.primaryQuery}</p>
             )}
           </div>
           <WixTaskActions
@@ -148,8 +152,40 @@ export default async function AgentTaskPage({ params }: Props) {
             hasPage={Boolean(html)}
           />
         </div>
-        {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
-          <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
+      </div>
+
+      {/* An article has no agent run: it publishes from its draft, so its
+          conversation stays a plain list of review notes. */}
+      {task.kind !== "wix_article" && (
+        <AgentRunConsole
+          taskId={task.id}
+          initialStatus={task.status}
+          initialProgress={agentProgress}
+          initialMessages={task.messages.map((message) => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            createdAt: message.createdAt.toISOString(),
+          }))}
+          initialJobStatus={latestJob?.status ?? null}
+        />
+      )}
+      {task.kind === "wix_article" && task.messages.length > 0 && (
+        <section className="panel p-5">
+          <h2 className="font-heading text-base font-semibold">Review notes</h2>
+          <div className="mt-2 space-y-2">
+            {task.messages.map((message) => (
+              <div key={message.id} className="rounded-lg border border-border/50 p-3">
+                <p className="font-data text-[9px] uppercase tracking-wide text-muted-foreground">{message.role}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm">{message.content}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
+        <section className="panel p-5">
+          <div className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
             <p className="font-medium text-warning">Deployed; Wix has not rendered the element yet</p>
             <p className="mt-1 text-muted-foreground">
               The early packet in general custom code registers the element and the page&apos;s mount embed adds it, so there is nothing to place in the editor.
@@ -175,9 +211,11 @@ export default async function AgentTaskPage({ params }: Props) {
               </p>
             </div>
           </div>
-        )}
-        {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length === 0 && (
-          <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
+        </section>
+      )}
+      {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length === 0 && (
+        <section className="panel p-5">
+          <div className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
             <p className="font-medium text-warning">The Wix page does not exist yet</p>
             <p className="mt-1 text-muted-foreground">
               Create and publish a blank page at{" "}
@@ -199,14 +237,35 @@ export default async function AgentTaskPage({ params }: Props) {
               {pageDescription && <p>Meta description: <span className="text-foreground">{pageDescription}</span></p>}
             </div>
           </div>
-        )}
-        {task.status === "FAILED" && task.errorCode && (
-          <div className="mt-4 rounded-lg border border-danger/40 bg-danger/5 p-4 text-sm">
+        </section>
+      )}
+      {task.status === "FAILED" && task.errorCode && (
+        <section className="panel p-5">
+          <div className="rounded-lg border border-danger/40 bg-danger/5 p-4 text-sm">
             <p className="font-medium text-danger">Delivery stopped</p>
             <p className="mt-1 text-muted-foreground">{task.errorCode}</p>
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {previewArtifact?.content && (
+        <section className="panel overflow-hidden">
+          <div className="border-b border-border/60 p-4">
+            <h2 className="font-heading text-base font-semibold">Preview</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The component the agent changed, rendered from its source with scripts enabled so the custom element mounts.
+            </p>
+          </div>
+          {/* The URL carries the artifact time: a rerun writes a new preview and
+              the iframe must reload instead of showing the previous run. */}
+          <iframe
+            title="Agent component preview"
+            src={`/crawlseo/api/agent-tasks/${task.id}/preview?v=${previewArtifact.createdAt.getTime()}`}
+            sandbox="allow-scripts"
+            className="h-[680px] w-full bg-white"
+          />
+        </section>
+      )}
 
       {pageVariants.map((variant) => variant.html && (
         <section key={variant.code} className="panel overflow-hidden">
@@ -270,32 +329,6 @@ export default async function AgentTaskPage({ params }: Props) {
         </section>
       )}
 
-      {progressLines.length > 0 && (
-        <section className="panel p-5">
-          <h2 className="font-heading text-base font-semibold">Agent progress</h2>
-          <ul className="mt-2 space-y-1">
-            {progressLines.slice(-20).map((line, index) => (
-              <li key={index} className="font-data text-[11px] text-muted-foreground">
-                {String(line.message)}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {task.messages.length > 0 && (
-        <section className="panel p-5">
-          <h2 className="font-heading text-base font-semibold">Review notes</h2>
-          <div className="mt-2 space-y-2">
-            {task.messages.map((message) => (
-              <div key={message.id} className="rounded-lg border border-border/50 p-3">
-                <p className="font-data text-[9px] uppercase tracking-wide text-muted-foreground">{message.role}</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm">{message.content}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

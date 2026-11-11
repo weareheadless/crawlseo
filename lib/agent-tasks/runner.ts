@@ -7,6 +7,8 @@ import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
 import { agentChangeOutcome, isReleaseableSiteFile, parseGitStatusFiles } from "@/lib/agent-tasks/changes";
 import { captureTaskScreenshots, selectScreenshotUrls, type AgentScreenshot } from "@/lib/agent-tasks/screenshots";
 import { agentTimeouts } from "@/lib/agent-tasks/timeouts";
+import { progressLineForEvent, type AgentProgressLine } from "@/lib/agent-tasks/progress";
+import { worktreeBrief } from "@/lib/agent-tasks/prompt";
 
 const execFileAsync = promisify(execFile);
 
@@ -40,13 +42,20 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type AgentProgressLine = { at: string; message: string };
 type AgentProgressState = {
   stage: string;
   startedAt: string;
   updatedAt: string;
   lines: AgentProgressLine[];
+  dropped: number;
 };
+
+/**
+ * The console shows the run as it happens, so the buffer is large enough to
+ * cover a real session. Anything older is counted, not silently forgotten: the
+ * page says how many earlier lines it is not showing.
+ */
+const RETAINED_PROGRESS_LINES = 500;
 
 function progressRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -56,7 +65,7 @@ function progressRecord(value: unknown): Record<string, unknown> {
 
 function createProgress(): AgentProgressState {
   const now = new Date().toISOString();
-  return { stage: "Preparing agent", startedAt: now, updatedAt: now, lines: [] };
+  return { stage: "Preparing agent", startedAt: now, updatedAt: now, lines: [], dropped: 0 };
 }
 
 async function flushProgress(taskId: string, progress: AgentProgressState): Promise<void> {
@@ -68,40 +77,10 @@ async function flushProgress(taskId: string, progress: AgentProgressState): Prom
     data: {
       result: {
         ...progressRecord(task.result),
-        progress: {
-          ...progress,
-          lines: progress.lines.slice(-60),
-        },
+        progress,
       },
     },
   });
-}
-
-function progressLineForEvent(line: string): string | null {
-  if (!line.trim()) return null;
-  try {
-    const event = JSON.parse(line) as {
-      type?: unknown;
-      part?: { type?: unknown; text?: unknown; tool?: unknown; name?: unknown };
-    };
-    if (event.type === "step_start") return "Agent started a reasoning step.";
-    if (event.type === "step_finish") return "Reasoning step completed.";
-    if (event.type === "text" && typeof event.part?.text === "string") {
-      const text = event.part.text.replace(/\s+/g, " ").trim();
-      return text ? `Agent: ${text.slice(0, 220)}` : null;
-    }
-    const tool = typeof event.part?.tool === "string"
-      ? event.part.tool
-      : typeof event.part?.name === "string"
-        ? event.part.name
-        : null;
-    if (tool && (event.type === "tool_use" || event.part?.type === "tool")) {
-      return `Tool: ${tool}`;
-    }
-  } catch {
-    // Ignore non-JSON output.
-  }
-  return null;
 }
 
 function previewTag(source: string, file: string): string | null {
@@ -266,6 +245,11 @@ export async function runAgentTask(taskId: string) {
     if (message) {
       const last = progress.lines.at(-1)?.message;
       if (message !== last) progress.lines.push({ at: new Date().toISOString(), message });
+      if (progress.lines.length > RETAINED_PROGRESS_LINES) {
+        const overflow = progress.lines.length - RETAINED_PROGRESS_LINES;
+        progress.lines.splice(0, overflow);
+        progress.dropped += overflow;
+      }
     }
     const now = Date.now();
     if (force || now - lastProgressFlush >= 1_500) {
@@ -301,7 +285,8 @@ export async function runAgentTask(taskId: string) {
         "For alt text, apply the description to the matching <img> element in the DOM and use alt=\"\" for decorative images.",
       ].join("\n")
     : "";
-  const agentPrompt = `${prompt}${screenshotNote}`;
+  // The run happens in a worktree; the brief may still name the main checkout.
+  const agentPrompt = `${worktreeBrief(prompt, worktreePath)}${screenshotNote}`;
   await addProgress("Starting OpenCode agent.", "Starting agent", true);
   try {
     await new Promise<void>((resolve, reject) => {

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { addAgentArtifact, addAgentMessage } from "@/lib/agent-tasks/chat";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { agentTimeouts } from "@/lib/agent-tasks/timeouts";
+import { progressLineForEvent } from "@/lib/agent-tasks/progress";
 import { markActionVerified } from "@/lib/research/action-status";
 import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 import { ResearchServiceError } from "@/lib/research/service";
@@ -188,7 +189,11 @@ type Progress = {
   startedAt: string;
   updatedAt: string;
   lines: Array<{ at: string; message: string }>;
+  /** Lines older than the retained window, reported rather than hidden. */
+  dropped: number;
 };
+
+const RETAINED_PROGRESS_LINES = 500;
 
 async function flushProgress(taskId: string, progress: Progress): Promise<void> {
   progress.updatedAt = new Date().toISOString();
@@ -199,7 +204,7 @@ async function flushProgress(taskId: string, progress: Progress): Promise<void> 
     data: {
       result: {
         ...record(task.result),
-        progress: { ...progress, lines: progress.lines.slice(-60) },
+        progress,
       } as never,
     },
   });
@@ -260,14 +265,8 @@ async function runAgent(command: string[], cwd: string, onOutput: (line: string)
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() ?? "";
       for (const line of lines) {
-        try {
-          const event = JSON.parse(line) as { type?: string; part?: { text?: string; tool?: string; name?: string } };
-          if (event.type === "text" && event.part?.text?.trim()) onOutput(event.part.text.trim().slice(0, 220));
-          const tool = event.part?.tool ?? event.part?.name;
-          if (tool && event.type === "tool_use") onOutput(`Tool: ${tool}`);
-        } catch {
-          // Non-JSON progress lines are not user-facing text.
-        }
+        const message = progressLineForEvent(line);
+        if (message) onOutput(message);
       }
     });
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -312,6 +311,7 @@ export async function runWixPageTask(taskId: string) {
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     lines: [{ at: new Date().toISOString(), message: `Workspace: ${directory}` }],
+    dropped: 0,
   };
   await db.agentTask.update({
     where: { id: task.id },
@@ -323,6 +323,11 @@ export async function runWixPageTask(taskId: string) {
   const onOutput = (message: string) => {
     if (progress.lines.at(-1)?.message === message) return;
     progress.lines.push({ at: new Date().toISOString(), message });
+    if (progress.lines.length > RETAINED_PROGRESS_LINES) {
+      const overflow = progress.lines.length - RETAINED_PROGRESS_LINES;
+      progress.lines.splice(0, overflow);
+      progress.dropped += overflow;
+    }
     const now = Date.now();
     if (now - lastFlush > 1_500) {
       lastFlush = now;
@@ -503,6 +508,7 @@ async function deliver(task: {
                 instruction: `The page's mount embed is deployed for every locale; Wix may still be serving a cached document. Check again shortly.`,
               },
           progress: {
+            ...record(priorResult.progress),
             stage: live ? "Published" : "Waiting for the packets to render",
             updatedAt: new Date().toISOString(),
           },
@@ -564,7 +570,7 @@ async function deliver(task: {
         ...priorResult,
         delivery: result,
         liveVerified,
-        progress: { stage: "Published", updatedAt: new Date().toISOString() },
+        progress: { ...record(priorResult.progress), stage: "Published", updatedAt: new Date().toISOString() },
       } as never,
     });
   } catch (error) {
@@ -619,7 +625,7 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
           attempts: 0,
           instruction: `Create and publish a blank page at ${missing.map((variant) => variant.route).join(" and ")} in the Wix editor. The agent delivers every locale as soon as the pages answer.`,
         },
-        progress: { stage: "Waiting for the pages", updatedAt: new Date().toISOString() },
+        progress: { ...record(record(task.result).progress), stage: "Waiting for the pages", updatedAt: new Date().toISOString() },
       } as never,
     });
     await enqueueJob({
@@ -702,7 +708,7 @@ export async function resumeWixPageDelivery(taskId: string) {
             ...result,
             delivery: { ...delivery, variants: checked },
             awaitingPlacement: undefined,
-            progress: { stage: "Published", updatedAt: new Date().toISOString() },
+            progress: { ...record(result.progress), stage: "Published", updatedAt: new Date().toISOString() },
           } as never,
         }),
       };

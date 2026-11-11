@@ -43,7 +43,7 @@ describe("the opportunity follows its task", () => {
 
   it("does nothing for a task with no opportunity", async () => {
     const { db, calls } = fakeDb();
-    db.task.findUnique.mockResolvedValue({ opportunityId: null });
+    db.task.findUnique.mockResolvedValue({ opportunityId: null } as never);
     await syncOpportunityStatus(db as never, "task-1", "delivered");
     expect(calls).toHaveLength(0);
   });

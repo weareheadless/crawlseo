@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, Loader2, Play, RefreshCw, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AGENT_RUN_REQUESTED_EVENT } from "@/lib/agent-tasks/run-event";
 
 export function WixTaskActions({
   taskId,
@@ -37,6 +38,9 @@ export function WixTaskActions({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error ?? `${label} failed`);
+      if (path.endsWith("/run")) {
+        window.dispatchEvent(new Event(AGENT_RUN_REQUESTED_EVENT));
+      }
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : `${label} failed`);
@@ -122,6 +126,7 @@ export function WixTaskActions({
                 const run = await fetch(`/crawlseo/api/agent-tasks/${taskId}/run`, { method: "POST" });
                 const runBody = await run.json().catch(() => ({}));
                 if (!run.ok) throw new Error(runBody.error ?? "Could not start the agent");
+                window.dispatchEvent(new Event(AGENT_RUN_REQUESTED_EVENT));
                 router.refresh();
               } catch (caught) {
                 setError(caught instanceof Error ? caught.message : "Could not start the agent");

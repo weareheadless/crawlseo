@@ -215,6 +215,23 @@ export async function listAgentTasks(siteId: string, limit = 50) {
   });
 }
 
+/**
+ * The run currently targeting a task, if any.
+ *
+ * A run is queued before the task becomes RUNNING, so the review page needs the
+ * job state to keep its console live through that window.
+ */
+export async function latestAgentRunJob(taskId: string) {
+  return db.job.findFirst({
+    where: {
+      kind: "AGENT_TASK",
+      payload: { path: ["agentTaskId"], equals: taskId },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+  });
+}
+
 export async function updateAgentTask(
   taskId: string,
   input: {

@@ -114,3 +114,20 @@ export function buildAgentPrompt(input: AgentPromptInput): string {
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",
   ].filter(Boolean).join("\n");
 }
+
+/**
+ * Point the agent at its own checkout.
+ *
+ * The stored brief names the repository so it reads self-contained, but the
+ * run happens in a worktree. An agent that follows the absolute repository path
+ * edits the shared checkout; that is how a run inside a worktree still left two
+ * files modified in the main repository.
+ */
+export function worktreeBrief(prompt: string, worktreePath: string): string {
+  return [
+    `WORKING COPY: ${worktreePath}`,
+    "Make every edit inside that directory and run commands from it. The repository named in the brief is the shared checkout: read it if you must, but never write to it.",
+    "",
+    prompt.replace(/^REPOSITORY:.*$/m, `REPOSITORY: ${worktreePath}`),
+  ].join("\n");
+}
