@@ -98,6 +98,8 @@ export function AgentRunConsole({
   const logRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const stickToChat = useRef(true);
 
   const polling = runRequested || status === "RUNNING" || BUSY_JOB.has(jobStatus ?? "");
 
@@ -165,6 +167,12 @@ export function AgentRunConsole({
     if (element && stickToBottom.current) element.scrollTop = element.scrollHeight;
   }, [lines]);
 
+  // A sent note and the agent's reply both land at the end of the thread.
+  useEffect(() => {
+    const element = chatRef.current;
+    if (element && stickToChat.current) element.scrollTop = element.scrollHeight;
+  }, [messages]);
+
   const jumpToLatest = () => {
     stickToBottom.current = true;
     setAtBottom(true);
@@ -202,6 +210,7 @@ export function AgentRunConsole({
         setStatus("RUNNING");
         setStage("Queued");
       }
+      stickToChat.current = true;
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not send that note");
@@ -290,7 +299,14 @@ export function AgentRunConsole({
         </div>
 
         <div className="flex min-w-0 flex-col">
-          <div className="h-[240px] overflow-auto px-4 py-3">
+          <div
+            ref={chatRef}
+            onScroll={(event) => {
+              const element = event.currentTarget;
+              stickToChat.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+            }}
+            className="h-[240px] overflow-auto px-4 py-3"
+          >
             {messages.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 No conversation yet. Review notes and the agent&apos;s summary appear here.
