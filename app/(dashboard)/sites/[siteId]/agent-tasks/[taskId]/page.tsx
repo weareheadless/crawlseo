@@ -41,7 +41,16 @@ export default async function AgentTaskPage({ params }: Props) {
       site: { select: { id: true, domain: true } },
       action: { select: { id: true, title: true, targetUrl: true, primaryQuery: true, status: true } },
       draft: { select: { id: true, title: true, metaTitle: true, metaDescription: true, excerpt: true, markdown: true } },
-      artifacts: { where: { kind: { in: ["page_html", "design_notes", "navigation_notes", "navigation_edits"] } }, orderBy: { createdAt: "desc" }, take: 10 },
+      artifacts: {
+        where: {
+          OR: [
+            { kind: { startsWith: "page_html" } },
+            { kind: { in: ["design_notes", "navigation_notes", "navigation_edits"] } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+      },
       messages: { orderBy: { createdAt: "asc" }, take: 40 },
     },
   });
