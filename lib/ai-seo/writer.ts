@@ -61,18 +61,64 @@ function stringList(value: unknown, maxItems = 12): string[] {
     .slice(0, maxItems);
 }
 
+/**
+ * Escape raw control characters inside JSON string literals.
+ *
+ * A model asked for JSON sometimes emits a real newline inside the markdown
+ * string. That is invalid JSON, not a different meaning, so escaping it is a
+ * syntax repair rather than a guess about the draft.
+ */
+function escapeControlCharactersInStrings(value: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const character of value) {
+    if (!inString) {
+      out += character;
+      if (character === "\"") inString = true;
+      continue;
+    }
+    if (escaped) {
+      out += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      out += character;
+      escaped = true;
+      continue;
+    }
+    if (character === "\"") {
+      out += character;
+      inString = false;
+      continue;
+    }
+    if (character === "\n") { out += "\\n"; continue; }
+    if (character === "\r") { out += "\\r"; continue; }
+    if (character === "\t") { out += "\\t"; continue; }
+    out += character;
+  }
+  return out;
+}
+
 function extractJson(content: string): unknown {
   const trimmed = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
+  const candidates = [trimmed];
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) candidates.push(trimmed.slice(start, end + 1));
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      try {
+        return JSON.parse(escapeControlCharactersInStrings(candidate));
+      } catch {
+        // Try the next candidate, then report the failure once.
+      }
     }
-    throw new ContentWriterError("The content writer returned an unreadable draft");
   }
+  throw new ContentWriterError("The content writer returned an unreadable draft");
 }
 
 function outlineFromMarkdown(markdown: string): string[] {
@@ -213,73 +259,106 @@ export async function generateContentDraft(input: {
     ].join("\n"),
   ].join("\n\n");
 
-  let response: Response;
-  try {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.4,
-        max_tokens: 6_000,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt() },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(90_000),
-    });
-  } catch (error) {
-    throw new ContentWriterError(
-      error instanceof Error && /timeout|aborted/i.test(error.message)
-        ? "The content writer timed out"
-        : "The content writer could not be reached",
-    );
-  }
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      throw new ContentWriterError("The content writer is rate-limited (HTTP 429). Try again shortly.");
+  // One draft, then one repair attempt if the model's answer could not be
+  // read. A second call is cheaper than asking the person to press the button
+  // again, and it never invents content: it re-asks with the same evidence.
+  let lastError: ContentWriterError | null = null;
+  // The button waits on this call, and a proxy cuts a request near 100 s, so
+  // the second attempt only starts if there is room for it to finish.
+  const deadline = Date.now() + 90_000;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const remaining = deadline - Date.now();
+    if (attempt > 0 && remaining < 25_000) break;
+    const timeout = attempt === 0 ? 70_000 : Math.min(45_000, remaining);
+    const repair = attempt === 0
+      ? ""
+      : [
+          "REPAIR",
+          "The previous answer could not be parsed as JSON.",
+          "Return exactly one JSON object and nothing else. Escape every newline inside a string as \\n.",
+          "Keep the same evidence and the same draft; change only the formatting.",
+        ].join("\n");
+    let response: Response;
+    try {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: config.model,
+          temperature: attempt === 0 ? 0.4 : 0.2,
+          max_tokens: 6_000,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt() },
+            { role: "user", content: repair ? `${userPrompt}\n\n${repair}` : userPrompt },
+          ],
+        }),
+        signal: AbortSignal.timeout(timeout),
+      });
+    } catch (error) {
+      throw new ContentWriterError(
+        error instanceof Error && /timeout|aborted/i.test(error.message)
+          ? "The content writer timed out"
+          : "The content writer could not be reached",
+      );
     }
-    if (response.status === 401 || response.status === 403) {
-      throw new ContentWriterError(`The content writer rejected its credentials (HTTP ${response.status})`);
-    }
-    if (response.status >= 500) {
-      throw new ContentWriterError(`The content writer is temporarily unavailable (HTTP ${response.status})`);
-    }
-    throw new ContentWriterError(`The content writer returned HTTP ${response.status}`);
-  }
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    throw new ContentWriterError("The content writer returned an unreadable response");
-  }
+    if (!response.ok) {
+      if (response.status === 429) {
+        throw new ContentWriterError("The content writer is rate-limited (HTTP 429). Try again shortly.");
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new ContentWriterError(`The content writer rejected its credentials (HTTP ${response.status})`);
+      }
+      if (response.status >= 500) {
+        throw new ContentWriterError(`The content writer is temporarily unavailable (HTTP ${response.status})`);
+      }
+      throw new ContentWriterError(`The content writer returned HTTP ${response.status}`);
+    }
 
-  const choice = (body as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0];
-  const content = choice?.message?.content;
-  const raw = typeof content === "string"
-    ? content
-    : Array.isArray(content)
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      throw new ContentWriterError("The content writer returned an unreadable response");
+    }
+
+    const choice = (body as { choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }> }).choices?.[0];
+    const content = choice?.message?.content;
+    const raw = typeof content === "string"
       ? content
-        .map((part) => {
-          if (typeof part === "string") return part;
-          if (part && typeof part === "object" && "text" in part) return String((part as { text?: unknown }).text ?? "");
-          return "";
-        })
-        .join("")
-      : "";
-  if (!raw.trim()) {
-    throw new ContentWriterError("The content writer returned an empty draft");
+      : Array.isArray(content)
+        ? content
+          .map((part) => {
+            if (typeof part === "string") return part;
+            if (part && typeof part === "object" && "text" in part) return String((part as { text?: unknown }).text ?? "");
+            return "";
+          })
+          .join("")
+        : "";
+    if (!raw.trim()) {
+      lastError = new ContentWriterError(
+        choice?.finish_reason === "length"
+          ? "The content writer ran out of room before it wrote the draft. Try again, or shorten the brief."
+          : "The content writer returned an empty draft",
+      );
+      continue;
+    }
+    try {
+      return validateGeneratedDraft(extractJson(raw), config);
+    } catch (error) {
+      lastError = error instanceof ContentWriterError
+        ? error
+        : new ContentWriterError("The content writer returned an unreadable draft");
+    }
   }
 
-  return validateGeneratedDraft(extractJson(raw), config);
+  throw lastError ?? new ContentWriterError("The content writer returned an unreadable draft");
 }
+
 
 export function briefForDraft(action: ContentAction): Record<string, unknown> {
   return {

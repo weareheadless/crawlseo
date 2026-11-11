@@ -78,16 +78,29 @@ export async function acceptOpportunityAction(
  * Turn an accepted opportunity into a page or article task the agent can
  * prepare. The funnel task stays the human's record; this creates the action
  * and agent task that actually deliver.
+ *
+ * An article needs a draft written first, which can take a minute. The result
+ * is returned instead of thrown so a failure shows as a message on the page
+ * the person is reading, not as an error screen that replaces it.
  */
 export async function prepareOpportunityWithAgentAction(
   siteId: string,
   opportunityId: string,
-) {
+): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> {
   await requireSiteAccess(siteId);
-  const task = await prepareOpportunityWithAgent(opportunityId, siteId);
-  revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
-  revalidatePath(`/sites/${siteId}/work`);
-  redirect(`/sites/${siteId}/agent-tasks/${task.id}`);
+  try {
+    const task = await prepareOpportunityWithAgent(opportunityId, siteId);
+    revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
+    revalidatePath(`/sites/${siteId}/work`);
+    return { ok: true, taskId: task.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error && error.message
+        ? error.message
+        : "The agent could not prepare this task. Try again.",
+    };
+  }
 }
 
 export async function confirmTaskStepAction(

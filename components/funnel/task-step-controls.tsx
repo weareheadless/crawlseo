@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import {
   attachAgentPlanAction,
@@ -34,7 +35,29 @@ export function TaskStepControls({
   agentTaskStatus?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
+  const [preparing, setPreparing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const run = (fn: () => Promise<void>) => startTransition(async () => { await fn(); });
+
+  // Preparing an article writes the draft first, which takes up to a minute.
+  // The button reports that work and keeps the page in place if it fails.
+  const prepareTask = async () => {
+    setPreparing(true);
+    setError(null);
+    try {
+      const result = await prepareOpportunityWithAgentAction(siteId, opportunityId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.push(`/sites/${siteId}/agent-tasks/${result.taskId}`);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : "The agent could not prepare this task. Try again.");
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   if (status === "verified_outcome") {
     return <p className="text-xs text-[var(--a-success-700)]">Closed: outcome verified.</p>;
@@ -53,16 +76,28 @@ export function TaskStepControls({
   const prepare = !agentTaskId ? (
     <button
       type="button"
-      disabled={pending}
-      onClick={() => run(() => prepareOpportunityWithAgentAction(siteId, opportunityId))}
-      className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:border-primary/40 disabled:opacity-50"
+      disabled={pending || preparing}
+      onClick={() => void prepareTask()}
+      className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:border-primary/40 disabled:opacity-50"
     >
-      Prepare with the agent
+      {preparing ? (
+        <>
+          <span className="size-3 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-foreground" />
+          Preparing… this can take a minute
+        </>
+      ) : (
+        "Prepare with the agent"
+      )}
     </button>
   ) : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+      {error && (
+        <p className="w-full text-[11px] text-danger" role="alert">
+          {error}
+        </p>
+      )}
       {status === "todo" && (
         <>
           {prepare}

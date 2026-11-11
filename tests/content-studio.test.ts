@@ -246,6 +246,67 @@ describe("writer provider", () => {
     })).rejects.toThrow("rate-limited");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("repairs a draft whose markdown contains literal newlines", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    const valid = JSON.stringify({
+      title: "Freediving in Playa del Carmen: A Practical Guide",
+      slug: "freediving-playa-del-carmen",
+      metaTitle: "Freediving in Playa del Carmen: Practical Guide",
+      metaDescription: "A practical, source-grounded guide to choosing a freediving course, planning your training, and understanding the local options.",
+      excerpt: "A concise guide to planning a freediving course in Playa del Carmen.",
+      markdown: `# Freediving in Playa del Carmen\n\n${"A useful paragraph about planning, safety, and course selection. ".repeat(8)}`,
+      outline: ["Planning"],
+    });
+    // A model that writes a real newline inside the markdown string: invalid
+    // JSON syntax, but the same draft.
+    const broken = valid.replace("\\n\\n", "\n\n");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: broken } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const draft = await generateContentDraft({ domain: "example.com", action: metadataAction });
+    expect(draft.slug).toBe("freediving-playa-del-carmen");
+    expect(draft.markdown).toContain("A useful paragraph");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks once more when the answer cannot be read, then succeeds", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    const valid = JSON.stringify({
+      title: "Freediving in Playa del Carmen: A Practical Guide",
+      slug: "freediving-playa-del-carmen",
+      metaTitle: "Freediving in Playa del Carmen: Practical Guide",
+      metaDescription: "A practical, source-grounded guide to choosing a freediving course, planning your training, and understanding the local options.",
+      excerpt: "A concise guide to planning a freediving course in Playa del Carmen.",
+      markdown: `# Freediving in Playa del Carmen\n\n${"A useful paragraph about planning, safety, and course selection. ".repeat(8)}`,
+      outline: ["Planning"],
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "Sure! Here is your draft:" } }] }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: valid } }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const draft = await generateContentDraft({ domain: "example.com", action: metadataAction });
+    expect(draft.slug).toBe("freediving-playa-del-carmen");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(second.messages[1].content).toContain("REPAIR");
+    expect(second.temperature).toBeLessThan(0.4);
+  });
+
+  it("reports the failure after the repair attempt", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "not json" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateContentDraft({ domain: "example.com", action: metadataAction }))
+      .rejects.toThrow("unreadable draft");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("draft validation", () => {
