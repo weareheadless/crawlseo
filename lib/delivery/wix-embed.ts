@@ -142,6 +142,8 @@ async function loadTaskAndTarget(taskId: string, targetKey: string) {
       connectorGeneration: true,
       title: true,
       commitSha: true,
+      bridgeReceiptId: true,
+      result: true,
       action: { select: { revision: true } },
     },
   });
@@ -200,6 +202,28 @@ export function assertWixEmbedExecutionBinding(task: {
 
 export function wixEmbedEffectToken(input: Record<string, unknown>) {
   return sha256(JSON.stringify(input));
+}
+
+/** Which target and reviewed commit an embed artifact belongs to. */
+function embedArtifactIdentity(content: string | null | undefined): {
+  target: string | null;
+  commitSha: string | null;
+} {
+  if (!content) return { target: null, commitSha: null };
+  try {
+    const parsed = JSON.parse(content) as {
+      target?: unknown;
+      effect?: { targetKey?: unknown; commitSha?: unknown };
+    };
+    return {
+      target: typeof parsed.effect?.targetKey === "string"
+        ? parsed.effect.targetKey
+        : typeof parsed.target === "string" ? parsed.target : null,
+      commitSha: typeof parsed.effect?.commitSha === "string" ? parsed.effect.commitSha : null,
+    };
+  } catch {
+    return { target: null, commitSha: null };
+  }
 }
 
 export function wixEmbedReadbackMatches(html: string, desiredSha256: string) {
@@ -283,9 +307,20 @@ export async function applyEmbedDelivery(
     take: 50,
     select: { id: true, kind: true, content: true, createdAt: true },
   });
-  const priorApply = artifacts.find((item) => item.kind !== "embed_plan");
+  // The fence is per exact effect, not per task. A different embed, or the
+  // same embed from a different reviewed commit, must not block a correction;
+  // the same target at the same commit must, because that effect may already
+  // have landed. An unreadable artifact blocks conservatively.
+  const priorApply = artifacts.find((item) => {
+    if (item.kind === "embed_plan") return false;
+    const prior = embedArtifactIdentity(item.content);
+    if (prior.target === null) return true;
+    if (prior.target !== targetKey) return false;
+    return !task.commitSha || prior.commitSha === task.commitSha;
+  });
   if (priorApply) throw new WixEmbedDeliveryError("An embed apply already has a receipt or uncertain outcome; reconcile it before retrying", 409);
-  const planArtifact = artifacts.find((item) => item.kind === "embed_plan");
+  const planArtifact = artifacts.find((item) =>
+    item.kind === "embed_plan" && embedArtifactIdentity(item.content).target === targetKey);
   if (!planArtifact?.content) throw new WixEmbedDeliveryError("Plan the exact embed effect before applying it", 409);
   let prepared: { target?: string; effect?: Record<string, unknown>; token?: string };
   try { prepared = JSON.parse(planArtifact.content) as typeof prepared; }
@@ -409,6 +444,131 @@ export async function applyEmbedDelivery(
     return result;
   });
   return { task: updated, receipt };
+  });
+}
+
+/**
+ * Correct the packet of a task that has already been delivered.
+ *
+ * A release can publish the site code and still update the wrong embed. By
+ * then the task is CLOSED, so the release apply fence cannot be reused. This
+ * rewrites exactly one target from the task's reviewed commit, verifies the
+ * live readback, and records the correction. It never changes the task status
+ * or re-publishes site code.
+ *
+ * The target's tag must already exist in the live packet: a repair corrects
+ * stale bytes, it does not invent a new registration.
+ */
+export async function repairEmbedDelivery(taskId: string, targetKey: string) {
+  const { task, target, delivery, binding } = await loadTaskAndTarget(taskId, targetKey);
+  if (!["CLOSED", "PUBLISHED"].includes(task.status)) {
+    throw new WixEmbedDeliveryError("Only a completed task can have its embed repaired; release a reviewed task instead", 409);
+  }
+  if (!task.commitSha) {
+    throw new WixEmbedDeliveryError("A committed source revision is required before repairing an embed", 409);
+  }
+  assertWixEmbedExecutionBinding(task, binding);
+  if (binding) await assertNegotiatedWixBridgeOperations(delivery.bridgeAlias, ["read_embed", "update_snippet"]);
+
+  const source = await reviewedSource(task, target.sourcePath!);
+  const sourceSha256 = sha256(source);
+  const snippet = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as {
+    snippet?: { embedData?: { html?: string } };
+  };
+  const currentHtml = snippet.snippet?.embedData?.html ?? "";
+  if (!packetTags(currentHtml).includes(target.componentTag!)) {
+    throw new WixEmbedDeliveryError(
+      `The live ${target.componentTag} packet does not contain that component; refusing to add it from a repair`,
+      409,
+    );
+  }
+  const nextHtml = buildPacket(currentHtml, target, source);
+  const beforeSha256 = sha256(currentHtml);
+  const desiredSha256 = sha256(nextHtml);
+  const priorEmbed = task.result && typeof task.result === "object" && !Array.isArray(task.result)
+    ? (task.result as Record<string, unknown>).embed as Record<string, unknown> | undefined
+    : undefined;
+
+  if (beforeSha256 === desiredSha256) {
+    return {
+      repaired: false,
+      verified: true,
+      target: target.key,
+      snippetId: target.snippetId,
+      componentTag: target.componentTag,
+      sourceSha256,
+      htmlSha256: desiredSha256,
+    };
+  }
+
+  return withAtomicPacketFile(task.id, target.componentTag!, `repair-${desiredSha256.slice(0, 16)}`, nextHtml, async (htmlFile) => {
+    const preparedSha256 = sha256(await readFile(htmlFile, "utf8"));
+    if (preparedSha256 !== desiredSha256) {
+      throw new WixEmbedDeliveryError("Prepared repair packet bytes changed before delivery", 502);
+    }
+    const receipt = await updateBridgeSnippet(delivery.bridgeAlias, target.snippetId!, htmlFile, true) as {
+      operationId?: string;
+      releaseId?: string;
+    };
+    const observed = await readBridgeSnippet(delivery.bridgeAlias, target.snippetId!) as {
+      snippet?: { embedData?: { html?: string } };
+    };
+    const actualSha256 = sha256(observed.snippet?.embedData?.html ?? "");
+    if (actualSha256 !== desiredSha256) {
+      throw new WixEmbedDeliveryError(
+        `The repaired embed did not read back (${actualSha256} != ${desiredSha256}); reconcile before retrying`,
+        502,
+      );
+    }
+
+    const repair = {
+      target: target.key,
+      snippetId: target.snippetId,
+      componentTag: target.componentTag,
+      sourcePath: target.sourcePath,
+      commitSha: task.commitSha,
+      sourceSha256,
+      beforeSha256,
+      desiredSha256,
+      repairedAt: new Date().toISOString(),
+      replacedTarget: typeof priorEmbed?.target === "string" ? priorEmbed.target : null,
+      receipt,
+    };
+    await addAgentArtifact(task.id, { kind: "embed_repair", content: JSON.stringify(repair, null, 2) });
+    const result = task.result && typeof task.result === "object" && !Array.isArray(task.result)
+      ? { ...(task.result as Record<string, unknown>) }
+      : {};
+    const embed = priorEmbed ? { ...priorEmbed } : {};
+    const updated = await db.agentTask.updateMany({
+      where: { id: task.id, status: task.status, commitSha: task.commitSha },
+      data: {
+        bridgeReceiptId: receipt.operationId ?? receipt.releaseId ?? task.bridgeReceiptId ?? null,
+        result: {
+          ...result,
+          embed: {
+            ...embed,
+            target: target.key,
+            snippetId: target.snippetId,
+            componentTag: target.componentTag,
+            repair,
+          },
+        },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new WixEmbedDeliveryError("The task changed while its embed was being repaired", 409);
+    }
+    return {
+      repaired: true,
+      verified: true,
+      target: target.key,
+      snippetId: target.snippetId,
+      componentTag: target.componentTag,
+      sourceSha256,
+      beforeSha256,
+      htmlSha256: desiredSha256,
+      receipt,
+    };
   });
 }
 

@@ -20,6 +20,17 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+async function isAncestor(repoPath: string, ancestor: string, descendant: string): Promise<boolean> {
+  try {
+    await execFileAsync("git", ["-C", repoPath, "merge-base", "--is-ancestor", ancestor, descendant], {
+      timeout: 30_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function mergeAndPush(repoPath: string, commitSha: string) {
   const status = await execFileAsync("git", ["-C", repoPath, "status", "--porcelain"], {
     timeout: 30_000,
@@ -47,14 +58,50 @@ export async function mergeAndPush(repoPath: string, commitSha: string) {
   return releaseSha;
 }
 
+function unquoteGitPath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) return trimmed;
+  try {
+    return JSON.parse(trimmed) as string;
+  } catch {
+    return trimmed.slice(1, -1);
+  }
+}
+
 async function changedFiles(worktreePath: string): Promise<string[]> {
-  const status = await execFileAsync("git", ["-C", worktreePath, "status", "--porcelain"], {
+  const status = await execFileAsync("git", [
+    "-C", worktreePath, "status", "--porcelain", "--untracked-files=all",
+  ], {
     timeout: 30_000,
     maxBuffer: 2 * 1024 * 1024,
   });
   return status.stdout
     .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[A-Z?]{1,2}\s+/, "").replace(/^"|"$/g, ""))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      // Porcelain v1 is `XY<space>path`; a rename is `XY<space>old -> new`.
+      const path = line.slice(2);
+      return unquoteGitPath(path.includes(" -> ") ? path.split(" -> ").pop() ?? path : path);
+    })
+    .filter(Boolean);
+}
+
+/**
+ * The files a reviewed commit contains. A released task's worktree is clean,
+ * so `git status` is empty by then; the commit is still the fact the release
+ * must select its target from.
+ */
+async function committedFiles(worktreePath: string, commitSha: string): Promise<string[]> {
+  const shown = await execFileAsync("git", [
+    "-C", worktreePath, "show", "--pretty=format:", "--name-only", commitSha,
+  ], {
+    timeout: 30_000,
+    maxBuffer: 2 * 1024 * 1024,
+  });
+  return shown.stdout
+    .split(/\r?\n/)
+    .map((line) => unquoteGitPath(line))
     .filter(Boolean);
 }
 
@@ -66,7 +113,26 @@ function isAllowedSiteCode(file: string, targetSourcePath: string): boolean {
     || /^scripts\/test-[^/]+\.mjs$/i.test(file);
 }
 
-export async function approveAndReleaseAgentTask(taskId: string, requestedTargetKey?: string) {
+/**
+ * Correct a completed delivery.
+ *
+ * A closed task is re-opened through the same claim, commit, merge, publish
+ * and packet-update path as a first release, but the corrected target is named
+ * explicitly. This is the recovery path for a release that published the code
+ * and updated the wrong embed; it is never used to bypass review.
+ */
+export async function reReleaseAgentTask(taskId: string, targetKey: string) {
+  if (!targetKey.trim()) {
+    throw new ResearchServiceError("A re-release must name the embed target it corrects", 409);
+  }
+  return approveAndReleaseAgentTask(taskId, targetKey.trim(), { reRelease: true });
+}
+
+export async function approveAndReleaseAgentTask(
+  taskId: string,
+  requestedTargetKey?: string,
+  options: { reRelease?: boolean } = {},
+) {
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
     select: {
@@ -97,8 +163,19 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     },
   });
   if (!task) throw new ResearchServiceError("Agent task not found", 404);
-  if (!["AWAITING_REVIEW", "CHANGES_REQUESTED"].includes(task.status)) {
-    throw new ResearchServiceError("Only tasks awaiting review or retry can be released", 409);
+  const releasable = options.reRelease
+    ? ["AWAITING_REVIEW", "CHANGES_REQUESTED", "CLOSED", "PUBLISHED"]
+    : ["AWAITING_REVIEW", "CHANGES_REQUESTED"];
+  if (!releasable.includes(task.status)) {
+    throw new ResearchServiceError(
+      options.reRelease
+        ? "Only a reviewed or completed task can be re-released"
+        : "Only tasks awaiting review or retry can be released",
+      409,
+    );
+  }
+  if (options.reRelease && !requestedTargetKey) {
+    throw new ResearchServiceError("A re-release must name the embed target it corrects", 409);
   }
   if (task.connectorGeneration !== null) {
     throw new ResearchServiceError("Wix code publication is unsupported for connector-bound Actions until the generic bridge capability is qualified", 409);
@@ -114,6 +191,31 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     source: task.action?.source,
     kind: task.action?.kind,
   });
+
+  // Resolve the reviewed files once. A task that has already been committed
+  // has a clean worktree, so the commit itself must supply the file list; the
+  // release target is chosen from what the commit changed, not from an empty
+  // status or the wording of the action title.
+  const worktreeFiles = await changedFiles(task.worktreePath);
+  const existingCommit = worktreeFiles.length === 0 ? task.commitSha : null;
+  if (worktreeFiles.length === 0 && !existingCommit) {
+    throw new ResearchServiceError("The task has no worktree changes or committed SHA to release", 409);
+  }
+  if (existingCommit) {
+    const worktreeHead = (await execFileAsync("git", ["-C", task.worktreePath, "rev-parse", "HEAD"], {
+      timeout: 30_000,
+    })).stdout.trim();
+    if (worktreeHead !== existingCommit) {
+      throw new ResearchServiceError(
+        `The task worktree is at ${worktreeHead}, not its recorded commit ${existingCommit}`,
+        409,
+      );
+    }
+  }
+  const files = worktreeFiles.length > 0
+    ? worktreeFiles
+    : await committedFiles(task.worktreePath, existingCommit!);
+
   let target: {
     key: string;
     sourcePath: string;
@@ -138,11 +240,10 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       },
       select: { key: true, sourcePath: true, snippetId: true, componentTag: true, route: true },
     });
-    const worktreeFilesForTarget = await changedFiles(task.worktreePath);
     const targetKey = requestedTargetKey ?? selectReleaseTargetKey(targets, {
       title: task.action?.title ?? task.title,
       targetUrl: task.action?.targetUrl ?? task.route,
-    }, worktreeFilesForTarget);
+    }, files);
     const selected = targetKey ? targets.find((item) => item.key === targetKey) : null;
     if (!selected || !selected.sourcePath || !selected.snippetId) {
       throw new ResearchServiceError("Could not determine a unique embed target for this release", 409);
@@ -156,31 +257,6 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
     };
   }
 
-  const worktreeFiles = await changedFiles(task.worktreePath);
-  const existingCommit = worktreeFiles.length === 0 ? task.commitSha : null;
-  if (worktreeFiles.length === 0 && !existingCommit) {
-    throw new ResearchServiceError("The task has no worktree changes or committed SHA to release", 409);
-  }
-  if (existingCommit) {
-    const worktreeHead = (await execFileAsync("git", ["-C", task.worktreePath, "rev-parse", "HEAD"], {
-      timeout: 30_000,
-    })).stdout.trim();
-    if (worktreeHead !== existingCommit) {
-      throw new ResearchServiceError(
-        `The task worktree is at ${worktreeHead}, not its recorded commit ${existingCommit}`,
-        409,
-      );
-    }
-  }
-  const files = worktreeFiles.length > 0
-    ? worktreeFiles
-    : (await execFileAsync("git", ["-C", task.worktreePath, "show", "--pretty=format:", "--name-only", existingCommit!], {
-        timeout: 30_000,
-        maxBuffer: 2 * 1024 * 1024,
-      })).stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
   const disallowed = files.filter((file) => !isAllowedSiteCode(file, target?.sourcePath ?? ""));
   if (disallowed.length > 0) {
     throw new ResearchServiceError(
@@ -246,8 +322,14 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       if (!saved.codeSha || !saved.releaseSha || !saved.revisionPublished?.revision) {
         throw new ResearchServiceError("The prior Wix publication receipt is incomplete; reconcile it before retrying", 409);
       }
-      if (saved.codeSha !== releaseHead) throw new ResearchServiceError("A prior Wix publication receipt belongs to a different commit", 409);
-      publication = saved;
+      if (saved.codeSha === releaseHead) {
+        publication = saved;
+      } else if (!(await isAncestor(task.repoPath, saved.codeSha, releaseHead))) {
+        // The published code must be part of this release. A UI-version sync
+        // commit after publication is a descendant of it and is safe to
+        // publish again; an unrelated commit is not.
+        throw new ResearchServiceError("A prior Wix publication receipt belongs to a different commit", 409);
+      }
     }
     if (!publication) {
       if (task.actionId) {
