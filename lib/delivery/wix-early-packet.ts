@@ -71,7 +71,7 @@ function slugFor(route: string): string {
  * share a prefix (`atelier-`), so a new page keeps that prefix and adds the
  * route slug. A site without a shared prefix gets a neutral one.
  */
-export function pageComponentTag(route: string, existingTags: string[]): string {
+export function pageComponentTag(route: string, existingTags: string[], localeCode?: string | null): string {
   const slug = slugFor(route);
   if (!slug) throw new WixEarlyPacketError("The route has no usable slug for a component tag", 400);
   const prefixes = existingTags
@@ -88,7 +88,10 @@ export function pageComponentTag(route: string, existingTags: string[]): string 
       })
     : "";
   const prefix = shared.length >= 3 ? shared : "crawlseo-";
-  return `${prefix}${slug}-v1`;
+  // A non-default locale is a separate page with its own component, so the
+  // language is part of the tag and the two never collide.
+  const suffix = localeCode ? `-${localeCode.toLowerCase()}` : "";
+  return `${prefix}${slug}${suffix}-v1`;
 }
 
 /**
@@ -143,6 +146,10 @@ export function buildEarlyPackets(input: {
   tag: string;
   route: string;
   source: string;
+  /** The query pair this locale requires, when the site selects language in the URL. */
+  query?: { key: string; value: string } | null;
+  /** The query pair that selects a different locale on the same route. */
+  excludeQuery?: { key: string; value: string } | null;
   chunkCharacters?: number;
 }): EarlyPacket[] {
   const route = routePath(input.route);
@@ -154,7 +161,12 @@ export function buildEarlyPackets(input: {
   }
   const count = chunks.length;
   const key = sha256(input.source).slice(0, 16);
-  const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)},q=p.replace(/^\\/[a-z]{2}(?=\\/)/,"");if(p!==r&&q!==r)return;if(new URLSearchParams(location.search).get("earlyElements")==="off")return;`;
+  const queryGuard = input.query
+    ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.query.key)})!==${JSON.stringify(input.query.value)})return;`
+    : input.excludeQuery
+      ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.excludeQuery.key)})===${JSON.stringify(input.excludeQuery.value)})return;`
+      : "";
+  const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)},q=p.replace(/^\\/[a-z]{2}(?=\\/)/,"");if(p!==r&&q!==r)return;if(new URLSearchParams(location.search).get("earlyElements")==="off")return;${queryGuard}`;
   // The page is blank and this element is its whole content, so the packet
   // mounts it into the page container itself. That keeps the delivery free of
   // a manual editor step; an element a human already placed is left alone.
@@ -230,6 +242,12 @@ export async function deliverWixPageComponent(input: {
   route: string;
   html: string;
   taskId: string;
+  /** The locale this page is written in, when the site publishes several. */
+  localeCode?: string | null;
+  /** The query pair this locale requires, when the site selects language in the URL. */
+  query?: { key: string; value: string } | null;
+  /** The query pair that selects a different locale on the same route. */
+  excludeQuery?: { key: string; value: string } | null;
 }): Promise<WixPageComponentResult> {
   const route = routePath(input.route);
   const site = await db.site.findUnique({
@@ -245,10 +263,16 @@ export async function deliverWixPageComponent(input: {
   await assertNegotiatedWixBridgeOperations(alias, ["read_embed", "write_embed"]);
 
   const repoPath = config?.repoPath?.trim() || null;
-  const tag = pageComponentTag(route, await existingComponentTags(repoPath));
+  const tag = pageComponentTag(route, await existingComponentTags(repoPath), input.localeCode ?? null);
   const source = buildPageComponentSource({ tag, html: input.html, taskId: input.taskId });
   const sourcePath = await writeComponentSource(repoPath, tag, source);
-  const packets = buildEarlyPackets({ tag, route, source });
+  const packets = buildEarlyPackets({
+    tag,
+    route,
+    source,
+    query: input.query ?? null,
+    excludeQuery: input.excludeQuery ?? null,
+  });
 
   const existing = await managedEmbeds(alias);
   const results: WixPageComponentResult["packets"] = [];

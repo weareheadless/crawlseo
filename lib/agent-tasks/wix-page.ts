@@ -17,6 +17,7 @@ import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
 import { designProfileForSite } from "@/lib/design/profile";
+import { getSiteLocales, localeQuery, localeVariants } from "@/lib/site-locales";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -29,6 +30,35 @@ export type WixPageTaskInput = {
    */
   route?: string | null;
 };
+
+type PageVariant = {
+  code: string;
+  route: string;
+  url: string;
+  isDefault: boolean;
+  query: { key: string; value: string } | null;
+  excludeQuery: { key: string; value: string } | null;
+};
+
+/**
+ * The page in every published locale. A site without a locale list has one
+ * variant, which keeps the single-language path unchanged.
+ */
+async function pageVariantsFor(siteId: string, baseRoute: string, domain: string): Promise<PageVariant[]> {
+  const host = domain.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  const locales = await getSiteLocales(siteId);
+  if (!locales) {
+    return [{ code: "default", route: baseRoute, url: `https://${host}${baseRoute}`, isDefault: true, query: null, excludeQuery: null }];
+  }
+  const variants = localeVariants(locales, baseRoute, domain);
+  const queries = variants.map((variant) => localeQuery(variant)).filter((query): query is { key: string; value: string } => Boolean(query));
+  return variants.map((variant) => {
+    const own = localeQuery(variant);
+    // A locale without a query must not run on a URL that selects another one.
+    const other = own ? null : queries[0] ?? null;
+    return { ...variant, query: own, excludeQuery: other };
+  });
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -55,7 +85,7 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
           id: true,
           domain: true,
           connectorBinding: { select: { executor: true, status: true } },
-          siteProfile: { select: { language: true, country: true, design: true } },
+          siteProfile: { select: { language: true, country: true, design: true, locales: true } },
           siteDeliveryConfig: { select: { repoPath: true } },
         },
       },
@@ -103,6 +133,9 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
   });
 
   const design = await designProfileForSite(action.site.id, action.site.siteDeliveryConfig?.repoPath ?? null);
+  const locales = route
+    ? await pageVariantsFor(action.site.id, route, action.site.domain)
+    : [];
 
   // The marker is the task id, so the prompt is written once the id exists.
   const prompt = buildWixPagePrompt({
@@ -137,6 +170,9 @@ export async function createWixPageTaskForAction(input: WixPageTaskInput) {
         ? { repoPath: action.site.siteDeliveryConfig.repoPath, palette: [], fonts: [], notes: "" }
         : null,
     liveUrl: `https://${action.site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}`,
+    locales: locales.length > 0
+      ? locales.map((variant) => ({ code: variant.code, route: variant.route, url: variant.url, isDefault: variant.isDefault }))
+      : null,
     operatorInstructions: input.operatorInstructions,
   });
   return db.agentTask.update({ where: { id: task.id }, data: { prompt } });
@@ -301,7 +337,6 @@ export async function runWixPageTask(taskId: string) {
       prompt,
     ], directory, onOutput);
 
-    const html = await readFile(path.join(directory, "page.html"), "utf8").catch(() => "");
     const designNotes = await readFile(path.join(directory, "design-notes.md"), "utf8").catch(() => "");
     if (designNotes.trim()) {
       await addAgentArtifact(task.id, { kind: "design_notes", content: designNotes.slice(0, 20_000) });
@@ -310,7 +345,25 @@ export async function runWixPageTask(taskId: string) {
     if (navigation.trim()) {
       await addAgentArtifact(task.id, { kind: "navigation_notes", content: navigation.slice(0, 20_000) });
     }
-    const problems = pageProblems(html, task.id);
+
+    const variants = await pageVariantsFor(task.siteId, task.route ?? "/", task.site.domain);
+    const multiLocale = variants.length > 1;
+    const prepared: Array<PageVariant & { html: string; bytes: number; sha256: string }> = [];
+    const problems: string[] = [];
+    for (const variant of variants) {
+      const file = multiLocale ? `page.${variant.code}.html` : "page.html";
+      const html = await readFile(path.join(directory, file), "utf8").catch(() => "");
+      if (!html.trim()) {
+        problems.push(`${file} is missing`);
+        continue;
+      }
+      const variantProblems = pageProblems(html, task.id);
+      if (variantProblems.length > 0) {
+        problems.push(...variantProblems.map((problem) => `${variant.code}: ${problem}`));
+        continue;
+      }
+      prepared.push({ ...variant, html, bytes: Buffer.byteLength(html, "utf8"), sha256: sha256(html) });
+    }
     if (problems.length > 0) {
       await addAgentMessage(task.id, `The page was not deliverable:\n- ${problems.join("\n- ")}`, "SYSTEM");
       return db.agentTask.update({
@@ -327,11 +380,16 @@ export async function runWixPageTask(taskId: string) {
       });
     }
 
-    const bytes = Buffer.byteLength(html, "utf8");
-    await addAgentArtifact(task.id, { kind: "page_html", content: html, maxChars: MAX_PAGE_BYTES });
+    for (const variant of prepared) {
+      const kind = variant.isDefault || !multiLocale ? "page_html" : `page_html:${variant.code}`;
+      await addAgentArtifact(task.id, { kind, content: variant.html, maxChars: MAX_PAGE_BYTES });
+    }
+    const summary = prepared
+      .map((variant) => `${variant.code} ${variant.route}: ${Math.round(variant.bytes / 1024)} KB`)
+      .join(" · ");
     await addAgentMessage(
       task.id,
-      `Page prepared for ${task.route}: ${Math.round(bytes / 1024)} KB. Review it, then approve to deliver.`,
+      `Page prepared in ${prepared.length} locale${prepared.length === 1 ? "" : "s"} — ${summary}. Review every locale, then approve to deliver all of them.`,
       "AGENT",
     );
     progress.stage = "Review ready";
@@ -343,8 +401,9 @@ export async function runWixPageTask(taskId: string) {
         result: {
           ...record(task.result),
           progress: { ...progress, stage: "Review ready" },
-          pageHtmlSha256: sha256(html),
-          pageBytes: bytes,
+          pageHtmlSha256: prepared[0]?.sha256 ?? null,
+          pageBytes: prepared.reduce((total, variant) => total + variant.bytes, 0),
+          variants: prepared.map(({ html: _html, ...variant }) => variant),
           agentSummary: output.slice(-20_000),
         } as never,
       },
@@ -361,9 +420,9 @@ export async function runWixPageTask(taskId: string) {
   }
 }
 
-async function latestPageHtml(taskId: string): Promise<string> {
+async function latestPageHtml(taskId: string, kind = "page_html"): Promise<string> {
   const artifact = await db.agentTaskArtifact.findFirst({
-    where: { taskId, kind: "page_html" },
+    where: { taskId, kind },
     orderBy: { createdAt: "desc" },
     select: { content: true },
   });
@@ -379,51 +438,71 @@ async function deliver(task: {
   route: string | null;
 }, confirmedBy: string | null = null) {
   if (!task.route) throw new ResearchServiceError("The task has no page route", 409);
-  const html = await latestPageHtml(task.id);
+  const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
+  if (!site) throw new ResearchServiceError("Site not found", 404);
+  const variants = await pageVariantsFor(task.siteId, task.route, site.domain);
+  const multiLocale = variants.length > 1;
   const marker = markerFor(task.id);
   const before = await db.agentTask.findUnique({ where: { id: task.id }, select: { result: true } });
   const priorResult = record(before?.result);
   await updateAgentTask(task.id, { status: "PUBLISHING" });
   try {
-    // A site with a connected source repository delivers the page as a custom
-    // element registered by an early packet, which is how its other pages are
-    // built. Without a repository the page is an HTML embed.
+    // A site with a connected source repository delivers each locale as a
+    // custom element registered by an early packet, which is how its other
+    // pages are built. Without a repository the page is an HTML embed.
     const config = await getSiteDeliveryConfig(task.siteId);
     if (config?.repoPath) {
-      const component = await deliverWixPageComponent({
-        siteId: task.siteId,
-        route: task.route,
-        html,
-        taskId: task.id,
-      });
-      const live = component.placement === "found";
+      const delivered: Array<PageVariant & { tag: string; placement: string; packets: unknown[]; sourcePath: string | null }> = [];
+      for (const variant of variants) {
+        const html = await latestPageHtml(task.id, multiLocale && !variant.isDefault ? `page_html:${variant.code}` : "page_html");
+        const component = await deliverWixPageComponent({
+          siteId: task.siteId,
+          route: variant.route,
+          html,
+          taskId: task.id,
+          localeCode: variant.isDefault ? null : variant.code,
+          query: variant.query,
+          excludeQuery: variant.excludeQuery,
+        });
+        delivered.push({
+          ...variant,
+          tag: component.tag,
+          placement: component.placement,
+          packets: component.packets,
+          sourcePath: component.sourcePath,
+        });
+      }
+      const live = delivered.every((variant) => variant.placement === "found");
+      const missing = delivered.filter((variant) => variant.placement !== "found");
       if (live) {
         if (task.actionId) await markActionVerified(task.actionId).catch(() => undefined);
         await markOpportunityTaskDelivered(task.id, confirmedBy).catch(() => undefined);
       }
       return updateAgentTask(task.id, {
         status: live ? "PUBLISHED" : "AWAITING_TARGET",
-        publishedUrl: live ? component.url : null,
+        publishedUrl: live ? delivered.find((variant) => variant.isDefault)?.url ?? delivered[0]?.url ?? null : null,
         result: {
           ...priorResult,
-          delivery: { mode: "component", ...component },
+          delivery: { mode: "component", variants: delivered },
           awaitingPlacement: live
             ? undefined
             : {
-                tag: component.tag,
-                url: component.url,
-                route: component.route,
+                variants: missing.map((variant) => ({ tag: variant.tag, route: variant.route, url: variant.url })),
                 attempts: 0,
-                instruction: `The packet is deployed and mounts <${component.tag}> on ${component.route} itself. If the page is still blank, Wix is serving a cached document; check again shortly.`,
+                instruction: `The packets are deployed and mount their elements themselves. If a page is still blank, Wix is serving a cached document; check again shortly.`,
               },
           progress: {
-            stage: live ? "Published" : "Waiting for the element placement",
+            stage: live ? "Published" : "Waiting for the packets to render",
             updatedAt: new Date().toISOString(),
           },
         } as never,
       });
     }
 
+    if (multiLocale) {
+      throw new ResearchServiceError("A multi-locale page needs a connected source repository; the embed lane delivers one route", 409);
+    }
+    const html = await latestPageHtml(task.id, "page_html");
     const result = await deliverWixPageHtml({
       siteId: task.siteId,
       route: task.route,
@@ -509,23 +588,27 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
 
   const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
   if (!site) throw new ResearchServiceError("Site not found", 404);
-  const url = `https://${site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}${task.route}`;
+  const variants = await pageVariantsFor(task.siteId, task.route, site.domain);
 
   await updateAgentTask(task.id, { status: "APPROVED" });
-  const httpStatus = await probeWixRoute(url);
-  if (httpStatus !== 200) {
+  // Every locale must answer before anything is delivered, so a missing page
+  // in one language does not leave the other half published.
+  const missing: Array<{ code: string; route: string; url: string; httpStatus: number | null }> = [];
+  for (const variant of variants) {
+    const httpStatus = await probeWixRoute(variant.url);
+    if (httpStatus !== 200) missing.push({ code: variant.code, route: variant.route, url: variant.url, httpStatus });
+  }
+  if (missing.length > 0) {
     await updateAgentTask(task.id, {
       status: "AWAITING_TARGET",
       result: {
         ...record(task.result),
         awaitingTarget: {
-          route: task.route,
-          url,
-          httpStatus,
+          variants: missing,
           attempts: 0,
-          instruction: `Create and publish a blank page at ${task.route} in the Wix editor. The agent delivers the content as soon as the page answers.`,
+          instruction: `Create and publish a blank page at ${missing.map((variant) => variant.route).join(" and ")} in the Wix editor. The agent delivers every locale as soon as the pages answer.`,
         },
-        progress: { stage: "Waiting for the page", updatedAt: new Date().toISOString() },
+        progress: { stage: "Waiting for the pages", updatedAt: new Date().toISOString() },
       } as never,
     });
     await enqueueJob({
@@ -536,7 +619,7 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
       maxAttempts: 1,
       delaySeconds: 15 * 60,
     });
-    return { status: "awaiting_target" as const, route: task.route, url, httpStatus };
+    return { status: "awaiting_target" as const, route: task.route, url: missing[0].url, httpStatus: missing[0].httpStatus };
   }
 
   const published = await deliver(task, confirmedBy);
@@ -559,15 +642,24 @@ export async function resumeWixPageDelivery(taskId: string) {
   const result = record(task.result);
   const delivery = record(result.delivery);
 
-  // A component delivery is already deployed; only the human's element
-  // placement is missing. Re-deploying the packet every probe would rewrite
-  // the same bytes, so this path only checks the live document.
-  if (delivery.mode === "component" && typeof delivery.tag === "string") {
-    const placement = await checkComponentPlacement(url, delivery.tag);
-    if (placement === "found") {
-      // The page now renders from the placed element. An embed delivered
-      // earlier replaces the page container and would hide it, so it is
-      // disabled once the element is confirmed on the page.
+  // A component delivery is already deployed; only the element mount is
+  // missing. Re-deploying the packets every probe would rewrite the same
+  // bytes, so this path only checks the live documents.
+  const deliveredVariants = Array.isArray(delivery.variants)
+    ? delivery.variants.map((variant) => record(variant)).filter((variant) => typeof variant.tag === "string" && typeof variant.url === "string")
+    : typeof delivery.tag === "string"
+      ? [{ tag: delivery.tag, url, route: task.route, code: "default", isDefault: true }]
+      : [];
+  if (delivery.mode === "component" && deliveredVariants.length > 0) {
+    const checked: Array<Record<string, unknown> & { placement: string }> = [];
+    for (const variant of deliveredVariants) {
+      const placement = await checkComponentPlacement(String(variant.url), String(variant.tag));
+      checked.push({ ...variant, placement });
+    }
+    const allFound = checked.every((variant) => variant.placement === "found");
+    if (allFound) {
+      // The pages now render from their elements. An embed delivered earlier
+      // replaces the page container and would hide them, so it is disabled.
       const config = await getSiteDeliveryConfig(task.siteId);
       const target = await db.deliveryTarget.findUnique({
         where: { siteId_key: { siteId: task.siteId, key: `page:${task.route}` } },
@@ -582,10 +674,10 @@ export async function resumeWixPageDelivery(taskId: string) {
         status: "published" as const,
         task: await updateAgentTask(task.id, {
           status: "PUBLISHED",
-          publishedUrl: url,
+          publishedUrl: String(checked.find((variant) => variant.isDefault)?.url ?? checked[0].url),
           result: {
             ...result,
-            delivery: { ...delivery, placement },
+            delivery: { ...delivery, variants: checked },
             awaitingPlacement: undefined,
             progress: { stage: "Published", updatedAt: new Date().toISOString() },
           } as never,

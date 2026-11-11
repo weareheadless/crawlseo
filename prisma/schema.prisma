@@ -1006,6 +1006,9 @@ model SiteProfile {
   /// where they came from. Extracted from the site repo or the live site, and
   /// editable by a human.
   design      Json?
+  /// The site's published locales and how each one appears in a URL. A page
+  /// task writes one native page per locale, not a translation.
+  locales     Json?
   constraints Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

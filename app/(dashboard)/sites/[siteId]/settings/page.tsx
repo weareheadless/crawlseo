@@ -9,6 +9,8 @@ import { OperationsConfigForm } from "@/components/settings/operations-config-fo
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { DeliveryConfigForm } from "@/components/settings/delivery-config-form";
 import { DesignProfileForm } from "@/components/settings/design-profile-form";
+import { LocaleConfigForm } from "@/components/settings/locale-config-form";
+import { getSiteLocales } from "@/lib/site-locales";
 import { getStoredDesignProfile } from "@/lib/design/profile";
 
 interface Props {
@@ -43,7 +45,7 @@ export default async function SettingsPage({ params }: Props) {
   if (!site || site.userId !== userId) redirect("/sites");
 
   // Check API key status
-  const [apiKeys, platformGrant, operations, deliveryConfig, designProfile] = await Promise.all([
+  const [apiKeys, platformGrant, operations, deliveryConfig, designProfile, locales] = await Promise.all([
     db.apiKey.findMany({
       where: { userId },
       select: { provider: true, updatedAt: true },
@@ -64,6 +66,7 @@ export default async function SettingsPage({ params }: Props) {
     getResearchConfig(siteId),
     getSiteDeliveryConfig(siteId),
     getStoredDesignProfile(siteId),
+    getSiteLocales(siteId),
   ]);
   const apiKeyStatus: Record<string, { connected: boolean; managed?: boolean; updatedAt?: string }> = {
     dataforseo: { connected: false },
@@ -135,6 +138,7 @@ export default async function SettingsPage({ params }: Props) {
           }}
         />
         <DesignProfileForm siteId={siteId} initial={designProfile} />
+        <LocaleConfigForm siteId={siteId} initial={locales} />
         <ApiKeysSection initialStatus={apiKeyStatus} />
 
         {/* Data summary */}

@@ -37,6 +37,20 @@ describe("Wix page prompt", () => {
     expect(prompt).toContain("PAGE ROUTE: (assigned before delivery)");
   });
 
+  it("asks for one native page per locale, not a translation", () => {
+    const prompt = buildWixPagePrompt({
+      ...input,
+      locales: [
+        { code: "fr", route: "/abat-jour-sur-mesure", url: "https://example.com/abat-jour-sur-mesure", isDefault: true },
+        { code: "en", route: "/en/abat-jour-sur-mesure", url: "https://example.com/en/abat-jour-sur-mesure", isDefault: false },
+      ],
+    });
+    expect(prompt).toContain("page.fr.html");
+    expect(prompt).toContain("page.en.html");
+    expect(prompt).toContain("/en/abat-jour-sur-mesure");
+    expect(prompt).toContain("Do not translate one page into the other");
+  });
+
   it("carries the stored design reference and asks for the notes it used", () => {
     const prompt = buildWixPagePrompt({
       ...input,

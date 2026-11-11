@@ -47,6 +47,7 @@ export default async function AgentTaskPage({ params }: Props) {
   });
   if (!task || task.site.id !== siteId) notFound();
 
+  const route = task.route;
   const result = record(task.result);
   const progress = record(result.progress);
   const awaitingTarget = record(result.awaitingTarget);
@@ -56,12 +57,31 @@ export default async function AgentTaskPage({ params }: Props) {
   const progressLines = Array.isArray(progress.lines)
     ? progress.lines.map((line) => record(line)).filter((line) => typeof line.message === "string")
     : [];
-  const html = task.kind === "wix_page"
-    ? task.artifacts.find((artifact) => artifact.kind === "page_html")?.content ?? null
-    : null;
+  const pageArtifacts = task.kind === "wix_page"
+    ? task.artifacts.filter((artifact) => artifact.kind === "page_html" || artifact.kind.startsWith("page_html:"))
+    : [];
+  const html = pageArtifacts.find((artifact) => artifact.kind === "page_html")?.content ?? pageArtifacts[0]?.content ?? null;
+  const resultVariants = Array.isArray(result.variants)
+    ? result.variants.map((variant) => record(variant)).filter((variant) => typeof variant.code === "string")
+    : [];
+  const pageVariants = resultVariants.length > 0
+    ? resultVariants.map((variant) => {
+        const code = String(variant.code);
+        const artifact = pageArtifacts.find((item) => item.kind === (variant.isDefault === true ? "page_html" : `page_html:${code}`))
+          ?? pageArtifacts.find((item) => item.kind === "page_html");
+        return {
+          code,
+          route: typeof variant.route === "string" ? variant.route : route,
+          url: typeof variant.url === "string" ? variant.url : null,
+          isDefault: variant.isDefault === true,
+          html: artifact?.content ?? null,
+        };
+      })
+    : html
+      ? [{ code: "default", route, url: null, isDefault: true, html }]
+      : [];
   const designNotes = task.artifacts.find((artifact) => artifact.kind === "design_notes")?.content ?? null;
   const navigationNotes = task.artifacts.find((artifact) => artifact.kind === "navigation_notes")?.content ?? null;
-  const route = task.route;
   const pageTitle = task.draft?.metaTitle || task.draft?.title || task.title;
   const pageDescription = task.draft?.metaDescription ?? "";
 
@@ -113,11 +133,21 @@ export default async function AgentTaskPage({ params }: Props) {
           <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
             <p className="font-medium text-warning">The packet is deployed; the page has not rendered it yet</p>
             <p className="mt-1 text-muted-foreground">
-              The early packet registers and mounts
-              <code className="font-data text-foreground"> {String(awaitingPlacement.tag ?? componentTag ?? "")} </code>
-              on <code className="font-data text-foreground">{String(awaitingPlacement.route ?? route ?? "")}</code> itself, so there is nothing to place in the editor.
-              If the page is still blank, Wix is serving a cached document; check again shortly.
+              The early packets register and mount their elements themselves, so there is nothing to place in the editor.
+              If a page is still blank, Wix is serving a cached document; check again shortly.
             </p>
+            {Array.isArray(awaitingPlacement.variants) && (
+              <ul className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                {awaitingPlacement.variants.map((variant) => {
+                  const row = record(variant);
+                  return (
+                    <li key={String(row.route ?? row.tag)}>
+                      <code className="font-data text-foreground">{String(row.tag ?? "")}</code> on {String(row.route ?? "")}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
               <p>Page title: <span className="text-foreground">{pageTitle}</span></p>
               {pageDescription && <p>Meta description: <span className="text-foreground">{pageDescription}</span></p>}
@@ -131,8 +161,19 @@ export default async function AgentTaskPage({ params }: Props) {
           <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
             <p className="font-medium text-warning">The Wix page does not exist yet</p>
             <p className="mt-1 text-muted-foreground">
-              Create and publish a blank page at <code className="font-data text-foreground">{String(awaitingTarget.route ?? route ?? "")}</code> in
-              the Wix editor. The agent delivers the content as soon as the page answers.
+              Create and publish a blank page at{" "}
+              {Array.isArray(awaitingTarget.variants) && awaitingTarget.variants.length > 0
+                ? awaitingTarget.variants.map((variant, index) => {
+                    const row = record(variant);
+                    return (
+                      <span key={String(row.route ?? index)}>
+                        {index > 0 ? " and " : ""}
+                        <code className="font-data text-foreground">{String(row.route ?? "")}</code>
+                      </span>
+                    );
+                  })
+                : <code className="font-data text-foreground">{String(awaitingTarget.route ?? route ?? "")}</code>}{" "}
+              in the Wix editor. The agent delivers every locale as soon as the pages answer.
             </p>
             <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
               <p>Page title: <span className="text-foreground">{pageTitle}</span></p>
@@ -148,17 +189,21 @@ export default async function AgentTaskPage({ params }: Props) {
         )}
       </section>
 
-      {html && (
-        <section className="panel overflow-hidden">
+      {pageVariants.map((variant) => variant.html && (
+        <section key={variant.code} className="panel overflow-hidden">
           <div className="border-b border-border/60 p-4">
-            <h2 className="font-heading text-base font-semibold">Page preview</h2>
+            <h2 className="font-heading text-base font-semibold">
+              Page preview · {variant.code.toUpperCase()}
+              {variant.isDefault ? " (default)" : ""}
+            </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              The exact fragment delivered into the Wix page. Scripts are disabled here; styles and layout are the delivered ones.
+              {variant.route}
+              {variant.url ? ` · ${variant.url}` : ""} — the exact fragment delivered into the Wix page. Scripts are disabled here; styles and layout are the delivered ones.
             </p>
           </div>
-          <iframe title="Delivered page preview" srcDoc={html} sandbox="" className="h-[680px] w-full bg-white" />
+          <iframe title={`Delivered page preview ${variant.code}`} srcDoc={variant.html} sandbox="" className="h-[680px] w-full bg-white" />
         </section>
-      )}
+      ))}
 
       {designNotes && (
         <section className="panel p-5">

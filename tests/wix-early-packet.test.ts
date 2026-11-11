@@ -35,6 +35,11 @@ describe("page component tag", () => {
     expect(pageComponentTag("/lampes/abat-jours", ["atelier-navbar-v1"])).toBe("atelier-lampes-abat-jours-v1");
   });
 
+  it("adds the locale to a non-default page tag", () => {
+    expect(pageComponentTag("/en/abat-jour-sur-mesure", ["atelier-navbar-v1"], "en"))
+      .toBe("atelier-en-abat-jour-sur-mesure-en-v1");
+  });
+
   it("uses a neutral prefix when the site has no shared one", () => {
     expect(pageComponentTag("/abat-jour-sur-mesure", ["home-about-v1", "listing-detail-v1"]))
       .toBe("crawlseo-abat-jour-sur-mesure-v1");
@@ -80,6 +85,14 @@ describe("early packets", () => {
     expect(packet.html).toContain('"/abat-jour-sur-mesure"');
     expect(packet.html).toContain('get("earlyElements")==="off"');
     expect(packet.html).toContain("customElements.get");
+  });
+
+  it("requires the locale query and excludes the other locale on a shared route", () => {
+    const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
+    const [spanish] = buildEarlyPackets({ tag: "atelier-x-es-v1", route: "/x", source, query: { key: "lang", value: "es" } });
+    const [english] = buildEarlyPackets({ tag: "atelier-x-v1", route: "/x", source, excludeQuery: { key: "lang", value: "es" } });
+    expect(spanish.html).toContain('get("lang")!=="es"');
+    expect(english.html).toContain('get("lang")==="es"');
   });
 
   it("mounts the element into the page container so no editor step is needed", () => {

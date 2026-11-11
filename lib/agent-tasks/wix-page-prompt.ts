@@ -33,9 +33,17 @@ export function buildWixPagePrompt(input: {
   } | null;
   design?: DesignReference | null;
   liveUrl?: string | null;
+  /**
+   * Every published locale of the page. When there is more than one, the agent
+   * writes one page per locale from scratch in that language; it does not
+   * translate the first page.
+   */
+  locales?: Array<{ code: string; route: string; url: string; isDefault: boolean }> | null;
   operatorInstructions?: string;
 }): string {
   const marker = markerFor(input.taskId);
+  const locales = input.locales && input.locales.length > 0 ? input.locales : null;
+  const multiLocale = Boolean(locales && locales.length > 1);
   const routeAttribute = input.route.startsWith("(") ? "" : ` data-crawlseo-page="${input.route}"`;
   const design = input.design;
   const designLines = [
@@ -71,8 +79,12 @@ export function buildWixPagePrompt(input: {
     "You are producing one Wix landing-page section.",
     "",
     `SITE: ${input.domain}`,
-    `PAGE ROUTE: ${input.route}`,
-    `LANGUAGE: ${input.language}`,
+    multiLocale
+      ? `PAGE ROUTES:\n${locales!.map((locale) => `- ${locale.code}${locale.isDefault ? " (default)" : ""}: ${locale.route} — ${locale.url}`).join("\n")}`
+      : `PAGE ROUTE: ${input.route}`,
+    multiLocale
+      ? `LANGUAGES: ${locales!.map((locale) => locale.code).join(", ")}`
+      : `LANGUAGE: ${input.language}`,
     `COUNTRY: ${input.country ?? "not specified"}`,
     `TARGET QUERY: ${input.action.primaryQuery ?? "none"}`,
     `ACTION: ${input.action.title}`,
@@ -90,10 +102,16 @@ export function buildWixPagePrompt(input: {
     designLines,
     "",
     "DELIVERABLE",
-    "Write page.html in the current directory, plus design-notes.md and navigation.md. Do not create or modify any other file.",
+    multiLocale
+      ? `Write one page per locale: ${locales!.map((locale) => `page.${locale.code}.html`).join(", ")}, plus design-notes.md and navigation.md. Do not create or modify any other file.`
+      : "Write page.html in the current directory, plus design-notes.md and navigation.md. Do not create or modify any other file.",
     "",
-    "The file is a fragment, not a document. Its single root element must be:",
-    `<section ${marker}${routeAttribute}>`,
+    multiLocale
+      ? "Each page is a fragment, not a document. Its single root element must be:"
+      : "The file is a fragment, not a document. Its single root element must be:",
+    multiLocale
+      ? `<section ${marker} data-crawlseo-page="<the locale's route>">`
+      : `<section ${marker}${routeAttribute}>`,
     "",
     "REQUIREMENTS",
     "- Put every style inside one <style> block inside that section. Every selector must begin with the attribute selector for the marker, so no style can leak into the rest of the Wix page.",
@@ -101,20 +119,28 @@ export function buildWixPagePrompt(input: {
     "- Include JSON-LD in a <script type=\"application/ld+json\"> block: WebPage always, FAQPage when there is a FAQ. Do not add claims that are not in the draft or evidence.",
     "- Internal links only to paths that exist on this site. Do not invent URLs.",
     "- No <html>, <head>, <body>, <iframe>, external fonts, external scripts, tracking pixels, or forms that submit.",
-    "- Write in the page language. Keep the buyer's wording for the target query; do not translate it into marketing jargon.",
+    multiLocale
+      ? "- Write each page from scratch in its own language, as a native copywriter for that market. Do not translate one page into the other: the examples, the phrasing, the search wording and the cultural references must be the ones a buyer in that language actually uses. A sentence that reads like a translation is a defect."
+      : "- Write in the page language. Keep the buyer's wording for the target query; do not translate it into marketing jargon.",
     "- Use the design reference's colours and fonts. Do not substitute a new palette or typeface.",
     "- The Wix page is blank and this embed replaces its content container, so this section is the whole page. It must stand on its own.",
     "",
     "Also write design-notes.md in the current directory: a short list of the palette, fonts, spacing and component patterns you used, and the file or page where you found each. Do not invent tokens.",
     "",
-    "Also write navigation.md: the best way a visitor reaches this new page. Read the site's navigation and footer sources in the repository, then choose one target and give the exact edit. Cover:",
+    multiLocale
+      ? "Also write navigation.md: the best way a visitor reaches each new page. Read the site's navigation and footer sources in the repository, then choose one target per locale and give the exact edit. Cover:"
+      : "Also write navigation.md: the best way a visitor reaches this new page. Read the site's navigation and footer sources in the repository, then choose one target and give the exact edit. Cover:",
     "- the target (the menu, the footer, or a named existing page) and the file and location inside it;",
-    "- the link text in the page language and the href;",
+    multiLocale
+      ? "- the link text in each page language and the href;"
+      : "- the link text in the page language and the href;",
     "- why this is the best place for this page, and what you rejected;",
     "- whether the target is a repository component the agent can edit, or a native Wix menu a human must change.",
     "Do not invent a menu item that duplicates an existing one, and do not link the page from itself.",
     "",
-    "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce page.html, design-notes.md and navigation.md only.",
+    multiLocale
+      ? "The pages are delivered to existing Wix routes. Do not try to create the pages, call the Wix API, or publish anything. Produce the page files, design-notes.md and navigation.md only."
+      : "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce page.html, design-notes.md and navigation.md only.",
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",
   ].filter(Boolean).join("\n");
 }
