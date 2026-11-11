@@ -138,11 +138,13 @@ export function buildWixPagePrompt(input: {
     "- whether the target is a repository component the agent can edit, or a native Wix menu a human must change.",
     "Do not invent a menu item that duplicates an existing one, and do not link the page from itself.",
     "",
-    "When TARGET names a repository file, also write navigation.js: the complete edited file, not a diff. Keep every existing link, style and behaviour; add only the new link and its translation. The app writes it to the repository and rebuilds that component's early packet after the human approves.",
+    "When TARGET names a repository file, also write navigation.json with the exact edit:",
+    "{\"target\":\"<path relative to the repository>\",\"component\":\"<component name in the site manifest>\",\"summary\":\"<one sentence>\",\"edits\":[{\"find\":\"<exact text that occurs once>\",\"replace\":\"<the text with the new link>\"}]}",
+    "Each find string must occur exactly once in the target file, character for character (including escaped quotes in an HTML string). Keep every existing link, style and behaviour; add only the new link and its translation. The app applies the edit and rebuilds that component's early packet after the human approves.",
     "",
     multiLocale
-      ? "The pages are delivered to existing Wix routes. Do not try to create the pages, call the Wix API, or publish anything. Produce the page files, design-notes.md, navigation.md and, when a repository file is the target, navigation.js."
-      : "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce page.html, design-notes.md, navigation.md and, when a repository file is the target, navigation.js.",
+      ? "The pages are delivered to existing Wix routes. Do not try to create the pages, call the Wix API, or publish anything. Produce the page files, design-notes.md, navigation.md and, when a repository file is the target, navigation.json."
+      : "The page is delivered to an existing Wix route. Do not try to create the page, call the Wix API, or publish anything. Produce page.html, design-notes.md, navigation.md and, when a repository file is the target, navigation.json.",
     input.operatorInstructions ? `\nOPERATOR INSTRUCTIONS\n${input.operatorInstructions}` : "",
   ].filter(Boolean).join("\n");
 }

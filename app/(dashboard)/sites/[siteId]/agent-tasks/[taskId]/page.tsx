@@ -41,7 +41,7 @@ export default async function AgentTaskPage({ params }: Props) {
       site: { select: { id: true, domain: true } },
       action: { select: { id: true, title: true, targetUrl: true, primaryQuery: true, status: true } },
       draft: { select: { id: true, title: true, metaTitle: true, metaDescription: true, excerpt: true, markdown: true } },
-      artifacts: { where: { kind: { in: ["page_html", "design_notes", "navigation_notes"] } }, orderBy: { createdAt: "desc" }, take: 6 },
+      artifacts: { where: { kind: { in: ["page_html", "design_notes", "navigation_notes", "navigation_edits"] } }, orderBy: { createdAt: "desc" }, take: 10 },
       messages: { orderBy: { createdAt: "asc" }, take: 40 },
     },
   });
@@ -82,6 +82,16 @@ export default async function AgentTaskPage({ params }: Props) {
       : [];
   const designNotes = task.artifacts.find((artifact) => artifact.kind === "design_notes")?.content ?? null;
   const navigationNotes = task.artifacts.find((artifact) => artifact.kind === "navigation_notes")?.content ?? null;
+  const navigationEditsRaw = task.artifacts.find((artifact) => artifact.kind === "navigation_edits")?.content ?? null;
+  const navigationPlan = (() => {
+    if (!navigationEditsRaw) return null;
+    try {
+      const parsed = JSON.parse(navigationEditsRaw) as { target?: string; component?: string; summary?: string; edits?: Array<{ find?: string; replace?: string }> };
+      return parsed;
+    } catch {
+      return null;
+    }
+  })();
   const pageTitle = task.draft?.metaTitle || task.draft?.title || task.title;
   const pageDescription = task.draft?.metaDescription ?? "";
 
@@ -223,6 +233,18 @@ export default async function AgentTaskPage({ params }: Props) {
           <p className="mt-1 text-xs text-muted-foreground">
             The agent chose the best link location from the site&apos;s own navigation, footer and related pages.
           </p>
+          {navigationPlan && (
+            <div className="mt-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+              <p className="text-xs text-muted-foreground">
+                Agent edit · <code className="font-data text-foreground">{String(navigationPlan.target ?? "")}</code>
+                {navigationPlan.component ? ` · ${navigationPlan.component}` : ""}
+              </p>
+              {navigationPlan.summary && <p className="mt-1 text-sm text-foreground">{navigationPlan.summary}</p>}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Approving writes this edit to the repository and rebuilds the component&apos;s early packet.
+              </p>
+            </div>
+          )}
           <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-4 text-xs leading-6">
             {navigationNotes}
           </pre>

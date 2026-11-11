@@ -350,9 +350,9 @@ export async function runWixPageTask(taskId: string) {
     if (navigation.trim()) {
       await addAgentArtifact(task.id, { kind: "navigation_notes", content: navigation.slice(0, 20_000) });
     }
-    const navigationSource = await readFile(path.join(directory, "navigation.js"), "utf8").catch(() => "");
-    if (navigationSource.trim()) {
-      await addAgentArtifact(task.id, { kind: "navigation_source", content: navigationSource.slice(0, 400_000) });
+    const navigationEdits = await readFile(path.join(directory, "navigation.json"), "utf8").catch(() => "");
+    if (navigationEdits.trim()) {
+      await addAgentArtifact(task.id, { kind: "navigation_edits", content: navigationEdits.slice(0, 40_000) });
     }
 
     const variants = await pageVariantsFor(task.siteId, task.route ?? "/", task.site.domain);
