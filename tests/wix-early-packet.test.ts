@@ -88,6 +88,8 @@ describe("early packets", () => {
     expect(packet.html).toContain('document.getElementById("PAGES_CONTAINER")');
     expect(packet.html).toContain('createElement("atelier-x-v1")');
     expect(packet.html).toContain("replaceChildren(el)");
+    // A blank page has an empty container, so the mount must not wait for a child.
+    expect(packet.html).not.toContain("childElementCount");
   });
 
   it("splits a long source into ordered chunks that stay under the Wix limit", () => {

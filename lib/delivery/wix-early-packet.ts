@@ -158,7 +158,7 @@ export function buildEarlyPackets(input: {
   // The page is blank and this element is its whole content, so the packet
   // mounts it into the page container itself. That keeps the delivery free of
   // a manual editor step; an element a human already placed is left alone.
-  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c||!c.childElementCount)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};if(!mount()){const o=new MutationObserver(()=>{if(mount())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),30000)}`;
+  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};if(!mount()){const o=new MutationObserver(()=>{if(mount())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),30000)}`;
   return chunks.map((chunk, index) => {
     const store = `(window.__crawlseoEarly||(window.__crawlseoEarly={}))[${JSON.stringify(key)}]=(window.__crawlseoEarly[${JSON.stringify(key)}]||"")+${JSON.stringify(chunk)};`;
     const drain = index === count - 1
