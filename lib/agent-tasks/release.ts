@@ -8,7 +8,7 @@ import { markActionVerified } from "@/lib/agent-tasks/deploy";
 import { updateAgentTask } from "@/lib/agent-tasks/service";
 import { addAgentArtifact } from "@/lib/agent-tasks/chat";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
-import { selectEmbedTargetKey } from "@/lib/delivery/target-selection";
+import { selectReleaseTargetKey } from "@/lib/delivery/target-selection";
 import { isTechnicalSeoAction } from "@/lib/agent-tasks/targets";
 import { publishWixSite, readWixConfig, WixPublicationOutcomeUnknown, type PublicationResult } from "@/lib/delivery/wix-publish";
 import { verifyReleaseOutcome } from "@/lib/research/release-verification";
@@ -138,10 +138,11 @@ export async function approveAndReleaseAgentTask(taskId: string, requestedTarget
       },
       select: { key: true, sourcePath: true, snippetId: true, componentTag: true, route: true },
     });
-    const targetKey = requestedTargetKey ?? selectEmbedTargetKey(targets, {
+    const worktreeFilesForTarget = await changedFiles(task.worktreePath);
+    const targetKey = requestedTargetKey ?? selectReleaseTargetKey(targets, {
       title: task.action?.title ?? task.title,
       targetUrl: task.action?.targetUrl ?? task.route,
-    });
+    }, worktreeFilesForTarget);
     const selected = targetKey ? targets.find((item) => item.key === targetKey) : null;
     if (!selected || !selected.sourcePath || !selected.snippetId) {
       throw new ResearchServiceError("Could not determine a unique embed target for this release", 409);

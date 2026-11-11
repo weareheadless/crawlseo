@@ -15,6 +15,7 @@ import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
 import { checkComponentPlacement, deliverWixPageComponent } from "@/lib/delivery/wix-early-packet";
 import { disableBridgeEmbed } from "@/lib/bridge/client";
 import { applyNavigationEdit } from "@/lib/delivery/wix-navigation";
+import { commitAndPushFiles, type CodeSyncResult } from "@/lib/agent-tasks/code-sync";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
@@ -589,6 +590,29 @@ async function deliver(task: {
  * missing Wix page parks the task in AWAITING_TARGET, and the worker resumes
  * when the human has created it. No second click is required.
  */
+/**
+ * Push the files this delivery wrote, so GitHub matches what is live.
+ *
+ * A failure is recorded on the task, not thrown: the page is already served by
+ * the bridge, and undoing a working delivery because a push was rejected would
+ * be worse than reporting it.
+ */
+async function syncDeliveredCode(
+  task: { id: string; title: string; siteId: string },
+  result: unknown,
+  navigationTarget: string | null,
+): Promise<CodeSyncResult | null> {
+  const config = await getSiteDeliveryConfig(task.siteId);
+  if (!config?.repoPath) return null;
+  const delivery = record(record(result).delivery);
+  const variants = Array.isArray(delivery.variants) ? delivery.variants.map(record) : [];
+  const files = [
+    ...variants.map((variant) => (typeof variant.sourcePath === "string" ? variant.sourcePath : null)),
+    navigationTarget,
+  ];
+  return commitAndPushFiles(config.repoPath, files, `CrawlSEO: ${task.title}`);
+}
+
 export async function approveAndDeliverWixPage(taskId: string, confirmedBy: string | null = null) {
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
@@ -649,8 +673,14 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
     reason: error instanceof Error ? error.message : "navigation apply failed",
   }));
   const published = await deliver(task, confirmedBy);
+  const navigationTarget = navigation.status === "applied" ? navigation.target : null;
+  const codeSync = await syncDeliveredCode(task, published.result, navigationTarget).catch((error) => ({
+    status: "failed" as const,
+    files: [],
+    reason: error instanceof Error ? error.message : "code sync failed",
+  }));
   const withNavigation = await updateAgentTask(task.id, {
-    result: { ...record(published.result), navigation } as never,
+    result: { ...record(published.result), navigation, ...(codeSync ? { codeSync } : {}) } as never,
   });
   return { status: "published" as const, task: withNavigation };
 }
@@ -659,7 +689,7 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
 export async function resumeWixPageDelivery(taskId: string) {
   const task = await db.agentTask.findUnique({
     where: { id: taskId },
-    select: { id: true, siteId: true, actionId: true, draftId: true, route: true, status: true, kind: true, result: true },
+    select: { id: true, title: true, siteId: true, actionId: true, draftId: true, route: true, status: true, kind: true, result: true },
   });
   if (!task) throw new ResearchServiceError("Agent task not found", 404);
   if (task.kind !== "wix_page") return { status: "skipped" as const };
@@ -774,5 +804,17 @@ export async function resumeWixPageDelivery(taskId: string) {
     return { status: "waiting" as const, httpStatus };
   }
   const published = await deliver(task);
-  return { status: "published" as const, task: published };
+  const priorNavigation = record(record(task.result).navigation);
+  const navigationTarget = priorNavigation.status === "applied" && typeof priorNavigation.target === "string"
+    ? priorNavigation.target
+    : null;
+  const codeSync = await syncDeliveredCode(task, published.result, navigationTarget).catch((error) => ({
+    status: "failed" as const,
+    files: [],
+    reason: error instanceof Error ? error.message : "code sync failed",
+  }));
+  const withSync = codeSync
+    ? await updateAgentTask(task.id, { result: { ...record(published.result), codeSync } as never })
+    : published;
+  return { status: "published" as const, task: withSync };
 }

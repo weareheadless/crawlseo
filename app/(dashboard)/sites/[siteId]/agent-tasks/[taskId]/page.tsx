@@ -66,6 +66,15 @@ export default async function AgentTaskPage({ params }: Props) {
   const delivery = record(result.delivery);
   const componentTag = typeof delivery.tag === "string" ? delivery.tag : null;
   const agentProgress = readAgentProgress(task.result);
+  const codeSync = record(result.codeSync);
+  const githubSha = typeof codeSync.commitSha === "string"
+    ? codeSync.commitSha
+    : typeof result.mergedSha === "string"
+      ? result.mergedSha
+      : null;
+  const githubStatus = typeof codeSync.status === "string" ? codeSync.status : githubSha ? "pushed" : null;
+  const githubReason = typeof codeSync.reason === "string" ? codeSync.reason : "";
+  const githubFiles = Array.isArray(codeSync.files) ? codeSync.files.length : 0;
   const previewArtifact = task.artifacts.find((artifact) => artifact.kind === "preview_html") ?? null;
   const latestJob = await latestAgentRunJob(task.id);
   const pageArtifacts = task.kind === "wix_page"
@@ -183,6 +192,25 @@ export default async function AgentTaskPage({ params }: Props) {
           </div>
         </section>
       )}
+      {githubStatus && (
+        <div
+          className={`rounded-xl border px-4 py-2 font-data text-[11px] ${
+            githubStatus === "pushed" || githubStatus === "nothing"
+              ? "border-signal/30 bg-signal/5 text-signal"
+              : "border-warning/40 bg-warning/5 text-warning"
+          }`}
+        >
+          {githubStatus === "pushed" && (
+            <>GitHub · main at {githubSha ? githubSha.slice(0, 7) : "unknown"}{githubFiles > 0 ? ` · ${githubFiles} file${githubFiles === 1 ? "" : "s"}` : ""}</>
+          )}
+          {githubStatus === "nothing" && <>GitHub · already up to date</>}
+          {githubStatus === "skipped" && <>Not pushed to GitHub: {githubReason}</>}
+          {githubStatus === "failed" && (
+            <>GitHub push failed: {githubReason}. The page is live; the commit is local.</>
+          )}
+        </div>
+      )}
+
       {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
         <section className="panel p-5">
           <div className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">

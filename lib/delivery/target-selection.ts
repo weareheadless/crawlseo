@@ -53,3 +53,24 @@ export function selectEmbedTargetKey(
   if (scored.length > 1 && scored[0].score === scored[1].score) return null;
   return scored[0].target.key;
 }
+
+/**
+ * The target a code release updates.
+ *
+ * An action title often names the page, not the component that renders it, so
+ * a page rewrite that changes `unit-type-collection-split` scored zero against
+ * every target and could not be released. The changed file is the fact: if the
+ * task changed a target's source, that target is the one to update.
+ */
+export function selectReleaseTargetKey(
+  targets: Array<EmbedTargetCandidate & { sourcePath?: string | null }>,
+  action: { title?: string | null; targetUrl?: string | null },
+  changedFiles: string[],
+): string | null {
+  const byName = selectEmbedTargetKey(targets, action);
+  if (byName) return byName;
+  const byFile = changedFiles
+    .map((file) => targets.find((target) => target.sourcePath === file))
+    .find((target) => Boolean(target));
+  return byFile?.key ?? null;
+}

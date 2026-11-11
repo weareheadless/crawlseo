@@ -51,6 +51,10 @@ export function WixTaskActions({
 
   const spinner = (label: string) => busy === label ? <Loader2 className="size-3 animate-spin" /> : null;
   const isArticle = kind === "wix_article";
+  const isPage = kind === "wix_page";
+  // A page is delivered by the page lane; every other code task is released
+  // through the repository, which commits, merges and pushes it.
+  const isCodeRelease = !isPage && !isArticle;
 
   if (status === "PUBLISHED") {
     return (
@@ -196,11 +200,16 @@ export function WixTaskActions({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            onClick={() => request(`/crawlseo/api/agent-tasks/${taskId}/deliver`, "POST", {}, "deliver")}
+            onClick={() => request(
+              `/crawlseo/api/agent-tasks/${taskId}/${isCodeRelease ? "approve-release" : "deliver"}`,
+              "POST",
+              {},
+              isCodeRelease ? "release" : "deliver",
+            )}
             disabled={busy !== null || (!isArticle && !route)}
           >
-            {spinner("deliver") ?? <Rocket className="size-3" />}
-            {isArticle ? "Approve & publish" : "Approve & deliver"}
+            {spinner(isCodeRelease ? "release" : "deliver") ?? <Rocket className="size-3" />}
+            {isArticle ? "Approve & publish" : isCodeRelease ? "Approve & release" : "Approve & deliver"}
           </Button>
           {!isArticle && (
             <Button
@@ -214,6 +223,15 @@ export function WixTaskActions({
             </Button>
           )}
         </div>
+        {isCodeRelease ? (
+          <p className="text-[11px] text-muted-foreground">
+            Commits the reviewed change, merges it into main, pushes it to GitHub, then updates and verifies the Wix embed.
+          </p>
+        ) : !isArticle ? (
+          <p className="text-[11px] text-muted-foreground">
+            Delivers every locale, then pushes the page source and navigation edit to GitHub.
+          </p>
+        ) : null}
         {!isArticle && !route && (
           <p className="text-[11px] text-warning">Save the page route before delivering.</p>
         )}
