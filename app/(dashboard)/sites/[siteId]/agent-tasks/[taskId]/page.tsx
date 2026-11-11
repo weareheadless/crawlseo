@@ -253,7 +253,7 @@ export default async function AgentTaskPage({ params }: Props) {
           <div className="border-b border-border/60 p-4">
             <h2 className="font-heading text-base font-semibold">Preview</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              The component the agent changed, rendered from its source with scripts enabled so the custom element mounts.
+              The changed page and component, rendered with the page&apos;s own copy. Live Wix data and page chrome are not loaded; every config variant (locale or market) is shown.
             </p>
           </div>
           {/* The URL carries the artifact time: a rerun writes a new preview and

@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, readFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { db } from "@/lib/db";
@@ -9,6 +9,11 @@ import { captureTaskScreenshots, selectScreenshotUrls, type AgentScreenshot } fr
 import { agentTimeouts } from "@/lib/agent-tasks/timeouts";
 import { progressLineForEvent, type AgentProgressLine } from "@/lib/agent-tasks/progress";
 import { worktreeBrief } from "@/lib/agent-tasks/prompt";
+import {
+  componentAccepts,
+  extractConfigVariants,
+  type ConfigVariant,
+} from "@/lib/agent-tasks/page-preview";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,19 +102,54 @@ export async function createPreviewArtifact(
   status: string,
   routeUrl?: string | null,
 ): Promise<void> {
-  const files = status
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[A-Z?]{1,2}\s+/, ""))
-    .filter((file) => /^src\/public\/custom-elements\/[^/]+\.js$/.test(file))
+  const changed = parseGitStatusFiles(status);
+  const elementFiles = changed
+    .filter((file) => /^src\/public\/custom-elements\/[^/]+\.js$/i.test(file))
     .slice(0, 6);
-  if (files.length === 0) return;
 
-  const components: Array<{ file: string; tag: string; source: string }> = [];
-  for (const file of files) {
+  // A page can change without its component changing: the copy lives in the
+  // page file. Read every changed source that hands a config to an element.
+  const variants: ConfigVariant[] = [];
+  for (const file of changed.filter((item) => item.endsWith(".js")).slice(0, 8)) {
+    if (elementFiles.includes(file)) continue;
+    const source = await readFile(path.join(worktreePath, file), "utf8").catch(() => null);
+    if (!source || !/setAttribute\(\s*['"]config['"]/.test(source)) continue;
+    for (const variant of extractConfigVariants(source)) {
+      if (!variants.some((existing) => existing.name === variant.name)) variants.push(variant);
+    }
+    if (variants.length >= 6) break;
+  }
+
+  // With no changed component, the config still describes a component in the
+  // repository; render the one that declares a `config` attribute.
+  let previewFiles = elementFiles;
+  if (previewFiles.length === 0 && variants.length > 0) {
+    const directory = path.join(worktreePath, "src/public/custom-elements");
+    const names = await readdir(directory).catch(() => [] as string[]);
+    for (const name of names.filter((entry) => entry.endsWith(".js")).slice(0, 12)) {
+      const source = await readFile(path.join(directory, name), "utf8").catch(() => "");
+      if (componentAccepts(source, "config")) {
+        previewFiles.push(`src/public/custom-elements/${name}`);
+      }
+    }
+    previewFiles = previewFiles.slice(0, 3);
+  }
+  if (previewFiles.length === 0) return;
+
+  const components: Array<{ file: string; tag: string; source: string; configurable: boolean; modes: boolean }> = [];
+  for (const file of previewFiles) {
     try {
       const source = await readFile(path.join(worktreePath, file), "utf8");
       const tag = previewTag(source, file);
-      if (tag) components.push({ file, tag, source });
+      if (tag) {
+        components.push({
+          file,
+          tag,
+          source,
+          configurable: componentAccepts(source, "config"),
+          modes: componentAccepts(source, "mode"),
+        });
+      }
     } catch {
       // A deleted or unreadable file cannot be previewed.
     }
@@ -130,21 +170,34 @@ export async function createPreviewArtifact(
       previewPath = "";
     }
   }
-  const attributes = [
+  const shared = [
     locale ? `locale="${locale}"` : "",
     categoryKey ? `category-key="${categoryKey}"` : "",
   ].filter(Boolean).join(" ");
   const routeScript = previewPath
     ? `<script>history.replaceState(null,"",${JSON.stringify(previewPath)});</script>`
     : "";
+  const label = (value: string) => escapeHtml(value);
 
-  const sections = components.map(({ file, tag, source }) => `
+  const sections = components.map(({ file, tag, source, configurable, modes }) => {
+    // One block per config variant, so every market or locale the page can
+    // render is reviewable together. `mode="all"` on a single mount would
+    // otherwise render only the hero.
+    const render = configurable && variants.length > 0
+      ? variants.map((variant) => `
     <section class="preview-block">
-      <div class="preview-label">${file}${previewPath ? ` · ${previewPath}` : ""}</div>
-      <${tag} ${attributes}></${tag}>
-    </section>
+      <div class="preview-label">${label(file)} · ${label(variant.name)}${previewPath ? ` · ${label(previewPath)}` : ""}</div>
+      <${tag} ${shared}${modes ? ' mode="all"' : ""} config="${escapeHtml(JSON.stringify(variant.config))}"></${tag}>
+    </section>`).join("\n")
+      : `
+    <section class="preview-block">
+      <div class="preview-label">${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</div>
+      <${tag} ${shared}></${tag}>
+    </section>`;
+    return `${render}
     ${routeScript}
-    <script>${source}</script>`).join("\n");
+    <script>${source}</script>`;
+  }).join("\n");
 
   const html = `<!doctype html>
 <html lang="en">
@@ -160,11 +213,19 @@ export async function createPreviewArtifact(
 </style>
 </head>
 <body>
-<div class="preview-note">Preview of the modified component source. Live Wix data and page chrome are not loaded here; use this to validate the visible component change before approval.</div>
+<div class="preview-note">Preview of the changed page and component. Page copy comes from the page's own config; live Wix data, listings and page chrome are not loaded. Every config variant is shown.</div>
 ${sections}
 </body>
 </html>`;
   await addAgentArtifact(taskId, { kind: "preview_html", content: html });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 async function exists(path: string): Promise<boolean> {
