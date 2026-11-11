@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
+vi.mock("@/lib/delivery/wix-render", () => ({ renderPageDom: vi.fn() }));
+
+import { renderPageDom } from "@/lib/delivery/wix-render";
+
 import {
   buildEarlyPackets,
   buildPageComponentSource,
@@ -78,6 +82,14 @@ describe("early packets", () => {
     expect(packet.html).toContain("customElements.get");
   });
 
+  it("mounts the element into the page container so no editor step is needed", () => {
+    const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
+    const [packet] = buildEarlyPackets({ tag: "atelier-x-v1", route: "/x", source });
+    expect(packet.html).toContain('document.getElementById("PAGES_CONTAINER")');
+    expect(packet.html).toContain('createElement("atelier-x-v1")');
+    expect(packet.html).toContain("replaceChildren(el)");
+  });
+
   it("splits a long source into ordered chunks that stay under the Wix limit", () => {
     // A repeated fragment compresses to almost nothing; this payload does not.
     const noisy = pseudoRandom(12_000);
@@ -99,20 +111,20 @@ describe("early packets", () => {
 });
 
 describe("placement check", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => vi.mocked(renderPageDom).mockReset());
 
   it("finds the element in the rendered document", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "<main><atelier-x-v1></atelier-x-v1></main>" }));
+    vi.mocked(renderPageDom).mockResolvedValue("<main><atelier-x-v1></atelier-x-v1></main>");
     expect(await checkComponentPlacement("https://example.com/x", "atelier-x-v1")).toBe("found");
   });
 
   it("reports a page without the element as missing", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "<main></main>" }));
+    vi.mocked(renderPageDom).mockResolvedValue("<main></main>");
     expect(await checkComponentPlacement("https://example.com/x", "atelier-x-v1")).toBe("missing");
   });
 
-  it("reports an unreachable page as unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  it("reports an unrenderable page as unavailable", async () => {
+    vi.mocked(renderPageDom).mockResolvedValue(null);
     expect(await checkComponentPlacement("https://example.com/x", "atelier-x-v1")).toBe("unavailable");
   });
 });

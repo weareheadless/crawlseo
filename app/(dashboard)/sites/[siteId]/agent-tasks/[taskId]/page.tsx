@@ -111,13 +111,12 @@ export default async function AgentTaskPage({ params }: Props) {
         </div>
         {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
           <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
-            <p className="font-medium text-warning">The page is deployed; the element is not on it yet</p>
+            <p className="font-medium text-warning">The packet is deployed; the page has not rendered it yet</p>
             <p className="mt-1 text-muted-foreground">
-              The early packet is live, so the page renders as soon as the element is placed. In the Wix editor, add
-              <span className="text-foreground"> Embed a custom element </span>
-              to <code className="font-data text-foreground">{String(awaitingPlacement.route ?? route ?? "")}</code> and choose
+              The early packet registers and mounts
               <code className="font-data text-foreground"> {String(awaitingPlacement.tag ?? componentTag ?? "")} </code>
-              from the list. Publish the page, then check the placement.
+              on <code className="font-data text-foreground">{String(awaitingPlacement.route ?? route ?? "")}</code> itself, so there is nothing to place in the editor.
+              If the page is still blank, Wix is serving a cached document; check again shortly.
             </p>
             <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
               <p>Page title: <span className="text-foreground">{pageTitle}</span></p>

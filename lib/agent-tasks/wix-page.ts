@@ -414,7 +414,7 @@ async function deliver(task: {
                 url: component.url,
                 route: component.route,
                 attempts: 0,
-                instruction: `Place <${component.tag}> on the Wix page at ${component.route}. The packet is already deployed, so the page renders as soon as the element is on it.`,
+                instruction: `The packet is deployed and mounts <${component.tag}> on ${component.route} itself. If the page is still blank, Wix is serving a cached document; check again shortly.`,
               },
           progress: {
             stage: live ? "Published" : "Waiting for the element placement",

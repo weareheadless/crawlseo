@@ -4,11 +4,13 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { db } from "@/lib/db";
+import { renderPageDom } from "@/lib/delivery/wix-render";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import {
   assertNegotiatedWixBridgeOperations,
   createBridgeSnippet,
   listBridgeSnippets,
+  disableBridgeEmbed,
   readBridgeEmbed,
   writeBridgePacket,
 } from "@/lib/bridge/client";
@@ -153,10 +155,14 @@ export function buildEarlyPackets(input: {
   const count = chunks.length;
   const key = sha256(input.source).slice(0, 16);
   const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)},q=p.replace(/^\\/[a-z]{2}(?=\\/)/,"");if(p!==r&&q!==r)return;if(new URLSearchParams(location.search).get("earlyElements")==="off")return;`;
+  // The page is blank and this element is its whole content, so the packet
+  // mounts it into the page container itself. That keeps the delivery free of
+  // a manual editor step; an element a human already placed is left alone.
+  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c||!c.childElementCount)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};if(!mount()){const o=new MutationObserver(()=>{if(mount())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),30000)}`;
   return chunks.map((chunk, index) => {
     const store = `(window.__crawlseoEarly||(window.__crawlseoEarly={}))[${JSON.stringify(key)}]=(window.__crawlseoEarly[${JSON.stringify(key)}]||"")+${JSON.stringify(chunk)};`;
     const drain = index === count - 1
-      ? `const b=window.__crawlseoEarly[${JSON.stringify(key)}];if(!b)return;const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(customElements.get(${JSON.stringify(input.tag)}))return;const script=document.createElement("script");script.textContent=source;document.head.append(script)}).catch(()=>{});`
+      ? `const b=window.__crawlseoEarly[${JSON.stringify(key)}];if(!b)return;const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(!customElements.get(${JSON.stringify(input.tag)})){const script=document.createElement("script");script.textContent=source;document.head.append(script)}${mount}}).catch(()=>{});`
       : "";
     const html = `<script>(()=>{${guard}${store}${drain}})();</script>`;
     if (html.length >= PACKET_MAX_CHARACTERS) {
@@ -280,6 +286,17 @@ export async function deliverWixPageComponent(input: {
   }
 
   const url = siteUrl(site.domain, route);
+
+  // An embed delivered earlier replaces the page container, which would wipe
+  // the element this packet mounts. It is disabled before the page is checked.
+  const previous = await db.deliveryTarget.findUnique({
+    where: { siteId_key: { siteId: site.id, key: `page:${route}` } },
+    select: { snippetId: true },
+  });
+  if (previous?.snippetId) {
+    await disableBridgeEmbed(alias, previous.snippetId, true).catch(() => undefined);
+  }
+
   return {
     tag,
     route,
@@ -296,19 +313,12 @@ export async function deliverWixPageComponent(input: {
  * no API for adding an element to a page, so the delivery waits for the tag to
  * appear in the rendered document.
  */
-export async function checkComponentPlacement(url: string, tag: string, timeoutMs = 30_000): Promise<"found" | "missing" | "unavailable"> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal, redirect: "follow" });
-    if (!response.ok) return "unavailable";
-    const html = await response.text();
-    return html.includes(`<${tag}`) ? "found" : "missing";
-  } catch {
-    return "unavailable";
-  } finally {
-    clearTimeout(timer);
-  }
+export async function checkComponentPlacement(url: string, tag: string): Promise<"found" | "missing" | "unavailable"> {
+  // The packet mounts the element after the document loads, so the server HTML
+  // never contains it. Only a rendered document proves the page is live.
+  const dom = await renderPageDom(url);
+  if (!dom) return "unavailable";
+  return dom.includes(`<${tag}`) ? "found" : "missing";
 }
 
 /** Read the component source a delivery wrote, for review or a re-delivery. */
