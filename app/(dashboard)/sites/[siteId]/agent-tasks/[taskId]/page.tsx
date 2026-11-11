@@ -128,7 +128,7 @@ export default async function AgentTaskPage({ params }: Props) {
 
       {/* The actions stay reachable while the run and its preview scroll past:
           approving and running used to mean scrolling back to the top. */}
-      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border/60 bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 space-y-0.5">
             <p className="truncate font-data text-[10px] uppercase tracking-wide text-muted-foreground">
