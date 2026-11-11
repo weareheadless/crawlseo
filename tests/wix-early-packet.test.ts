@@ -122,9 +122,56 @@ describe("early packets", () => {
     expect(packets.length).toBeGreaterThan(1);
     expect(packets.map((packet) => packet.index)).toEqual(packets.map((_, index) => index));
     for (const packet of packets) expect(packet.html.length).toBeLessThan(PACKET_MAX_CHARACTERS);
-    // Only the last chunk decompresses; the earlier ones only store their part.
-    expect(packets.at(-1)?.html).toContain("DecompressionStream");
-    expect(packets[0].html).not.toContain("DecompressionStream");
+    // Every chunk can complete the set: the store is indexed, not appended.
+    for (const packet of packets) {
+      expect(packet.html).toContain("parts[i]=");
+      expect(packet.html).toContain("Object.keys(e.parts).length!==c");
+    }
+  });
+
+  it("reassembles the source from chunks in any order and survives repeated runs", async () => {
+    const tag = "atelier-order-test-v1";
+    const source = `customElements.define("${tag}", class extends HTMLElement {});`;
+    const packets = buildEarlyPackets({ tag, route: "/x", source, chunkCharacters: 80 });
+    expect(packets.length).toBeGreaterThan(1);
+
+    const defined: string[] = [];
+    const injected: string[] = [];
+    const customElements = {
+      get: (name: string) => (defined.includes(name) ? class {} : undefined),
+      define: (name: string) => { defined.push(name); },
+    };
+    const document = {
+      createElement: () => ({ textContent: "" }),
+      head: {
+        append: (script: { textContent: string }) => {
+          injected.push(script.textContent);
+          new Function("customElements", "HTMLElement", script.textContent)(customElements, class {});
+        },
+      },
+    };
+    const windowObject: Record<string, unknown> = {};
+    const run = (html: string) => {
+      const code = html.replace(/^<script>/, "").replace(/<\/script>$/, "");
+      new Function(
+        "window", "location", "URLSearchParams", "atob", "Uint8Array", "Object", "Array",
+        "DecompressionStream", "Blob", "Response", "customElements", "document", "HTMLElement",
+        code,
+      )(windowObject, { pathname: "/x", search: "" }, URLSearchParams, atob, Uint8Array, Object, Array,
+        DecompressionStream, Blob, Response, customElements, document, class {});
+    };
+
+    // Reverse order, each chunk twice, is the worst case Wix can produce when
+    // it reruns a page's custom code inside one document.
+    for (const packet of [...packets].reverse()) {
+      run(packet.html);
+      run(packet.html);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(defined).toEqual([tag]);
+    expect(injected).toHaveLength(1);
+    expect(injected[0]).toContain(`customElements.define("${tag}"`);
   });
 
   it("refuses a chunk that would exceed the Wix limit", () => {

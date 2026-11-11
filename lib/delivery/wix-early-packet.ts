@@ -19,10 +19,12 @@ import {
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 /**
- * Wix Custom Code rejects an entry at 15,000 characters. The Atelier startup
- * build chunks at 14,000 and so do we, leaving room for the wrapper script.
+ * Wix Custom Code rejects an entry at 15,000 characters. The guard, indexed
+ * store and drain add roughly 850, so chunking at 13,500 leaves real headroom
+ * for a long tag or route. The Atelier startup build chunks at 14,000 with a
+ * smaller wrapper; do not copy that number here.
  */
-export const PACKET_CHUNK_CHARACTERS = 14_000;
+export const PACKET_CHUNK_CHARACTERS = 13_500;
 export const PACKET_MAX_CHARACTERS = 15_000;
 
 export class WixEarlyPacketError extends Error {
@@ -49,6 +51,7 @@ export type WixPageComponentResult = {
   packets: Array<{ id: string; name: string; index: number; characters: number; created: boolean; readback: "match" | "mismatch" }>;
   mount: { id: string; name: string; characters: number; created: boolean; readback: "match" | "mismatch" };
   placement: "found" | "missing" | "unavailable";
+  disabled: Array<{ id: string; name: string }>;
 };
 
 function routePath(route: string): string {
@@ -168,6 +171,11 @@ function routeGuard(input: RouteScope): string {
  * The early packet: the component source, compressed and registered from Wix
  * general custom code before Wix's own loader runs. It registers the element
  * and does nothing else; mounting belongs to the page's embed.
+ *
+ * Chunks are order- and repeat-safe. Each script writes its own indexed slot,
+ * and any script that completes the set decompresses it. Re-running a chunk
+ * overwrites the same slot instead of appending to the payload, so Wix may
+ * reload the entries on navigation without corrupting the base64.
  */
 export function buildEarlyPackets(input: RouteScope & {
   tag: string;
@@ -184,10 +192,8 @@ export function buildEarlyPackets(input: RouteScope & {
   const key = sha256(input.source).slice(0, 16);
   const guard = routeGuard(input);
   return chunks.map((chunk, index) => {
-    const store = `(window.__crawlseoEarly||(window.__crawlseoEarly={}))[${JSON.stringify(key)}]=(window.__crawlseoEarly[${JSON.stringify(key)}]||"")+${JSON.stringify(chunk)};`;
-    const drain = index === count - 1
-      ? `const b=window.__crawlseoEarly[${JSON.stringify(key)}];if(!b)return;const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(customElements.get(${JSON.stringify(input.tag)}))return;const script=document.createElement("script");script.textContent=source;document.head.append(script)}).catch(()=>{});`
-      : "";
+    const store = `const s=window.__crawlseoEarly||(window.__crawlseoEarly={}),k=${JSON.stringify(key)},c=${count},i=${index};let e=s[k];if(!e||e.count!==c){e={count:c,parts:{}};s[k]=e}e.parts[i]=${JSON.stringify(chunk)};if(Object.keys(e.parts).length!==c)return;const b=Array.from({length:c},(_,n)=>e.parts[n]).join("");delete s[k];`;
+    const drain = `const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(customElements.get(${JSON.stringify(input.tag)}))return;const script=document.createElement("script");script.textContent=source;document.head.append(script)}).catch(()=>{});`;
     const html = `<script>(()=>{${guard}${store}${drain}})();</script>`;
     if (html.length >= PACKET_MAX_CHARACTERS) {
       throw new WixEarlyPacketError(`Packet ${index + 1} is ${html.length} characters; Wix rejects entries at ${PACKET_MAX_CHARACTERS}`, 500);
@@ -297,7 +303,7 @@ export async function deliverWixPageComponent(input: {
   const alias = config.bridgeAlias.trim();
   if (!alias) throw new WixEarlyPacketError("This site has no Wix bridge alias configured", 409);
 
-  await assertNegotiatedWixBridgeOperations(alias, ["read_embed", "write_embed"]);
+  await assertNegotiatedWixBridgeOperations(alias, ["read_embed", "write_embed", "write_packet", "disable_embed"]);
 
   const repoPath = config?.repoPath?.trim() || null;
   const tag = pageComponentTag(route, await existingComponentTags(repoPath), input.localeCode ?? null);
@@ -321,7 +327,7 @@ export async function deliverWixPageComponent(input: {
     let created = false;
     if (current) {
       id = current.id;
-      await writeBridgePacket(alias, id, file, true);
+      await writeBridgePacket(alias, id, file, true, false);
     } else {
       const receipt = await createBridgeSnippet(alias, {
         name: packet.name,
@@ -330,7 +336,7 @@ export async function deliverWixPageComponent(input: {
         position: "HEAD",
         category: "ESSENTIAL",
         apply: true,
-        loadOnce: true,
+        loadOnce: false,
       }) as { customEmbedId?: string; snippetId?: string; id?: string };
       id = String(receipt.customEmbedId ?? receipt.snippetId ?? receipt.id ?? "");
       if (!id) throw new WixEarlyPacketError("The bridge did not return the new packet embed id", 502);
@@ -347,6 +353,17 @@ export async function deliverWixPageComponent(input: {
     });
   }
 
+  // A shorter source can leave an older chunk behind. It is part of the same
+  // packet set by name, so it must be disabled: with the wrong count it would
+  // wait forever and transfer bytes on every page.
+  const packetPrefix = `CrawlSEO early packet — ${tag} — `;
+  const staleChunks = existing.filter((embed) => embed.name.startsWith(packetPrefix) && !results.some((result) => result.id === embed.id));
+  const disabled: Array<{ id: string; name: string }> = [];
+  for (const embed of staleChunks) {
+    await disableBridgeEmbed(alias, embed.id, true);
+    disabled.push({ id: embed.id, name: embed.name });
+  }
+
   // The mount embed is the page's own Custom Embed. The packet above only
   // registers the element, so the two never fight over the container.
   const mountFile = await writePacketFile({ index: 0, count: 1, name: mount.name, html: mount.html, characters: mount.html.length });
@@ -355,7 +372,7 @@ export async function deliverWixPageComponent(input: {
   let mountCreated = false;
   if (existingMount) {
     mountId = existingMount.id;
-    await writeBridgePacket(alias, mountId, mountFile, true);
+    await writeBridgePacket(alias, mountId, mountFile, true, false);
   } else {
     const receipt = await createBridgeSnippet(alias, {
       name: mount.name,
@@ -364,7 +381,7 @@ export async function deliverWixPageComponent(input: {
       position: "BODY_END",
       category: "ESSENTIAL",
       apply: true,
-      loadOnce: true,
+      loadOnce: false,
     }) as { customEmbedId?: string; snippetId?: string; id?: string };
     mountId = String(receipt.customEmbedId ?? receipt.snippetId ?? receipt.id ?? "");
     if (!mountId) throw new WixEarlyPacketError("The bridge did not return the new mount embed id", 502);
@@ -399,6 +416,7 @@ export async function deliverWixPageComponent(input: {
       readback: mountReadback.embed?.htmlSha256 === sha256(mount.html) ? "match" : "mismatch",
     },
     placement: await checkComponentPlacement(url, tag),
+    disabled,
   };
 }
 

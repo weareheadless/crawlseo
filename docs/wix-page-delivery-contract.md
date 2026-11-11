@@ -25,8 +25,8 @@ So a deployment writes both, and they do different jobs:
 
 | Entry | Position | Scope | Job |
 | --- | --- | --- | --- |
-| early packet | HEAD, ESSENTIAL, load-once | general custom code, all pages | decompress the source and register the element |
-| page mount | BODY_END, ESSENTIAL | general custom code, all pages | create the element and put it in the page container |
+| early packet | HEAD, ESSENTIAL, reload on every page | general custom code, all pages | decompress the source and register the element |
+| page mount | BODY_END, ESSENTIAL, reload on every page | general custom code, all pages | create the element and put it in the page container |
 
 They must never both mount. The packet registers and touches nothing else; the
 mount creates the element and re-mounts it through Wix hydration for the first
@@ -34,14 +34,19 @@ minute, because hydration replaces the page container after first paint. Both
 carry the same route and language guard, so an entry that is site-wide is inert
 everywhere except its own page.
 
+Both entries must have Wix's load-once setting **off**. With load-once on, Wix
+runs the entry only during the initial site render, so a visitor who reaches the
+page by an internal navigation would never mount it. The app sets it off on
+create and corrects it on every rewrite.
+
 A page task therefore produces:
 
 | Artifact | Who | Where |
 | --- | --- | --- |
 | `page.<locale>.html` | the agent | the reviewed fragment, one per locale |
 | component source | the app | `<repo>/src/public/custom-elements/<tag>.js` |
-| early packet | the app, through the bridge | Wix Custom Code, HEAD, ESSENTIAL, load-once |
-| page mount | the app, through the bridge | Wix Custom Code, BODY_END, ESSENTIAL |
+| early packet | the app, through the bridge | Wix Custom Code, HEAD, ESSENTIAL, reload on every page |
+| page mount | the app, through the bridge | Wix Custom Code, BODY_END, ESSENTIAL, reload on every page |
 | `design-notes.md` | the agent | task artifact |
 | `navigation.md` + `navigation.json` | the agent | task artifact |
 
@@ -49,9 +54,12 @@ The component renders the fragment into the light DOM, so the copy stays in the
 document for crawlers. JSON-LD is moved to `document.head` on connect, because
 structured data inside a custom element is not read.
 
-The packet is gzip + base64, chunked at 14,000 characters (Wix rejects an entry
-at 15,000). It only runs on its own route, honours `?earlyElements=off`, and
-guards `customElements.define` with `customElements.get`.
+The packet is gzip + base64, chunked at 13,500 characters (Wix rejects an entry
+at 15,000). Chunks write indexed slots and any chunk that completes the set
+decompresses it, so loading them in any order or rerunning them on navigation
+cannot corrupt the payload. It only runs on its own route, honours
+`?earlyElements=off`, and guards `customElements.define` with
+`customElements.get`. A shorter source disables the chunks it no longer needs.
 
 ### Locales
 
@@ -65,6 +73,14 @@ own component tag, its own packet and its own mount, because the guard differs:
   never another locale's prefix.
 
 Every locale's page is written from scratch in its language, not translated.
+
+### Repairing a published page
+
+`npm run repair:wix-page -- <taskId> --apply` re-delivers a published page from
+its stored fragment. It regenerates both entries from the current builders,
+rewrites them in place, sets load-once off on both, disables leftover chunks and
+checks the live element. It does not change the task's review state or push to
+GitHub.
 
 ### What stays human
 

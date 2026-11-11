@@ -9,5 +9,14 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Ignored working copies carry their own test files and stale paths. They
+    // are not part of this repository's suite; including them buried real
+    // failures under dozens of "Cannot find package" errors.
+    exclude: [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/.agent-worktrees/**",
+      "**/.agent-tools/**",
+    ],
   },
 });

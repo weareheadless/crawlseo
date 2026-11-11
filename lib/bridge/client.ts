@@ -111,7 +111,7 @@ function runBridge(
       ...(options.allPages ? ["--all-pages"] : []),
       ...(options.position ? ["--position", options.position] : []),
       ...(options.category ? ["--category", options.category] : []),
-      ...(options.loadOnce ? ["--load-once", "true"] : []),
+      ...(options.loadOnce === undefined ? [] : ["--load-once", String(options.loadOnce)]),
       ...(options.preserveScope ? ["--preserve-scope"] : []),
       ...(options.apply ? ["--apply"] : []),
       ...(options.extraArgs ?? []),
@@ -206,9 +206,10 @@ export async function writeBridgeEmbed(
 /**
  * Rewrite an early packet. A packet is a HEAD script that registers a
  * component, so it must not be wrapped in the content-embed route guard.
+ * Pass `loadOnce` to change the setting; omit it to keep the live value.
  */
-export async function writeBridgePacket(alias: string, snippetId: string, htmlFile: string, apply = false) {
-  return runBridge(alias, "write-packet", { snippetId, htmlFile, apply });
+export async function writeBridgePacket(alias: string, snippetId: string, htmlFile: string, apply = false, loadOnce?: boolean) {
+  return runBridge(alias, "write-packet", { snippetId, htmlFile, apply, loadOnce });
 }
 
 /**

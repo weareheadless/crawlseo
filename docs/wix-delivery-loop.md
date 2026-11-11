@@ -63,14 +63,16 @@ READY → RUNNING → AWAITING_REVIEW → APPROVED → PUBLISHING → PUBLISHED
 |---|---|---|
 | `page.<locale>.html` | the agent | the reviewed fragment, one per locale |
 | component source | the app | `<repo>/src/public/custom-elements/<tag>.js`, committed and pushed |
-| early packet | the bridge | Custom Code, HEAD, ESSENTIAL, load-once |
-| page mount | the bridge | Custom Code, BODY_END, ESSENTIAL |
+| early packet | the bridge | Custom Code, HEAD, ESSENTIAL, reload on every page |
+| page mount | the bridge | Custom Code, BODY_END, ESSENTIAL, reload on every page |
 | `design-notes.md` | the agent | task artifact |
 | `navigation.md` + `navigation.json` | the agent | task artifact |
 
 Both entries carry the same route and language guard, so a site-wide entry is
 inert everywhere except its own page. They must never both mount content: the
-packet only registers, the mount only places.
+packet only registers, the mount only places. Both run on every page; Wix's
+load-once setting only runs at the initial site render and would miss an
+internal navigation.
 
 ## Why the page is manual
 

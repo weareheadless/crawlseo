@@ -34,8 +34,8 @@ vi.mock("@/lib/bridge/client", () => ({
     h.state.snippets.push({ id, name: input.name });
     return { customEmbedId: id };
   }),
-  writeBridgePacket: vi.fn(async (_alias: string, id: string, file: string) => {
-    h.state.written.push({ id, file });
+  writeBridgePacket: vi.fn(async (_alias: string, id: string, file: string, _apply: boolean, loadOnce?: boolean) => {
+    h.state.written.push({ id, file, loadOnce });
     return { status: "updated" };
   }),
   readBridgeEmbed: vi.fn(async () => ({ embed: { htmlSha256: null } })),
@@ -72,8 +72,24 @@ describe("Wix component delivery", () => {
     ]);
     // The packet registers the element; only the mount touches the container.
     expect(h.state.created[0].htmlFile).toBeTruthy();
+    // Both entries must run when their page renders, not only at first load.
+    expect(h.state.created.map((embed: any) => embed.loadOnce)).toEqual([false, false]);
     expect(result.mount.name).toBe(`CrawlSEO page mount — ${result.tag}`);
     expect(result.packets).toHaveLength(1);
+  });
+
+  it("rewrites existing entries to reload on every page and disables a stale chunk", async () => {
+    h.state.snippets = [{ id: "stale", name: "CrawlSEO early packet — crawlseo-condos-v1 — 2" }];
+    // First delivery creates the pair, with the stale chunk still listed.
+    const first = await deliverWixPageComponent({ siteId: "site-1", route: "/condos", html, taskId: "task-1" });
+    expect(first.disabled).toEqual([{ id: "stale", name: "CrawlSEO early packet — crawlseo-condos-v1 — 2" }]);
+    expect(h.state.disabled).toContain("stale");
+    expect(h.state.created.every((embed: any) => embed.loadOnce === false)).toBe(true);
+
+    // A retry rewrites both entries in place with the same setting.
+    h.state.written = [];
+    await deliverWixPageComponent({ siteId: "site-1", route: "/condos", html, taskId: "task-1" });
+    expect(h.state.written.map((entry: any) => entry.loadOnce)).toEqual([false, false]);
   });
 
   it("reuses the existing mount embed on a retry instead of creating a duplicate", async () => {
