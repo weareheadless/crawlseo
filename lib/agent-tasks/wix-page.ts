@@ -38,6 +38,7 @@ type PageVariant = {
   isDefault: boolean;
   query: { key: string; value: string } | null;
   excludeQuery: { key: string; value: string } | null;
+  alternateRoute: string | null;
 };
 
 /**
@@ -48,7 +49,7 @@ async function pageVariantsFor(siteId: string, baseRoute: string, domain: string
   const host = domain.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   const locales = await getSiteLocales(siteId);
   if (!locales) {
-    return [{ code: "default", route: baseRoute, url: `https://${host}${baseRoute}`, isDefault: true, query: null, excludeQuery: null }];
+    return [{ code: "default", route: baseRoute, url: `https://${host}${baseRoute}`, isDefault: true, query: null, excludeQuery: null, alternateRoute: null }];
   }
   const variants = localeVariants(locales, baseRoute, domain);
   const queries = variants.map((variant) => localeQuery(variant)).filter((query): query is { key: string; value: string } => Boolean(query));
@@ -56,7 +57,10 @@ async function pageVariantsFor(siteId: string, baseRoute: string, domain: string
     const own = localeQuery(variant);
     // A locale without a query must not run on a URL that selects another one.
     const other = own ? null : queries[0] ?? null;
-    return { ...variant, query: own, excludeQuery: other };
+    // The default locale also answers under its explicit prefix (/fr/...), but
+    // must not answer on another locale's prefix (/en/...).
+    const alternateRoute = variant.isDefault ? `/${locales.default}${baseRoute}`.replace(/\/{2,}/g, "/") : null;
+    return { ...variant, query: own, excludeQuery: other, alternateRoute };
   });
 }
 
@@ -463,6 +467,7 @@ async function deliver(task: {
           localeCode: variant.isDefault ? null : variant.code,
           query: variant.query,
           excludeQuery: variant.excludeQuery,
+          alternateRoute: variant.alternateRoute,
         });
         delivered.push({
           ...variant,

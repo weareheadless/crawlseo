@@ -87,6 +87,16 @@ describe("early packets", () => {
     expect(packet.html).toContain("customElements.get");
   });
 
+  it("keeps the default locale off another locale's prefix", () => {
+    const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
+    const [french] = buildEarlyPackets({ tag: "atelier-x-v1", route: "/abat-jour-sur-mesure", source, alternateRoute: "/fr/abat-jour-sur-mesure" });
+    const [english] = buildEarlyPackets({ tag: "atelier-x-en-v1", route: "/en/abat-jour-sur-mesure", source });
+    expect(french.html).toContain('"/fr/abat-jour-sur-mesure"');
+    expect(french.html).toContain("p!==r&&p!==a");
+    expect(english.html).toContain("p!==r)return");
+    expect(english.html).not.toContain("/fr/abat-jour-sur-mesure");
+  });
+
   it("requires the locale query and excludes the other locale on a shared route", () => {
     const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
     const [spanish] = buildEarlyPackets({ tag: "atelier-x-es-v1", route: "/x", source, query: { key: "lang", value: "es" } });

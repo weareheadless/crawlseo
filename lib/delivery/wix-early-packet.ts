@@ -150,6 +150,11 @@ export function buildEarlyPackets(input: {
   query?: { key: string; value: string } | null;
   /** The query pair that selects a different locale on the same route. */
   excludeQuery?: { key: string; value: string } | null;
+  /**
+   * The same page under the default locale's explicit prefix (`/fr/...`).
+   * A default-locale packet must not run on another locale's route.
+   */
+  alternateRoute?: string | null;
   chunkCharacters?: number;
 }): EarlyPacket[] {
   const route = routePath(input.route);
@@ -166,7 +171,9 @@ export function buildEarlyPackets(input: {
     : input.excludeQuery
       ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.excludeQuery.key)})===${JSON.stringify(input.excludeQuery.value)})return;`
       : "";
-  const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)},q=p.replace(/^\\/[a-z]{2}(?=\\/)/,"");if(p!==r&&q!==r)return;if(new URLSearchParams(location.search).get("earlyElements")==="off")return;${queryGuard}`;
+  const alternate = input.alternateRoute ? `,a=${JSON.stringify(input.alternateRoute)}` : "";
+  const routeMatch = input.alternateRoute ? `if(p!==r&&p!==a)return;` : `if(p!==r)return;`;
+  const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)}${alternate};${routeMatch}if(new URLSearchParams(location.search).get("earlyElements")==="off")return;${queryGuard}`;
   // The page is blank and this element is its whole content, so the packet
   // mounts it into the page container itself. That keeps the delivery free of
   // a manual editor step; an element a human already placed is left alone.
@@ -248,6 +255,8 @@ export async function deliverWixPageComponent(input: {
   query?: { key: string; value: string } | null;
   /** The query pair that selects a different locale on the same route. */
   excludeQuery?: { key: string; value: string } | null;
+  /** The same page under the default locale's explicit prefix. */
+  alternateRoute?: string | null;
 }): Promise<WixPageComponentResult> {
   const route = routePath(input.route);
   const site = await db.site.findUnique({
@@ -272,6 +281,7 @@ export async function deliverWixPageComponent(input: {
     source,
     query: input.query ?? null,
     excludeQuery: input.excludeQuery ?? null,
+    alternateRoute: input.alternateRoute ?? null,
   });
 
   const existing = await managedEmbeds(alias);
