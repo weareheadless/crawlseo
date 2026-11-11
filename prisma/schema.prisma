@@ -1284,6 +1284,18 @@ model LegacyBudgetSourceFreezeReceipt {
   @@index([sourceProjectId, createdAt])
 }
 
+/// One Unsplash photo a published cover used. A photo is chosen once and never
+/// reused, so two posts on the same topic do not share a picture.
+model UnsplashPhotoUse {
+  id      String   @id @default(cuid())
+  photoId String   @unique
+  siteId  String?
+  query   String?
+  usedAt  DateTime @default(now())
+
+  @@index([usedAt])
+}
+
 model Delivery {
   id                String    @id @default(cuid())
   actionId          String

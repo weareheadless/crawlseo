@@ -327,8 +327,14 @@ function withCoverCredit(
   return { documentStyle: rich.documentStyle, nodes };
 }
 
+/**
+ * What the cover searches for.
+ *
+ * The query the article answers is short and concrete, while a title is a whole
+ * sentence; Unsplash matches the sentence badly and returns something unrelated.
+ */
 function coverQuery(draft: { title: string; primaryQuery: string }): string {
-  return (draft.title || draft.primaryQuery).trim();
+  return (draft.primaryQuery || draft.title).trim();
 }
 
 /**
@@ -342,11 +348,25 @@ async function locationForSite(siteId: string): Promise<string | null> {
   return context?.location ?? null;
 }
 
+/** The cover a delivery used, kept so a post's image is auditable later. */
+function coverPayload(cover: UnsplashCover) {
+  return {
+    photo_id: cover.photoId,
+    query: cover.query,
+    alt_text: cover.altText,
+    photographer: cover.photographer,
+    photo_url: cover.photoUrl,
+  };
+}
+
 async function importCover(
   cfg: WixConfig,
   draft: { title: string; primaryQuery: string; slug: string; siteId: string },
 ) {
-  const cover = await findUnsplashCover(coverQuery(draft), { location: await locationForSite(draft.siteId) });
+  const cover = await findUnsplashCover(coverQuery(draft), {
+    location: await locationForSite(draft.siteId),
+    siteId: draft.siteId,
+  });
   return importUnsplashCover(
     (method, path, body) => wixRequest(cfg, method, path, body),
     cover,
@@ -481,6 +501,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
         slug: draft.slug,
         language: cfg.language,
         readback_verified: true,
+        cover: coverPayload(importedCover.cover),
       },
     },
   });
@@ -681,6 +702,7 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
         slug,
         live_url: liveUrl,
         readback_verified: true,
+        cover: coverPayload(importedCover.cover),
       },
     },
   });

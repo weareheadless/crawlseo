@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coverCandidates } from "@/lib/delivery/unsplash";
+import { coverCandidates, primaryPlace } from "@/lib/delivery/unsplash";
 
 /**
  * The cover fallback used to carry a hardcoded list of places (Cancun, Tulum,
@@ -16,9 +16,24 @@ describe("unsplash cover candidates", () => {
     ]);
   });
 
-  it("adds the business's own location when given one", () => {
+  it("searches the specific place before the article wording", () => {
     const candidates = coverCandidates("Atelier de tapisserie", "Saint-Pierre-en-Port, France");
-    expect(candidates).toContain("Saint-Pierre-en-Port, France landscape");
+    expect(candidates[1]).toBe("Saint-Pierre-en-Port");
+    expect(candidates).toContain("Saint-Pierre-en-Port landscape");
+    // The market description is not an image query.
+    expect(candidates).not.toContain("Saint-Pierre-en-Port, France");
+  });
+
+  it("uses the first place of a market description", () => {
+    expect(primaryPlace("Playa Del Carmen, Tulum & Riviera Maya")).toBe("Playa Del Carmen");
+    expect(primaryPlace("Lisbon")).toBe("Lisbon");
+    expect(primaryPlace(null)).toBe("");
+  });
+
+  it("does not repeat the place when the topic already names it", () => {
+    const candidates = coverCandidates("Banks in Playa del Carmen", "Playa Del Carmen, Tulum & Riviera Maya");
+    expect(candidates[0]).toBe("Playa Del Carmen");
+    expect(candidates).not.toContain("Banks in Playa del Carmen Playa Del Carmen");
   });
 
   it("carries no place names of its own", () => {
