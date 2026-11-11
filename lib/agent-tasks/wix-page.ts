@@ -461,7 +461,7 @@ async function deliver(task: {
     // pages are built. Without a repository the page is an HTML embed.
     const config = await getSiteDeliveryConfig(task.siteId);
     if (config?.repoPath) {
-      const delivered: Array<PageVariant & { tag: string; placement: string; packets: unknown[]; sourcePath: string | null }> = [];
+      const delivered: Array<PageVariant & { tag: string; placement: string; packets: unknown[]; mount: unknown; sourcePath: string | null }> = [];
       for (const variant of variants) {
         const html = await latestPageHtml(task.id, multiLocale && !variant.isDefault ? `page_html:${variant.code}` : "page_html");
         const component = await deliverWixPageComponent({
@@ -479,6 +479,7 @@ async function deliver(task: {
           tag: component.tag,
           placement: component.placement,
           packets: component.packets,
+          mount: component.mount,
           sourcePath: component.sourcePath,
         });
       }
@@ -499,7 +500,7 @@ async function deliver(task: {
             : {
                 variants: missing.map((variant) => ({ tag: variant.tag, route: variant.route, url: variant.url })),
                 attempts: 0,
-                instruction: `The packets are deployed and mount their elements themselves. If a page is still blank, Wix is serving a cached document; check again shortly.`,
+                instruction: `The page's mount embed is deployed for every locale; Wix may still be serving a cached document. Check again shortly.`,
               },
           progress: {
             stage: live ? "Published" : "Waiting for the packets to render",

@@ -8,7 +8,10 @@ export const AGENT_TASK_TRANSITIONS: Record<string, string[]> = {
   // The worker probes the route and resumes when the human creates the page.
   AWAITING_TARGET: ["PUBLISHING", "CHANGES_REQUESTED", "CANCELLED", "FAILED"],
   COMMITTED: ["PUBLISHING", "CLOSED", "CHANGES_REQUESTED"],
-  PUBLISHING: ["PUBLISHED", "FAILED"],
+  // A locale that is not rendering yet must park the task, not fail it: the
+  // packets and mounts are deployed and Wix may still be serving a cached
+  // document. The worker re-checks and publishes once the element appears.
+  PUBLISHING: ["PUBLISHED", "AWAITING_TARGET", "FAILED"],
   PUBLISHED: ["CLOSED", "CHANGES_REQUESTED"],
   COMPLETED: ["CLOSED"],
   // A failed delivery keeps its reviewed artifact, so returning to review

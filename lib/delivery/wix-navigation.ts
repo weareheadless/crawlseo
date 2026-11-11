@@ -58,6 +58,10 @@ export function parseNavigationPlan(value: unknown): NavigationPlan | null {
 export function applyNavigationPlan(source: string, plan: NavigationPlan): string {
   let next = source;
   for (const [index, edit] of plan.edits.entries()) {
+    // A retry after a successful apply must not append a second copy: an edit
+    // whose find string is a prefix of its replacement still matches the
+    // already-edited text.
+    if (next.includes(edit.replace)) continue;
     const occurrences = next.split(edit.find).length - 1;
     if (occurrences !== 1) {
       throw new Error(`Navigation edit ${index + 1} matches ${occurrences} places; it must match exactly one`);
@@ -130,5 +134,12 @@ export async function applyNavigationEdit(taskId: string): Promise<NavigationApp
 
   await writeFile(full, next, "utf8");
   const rebuilt = await rebuildComponentPacket({ siteId: task.siteId, componentName: component, source: next });
-  return { status: "applied", target: plan.target, component, packets: rebuilt.packets };
+  return {
+    status: "applied",
+    target: plan.target,
+    component,
+    packets: rebuilt.packets,
+    // A retry reports the truth: the repository already had this edit.
+    ...(next === current ? { reason: "already applied" } : {}),
+  };
 }

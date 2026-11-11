@@ -150,10 +150,10 @@ export default async function AgentTaskPage({ params }: Props) {
         </div>
         {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
           <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
-            <p className="font-medium text-warning">The packet is deployed; the page has not rendered it yet</p>
+            <p className="font-medium text-warning">Deployed; Wix has not rendered the element yet</p>
             <p className="mt-1 text-muted-foreground">
-              The early packets register and mount their elements themselves, so there is nothing to place in the editor.
-              If a page is still blank, Wix is serving a cached document; check again shortly.
+              The early packet in general custom code registers the element and the page&apos;s mount embed adds it, so there is nothing to place in the editor.
+              If a page is still blank, Wix is serving a cached document; the worker checks again and publishes when it appears.
             </p>
             {Array.isArray(awaitingPlacement.variants) && (
               <ul className="mt-2 grid gap-1 text-xs text-muted-foreground">

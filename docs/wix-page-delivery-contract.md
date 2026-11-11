@@ -1,29 +1,44 @@
 # Wix page delivery contract
 
 A new page is not finished when its copy is written. On both Wix sites a page
-is a custom element registered early by a compressed packet, and it is only
-reachable when an existing page links to it. This is the contract a page task
-follows.
+is a custom element registered early by a compressed packet, mounted by the
+page's own embed, and it is only reachable when an existing page links to it.
+This is the contract a page task follows.
 
 Source of truth for the mechanics: `/home/admin/wix-site-bridge/docs/GLOBAL_EARLY_REGISTRATION.md`
 and `sites/atelier-harmonie/production/PACKET_SCOPES.md`.
 
-## 1. The page is a custom element with an early packet
+## 1. A deployment is two entries, not one
 
 Wix loads a custom element's source from its own CDN after the document. A page
 that waits for that loader renders late; an HTML embed is worse, because the
-bridge mounts it 2.5 s after load. The site's own pages avoid both by
-registering the element from a HEAD packet.
+bridge mounts it 2.5 s after load. The site's own pages avoid both with a HEAD
+script that registers the element before Wix's loader runs, and a body embed
+that puts the element on the page.
+
+So a deployment writes both, and they do different jobs:
+
+| Entry | Position | Scope | Job |
+| --- | --- | --- | --- |
+| early packet | HEAD, ESSENTIAL, load-once | general custom code, all pages | decompress the source and register the element |
+| page mount | BODY_END, ESSENTIAL | general custom code, all pages | create the element and put it in the page container |
+
+They must never both mount. The packet registers and touches nothing else; the
+mount creates the element and re-mounts it through Wix hydration for the first
+minute, because hydration replaces the page container after first paint. Both
+carry the same route and language guard, so an entry that is site-wide is inert
+everywhere except its own page.
 
 A page task therefore produces:
 
 | Artifact | Who | Where |
 | --- | --- | --- |
-| `page.html` | the agent | the reviewed fragment |
+| `page.<locale>.html` | the agent | the reviewed fragment, one per locale |
 | component source | the app | `<repo>/src/public/custom-elements/<tag>.js` |
 | early packet | the app | Wix Custom Code, HEAD, ESSENTIAL, load-once |
+| page mount | the app | Wix Custom Code, BODY_END, ESSENTIAL |
 | `design-notes.md` | the agent | task artifact |
-| `navigation.md` | the agent | task artifact |
+| `navigation.md` + `navigation.json` | the agent | task artifact |
 
 The component renders the fragment into the light DOM, so the copy stays in the
 document for crawlers. JSON-LD is moved to `document.head` on connect, because
@@ -33,22 +48,31 @@ The packet is gzip + base64, chunked at 14,000 characters (Wix rejects an entry
 at 15,000). It only runs on its own route, honours `?earlyElements=off`, and
 guards `customElements.define` with `customElements.get`.
 
+### Locales
+
+A site publishes several locales (`SiteProfile.locales`). Each locale gets its
+own component tag, its own packet and its own mount, because the guard differs:
+
+- a locale selected by a path prefix (`/en/...`) guards its own route;
+- a locale selected by a query (`lang=es`) also requires that query, and the
+  default locale's entry excludes it;
+- the default locale's entry also answers its explicit prefix (`/fr/...`), but
+  never another locale's prefix.
+
+Every locale's page is written from scratch in its language, not translated.
+
 ### What stays human
 
-Wix has no API for adding an element to a page, and it exposes the Custom Code
-page filter as read-only. So two steps stay with the person:
+Wix has no API for creating a page. The person creates the page at the route in
+the Wix editor; everything after that is the agent's. Delivery probes every
+locale's route first and parks the task in `AWAITING_TARGET` until they answer,
+then deploys both entries for every locale.
 
-1. Place `<tag>` on the page in the Wix editor (Embed a custom element).
-2. Narrow the packet's page scope in Wix Custom Code to that page.
-
-Until step 1 the page is blank; the packet is already live, so it renders as
-soon as the element is placed. Until step 2 the packet transfers on every page
-but is inert, because it checks the route itself.
-
-The task page shows the tag, the steps, and a **Check the page now** button. The
-worker also probes every 15 minutes for a day. When the tag appears, the task
-publishes and any earlier embed for that route is disabled, because the embed
-would replace the page container and hide the element.
+A locale whose element has not appeared in the rendered document parks the task
+instead of failing it: the entries are deployed and Wix may still be serving a
+cached document. The worker re-checks and publishes when the element appears,
+and an earlier HTML embed for that route is disabled, because the embed would
+replace the page container and hide the element.
 
 ### Sites without a repository
 
@@ -58,15 +82,22 @@ not the target: it is slower and cannot be registered early.
 ## 2. The page is reachable
 
 A page nobody links to is not delivered. The agent reads the site's navigation,
-footer and related pages and writes `navigation.md` with one chosen target, the
-exact edit, the link text and href, and what it rejected.
+footer and related pages and writes `navigation.md` with the chosen target, the
+link text and href, and what it rejected.
 
 The choice is the model's: it knows which menu a buyer uses for this kind of
 page. The app does not guess a menu from a route.
 
-Applying the edit is a code change to a repository component (the navbar, a
-category page) or a Wix editor change (the native mobile menu). The task page
-shows the proposal; the edit is applied with the same review as the page.
+The edit itself is `navigation.json`: the target file, the component name in the
+site manifest, and exact `find`/`replace` strings. The app applies them instead
+of retyping a large minified component, refuses a string that matches anything
+but once, checks the result parses, writes the repository and rebuilds that
+component's packet in the site's own format. A retry after a successful apply
+reports "already applied" instead of inserting a second copy.
+
+The task page shows the proposal, and approving applies the edit with the same
+review as the page. Wix editor changes, such as the native mobile menu, stay
+human.
 
 ## Atelier specifics
 
@@ -82,4 +113,5 @@ shows the proposal; the edit is applied with the same review as the page.
 
 - Components: `src/public/custom-elements/*.js`, no shared tag prefix.
 - Packets use `window.__susiEarlyPackets` and `window.__susiDrainEarly`.
+- Spanish is a query locale (`?lang=es`), not a path prefix: `/es/` is a 404.
 - The site has no startup build script, so a page packet is self-registering.

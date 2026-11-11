@@ -12,6 +12,7 @@ import {
   listBridgeSnippets,
   disableBridgeEmbed,
   readBridgeEmbed,
+  updateBridgeSnippet,
   writeBridgePacket,
 } from "@/lib/bridge/client";
 
@@ -242,11 +243,16 @@ async function writeComponentSource(repoPath: string | null, tag: string, source
 
 type ManagedEmbed = { id: string; name: string; htmlSha256?: string };
 
+/**
+ * Every Custom Embed CrawlSEO owns on the site. Both parts of a deployment are
+ * looked up here — the early packets and the page mount — so a retry rewrites
+ * the entries it created instead of creating a second one with the same name.
+ */
 async function managedEmbeds(alias: string): Promise<ManagedEmbed[]> {
   const listed = await listBridgeSnippets(alias) as { snippets?: Array<{ id?: string; name?: string; htmlSha256?: string }> };
   return (listed.snippets ?? [])
     .filter((snippet): snippet is ManagedEmbed => typeof snippet.id === "string" && typeof snippet.name === "string")
-    .filter((snippet) => snippet.name.startsWith("CrawlSEO early packet — "));
+    .filter((snippet) => snippet.name.startsWith("CrawlSEO "));
 }
 
 async function writePacketFile(packet: EarlyPacket): Promise<string> {
@@ -397,13 +403,13 @@ export async function deliverWixPageComponent(input: {
 }
 
 /**
- * A page is only live once the human places the custom element on it. Wix has
- * no API for adding an element to a page, so the delivery waits for the tag to
- * appear in the rendered document.
+ * A page is only live once its mount embed has put the element on the page.
+ * Wix has no API for adding an element to a page, so the delivery waits for
+ * the tag to appear in the rendered document.
  */
 export async function checkComponentPlacement(url: string, tag: string): Promise<"found" | "missing" | "unavailable"> {
-  // The packet mounts the element after the document loads, so the server HTML
-  // never contains it. Only a rendered document proves the page is live.
+  // The mount embed adds the element after the document loads, so the server
+  // HTML never contains it. Only a rendered document proves the page is live.
   const dom = await renderPageDom(url);
   if (!dom) return "unavailable";
   return dom.includes(`<${tag}`) ? "found" : "missing";
@@ -434,10 +440,18 @@ export async function rebuildComponentPacket(input: {
   if (!alias) throw new WixEarlyPacketError("This site has no Wix bridge alias configured", 409);
 
   const listed = await listBridgeSnippets(alias) as { snippets?: Array<{ id?: string; name?: string }> };
-  const candidates = (listed.snippets ?? []).filter((snippet): snippet is { id: string; name: string } =>
-    typeof snippet.id === "string" && typeof snippet.name === "string" &&
-    (snippet.name.includes(`early-packet-${input.componentName}-`) || snippet.name.toLowerCase().includes(`early packet — ${input.componentName}`)),
-  );
+  // A multi-chunk packet is ordered by the index in its name, never by the
+  // order the listing happens to return.
+  const chunkIndex = (name: string): number => {
+    const match = name.match(/-(\d+)\.html?$/i) ?? name.match(/\b(?:packet\s*)?(\d+)\s*$/i);
+    return match ? Number(match[1]) : 0;
+  };
+  const candidates = (listed.snippets ?? [])
+    .filter((snippet): snippet is { id: string; name: string } =>
+      typeof snippet.id === "string" && typeof snippet.name === "string" &&
+      (snippet.name.includes(`early-packet-${input.componentName}-`) || snippet.name.toLowerCase().includes(`early packet — ${input.componentName}`)),
+    )
+    .sort((left, right) => chunkIndex(left.name) - chunkIndex(right.name));
   if (candidates.length === 0) {
     throw new WixEarlyPacketError(`No early packet exists for ${input.componentName}; the site's startup build must create it first`, 409);
   }
@@ -471,7 +485,10 @@ export async function rebuildComponentPacket(input: {
       throw new WixEarlyPacketError(`The site has ${candidates.length} packet entries for ${input.componentName} but the new source needs ${chunks.length}`, 409);
     }
     const file = await writePacketFile({ index, count: chunks.length, name: target.name, html, characters: html.length });
-    await writeBridgePacket(alias, target.id, file, true);
+    // These packets belong to the site, not to CrawlSEO: the manifest declares
+    // each one, and the update writes exactly these bytes without adding a
+    // route guard to a HEAD startup script.
+    await updateBridgeSnippet(alias, target.id, file, true);
     const readback = await readBridgeEmbed(alias, target.id) as { embed?: { htmlSha256?: string } };
     results.push({
       id: target.id,

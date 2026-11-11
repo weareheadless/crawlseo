@@ -66,6 +66,8 @@ describe("agent task transitions", () => {
     expect(canTransitionAgentTask("APPROVED", "COMMITTED")).toBe(true);
     expect(canTransitionAgentTask("COMMITTED", "PUBLISHING")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHING", "PUBLISHED")).toBe(true);
+    // A deployed locale that Wix has not rendered yet waits instead of failing.
+    expect(canTransitionAgentTask("PUBLISHING", "AWAITING_TARGET")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHED", "CLOSED")).toBe(true);
     expect(canTransitionAgentTask("PUBLISHED", "CHANGES_REQUESTED")).toBe(true);
     expect(canTransitionAgentTask("CLOSED", "CHANGES_REQUESTED")).toBe(true);
