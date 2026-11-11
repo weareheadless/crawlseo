@@ -622,6 +622,7 @@ export type FunnelCounts = {
   detected: number;
   accepted: number;
   inProgress: number;
+  delivered: number;
   parked: number;
   rejected: number;
   closed: number;
@@ -646,6 +647,7 @@ export async function getFunnelCounts(db: FunnelDb, projectId: string): Promise<
     detected: 0,
     accepted: 0,
     inProgress: 0,
+    delivered: 0,
     parked: 0,
     rejected: 0,
     closed: 0,
@@ -665,6 +667,7 @@ export async function getFunnelCounts(db: FunnelDb, projectId: string): Promise<
     if (row.status === "detected") counts.detected += 1;
     else if (row.status === "accepted") counts.accepted += 1;
     else if (row.status === "in_progress") counts.inProgress += 1;
+    else if (row.status === "delivered") counts.delivered += 1;
     else if (row.status === "parked") counts.parked += 1;
     else if (row.status === "rejected") counts.rejected += 1;
     else if (row.status === "closed") counts.closed += 1;

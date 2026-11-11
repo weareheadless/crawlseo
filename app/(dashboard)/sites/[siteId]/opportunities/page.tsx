@@ -27,9 +27,12 @@ interface Props {
 }
 
 const STATUS_TABS: Array<{ key: string; label: string; statuses?: OpportunityStatus[] }> = [
+  // Open is the to-do list: work that still needs someone. Delivered work has
+  // its own tab so finished jobs stay visible without inflating the queue.
   { key: "open", label: "Open", statuses: ["detected", "accepted", "in_progress"] },
   { key: "detected", label: "Detected", statuses: ["detected"] },
   { key: "accepted", label: "Accepted", statuses: ["accepted", "in_progress"] },
+  { key: "delivered", label: "Delivered", statuses: ["delivered"] },
   { key: "parked", label: "Parked", statuses: ["parked"] },
   { key: "all", label: "All" },
 ];
@@ -130,6 +133,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   const proposalStateCounts = {
     detected: proposalState.filter((row) => row.status === "detected").length,
     accepted: proposalState.filter((row) => row.status === "accepted" || row.status === "in_progress").length,
+    delivered: proposalState.filter((row) => row.status === "delivered").length,
     bothLegs: proposalState.filter((row) => row.evidenceCompleteness === "both").length,
     parked: proposalState.filter((row) => row.status === "parked").length,
   };
@@ -161,10 +165,11 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       />
 
       {/* Stage strip: the funnel in one line, every number a link. */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: "Detected", value: proposalStateCounts.detected, href: `/sites/${siteId}/opportunities?status=detected`, tone: "info" },
           { label: "Accepted", value: proposalStateCounts.accepted, href: `/sites/${siteId}/opportunities?status=accepted`, tone: "primary" },
+          { label: "Delivered", value: proposalStateCounts.delivered, href: `/sites/${siteId}/opportunities?status=delivered`, tone: "success" },
           { label: "Both legs", value: proposalStateCounts.bothLegs, href: `/sites/${siteId}/opportunities?status=all&leg=both`, tone: "success" },
           { label: "Parked", value: proposalStateCounts.parked, href: `/sites/${siteId}/opportunities?status=parked`, tone: "warning" },
         ].map((cell) => (

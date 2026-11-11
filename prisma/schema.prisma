@@ -208,6 +208,9 @@ enum OpportunityStatus {
   detected
   accepted
   in_progress
+  /// The work shipped. Delivered rows leave the to-do list and stay visible as
+  /// work that was done, until the outcome is verified (closed).
+  delivered
   parked
   rejected
   closed

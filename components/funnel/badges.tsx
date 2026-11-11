@@ -114,7 +114,7 @@ export function DimensionChip({ dimension }: { dimension: string }) {
 
 export function StatusChip({ status }: { status: string }) {
   const tone: Tone =
-    status === "detected" ? "info" : status === "accepted" || status === "in_progress" ? "primary" : status === "parked" ? "warning" : status === "rejected" ? "danger" : "neutral";
+    status === "detected" ? "info" : status === "accepted" || status === "in_progress" ? "primary" : status === "delivered" || status === "closed" ? "success" : status === "parked" ? "warning" : status === "rejected" ? "danger" : "neutral";
   return <Chip tone={tone}>{STATUS_LABELS[status] ?? status}</Chip>;
 }
 

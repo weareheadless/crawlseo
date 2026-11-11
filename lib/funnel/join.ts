@@ -373,6 +373,33 @@ export async function acceptOpportunityIntoTask(
   return task.id;
 }
 
+/**
+ * The opportunity follows its task's lifecycle.
+ *
+ * An opportunity whose work shipped is no longer a to-do: it leaves the open
+ * list and stays visible as delivered work. Verifying the outcome closes it.
+ * Rows in any other state (parked, rejected) are left alone.
+ */
+export async function syncOpportunityStatus(
+  db: TaskDb,
+  taskId: string,
+  taskStatus: string,
+): Promise<void> {
+  const task = await db.task.findUnique({ where: { id: taskId }, select: { opportunityId: true } });
+  if (!task?.opportunityId) return;
+  const move: Record<string, { next: "in_progress" | "delivered" | "closed"; from: Array<"accepted" | "in_progress" | "delivered"> }> = {
+    in_progress: { next: "in_progress", from: ["accepted"] },
+    delivered: { next: "delivered", from: ["accepted", "in_progress"] },
+    verified_outcome: { next: "closed", from: ["accepted", "in_progress", "delivered"] },
+  };
+  const target = move[taskStatus];
+  if (!target) return;
+  await db.opportunity.updateMany({
+    where: { id: task.opportunityId, status: { in: target.from } },
+    data: { status: target.next },
+  });
+}
+
 export async function confirmHumanStep(
   db: TaskDb,
   taskId: string,
@@ -389,6 +416,7 @@ export async function confirmHumanStep(
       humanConfirmedAt: new Date(),
     },
   });
+  await syncOpportunityStatus(db, taskId, input.status);
 }
 
 /**

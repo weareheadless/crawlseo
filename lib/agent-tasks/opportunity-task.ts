@@ -153,12 +153,22 @@ export async function prepareOpportunityWithAgent(
  * is not used when an agent task exists.
  */
 export async function markOpportunityTaskDelivered(agentTaskId: string, confirmedBy: string | null) {
-  await db.task.updateMany({
+  const tasks = await db.task.findMany({
     where: { plan: { path: ["agentTaskId"], equals: agentTaskId } },
+    select: { id: true, opportunityId: true },
+  });
+  if (tasks.length === 0) return;
+  await db.task.updateMany({
+    where: { id: { in: tasks.map((task) => task.id) } },
     data: {
       status: "delivered",
       humanConfirmedBy: confirmedBy,
       humanConfirmedAt: new Date(),
     },
+  });
+  // Delivered work is no longer a to-do: it moves out of the open list.
+  await db.opportunity.updateMany({
+    where: { id: { in: [...new Set(tasks.map((task) => task.opportunityId))] }, status: { in: ["accepted", "in_progress"] } },
+    data: { status: "delivered" },
   });
 }
