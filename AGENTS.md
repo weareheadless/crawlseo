@@ -9,6 +9,11 @@
 - **Then read `docs/crawlseo-simplified-execution-plan.md`.** It is the active
   implementation plan: data layers, multiple AI calls, minimal validation, pilot
   phases. Do not rebuild the old packet/decision/shadow machinery.
+- **A Wix page delivery is three artifacts, not one embed:** the component
+  source in the site repository, a HEAD early packet that registers the element,
+  and a BODY_END mount that places it. Read `docs/wix-page-delivery-contract.md`
+  and the bridge's `docs/PAGE_DELIVERY.md` before changing delivery code or
+  docs.
 - **Do not use archived docs as requirements.** `docs/README.md` lists the active
   set. Everything in `docs/archive/` is historical; read it only for audit or
   provenance.

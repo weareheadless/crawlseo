@@ -105,10 +105,11 @@ proposed → accepted → task → agent-prepared → human-confirmed → delive
 - Only acceptance creates a task.
 - Agent preparation is optional and never publishes.
 - Human confirms delivery once. After that confirmation the agent performs the
-  mechanical steps (create the embed, write the content, publish the article)
-  without asking for a second click. A new Wix page is the one manual step: Wix
-  has no page-creation API, so the human creates the blank page at the route the
-  task names, and the worker resumes delivery when it answers.
+  mechanical steps (write the component source, deploy the early packet and the
+  page mount, publish the article) without asking for a second click. A new Wix
+  page is the one manual step: Wix has no page-creation API, so the human
+  creates the blank page at the route the task names, and the worker resumes
+  delivery when it answers.
 - Outcome is measured and feeds the next cycle.
 
 ## Cost and storage

@@ -2,11 +2,16 @@
 
 A new page is not finished when its copy is written. On both Wix sites a page
 is a custom element registered early by a compressed packet, mounted by the
-page's own embed, and it is only reachable when an existing page links to it.
-This is the contract a page task follows.
+page's own mount entry, and it is only reachable when an existing page links to
+it. This is the contract a page task follows.
 
-Source of truth for the mechanics: `/home/admin/wix-site-bridge/docs/GLOBAL_EARLY_REGISTRATION.md`
-and `sites/atelier-harmonie/production/PACKET_SCOPES.md`.
+Source of truth for the mechanics: `/home/admin/wix-site-bridge/docs/PAGE_DELIVERY.md`.
+The current page scope of each deployed entry is the operator table
+`sites/atelier-harmonie/production/PACKET_SCOPES.md`.
+
+A delivery is three artifacts: the component source in the site repository, the
+HEAD packet and the BODY_END mount. The app writes the source and calls the
+bridge for both entries; the person creates only the blank Wix page.
 
 ## 1. A deployment is two entries, not one
 
@@ -35,8 +40,8 @@ A page task therefore produces:
 | --- | --- | --- |
 | `page.<locale>.html` | the agent | the reviewed fragment, one per locale |
 | component source | the app | `<repo>/src/public/custom-elements/<tag>.js` |
-| early packet | the app | Wix Custom Code, HEAD, ESSENTIAL, load-once |
-| page mount | the app | Wix Custom Code, BODY_END, ESSENTIAL |
+| early packet | the app, through the bridge | Wix Custom Code, HEAD, ESSENTIAL, load-once |
+| page mount | the app, through the bridge | Wix Custom Code, BODY_END, ESSENTIAL |
 | `design-notes.md` | the agent | task artifact |
 | `navigation.md` + `navigation.json` | the agent | task artifact |
 

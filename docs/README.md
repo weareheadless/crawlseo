@@ -18,7 +18,11 @@ requirements.
 
 ## Active operating docs
 
-- [Wix delivery loop](wix-delivery-loop.md)
+- [Wix delivery loop](wix-delivery-loop.md) — the lanes, page states and human
+  steps.
+- [Wix page delivery contract](wix-page-delivery-contract.md) — the early
+  packet + mount mechanics, locales and reachability. Read this before touching
+  Wix delivery code or docs.
 - [Agent coordination](agent-coordination.md)
 - [Agent workflow](architecture/centralized-intelligence/agent-workflow.md)
 - [Business knowledge writers](business-knowledge-writers.md)
