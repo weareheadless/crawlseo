@@ -46,6 +46,7 @@ export type WixPageComponentResult = {
   sourcePath: string | null;
   sourceSha256: string;
   packets: Array<{ id: string; name: string; index: number; characters: number; created: boolean; readback: "match" | "mismatch" }>;
+  mount: { id: string; name: string; characters: number; created: boolean; readback: "match" | "mismatch" };
   placement: "found" | "missing" | "unavailable";
 };
 
@@ -142,22 +143,36 @@ export function buildPageComponentSource(input: { tag: string; html: string; tas
  * own custom-element loader runs. A long source is split into ordered chunks
  * that concatenate into one base64 payload; the last chunk decompresses it.
  */
-export function buildEarlyPackets(input: {
-  tag: string;
+type RouteScope = {
   route: string;
-  source: string;
-  /** The query pair this locale requires, when the site selects language in the URL. */
   query?: { key: string; value: string } | null;
-  /** The query pair that selects a different locale on the same route. */
   excludeQuery?: { key: string; value: string } | null;
-  /**
-   * The same page under the default locale's explicit prefix (`/fr/...`).
-   * A default-locale packet must not run on another locale's route.
-   */
   alternateRoute?: string | null;
+};
+
+/** The route and language check both the packet and the mount share. */
+function routeGuard(input: RouteScope): string {
+  const route = routePath(input.route);
+  const queryGuard = input.query
+    ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.query.key)})!==${JSON.stringify(input.query.value)})return;`
+    : input.excludeQuery
+      ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.excludeQuery.key)})===${JSON.stringify(input.excludeQuery.value)})return;`
+      : "";
+  const alternate = input.alternateRoute ? `,a=${JSON.stringify(input.alternateRoute)}` : "";
+  const routeMatch = input.alternateRoute ? `if(p!==r&&p!==a)return;` : `if(p!==r)return;`;
+  return `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)}${alternate};${routeMatch}if(new URLSearchParams(location.search).get("earlyElements")==="off")return;${queryGuard}`;
+}
+
+/**
+ * The early packet: the component source, compressed and registered from Wix
+ * general custom code before Wix's own loader runs. It registers the element
+ * and does nothing else; mounting belongs to the page's embed.
+ */
+export function buildEarlyPackets(input: RouteScope & {
+  tag: string;
+  source: string;
   chunkCharacters?: number;
 }): EarlyPacket[] {
-  const route = routePath(input.route);
   const chunkCharacters = input.chunkCharacters ?? PACKET_CHUNK_CHARACTERS;
   const encoded = gzipSync(Buffer.from(input.source, "utf8"), { level: 9 }).toString("base64");
   const chunks: string[] = [];
@@ -166,25 +181,11 @@ export function buildEarlyPackets(input: {
   }
   const count = chunks.length;
   const key = sha256(input.source).slice(0, 16);
-  const queryGuard = input.query
-    ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.query.key)})!==${JSON.stringify(input.query.value)})return;`
-    : input.excludeQuery
-      ? `if(new URLSearchParams(location.search).get(${JSON.stringify(input.excludeQuery.key)})===${JSON.stringify(input.excludeQuery.value)})return;`
-      : "";
-  const alternate = input.alternateRoute ? `,a=${JSON.stringify(input.alternateRoute)}` : "";
-  const routeMatch = input.alternateRoute ? `if(p!==r&&p!==a)return;` : `if(p!==r)return;`;
-  const guard = `const p=location.pathname.replace(/\\/+$/,"")||"/",r=${JSON.stringify(route)}${alternate};${routeMatch}if(new URLSearchParams(location.search).get("earlyElements")==="off")return;${queryGuard}`;
-  // The page is blank and this element is its whole content, so the packet
-  // mounts it into the page container itself. That keeps the delivery free of
-  // a manual editor step; an element a human already placed is left alone.
-  // Wix hydration replaces the page container after first paint, so the
-  // observer must keep re-mounting for the startup window instead of
-  // disconnecting after the first successful mount.
-  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};mount();const o=new MutationObserver(()=>{mount()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),60000)`;
+  const guard = routeGuard(input);
   return chunks.map((chunk, index) => {
     const store = `(window.__crawlseoEarly||(window.__crawlseoEarly={}))[${JSON.stringify(key)}]=(window.__crawlseoEarly[${JSON.stringify(key)}]||"")+${JSON.stringify(chunk)};`;
     const drain = index === count - 1
-      ? `const b=window.__crawlseoEarly[${JSON.stringify(key)}];if(!b)return;const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(!customElements.get(${JSON.stringify(input.tag)})){const script=document.createElement("script");script.textContent=source;document.head.append(script)}${mount}}).catch(()=>{});`
+      ? `const b=window.__crawlseoEarly[${JSON.stringify(key)}];if(!b)return;const bytes=Uint8Array.from(atob(b),c=>c.charCodeAt(0));new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text().then(source=>{if(customElements.get(${JSON.stringify(input.tag)}))return;const script=document.createElement("script");script.textContent=source;document.head.append(script)}).catch(()=>{});`
       : "";
     const html = `<script>(()=>{${guard}${store}${drain}})();</script>`;
     if (html.length >= PACKET_MAX_CHARACTERS) {
@@ -198,6 +199,24 @@ export function buildEarlyPackets(input: {
       characters: html.length,
     };
   });
+}
+
+/**
+ * The page's mount embed. The packet defines the element; this puts it on the
+ * page. They are two Custom Embeds, as the site's own pages use: the packet in
+ * general custom code, the mount scoped to the page.
+ *
+ * Wix hydration replaces the page container after first paint, so the observer
+ * re-mounts for the startup window instead of disconnecting on first success.
+ */
+export function buildMountEmbed(input: RouteScope & { tag: string }): { name: string; html: string } {
+  const guard = routeGuard(input);
+  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};mount();const o=new MutationObserver(()=>{mount()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),60000)`;
+  const html = `<script>(()=>{${guard}${mount}})();</script>`;
+  if (html.length >= PACKET_MAX_CHARACTERS) {
+    throw new WixEarlyPacketError(`The mount embed is ${html.length} characters; Wix rejects entries at ${PACKET_MAX_CHARACTERS}`, 500);
+  }
+  return { name: `CrawlSEO page mount — ${input.tag}`, html };
 }
 
 async function existingComponentTags(repoPath: string | null): Promise<string[]> {
@@ -278,14 +297,14 @@ export async function deliverWixPageComponent(input: {
   const tag = pageComponentTag(route, await existingComponentTags(repoPath), input.localeCode ?? null);
   const source = buildPageComponentSource({ tag, html: input.html, taskId: input.taskId });
   const sourcePath = await writeComponentSource(repoPath, tag, source);
-  const packets = buildEarlyPackets({
-    tag,
+  const scope = {
     route,
-    source,
     query: input.query ?? null,
     excludeQuery: input.excludeQuery ?? null,
     alternateRoute: input.alternateRoute ?? null,
-  });
+  };
+  const packets = buildEarlyPackets({ ...scope, tag, source });
+  const mount = buildMountEmbed({ ...scope, tag });
 
   const existing = await managedEmbeds(alias);
   const results: WixPageComponentResult["packets"] = [];
@@ -322,10 +341,35 @@ export async function deliverWixPageComponent(input: {
     });
   }
 
+  // The mount embed is the page's own Custom Embed. The packet above only
+  // registers the element, so the two never fight over the container.
+  const mountFile = await writePacketFile({ index: 0, count: 1, name: mount.name, html: mount.html, characters: mount.html.length });
+  const existingMount = existing.find((embed) => embed.name === mount.name);
+  let mountId: string;
+  let mountCreated = false;
+  if (existingMount) {
+    mountId = existingMount.id;
+    await writeBridgePacket(alias, mountId, mountFile, true);
+  } else {
+    const receipt = await createBridgeSnippet(alias, {
+      name: mount.name,
+      htmlFile: mountFile,
+      allPages: true,
+      position: "BODY_END",
+      category: "ESSENTIAL",
+      apply: true,
+      loadOnce: true,
+    }) as { customEmbedId?: string; snippetId?: string; id?: string };
+    mountId = String(receipt.customEmbedId ?? receipt.snippetId ?? receipt.id ?? "");
+    if (!mountId) throw new WixEarlyPacketError("The bridge did not return the new mount embed id", 502);
+    mountCreated = true;
+  }
+  const mountReadback = await readBridgeEmbed(alias, mountId) as { embed?: { htmlSha256?: string } };
+
   const url = siteUrl(site.domain, route);
 
   // An embed delivered earlier replaces the page container, which would wipe
-  // the element this packet mounts. It is disabled before the page is checked.
+  // the element this mount adds. It is disabled before the page is checked.
   const previous = await db.deliveryTarget.findUnique({
     where: { siteId_key: { siteId: site.id, key: `page:${route}` } },
     select: { snippetId: true },
@@ -341,6 +385,13 @@ export async function deliverWixPageComponent(input: {
     sourcePath,
     sourceSha256: sha256(source),
     packets: results,
+    mount: {
+      id: mountId,
+      name: mount.name,
+      characters: mount.html.length,
+      created: mountCreated,
+      readback: mountReadback.embed?.htmlSha256 === sha256(mount.html) ? "match" : "mismatch",
+    },
     placement: await checkComponentPlacement(url, tag),
   };
 }

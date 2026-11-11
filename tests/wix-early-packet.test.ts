@@ -6,6 +6,7 @@ import { renderPageDom } from "@/lib/delivery/wix-render";
 
 import {
   buildEarlyPackets,
+  buildMountEmbed,
   buildPageComponentSource,
   checkComponentPlacement,
   pageComponentTag,
@@ -105,18 +106,12 @@ describe("early packets", () => {
     expect(english.html).toContain('get("lang")==="es"');
   });
 
-  it("mounts the element into the page container so no editor step is needed", () => {
+  it("registers the element and leaves mounting to the page embed", () => {
     const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
     const [packet] = buildEarlyPackets({ tag: "atelier-x-v1", route: "/x", source });
-    expect(packet.html).toContain('document.getElementById("PAGES_CONTAINER")');
-    expect(packet.html).toContain('createElement("atelier-x-v1")');
-    expect(packet.html).toContain("replaceChildren(el)");
-    // A blank page has an empty container, so the mount must not wait for a child.
-    expect(packet.html).not.toContain("childElementCount");
-    // Hydration can remove the element after the first mount, so the observer
-    // stays alive for the startup window instead of disconnecting on success.
-    expect(packet.html).toContain("setTimeout(()=>o.disconnect(),60000)");
-    expect(packet.html).not.toContain("if(mount())o.disconnect()");
+    expect(packet.html).toContain("customElements.get");
+    expect(packet.html).not.toContain("PAGES_CONTAINER");
+    expect(packet.html).not.toContain("replaceChildren");
   });
 
   it("splits a long source into ordered chunks that stay under the Wix limit", () => {
@@ -136,6 +131,25 @@ describe("early packets", () => {
     const noisy = pseudoRandom(30_000);
     const source = buildPageComponentSource({ tag: "atelier-x-v1", html: `<section>${noisy}</section>`, taskId: "task-1" });
     expect(() => buildEarlyPackets({ tag: "atelier-x-v1", route: "/x", source, chunkCharacters: 20_000 })).toThrow();
+  });
+});
+
+describe("mount embed", () => {
+  it("puts the element on the page and keeps re-mounting through hydration", () => {
+    const mount = buildMountEmbed({ tag: "atelier-x-v1", route: "/x" });
+    expect(mount.name).toBe("CrawlSEO page mount — atelier-x-v1");
+    expect(mount.html).toContain('document.getElementById("PAGES_CONTAINER")');
+    expect(mount.html).toContain('createElement("atelier-x-v1")');
+    expect(mount.html).toContain("replaceChildren(el)");
+    expect(mount.html).toContain("setTimeout(()=>o.disconnect(),60000)");
+    expect(mount.html).not.toContain("if(mount())o.disconnect()");
+  });
+
+  it("keeps the mount on its own route and locale", () => {
+    const mount = buildMountEmbed({ tag: "atelier-x-v1", route: "/x", alternateRoute: "/fr/x" });
+    expect(mount.html).toContain('"/x"');
+    expect(mount.html).toContain('"/fr/x"');
+    expect(mount.html).toContain('get("earlyElements")==="off"');
   });
 });
 
