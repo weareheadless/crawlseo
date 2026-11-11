@@ -180,8 +180,15 @@ export async function generateDraftForAction(
     instructions,
   });
 
-  const title = options.currentTitle?.trim() || generated.title;
-  const withoutH1 = options.currentTitle
+  // The writer decides the title. An action that asks to retitle must change
+  // the post, so the current title is context for the writer, never a ceiling
+  // on what it may return. A leading H1 is dropped only when it repeats the
+  // title the post will render as its own heading.
+  const title = generated.title || options.currentTitle?.trim() || "";
+  const lead = generated.markdown.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim() ?? "";
+  const sameHeading = (left: string, right: string) =>
+    left.replace(/\s+/g, " ").trim().toLowerCase() === right.replace(/\s+/g, " ").trim().toLowerCase();
+  const withoutH1 = lead && sameHeading(lead, title)
     ? generated.markdown.replace(/^#\s+.*\r?\n+/, "")
     : generated.markdown;
   const markdown = options.factSource
