@@ -64,7 +64,12 @@ export default async function AgentTaskPage({ params }: Props) {
   const awaitingTarget = record(result.awaitingTarget);
   const awaitingPlacement = record(result.awaitingPlacement);
   const delivery = record(result.delivery);
-  const componentTag = typeof delivery.tag === "string" ? delivery.tag : null;
+  const firstVariant = Array.isArray(delivery.variants) ? record(delivery.variants[0]) : {};
+  const componentTag = typeof delivery.tag === "string"
+    ? delivery.tag
+    : typeof firstVariant.tag === "string"
+      ? firstVariant.tag
+      : null;
   const agentProgress = readAgentProgress(task.result);
   const codeSync = record(result.codeSync);
   const githubSha = typeof codeSync.commitSha === "string"
