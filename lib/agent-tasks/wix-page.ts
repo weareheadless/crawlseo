@@ -13,6 +13,7 @@ import { ResearchServiceError } from "@/lib/research/service";
 import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
 import { checkComponentPlacement, deliverWixPageComponent } from "@/lib/delivery/wix-early-packet";
 import { disableBridgeEmbed } from "@/lib/bridge/client";
+import { applyNavigationEdit } from "@/lib/delivery/wix-navigation";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
@@ -349,6 +350,10 @@ export async function runWixPageTask(taskId: string) {
     if (navigation.trim()) {
       await addAgentArtifact(task.id, { kind: "navigation_notes", content: navigation.slice(0, 20_000) });
     }
+    const navigationSource = await readFile(path.join(directory, "navigation.js"), "utf8").catch(() => "");
+    if (navigationSource.trim()) {
+      await addAgentArtifact(task.id, { kind: "navigation_source", content: navigationSource.slice(0, 400_000) });
+    }
 
     const variants = await pageVariantsFor(task.siteId, task.route ?? "/", task.site.domain);
     const multiLocale = variants.length > 1;
@@ -627,8 +632,20 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
     return { status: "awaiting_target" as const, route: task.route, url: missing[0].url, httpStatus: missing[0].httpStatus };
   }
 
+  // The agent prepared the navigation edit; applying it here keeps the code
+  // change and its packet in the same approval as the page.
+  const navigation = await applyNavigationEdit(task.id).catch((error) => ({
+    status: "skipped" as const,
+    target: null,
+    component: null,
+    packets: [],
+    reason: error instanceof Error ? error.message : "navigation apply failed",
+  }));
   const published = await deliver(task, confirmedBy);
-  return { status: "published" as const, task: published };
+  const withNavigation = await updateAgentTask(task.id, {
+    result: { ...record(published.result), navigation } as never,
+  });
+  return { status: "published" as const, task: withNavigation };
 }
 
 /** The worker calls this after the route probe delay. */

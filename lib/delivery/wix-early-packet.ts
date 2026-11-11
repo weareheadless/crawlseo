@@ -177,7 +177,10 @@ export function buildEarlyPackets(input: {
   // The page is blank and this element is its whole content, so the packet
   // mounts it into the page container itself. That keeps the delivery free of
   // a manual editor step; an element a human already placed is left alone.
-  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};if(!mount()){const o=new MutationObserver(()=>{if(mount())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),30000)}`;
+  // Wix hydration replaces the page container after first paint, so the
+  // observer must keep re-mounting for the startup window instead of
+  // disconnecting after the first successful mount.
+  const mount = `const mount=()=>{const c=document.getElementById("PAGES_CONTAINER")||document.getElementById("main_MF")||document.querySelector("main");if(!c)return false;if(c.querySelector(${JSON.stringify(input.tag)}))return true;const el=document.createElement(${JSON.stringify(input.tag)});c.replaceChildren(el);return true};mount();const o=new MutationObserver(()=>{mount()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),60000)`;
   return chunks.map((chunk, index) => {
     const store = `(window.__crawlseoEarly||(window.__crawlseoEarly={}))[${JSON.stringify(key)}]=(window.__crawlseoEarly[${JSON.stringify(key)}]||"")+${JSON.stringify(chunk)};`;
     const drain = index === count - 1
@@ -358,4 +361,73 @@ export async function checkComponentPlacement(url: string, tag: string): Promise
 /** Read the component source a delivery wrote, for review or a re-delivery. */
 export async function readComponentSource(file: string): Promise<string> {
   return readFile(file, "utf8");
+}
+
+/**
+ * Rebuild an existing component's early packet after its source changed.
+ *
+ * The site's own startup build owns the packet format, so this reads one
+ * deployed packet to learn the queue global and entry shape, then writes the
+ * same shape from the new source. It never invents a second controller.
+ */
+export async function rebuildComponentPacket(input: {
+  siteId: string;
+  componentName: string;
+  source: string;
+}): Promise<{ packets: Array<{ id: string; name: string; characters: number; readback: "match" | "mismatch" }> }> {
+  const site = await db.site.findUnique({ where: { id: input.siteId }, select: { id: true, retiredAt: true } });
+  if (!site || site.retiredAt) throw new WixEarlyPacketError("Site not found or retired", 404);
+  const config = await getSiteDeliveryConfig(input.siteId);
+  if (!config?.enabled) throw new WixEarlyPacketError("Wix delivery is not enabled for this site", 409);
+  const alias = config.bridgeAlias.trim();
+  if (!alias) throw new WixEarlyPacketError("This site has no Wix bridge alias configured", 409);
+
+  const listed = await listBridgeSnippets(alias) as { snippets?: Array<{ id?: string; name?: string }> };
+  const candidates = (listed.snippets ?? []).filter((snippet): snippet is { id: string; name: string } =>
+    typeof snippet.id === "string" && typeof snippet.name === "string" &&
+    (snippet.name.includes(`early-packet-${input.componentName}-`) || snippet.name.toLowerCase().includes(`early packet — ${input.componentName}`)),
+  );
+  if (candidates.length === 0) {
+    throw new WixEarlyPacketError(`No early packet exists for ${input.componentName}; the site's startup build must create it first`, 409);
+  }
+  const first = await readBridgeEmbed(alias, candidates[0].id) as { embed?: { html?: string } };
+  const sample = first.embed?.html ?? "";
+  const encoded = gzipSync(Buffer.from(input.source, "utf8"), { level: 9 }).toString("base64");
+  const chunks: string[] = [];
+  for (let index = 0; index < encoded.length; index += PACKET_CHUNK_CHARACTERS) {
+    chunks.push(encoded.slice(index, index + PACKET_CHUNK_CHARACTERS));
+  }
+
+  let build: (chunk: string, index: number, count: number) => string;
+  if (sample.includes("__atelierPacketsV51")) {
+    build = (chunk, index, count) =>
+      `<script>(window.__atelierPacketsV51||(window.__atelierPacketsV51=[])).push(${JSON.stringify({ key: input.componentName, index, count, encoded: chunk })});window.__atelierDrainV51?.();</script>`;
+  } else if (sample.includes("__susiEarlyPackets")) {
+    build = (chunk) =>
+      `<script>(window.__susiEarlyPackets||(window.__susiEarlyPackets=[])).push(...${JSON.stringify([[input.componentName, chunk]])});if(window.__susiDrainEarly)window.__susiDrainEarly();</script>`;
+  } else {
+    throw new WixEarlyPacketError("The existing packet uses an unknown startup format; refusing to guess", 409);
+  }
+
+  const results: Array<{ id: string; name: string; characters: number; readback: "match" | "mismatch" }> = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const html = build(chunks[index], index, chunks.length);
+    if (html.length >= PACKET_MAX_CHARACTERS) {
+      throw new WixEarlyPacketError(`Packet ${index + 1} is ${html.length} characters; Wix rejects entries at ${PACKET_MAX_CHARACTERS}`, 500);
+    }
+    const target = candidates[index];
+    if (!target) {
+      throw new WixEarlyPacketError(`The site has ${candidates.length} packet entries for ${input.componentName} but the new source needs ${chunks.length}`, 409);
+    }
+    const file = await writePacketFile({ index, count: chunks.length, name: target.name, html, characters: html.length });
+    await writeBridgePacket(alias, target.id, file, true);
+    const readback = await readBridgeEmbed(alias, target.id) as { embed?: { htmlSha256?: string } };
+    results.push({
+      id: target.id,
+      name: target.name,
+      characters: html.length,
+      readback: readback.embed?.htmlSha256 === sha256(html) ? "match" : "mismatch",
+    });
+  }
+  return { packets: results };
 }

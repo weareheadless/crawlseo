@@ -113,6 +113,10 @@ describe("early packets", () => {
     expect(packet.html).toContain("replaceChildren(el)");
     // A blank page has an empty container, so the mount must not wait for a child.
     expect(packet.html).not.toContain("childElementCount");
+    // Hydration can remove the element after the first mount, so the observer
+    // stays alive for the startup window instead of disconnecting on success.
+    expect(packet.html).toContain("setTimeout(()=>o.disconnect(),60000)");
+    expect(packet.html).not.toContain("if(mount())o.disconnect()");
   });
 
   it("splits a long source into ordered chunks that stay under the Wix limit", () => {
