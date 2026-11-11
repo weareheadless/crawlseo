@@ -497,9 +497,13 @@ async function deliver(task: {
       }
       return updateAgentTask(task.id, {
         status: live ? "PUBLISHED" : "AWAITING_TARGET",
+        // A successful retry must not keep the error text of an earlier
+        // failed attempt on the task the human is reading.
+        errorCode: live ? null : undefined,
         publishedUrl: live ? delivered.find((variant) => variant.isDefault)?.url ?? delivered[0]?.url ?? null : null,
         result: {
           ...priorResult,
+          deliveryError: live ? null : priorResult.deliveryError,
           delivery: { mode: "component", variants: delivered },
           awaitingPlacement: live
             ? undefined
@@ -565,10 +569,12 @@ async function deliver(task: {
     await markOpportunityTaskDelivered(task.id, confirmedBy).catch(() => undefined);
     return updateAgentTask(task.id, {
       status: "PUBLISHED",
+      errorCode: null,
       publishedUrl: result.url,
       bridgeReceiptId: result.snippetId,
       result: {
         ...priorResult,
+        deliveryError: null,
         delivery: result,
         liveVerified,
         progress: { ...record(priorResult.progress), stage: "Published", updatedAt: new Date().toISOString() },

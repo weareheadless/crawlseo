@@ -55,6 +55,57 @@ describe("pushing what a delivery wrote", () => {
     expect((await commitAndPushFiles(repo, ["page.js"], "again")).status).toBe("nothing");
   });
 
+  it("pushes a delivery commit that a previous run committed but never pushed", async () => {
+    const { repo, remote } = await fixture();
+    await writeFile(path.join(repo, "page.js"), "export const page = 1;\n");
+    git(repo, "add", "page.js");
+    git(repo, "commit", "-m", "CrawlSEO: page");
+    const deliveryCommit = git(repo, "rev-parse", "HEAD");
+    expect(git(remote, "rev-parse", "main")).not.toBe(deliveryCommit);
+
+    // The worktree is clean; the only remaining work is the push.
+    const result = await commitAndPushFiles(repo, ["page.js"], "CrawlSEO: page");
+
+    expect(result.status).toBe("pushed");
+    expect(result.commitSha).toBe(deliveryCommit);
+    expect(git(remote, "rev-parse", "main")).toBe(deliveryCommit);
+    expect(git(remote, "show", "main:page.js")).toBe("export const page = 1;");
+  });
+
+  it("refuses to push unpushed work that is not part of this delivery", async () => {
+    const { repo, remote } = await fixture();
+    const base = git(repo, "rev-parse", "HEAD");
+    await writeFile(path.join(repo, "page.js"), "export const page = 1;\n");
+    await writeFile(path.join(repo, "someone-else.txt"), "not ours\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "local work from another session");
+
+    const result = await commitAndPushFiles(repo, ["page.js"], "CrawlSEO: page");
+
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("someone-else.txt");
+    expect(git(remote, "rev-parse", "main")).toBe(base);
+  });
+
+  it("does not commit onto a base that is behind origin/main", async () => {
+    const { repo, remote } = await fixture();
+    const other = path.join(path.dirname(repo), "other");
+    git(path.dirname(repo), "clone", remote, other);
+    git(other, "config", "user.email", "other@example.invalid");
+    git(other, "config", "user.name", "Other Session");
+    await writeFile(path.join(other, "landing.js"), "export const landing = 1;\n");
+    git(other, "add", "landing.js");
+    git(other, "commit", "-m", "someone else's page");
+    git(other, "push", "origin", "main");
+
+    await writeFile(path.join(repo, "page.js"), "export const page = 1;\n");
+    const result = await commitAndPushFiles(repo, ["page.js"], "CrawlSEO: page");
+
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("behind or diverged");
+    expect(git(remote, "show", "main:landing.js")).toBe("export const landing = 1;");
+  });
+
   it("refuses paths outside the repository and duplicate paths", async () => {
     const { repo } = await fixture();
     expect(pushableFiles(repo, ["../escape.js", "/etc/passwd", "page.js", "./page.js", null])).toEqual(["page.js"]);
