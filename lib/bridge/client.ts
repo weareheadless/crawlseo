@@ -5,7 +5,7 @@ import path from "node:path";
 const BRIDGE_ROOT = process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge";
 const BRIDGE_CLI = path.join(BRIDGE_ROOT, "src", "cli.mjs");
 
-export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "update_snippet" | "private_editor_revision" | "cms" | "seo_tags";
+export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "disable_embed" | "update_snippet" | "private_editor_revision" | "cms" | "seo_tags";
 
 /** A capability is true only when a bridge explicitly reports it. Unknown bridges fail closed. */
 export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridgeOperation, boolean> {
@@ -13,7 +13,7 @@ export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridge
     ? value as Record<string, unknown> : {};
   if (response.contract !== "wix-bridge-generic-v1") return {
     inspect: false, plan: false, deploy: false, publish: false, release: false, verify: false,
-    read_embed: false, write_embed: false, update_snippet: false, private_editor_revision: false, cms: false, seo_tags: false,
+    read_embed: false, write_embed: false, disable_embed: false, update_snippet: false, private_editor_revision: false, cms: false, seo_tags: false,
   };
   const capabilities = response.capabilities;
   const operations = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
@@ -27,6 +27,7 @@ export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridge
     verify: operations.verify === true,
     read_embed: operations.read_embed === true,
     write_embed: operations.write_embed === true,
+    disable_embed: operations.disable_embed === true,
     // Generic v1 advertises whether it can update an existing embed. The host
     // does not promote a host-only command on its own.
     update_snippet: operations.update_snippet === true,
@@ -78,7 +79,7 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "snippets" | "update-snippet" | "create-snippet" | "read-embed" | "write-embed",
+  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "snippets" | "update-snippet" | "create-snippet" | "read-embed" | "write-embed" | "disable-embed",
   options: {
     siteRepo?: string;
     apply?: boolean;
@@ -90,6 +91,7 @@ function runBridge(
     allPages?: boolean;
     position?: "HEAD" | "BODY_START" | "BODY_END";
     category?: string;
+    loadOnce?: boolean;
     extraArgs?: string[];
   } = {},
 ): Promise<unknown> {
@@ -108,6 +110,7 @@ function runBridge(
       ...(options.allPages ? ["--all-pages"] : []),
       ...(options.position ? ["--position", options.position] : []),
       ...(options.category ? ["--category", options.category] : []),
+      ...(options.loadOnce ? ["--load-once"] : []),
       ...(options.preserveScope ? ["--preserve-scope"] : []),
       ...(options.apply ? ["--apply"] : []),
       ...(options.extraArgs ?? []),
@@ -199,6 +202,15 @@ export async function writeBridgeEmbed(
   return runBridge(alias, "write-embed", { snippetId, htmlFile, route, apply });
 }
 
+/**
+ * Disable an embed CrawlSEO created. Used when a page moves from the embed
+ * lane to a placed custom element: the embed would otherwise replace the page
+ * container and hide the element.
+ */
+export async function disableBridgeEmbed(alias: string, snippetId: string, apply = false) {
+  return runBridge(alias, "disable-embed", { snippetId, apply });
+}
+
 export async function updateBridgeSnippet(
   alias: string,
   snippetId: string,
@@ -220,6 +232,7 @@ export type CreateBridgeSnippetInput = {
   allPages?: boolean;
   position?: "HEAD" | "BODY_START" | "BODY_END";
   category?: string;
+  loadOnce?: boolean;
   apply?: boolean;
 };
 
@@ -236,6 +249,7 @@ export async function createBridgeSnippet(alias: string, input: CreateBridgeSnip
     allPages: input.allPages,
     position: input.position ?? "BODY_END",
     category: input.category ?? "FUNCTIONAL",
+    loadOnce: input.loadOnce ?? false,
     apply: input.apply ?? false,
   });
 }

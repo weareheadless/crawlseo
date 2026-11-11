@@ -11,6 +11,9 @@ import { markActionVerified } from "@/lib/research/action-status";
 import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 import { ResearchServiceError } from "@/lib/research/service";
 import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
+import { checkComponentPlacement, deliverWixPageComponent } from "@/lib/delivery/wix-early-packet";
+import { disableBridgeEmbed } from "@/lib/bridge/client";
+import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { buildWixPagePrompt, markerFor, pageProblems, MAX_PAGE_BYTES } from "@/lib/agent-tasks/wix-page-prompt";
 import { designProfileForSite } from "@/lib/design/profile";
@@ -303,6 +306,10 @@ export async function runWixPageTask(taskId: string) {
     if (designNotes.trim()) {
       await addAgentArtifact(task.id, { kind: "design_notes", content: designNotes.slice(0, 20_000) });
     }
+    const navigation = await readFile(path.join(directory, "navigation.md"), "utf8").catch(() => "");
+    if (navigation.trim()) {
+      await addAgentArtifact(task.id, { kind: "navigation_notes", content: navigation.slice(0, 20_000) });
+    }
     const problems = pageProblems(html, task.id);
     if (problems.length > 0) {
       await addAgentMessage(task.id, `The page was not deliverable:\n- ${problems.join("\n- ")}`, "SYSTEM");
@@ -378,6 +385,45 @@ async function deliver(task: {
   const priorResult = record(before?.result);
   await updateAgentTask(task.id, { status: "PUBLISHING" });
   try {
+    // A site with a connected source repository delivers the page as a custom
+    // element registered by an early packet, which is how its other pages are
+    // built. Without a repository the page is an HTML embed.
+    const config = await getSiteDeliveryConfig(task.siteId);
+    if (config?.repoPath) {
+      const component = await deliverWixPageComponent({
+        siteId: task.siteId,
+        route: task.route,
+        html,
+        taskId: task.id,
+      });
+      const live = component.placement === "found";
+      if (live) {
+        if (task.actionId) await markActionVerified(task.actionId).catch(() => undefined);
+        await markOpportunityTaskDelivered(task.id, confirmedBy).catch(() => undefined);
+      }
+      return updateAgentTask(task.id, {
+        status: live ? "PUBLISHED" : "AWAITING_TARGET",
+        publishedUrl: live ? component.url : null,
+        result: {
+          ...priorResult,
+          delivery: { mode: "component", ...component },
+          awaitingPlacement: live
+            ? undefined
+            : {
+                tag: component.tag,
+                url: component.url,
+                route: component.route,
+                attempts: 0,
+                instruction: `Place <${component.tag}> on the Wix page at ${component.route}. The packet is already deployed, so the page renders as soon as the element is on it.`,
+              },
+          progress: {
+            stage: live ? "Published" : "Waiting for the element placement",
+            updatedAt: new Date().toISOString(),
+          },
+        } as never,
+      });
+    }
+
     const result = await deliverWixPageHtml({
       siteId: task.siteId,
       route: task.route,
@@ -477,7 +523,7 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
           url,
           httpStatus,
           attempts: 0,
-          instruction: `Create and publish a blank page at ${task.route} in the Wix editor. The agent creates the embed and delivers the content as soon as the page answers.`,
+          instruction: `Create and publish a blank page at ${task.route} in the Wix editor. The agent delivers the content as soon as the page answers.`,
         },
         progress: { stage: "Waiting for the page", updatedAt: new Date().toISOString() },
       } as never,
@@ -510,8 +556,71 @@ export async function resumeWixPageDelivery(taskId: string) {
   const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
   if (!site) throw new ResearchServiceError("Site not found", 404);
   const url = `https://${site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}${task.route}`;
-  const httpStatus = await probeWixRoute(url);
   const result = record(task.result);
+  const delivery = record(result.delivery);
+
+  // A component delivery is already deployed; only the human's element
+  // placement is missing. Re-deploying the packet every probe would rewrite
+  // the same bytes, so this path only checks the live document.
+  if (delivery.mode === "component" && typeof delivery.tag === "string") {
+    const placement = await checkComponentPlacement(url, delivery.tag);
+    if (placement === "found") {
+      // The page now renders from the placed element. An embed delivered
+      // earlier replaces the page container and would hide it, so it is
+      // disabled once the element is confirmed on the page.
+      const config = await getSiteDeliveryConfig(task.siteId);
+      const target = await db.deliveryTarget.findUnique({
+        where: { siteId_key: { siteId: task.siteId, key: `page:${task.route}` } },
+        select: { snippetId: true },
+      });
+      if (config?.bridgeAlias && target?.snippetId) {
+        await disableBridgeEmbed(config.bridgeAlias, target.snippetId, true).catch(() => undefined);
+      }
+      if (task.actionId) await markActionVerified(task.actionId).catch(() => undefined);
+      await markOpportunityTaskDelivered(task.id, null).catch(() => undefined);
+      return {
+        status: "published" as const,
+        task: await updateAgentTask(task.id, {
+          status: "PUBLISHED",
+          publishedUrl: url,
+          result: {
+            ...result,
+            delivery: { ...delivery, placement },
+            awaitingPlacement: undefined,
+            progress: { stage: "Published", updatedAt: new Date().toISOString() },
+          } as never,
+        }),
+      };
+    }
+    const awaiting = record(result.awaitingPlacement);
+    const attempts = typeof awaiting.attempts === "number" ? awaiting.attempts : 0;
+    if (attempts >= 96) {
+      await updateAgentTask(task.id, {
+        result: {
+          ...result,
+          awaitingPlacement: { ...awaiting, attempts, parked: true, checkedAt: new Date().toISOString() },
+        } as never,
+      });
+      return { status: "parked" as const, httpStatus: 200 };
+    }
+    await updateAgentTask(task.id, {
+      result: {
+        ...result,
+        awaitingPlacement: { ...awaiting, attempts: attempts + 1, checkedAt: new Date().toISOString() },
+      } as never,
+    });
+    await enqueueJob({
+      siteId: task.siteId,
+      kind: JobKind.WIX_DELIVERY,
+      payload: { agentTaskId: task.id },
+      idempotencyKey: `wix-delivery:${task.id}:${Date.now()}`,
+      maxAttempts: 1,
+      delaySeconds: 15 * 60,
+    });
+    return { status: "waiting" as const, httpStatus: 200 };
+  }
+
+  const httpStatus = await probeWixRoute(url);
   const awaiting = record(result.awaitingTarget);
   const attempts = typeof awaiting.attempts === "number" ? awaiting.attempts : 0;
   if (httpStatus !== 200) {

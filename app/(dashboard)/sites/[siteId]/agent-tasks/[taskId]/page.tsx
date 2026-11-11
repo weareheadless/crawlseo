@@ -41,7 +41,7 @@ export default async function AgentTaskPage({ params }: Props) {
       site: { select: { id: true, domain: true } },
       action: { select: { id: true, title: true, targetUrl: true, primaryQuery: true, status: true } },
       draft: { select: { id: true, title: true, metaTitle: true, metaDescription: true, excerpt: true, markdown: true } },
-      artifacts: { where: { kind: { in: ["page_html", "design_notes"] } }, orderBy: { createdAt: "desc" }, take: 4 },
+      artifacts: { where: { kind: { in: ["page_html", "design_notes", "navigation_notes"] } }, orderBy: { createdAt: "desc" }, take: 6 },
       messages: { orderBy: { createdAt: "asc" }, take: 40 },
     },
   });
@@ -50,6 +50,9 @@ export default async function AgentTaskPage({ params }: Props) {
   const result = record(task.result);
   const progress = record(result.progress);
   const awaitingTarget = record(result.awaitingTarget);
+  const awaitingPlacement = record(result.awaitingPlacement);
+  const delivery = record(result.delivery);
+  const componentTag = typeof delivery.tag === "string" ? delivery.tag : null;
   const progressLines = Array.isArray(progress.lines)
     ? progress.lines.map((line) => record(line)).filter((line) => typeof line.message === "string")
     : [];
@@ -57,6 +60,7 @@ export default async function AgentTaskPage({ params }: Props) {
     ? task.artifacts.find((artifact) => artifact.kind === "page_html")?.content ?? null
     : null;
   const designNotes = task.artifacts.find((artifact) => artifact.kind === "design_notes")?.content ?? null;
+  const navigationNotes = task.artifacts.find((artifact) => artifact.kind === "navigation_notes")?.content ?? null;
   const route = task.route;
   const pageTitle = task.draft?.metaTitle || task.draft?.title || task.title;
   const pageDescription = task.draft?.metaDescription ?? "";
@@ -85,7 +89,11 @@ export default async function AgentTaskPage({ params }: Props) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <p className="font-data text-[10px] uppercase tracking-wide text-muted-foreground">
-              {task.kind === "wix_article" ? "Wix Blog article" : "Wix page embed"}
+              {task.kind === "wix_article"
+                ? "Wix Blog article"
+                : componentTag
+                  ? `Wix page component · ${componentTag}`
+                  : "Wix page embed"}
               {route ? ` · ${route}` : ""}
             </p>
             {task.action?.primaryQuery && (
@@ -101,12 +109,31 @@ export default async function AgentTaskPage({ params }: Props) {
             hasPage={Boolean(html)}
           />
         </div>
-        {task.status === "AWAITING_TARGET" && (
+        {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length > 0 && (
+          <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
+            <p className="font-medium text-warning">The page is deployed; the element is not on it yet</p>
+            <p className="mt-1 text-muted-foreground">
+              The early packet is live, so the page renders as soon as the element is placed. In the Wix editor, add
+              <span className="text-foreground"> Embed a custom element </span>
+              to <code className="font-data text-foreground">{String(awaitingPlacement.route ?? route ?? "")}</code> and choose
+              <code className="font-data text-foreground"> {String(awaitingPlacement.tag ?? componentTag ?? "")} </code>
+              from the list. Publish the page, then check the placement.
+            </p>
+            <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+              <p>Page title: <span className="text-foreground">{pageTitle}</span></p>
+              {pageDescription && <p>Meta description: <span className="text-foreground">{pageDescription}</span></p>}
+              <p>
+                Narrow the packet&apos;s page scope in Wix Custom Code to this page so its bytes stop loading elsewhere.
+              </p>
+            </div>
+          </div>
+        )}
+        {task.status === "AWAITING_TARGET" && Object.keys(awaitingPlacement).length === 0 && (
           <div className="mt-4 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm">
             <p className="font-medium text-warning">The Wix page does not exist yet</p>
             <p className="mt-1 text-muted-foreground">
               Create and publish a blank page at <code className="font-data text-foreground">{String(awaitingTarget.route ?? route ?? "")}</code> in
-              the Wix editor. The agent creates the embed and delivers the content as soon as the page answers.
+              the Wix editor. The agent delivers the content as soon as the page answers.
             </p>
             <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
               <p>Page title: <span className="text-foreground">{pageTitle}</span></p>
@@ -142,6 +169,18 @@ export default async function AgentTaskPage({ params }: Props) {
           </p>
           <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-4 text-xs leading-6">
             {designNotes}
+          </pre>
+        </section>
+      )}
+
+      {navigationNotes && (
+        <section className="panel p-5">
+          <h2 className="font-heading text-base font-semibold">How visitors reach this page</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            The agent chose the best link location from the site&apos;s own navigation, footer and related pages.
+          </p>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-4 text-xs leading-6">
+            {navigationNotes}
           </pre>
         </section>
       )}
