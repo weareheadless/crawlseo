@@ -11,9 +11,12 @@ import {
   createBridgeSnippet,
   listBridgeSnippets,
   disableBridgeEmbed,
+  publishBridgeSite,
   readBridgeEmbed,
+  setBridgePageSeo,
   updateBridgeSnippet,
   writeBridgePacket,
+  type BridgePageSeo,
 } from "@/lib/bridge/client";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -48,10 +51,14 @@ export type WixPageComponentResult = {
   url: string;
   sourcePath: string | null;
   sourceSha256: string;
+  /** The key the deployed early packet publishes under, so a publish can be verified. */
+  packetKey: string;
   packets: Array<{ id: string; name: string; index: number; characters: number; created: boolean; readback: "match" | "mismatch" }>;
   mount: { id: string; name: string; characters: number; created: boolean; readback: "match" | "mismatch" };
   placement: "found" | "missing" | "unavailable";
   disabled: Array<{ id: string; name: string }>;
+  /** Set once the page has been published and its packet verified live. */
+  publish?: WixPagePublishResult | null;
 };
 
 function routePath(route: string): string {
@@ -77,7 +84,12 @@ function slugFor(route: string): string {
  * route slug. A site without a shared prefix gets a neutral one.
  */
 export function pageComponentTag(route: string, existingTags: string[], localeCode?: string | null): string {
-  const slug = slugFor(route);
+  // A localized route already carries its locale as its first segment, and the
+  // tag adds the locale again; strip it so the tag stays readable.
+  const base = localeCode
+    ? route.replace(new RegExp(`^/${localeCode.replace(/[^a-z0-9-]/gi, "")}(?=/|$)`, "i"), "") || "/"
+    : route;
+  const slug = slugFor(base);
   if (!slug) throw new WixEarlyPacketError("The route has no usable slug for a component tag", 400);
   const prefixes = existingTags
     .map((tag) => tag.match(/^([a-z][a-z0-9]*-)/)?.[1] ?? "")
@@ -107,7 +119,17 @@ export function pageComponentTag(route: string, existingTags: string[], localeCo
  * crawlers instead of hiding inside a shadow root. JSON-LD is moved to the
  * document head because structured data inside a custom element is not read.
  */
-export function buildPageComponentSource(input: { tag: string; html: string; taskId: string }): string {
+export function buildPageComponentSource(input: {
+  tag: string;
+  html: string;
+  taskId: string;
+  /**
+   * Title and description the component sets on the live page. Wix writes SEO
+   * tags for the site's primary language only, so a translated page owns these
+   * two fields itself; the route guard keeps them off every other page.
+   */
+  seo?: { title: string; description: string; locale: string } | null;
+}): string {
   if (!/^[a-z][a-z0-9]*-[a-z0-9-]*$/.test(input.tag)) {
     throw new WixEarlyPacketError(`"${input.tag}" is not a valid custom element tag`, 400);
   }
@@ -116,6 +138,7 @@ export function buildPageComponentSource(input: { tag: string; html: string; tas
 (() => {
   const TAG = ${JSON.stringify(input.tag)};
   const TASK = ${JSON.stringify(input.taskId)};
+  const SEO = ${input.seo ? JSON.stringify(input.seo) : "null"};
   if (customElements.get(TAG)) return;
   const HTML = ${JSON.stringify(input.html)};
   class CrawlSeoPage extends HTMLElement {
@@ -123,6 +146,21 @@ export function buildPageComponentSource(input: { tag: string; html: string; tas
       if (this.dataset.crawlseoRendered === "1") return;
       this.dataset.crawlseoRendered = "1";
       this.innerHTML = HTML;
+      if (SEO) {
+        document.title = SEO.title;
+        const meta = (selector, attrs) => {
+          let node = document.head.querySelector(selector);
+          if (!node) {
+            node = document.createElement("meta");
+            document.head.append(node);
+          }
+          for (const name of Object.keys(attrs)) node.setAttribute(name, attrs[name]);
+        };
+        meta('meta[name="description"]', { name: "description", content: SEO.description });
+        meta('meta[property="og:title"]', { property: "og:title", content: SEO.title });
+        meta('meta[property="og:description"]', { property: "og:description", content: SEO.description });
+        meta('meta[property="og:locale"]', { property: "og:locale", content: SEO.locale });
+      }
       // Structured data must live in the document head, not inside the element.
       for (const node of this.querySelectorAll('script[type="application/ld+json"]')) {
         const copy = document.createElement("script");
@@ -291,6 +329,8 @@ export async function deliverWixPageComponent(input: {
   excludeQuery?: { key: string; value: string } | null;
   /** The same page under the default locale's explicit prefix. */
   alternateRoute?: string | null;
+  /** Title and description this page sets for itself, for a non-primary locale. */
+  seoHead?: { title: string; description: string } | null;
 }): Promise<WixPageComponentResult> {
   const route = routePath(input.route);
   const site = await db.site.findUnique({
@@ -303,11 +343,23 @@ export async function deliverWixPageComponent(input: {
   const alias = config.bridgeAlias.trim();
   if (!alias) throw new WixEarlyPacketError("This site has no Wix bridge alias configured", 409);
 
-  await assertNegotiatedWixBridgeOperations(alias, ["read_embed", "write_embed", "write_packet", "disable_embed"]);
+  await assertNegotiatedWixBridgeOperations(alias, [
+    "read_embed",
+    "write_embed",
+    "write_packet",
+    "disable_embed",
+  ]);
 
   const repoPath = config?.repoPath?.trim() || null;
   const tag = pageComponentTag(route, await existingComponentTags(repoPath), input.localeCode ?? null);
-  const source = buildPageComponentSource({ tag, html: input.html, taskId: input.taskId });
+  const source = buildPageComponentSource({
+    tag,
+    html: input.html,
+    taskId: input.taskId,
+    seo: input.seoHead
+      ? { ...input.seoHead, locale: input.localeCode ?? "fr" }
+      : null,
+  });
   const sourcePath = await writeComponentSource(repoPath, tag, source);
   const scope = {
     route,
@@ -407,6 +459,7 @@ export async function deliverWixPageComponent(input: {
     url,
     sourcePath,
     sourceSha256: sha256(source),
+    packetKey: sha256(source).slice(0, 16),
     packets: results,
     mount: {
       id: mountId,
@@ -425,17 +478,262 @@ export async function deliverWixPageComponent(input: {
  * Wix has no API for adding an element to a page, so the delivery waits for
  * the tag to appear in the rendered document.
  */
-export async function checkComponentPlacement(url: string, tag: string): Promise<"found" | "missing" | "unavailable"> {
+export async function checkComponentPlacement(
+  url: string,
+  tag: string,
+  options: { attempts?: number; delayMs?: number } = {},
+): Promise<"found" | "missing" | "unavailable"> {
   // The mount embed adds the element after the document loads, so the server
   // HTML never contains it. Only a rendered document proves the page is live.
-  const dom = await renderPageDom(url);
-  if (!dom) return "unavailable";
-  return dom.includes(`<${tag}`) ? "found" : "missing";
+  //
+  // A new Custom Embed is served on the next site render, and Wix's edge does
+  // not switch every POP at once. One immediate check reported "missing" for a
+  // page that was live two minutes later, so a miss is rechecked with a
+  // cache-busting query before it is believed.
+  const attempts = Math.max(1, options.attempts ?? 6);
+  const delayMs = Math.max(0, options.delayMs ?? 20_000);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const probe = attempt === 0
+      ? url
+      : `${url}${url.includes("?") ? "&" : "?"}crawlseo_check=${Date.now()}-${attempt}`;
+    const dom = await renderPageDom(probe);
+    if (!dom) return "unavailable";
+    if (dom.includes(`<${tag}`)) return "found";
+    if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return "missing";
 }
 
 /** Read the component source a delivery wrote, for review or a re-delivery. */
 export async function readComponentSource(file: string): Promise<string> {
   return readFile(file, "utf8");
+}
+
+export type WixPagePublishResult = {
+  status: "verified" | "pending" | "failed";
+  /** How many publish rounds ran. */
+  attempts: number;
+  publishes: number;
+  packetKey: string;
+  seo?: BridgePageSeo | { status: "failed"; route: string; error: string } | null;
+  error?: string;
+  /** What the live pages served at the last check. */
+  pages?: Array<{ url: string; packet: boolean; injectedSeo?: boolean | null }>;
+};
+
+export const decodeEntities = (value: string): string =>
+  value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ");
+
+export function liveTitle(html: string): string | null {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return match ? decodeEntities(match[1]).trim() : null;
+}
+
+export function liveDescription(html: string): string | null {
+  for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = match[0];
+    if (!/\bname\s*=\s*["']description["']/i.test(tag)) continue;
+    const content = tag.match(/\bcontent\s*=\s*"([^"]*)"/i) ?? tag.match(/\bcontent\s*=\s*'([^']*)'/i);
+    if (content) return decodeEntities(content[1]).trim();
+  }
+  return null;
+}
+
+/** Read the page as the edge serves it. `null` means it could not be read. */
+export async function readLivePage(url: string): Promise<string | null> {
+  try {
+    const probe = `${url}${url.includes("?") ? "&" : "?"}crawlseo_publish=${Date.now()}`;
+    const response = await fetch(probe, {
+      redirect: "follow",
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+      headers: { "user-agent": "CrawlSEO publish probe" },
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Does the live page already serve this delivery's packet?
+ *
+ * The early packet keeps its source key in the script (`k="..."`), so the raw
+ * document proves which packet the edge is serving. `null` means the page
+ * could not be read, which is reported as unverified, not as a match.
+ */
+export async function pageServesPacket(url: string, packetKey: string): Promise<boolean | null> {
+  const html = await readLivePage(url);
+  return html === null ? null : html.includes(`k="${packetKey}"`);
+}
+
+export type WixPagePublishTarget = {
+  url: string;
+  packetKey: string;
+  /**
+   * Title and description the page sets from its own component, for a locale
+   * the SEO API cannot write. Verified in a rendered document, because only
+   * the running page carries them.
+   */
+  injectedSeo?: { title: string; description: string } | null;
+};
+
+function sameText(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false;
+  return a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Publish a site after its pages' packets and sources are written, then prove
+ * what the live pages serve.
+ *
+ * Custom Embeds API writes are drafts: the live page keeps serving the last
+ * published revision until the site is published. A publish also restores page
+ * settings from its saved revision, which is why the SEO tags are written only
+ * after the packet is live, and a publish triggered by a push to the connected
+ * repository can restore an older revision over both — so this reads the live
+ * documents, republishes when an older packet is served, and reports "pending"
+ * instead of claiming success it did not see.
+ */
+export async function publishDeliveredPages(input: {
+  alias: string;
+  pages: WixPagePublishTarget[];
+  /** The primary page's title and description, written through the SEO API. */
+  seo?: { title: string; description: string } | null;
+  attempts?: number;
+  waitAttempts?: number;
+  waitDelayMs?: number;
+}): Promise<WixPagePublishResult> {
+  if (input.pages.length === 0) throw new Error("A publish needs at least one delivered page.");
+  const primary = input.pages[0];
+  await assertNegotiatedWixBridgeOperations(input.alias, [
+    "publish_site",
+    ...(input.seo ? (["seo_tags"] as const) : []),
+  ]);
+  const attempts = Math.min(5, Math.max(1, input.attempts ?? 3));
+  const waitAttempts = Math.min(6, Math.max(1, input.waitAttempts ?? 4));
+  const waitDelayMs = Math.max(0, input.waitDelayMs ?? 15_000);
+  const route = (() => {
+    try {
+      return new URL(primary.url).pathname.replace(/\/+$/, "") || "/";
+    } catch {
+      return primary.url.replace(/\/+$/, "");
+    }
+  })();
+  let publishes = 0;
+  let seo: WixPagePublishResult["seo"] = null;
+  let pages: WixPagePublishResult["pages"] = [];
+
+  const readPackets = async () => {
+    const states: Array<{ url: string; packet: boolean; injectedSeo?: boolean | null }> = [];
+    for (const page of input.pages) {
+      const html = await readLivePage(page.url);
+      states.push({ url: page.url, packet: html !== null && html.includes(`k="${page.packetKey}"`) });
+    }
+    return states;
+  };
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await publishBridgeSite(input.alias, true);
+      publishes += 1;
+    } catch (publishError) {
+      return {
+        status: "failed",
+        attempts: attempt,
+        publishes,
+        packetKey: primary.packetKey,
+        seo,
+        pages,
+        error: publishError instanceof Error ? publishError.message.slice(0, 1_000) : String(publishError).slice(0, 1_000),
+      };
+    }
+
+    let live = await readPackets();
+    for (let wait = 0; wait < waitAttempts && !live.every((page) => page.packet); wait += 1) {
+      if (waitDelayMs) await new Promise((resolve) => setTimeout(resolve, waitDelayMs));
+      live = await readPackets();
+    }
+    if (!live.every((page) => page.packet)) {
+      pages = live;
+      continue;
+    }
+
+    if (input.seo && !seo) {
+      try {
+        seo = await setBridgePageSeo(input.alias, route, input.seo, true);
+      } catch (seoError) {
+        return {
+          status: "failed",
+          attempts: attempt,
+          publishes,
+          packetKey: primary.packetKey,
+          seo: {
+            status: "failed",
+            route,
+            error: seoError instanceof Error ? seoError.message.slice(0, 1_000) : String(seoError).slice(0, 1_000),
+          },
+          pages: live,
+          error: "SEO de la page non publié.",
+        };
+      }
+    }
+
+    // The API's answer is the saved payload, not the rendered page.
+    let apiSeoLive = true;
+    if (input.seo) {
+      for (let wait = 0; wait < waitAttempts; wait += 1) {
+        const html = await readLivePage(primary.url);
+        apiSeoLive = html !== null && sameText(liveTitle(html), input.seo.title) && sameText(liveDescription(html), input.seo.description);
+        if (apiSeoLive) break;
+        if (waitDelayMs) await new Promise((resolve) => setTimeout(resolve, waitDelayMs));
+      }
+    }
+
+    let injectedLive = true;
+    for (const [index, page] of input.pages.entries()) {
+      if (!page.injectedSeo) continue;
+      const dom = await renderPageDom(page.url);
+      const ok = dom !== null && sameText(liveTitle(dom), page.injectedSeo.title) && sameText(liveDescription(dom), page.injectedSeo.description);
+      live[index].injectedSeo = ok;
+      if (!ok) injectedLive = false;
+    }
+
+    pages = live;
+    if (apiSeoLive && injectedLive) {
+      return { status: "verified", attempts: attempt, publishes, packetKey: primary.packetKey, seo, pages: live };
+    }
+  }
+  return { status: "pending", attempts, publishes, packetKey: primary.packetKey, seo, pages };
+}
+
+/** A single page's publish, for the page lane that delivers one route at a time. */
+export async function publishDeliveredPage(input: {
+  alias: string;
+  url: string;
+  packetKey: string;
+  seo?: { title: string; description: string } | null;
+  injectedSeo?: { title: string; description: string } | null;
+  attempts?: number;
+  waitAttempts?: number;
+  waitDelayMs?: number;
+}): Promise<WixPagePublishResult> {
+  return publishDeliveredPages({
+    alias: input.alias,
+    pages: [{ url: input.url, packetKey: input.packetKey, injectedSeo: input.injectedSeo ?? null }],
+    seo: input.seo ?? null,
+    attempts: input.attempts,
+    waitAttempts: input.waitAttempts,
+    waitDelayMs: input.waitDelayMs,
+  });
 }
 
 /**

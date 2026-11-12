@@ -11,7 +11,17 @@ The current page scope of each deployed entry is the operator table
 
 A delivery is three artifacts: the component source in the site repository, the
 HEAD packet and the BODY_END mount. The app writes the source and calls the
-bridge for both entries; the person creates only the blank Wix page.
+bridge for both entries; the person creates only the blank Wix page. A page's
+SEO title and meta description are a page setting, not a fourth artifact: the
+app sets them through the Item SEO Tags API after the page is published.
+
+Those artifacts are drafts until the site is published. The delivery therefore
+ends with a publish and a read of the live document, in this order: write the
+packet and mount, push the source, publish the site, verify the live page
+serves the new packet, then set and verify the SEO tags. A publish restores page
+settings from its saved revision, which is why the SEO tags come last, and a
+publish triggered by the source push can restore an older revision, which is
+why the live packet is verified and the publish retried when it is not there.
 
 ## 1. A deployment is two entries, not one
 
@@ -53,6 +63,44 @@ A page task therefore produces:
 The component renders the fragment into the light DOM, so the copy stays in the
 document for crawlers. JSON-LD is moved to `document.head` on connect, because
 structured data inside a custom element is not read.
+
+### Page SEO
+
+A pushed page is not finished without its own title and meta description: Wix
+otherwise shows a page-type pattern ("abat-jour sur mesure | Atelier de
+l'Harmonie") and, often, no description at all. Every page delivery therefore
+ends with a check (`lib/delivery/page-seo.ts`):
+
+The check runs after the code push, because a push triggers a Wix build whose
+publish restores the saved revision and would undo a publish done before it.
+
+- A page that already carries its own title and description keeps them.
+- A page that still inherits the pattern gets both written, from the brief's
+  values when it has them, otherwise from its copy by the content model.
+- The copy is read from a rendered document, walking shadow roots: the site's
+  own components render their body there, so a plain DOM dump reports such a
+  page as empty.
+- The result is read back from the live document, not from the API response.
+
+On a multi-locale site the check runs on the primary page. Wix writes SEO tags
+for the primary language only, so a translated page sets its own title,
+description and `og:*` tags from its component, and that is verified in a
+rendered document.
+
+Wix page title and meta description are not Custom Embed content, so they are
+not part of the packet. When a page config supplies `seo.title` and
+`seo.description`, the delivery calls the bridge's `seo-tags` operation. The
+bridge lists `STATIC_PAGE` items, matches the route against the canonical link
+the page's SEO tags already carry, replaces only the title and description, and
+publishes the existing page revision with `publish: true`. It never publishes
+the whole site.
+
+This uses a Wix API key with `Manage SEO Settings` (`WIX_SEO_API_KEY`); the
+installed app token that Custom Embeds use gets HTTP 403 on the Item SEO Tags
+API. The same key publishes the site (`POST /site-publisher/v1/site/publish`).
+A failure is reported in the delivery result and does not hide a page that
+already rendered. The Wix page must exist and be published first; the API cannot
+create it.
 
 The packet is gzip + base64, chunked at 13,500 characters (Wix rejects an entry
 at 15,000). Chunks write indexed slots and any chunk that completes the set

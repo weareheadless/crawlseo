@@ -12,8 +12,9 @@ import { markActionVerified } from "@/lib/research/action-status";
 import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
 import { ResearchServiceError } from "@/lib/research/service";
 import { deliverWixPageHtml, probeWixRoute } from "@/lib/delivery/wix-page";
-import { checkComponentPlacement, deliverWixPageComponent } from "@/lib/delivery/wix-early-packet";
-import { disableBridgeEmbed } from "@/lib/bridge/client";
+import { checkComponentPlacement, deliverWixPageComponent, publishDeliveredPages, type WixPagePublishResult } from "@/lib/delivery/wix-early-packet";
+import { ensurePageSeo, type PageSeoResult } from "@/lib/delivery/page-seo";
+import { disableBridgeEmbed, publishBridgeSite } from "@/lib/bridge/client";
 import { applyNavigationEdit } from "@/lib/delivery/wix-navigation";
 import { commitAndPushFiles, type CodeSyncResult } from "@/lib/agent-tasks/code-sync";
 import { getSiteDeliveryConfig } from "@/lib/site-delivery/config";
@@ -453,7 +454,10 @@ async function deliver(task: {
   route: string | null;
 }, confirmedBy: string | null = null) {
   if (!task.route) throw new ResearchServiceError("The task has no page route", 409);
-  const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
+  const site = await db.site.findUnique({
+    where: { id: task.siteId },
+    select: { domain: true, siteProfile: { select: { language: true } } },
+  });
   if (!site) throw new ResearchServiceError("Site not found", 404);
   const variants = await pageVariantsFor(task.siteId, task.route, site.domain);
   const multiLocale = variants.length > 1;
@@ -467,7 +471,7 @@ async function deliver(task: {
     // pages are built. Without a repository the page is an HTML embed.
     const config = await getSiteDeliveryConfig(task.siteId);
     if (config?.repoPath) {
-      const delivered: Array<PageVariant & { tag: string; placement: string; packets: unknown[]; mount: unknown; sourcePath: string | null }> = [];
+      const delivered: Array<PageVariant & { tag: string; placement: string; packets: unknown[]; mount: unknown; sourcePath: string | null; packetKey: string; seoHead: { title: string; description: string } | null }> = [];
       for (const variant of variants) {
         const html = await latestPageHtml(task.id, multiLocale && !variant.isDefault ? `page_html:${variant.code}` : "page_html");
         const component = await deliverWixPageComponent({
@@ -487,8 +491,13 @@ async function deliver(task: {
           packets: component.packets,
           mount: component.mount,
           sourcePath: component.sourcePath,
+          packetKey: component.packetKey,
+          // Wix writes SEO tags for the primary language only; a translated
+          // page's title and description stay a Wix editor setting here.
+          seoHead: null,
         });
       }
+
       const live = delivered.every((variant) => variant.placement === "found");
       const missing = delivered.filter((variant) => variant.placement !== "found");
       if (live) {
@@ -504,7 +513,15 @@ async function deliver(task: {
         result: {
           ...priorResult,
           deliveryError: live ? null : priorResult.deliveryError,
-          delivery: { mode: "component", variants: delivered },
+          delivery: {
+            mode: "component",
+            variants: delivered,
+            // Wix writes SEO tags for the primary language only: a translated
+            // page's title and description stay a page setting in the editor.
+            localizedSeo: delivered
+              .filter((variant) => !variant.isDefault)
+              .map((variant) => ({ route: variant.route, url: variant.url })),
+          },
           awaitingPlacement: live
             ? undefined
             : {
@@ -539,6 +556,28 @@ async function deliver(task: {
     // bytes. The live DOM check is best effort because the embed mounts after
     // the page loads; a miss is reported, not turned into a false failure.
     const liveVerified = result.live.marker === "found";
+    const embedConfig = await getSiteDeliveryConfig(task.siteId);
+    let embedPublish: Awaited<ReturnType<typeof publishBridgeSite>> | null = null;
+    let embedSeo: Awaited<ReturnType<typeof ensurePageSeo>> | null = null;
+    let embedSeoError: string | null = null;
+    if (embedConfig?.bridgeAlias) {
+      // The embed is a draft until the site is published, and the page's own
+      // title and description are a separate setting from its content.
+      try {
+        embedPublish = await publishBridgeSite(embedConfig.bridgeAlias, true);
+        embedSeo = await ensurePageSeo({
+          alias: embedConfig.bridgeAlias,
+          route: task.route,
+          url: result.url,
+          siteName: site.domain,
+          language: site.siteProfile?.language ?? "fr",
+          html,
+        });
+        if (embedSeo.status === "failed") embedSeoError = embedSeo.error ?? "Page title and description were not confirmed.";
+      } catch (error) {
+        embedSeoError = error instanceof Error ? error.message.slice(0, 1_000) : String(error).slice(0, 1_000);
+      }
+    }
     if (!task.actionId) throw new ResearchServiceError("A delivered page must belong to a research action", 409);
     try {
       await db.delivery.create({
@@ -569,13 +608,13 @@ async function deliver(task: {
     await markOpportunityTaskDelivered(task.id, confirmedBy).catch(() => undefined);
     return updateAgentTask(task.id, {
       status: "PUBLISHED",
-      errorCode: null,
+      errorCode: embedSeoError ? "SEO_NOT_SET" : null,
       publishedUrl: result.url,
       bridgeReceiptId: result.snippetId,
       result: {
         ...priorResult,
-        deliveryError: null,
-        delivery: result,
+        deliveryError: embedSeoError,
+        delivery: { ...result, publish: embedPublish, seo: embedSeo },
         liveVerified,
         progress: { ...record(priorResult.progress), stage: "Published", updatedAt: new Date().toISOString() },
       } as never,
@@ -603,6 +642,65 @@ async function deliver(task: {
  * the bridge, and undoing a working delivery because a push was rejected would
  * be worse than reporting it.
  */
+/**
+ * Publish the site and make sure the page carries its own title and
+ * description. This runs after the code push on purpose: a push triggers a Wix
+ * build whose publish restores the saved revision, which would undo a publish
+ * done before it.
+ */
+async function finalizeDeliveredPage(
+  task: { id: string; siteId: string; route: string | null },
+  result: unknown,
+): Promise<{ publish: WixPagePublishResult | null; seo: PageSeoResult | null; error: string | null }> {
+  const config = await getSiteDeliveryConfig(task.siteId);
+  if (!config?.bridgeAlias) return { publish: null, seo: null, error: null };
+  const delivery = record(record(result).delivery);
+  const variants = (Array.isArray(delivery.variants) ? delivery.variants : []).map(record);
+  const primary = variants.find((variant) => variant.isDefault === true) ?? variants[0];
+  if (!primary || typeof primary.url !== "string" || typeof primary.packetKey !== "string") {
+    return { publish: null, seo: null, error: null };
+  }
+  const site = await db.site.findUnique({
+    where: { id: task.siteId },
+    select: { domain: true, siteProfile: { select: { language: true } } },
+  });
+  const pages = [
+    { url: primary.url, packetKey: primary.packetKey, injectedSeo: (primary.seoHead as { title: string; description: string } | null) ?? null },
+    ...variants
+      .filter((variant) => variant !== primary && typeof variant.url === "string" && typeof variant.packetKey === "string")
+      .map((variant) => ({
+        url: String(variant.url),
+        packetKey: String(variant.packetKey),
+        injectedSeo: (variant.seoHead as { title: string; description: string } | null) ?? null,
+      })),
+  ];
+  const publish = await publishDeliveredPages({ alias: config.bridgeAlias, pages, seo: null });
+
+  let seo: PageSeoResult | null = null;
+  let error: string | null = null;
+  try {
+    // A page without its own title and description falls back to a Wix
+    // pattern and no description, which is what search results show.
+    seo = await ensurePageSeo({
+      alias: config.bridgeAlias,
+      route: String(primary.route ?? task.route ?? ""),
+      url: primary.url,
+      siteName: site?.domain ?? "",
+      language: site?.siteProfile?.language ?? "fr",
+      html: await latestPageHtml(task.id, "page_html").catch(() => ""),
+    });
+    if (seo.status === "failed") error = seo.error ?? "Page title and description were not confirmed on the live page.";
+  } catch (seoFailure) {
+    error = seoFailure instanceof Error ? seoFailure.message.slice(0, 1_000) : String(seoFailure).slice(0, 1_000);
+  }
+  if (publish.status !== "verified" && !error) {
+    error = publish.status === "failed"
+      ? `Publication échouée : ${publish.error ?? "erreur inconnue"}`
+      : "Publication non confirmée : la page sert encore l’ancienne version.";
+  }
+  return { publish, seo, error };
+}
+
 async function syncDeliveredCode(
   task: { id: string; title: string; siteId: string },
   result: unknown,
@@ -633,7 +731,10 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
     throw new ResearchServiceError("Set the page route before delivery; the human creates the Wix page at that route", 409);
   }
 
-  const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
+  const site = await db.site.findUnique({
+    where: { id: task.siteId },
+    select: { domain: true, siteProfile: { select: { language: true } } },
+  });
   if (!site) throw new ResearchServiceError("Site not found", 404);
   const variants = await pageVariantsFor(task.siteId, task.route, site.domain);
 
@@ -685,8 +786,16 @@ export async function approveAndDeliverWixPage(taskId: string, confirmedBy: stri
     files: [],
     reason: error instanceof Error ? error.message : "code sync failed",
   }));
+  const finalized = await finalizeDeliveredPage(task, published.result);
   const withNavigation = await updateAgentTask(task.id, {
-    result: { ...record(published.result), navigation, ...(codeSync ? { codeSync } : {}) } as never,
+    errorCode: finalized.error ? "SEO_NOT_SET" : undefined,
+    result: {
+      ...record(published.result),
+      ...(finalized.error ? { deliveryError: finalized.error } : {}),
+      delivery: { ...record(record(published.result).delivery), publish: finalized.publish, seo: finalized.seo },
+      navigation,
+      ...(codeSync ? { codeSync } : {}),
+    } as never,
   });
   return { status: "published" as const, task: withNavigation };
 }
@@ -701,7 +810,10 @@ export async function resumeWixPageDelivery(taskId: string) {
   if (task.kind !== "wix_page") return { status: "skipped" as const };
   if (task.status !== "AWAITING_TARGET") return { status: "skipped" as const };
   if (!task.route) throw new ResearchServiceError("The task has no page route", 409);
-  const site = await db.site.findUnique({ where: { id: task.siteId }, select: { domain: true } });
+  const site = await db.site.findUnique({
+    where: { id: task.siteId },
+    select: { domain: true, siteProfile: { select: { language: true } } },
+  });
   if (!site) throw new ResearchServiceError("Site not found", 404);
   const url = `https://${site.domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}${task.route}`;
   const result = record(task.result);
@@ -735,14 +847,17 @@ export async function resumeWixPageDelivery(taskId: string) {
       }
       if (task.actionId) await markActionVerified(task.actionId).catch(() => undefined);
       await markOpportunityTaskDelivered(task.id, null).catch(() => undefined);
+      const finalized = await finalizeDeliveredPage(task, { ...result, delivery: { ...delivery, variants: checked } });
       return {
         status: "published" as const,
         task: await updateAgentTask(task.id, {
           status: "PUBLISHED",
+          errorCode: finalized.error ? "SEO_NOT_SET" : undefined,
           publishedUrl: String(checked.find((variant) => variant.isDefault)?.url ?? checked[0].url),
           result: {
             ...result,
-            delivery: { ...delivery, variants: checked },
+            ...(finalized.error ? { deliveryError: finalized.error } : {}),
+            delivery: { ...delivery, variants: checked, publish: finalized.publish, seo: finalized.seo },
             awaitingPlacement: undefined,
             progress: { ...record(result.progress), stage: "Published", updatedAt: new Date().toISOString() },
           } as never,
@@ -819,8 +934,15 @@ export async function resumeWixPageDelivery(taskId: string) {
     files: [],
     reason: error instanceof Error ? error.message : "code sync failed",
   }));
-  const withSync = codeSync
-    ? await updateAgentTask(task.id, { result: { ...record(published.result), codeSync } as never })
-    : published;
+  const finalized = await finalizeDeliveredPage(task, published.result);
+  const withSync = await updateAgentTask(task.id, {
+    errorCode: finalized.error ? "SEO_NOT_SET" : undefined,
+    result: {
+      ...record(published.result),
+      codeSync,
+      ...(finalized.error ? { deliveryError: finalized.error } : {}),
+      delivery: { ...record(record(published.result).delivery), publish: finalized.publish, seo: finalized.seo },
+    } as never,
+  });
   return { status: "published" as const, task: withSync };
 }
