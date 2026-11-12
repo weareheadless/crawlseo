@@ -18,6 +18,7 @@ describe("Wix bridge capability negotiation", () => {
       private_editor_revision: false,
       cms: false,
       seo_tags: false,
+      publish_site: false,
     });
     expect(() => assertWixBridgeCapability({}, "cms")).toThrow("unsupported or unnegotiated: cms");
   });
@@ -35,6 +36,7 @@ describe("Wix bridge capability negotiation", () => {
     expect(capabilities.private_editor_revision).toBe(false);
     expect(capabilities.cms).toBe(false);
     expect(capabilities.seo_tags).toBe(false);
+    expect(capabilities.publish_site).toBe(false);
     expect(() => assertWixBridgeCapability({ contract: "wix-bridge-generic-v1", capabilities: { deploy: true } }, "release")).toThrow();
   });
 });

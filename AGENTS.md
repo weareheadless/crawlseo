@@ -11,9 +11,14 @@
   phases. Do not rebuild the old packet/decision/shadow machinery.
 - **A Wix page delivery is three artifacts, not one embed:** the component
   source in the site repository, a HEAD early packet that registers the element,
-  and a BODY_END mount that places it. Read `docs/wix-page-delivery-contract.md`
-  and the bridge's `docs/PAGE_DELIVERY.md` before changing delivery code or
-  docs.
+  and a BODY_END mount that places it. Those writes are drafts until the site is
+  published, so a delivery ends with the bridge's `publish-site`, then the
+  page's SEO title and meta description through `seo-tags`, then a read of the
+  live page that proves both. Every pushed page gets this check: a page without
+  its own title and description is written one from its copy, and a translated
+  page sets its own from the component because Wix writes the primary language
+  only. Read `docs/wix-page-delivery-contract.md` and the bridge's
+  `docs/PAGE_DELIVERY.md` before changing delivery code or docs.
 - **Do not use archived docs as requirements.** `docs/README.md` lists the active
   set. Everything in `docs/archive/` is historical; read it only for audit or
   provenance.
@@ -83,6 +88,14 @@ A local fix that makes one tenant better but adds a tenant-shaped branch is
 rejected, even when it works. A general rule may still be imperfect for a
 tenant; the model and the human review handle that context. Do not encode the
 exception.
+
+**Exception: the Wix delivery connector is tenant-wired on purpose.** The
+packet formats and component wiring for the Atelier Harmonie and Susi MacDonald
+Wix sites live in `lib/delivery/`, `lib/bridge/` and their tests deliberately.
+Those sites expose different packet formats and component contracts and the
+connector must speak each one. Do not remove or "generalize" that wiring as a
+universality cleanup: new tenants use the generic path, and the existing
+tenant connectors stay.
 
 ## Agent task coordination
 

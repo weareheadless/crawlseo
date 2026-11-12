@@ -36,9 +36,9 @@ describe("page component tag", () => {
     expect(pageComponentTag("/lampes/abat-jours", ["atelier-navbar-v1"])).toBe("atelier-lampes-abat-jours-v1");
   });
 
-  it("adds the locale to a non-default page tag", () => {
+  it("adds the locale to a non-default page tag without repeating the prefix", () => {
     expect(pageComponentTag("/en/abat-jour-sur-mesure", ["atelier-navbar-v1"], "en"))
-      .toBe("atelier-en-abat-jour-sur-mesure-en-v1");
+      .toBe("atelier-abat-jour-sur-mesure-en-v1");
   });
 
   it("uses a neutral prefix when the site has no shared one", () => {
@@ -64,6 +64,24 @@ describe("page component source", () => {
     const source = buildPageComponentSource({ tag: "atelier-x-v1", html: fragment, taskId: "task-1" });
     expect(source).toContain('script[type="application/ld+json"]');
     expect(source).toContain("document.head.append(copy)");
+  });
+
+  it("sets a translated page's title and description from the component", () => {
+    const source = buildPageComponentSource({
+      tag: "atelier-agenda-en-v1",
+      html: "<h1>Agenda</h1>",
+      taskId: "task-1",
+      seo: { title: "Craft fairs in Normandy", description: "Checked every week.", locale: "en" },
+    });
+    expect(source).toContain('const SEO = {"title":"Craft fairs in Normandy"');
+    expect(source).toContain("document.title = SEO.title");
+    expect(source).toContain('meta[name="description"]');
+    expect(source).toContain('meta[property="og:locale"]');
+  });
+
+  it("does not touch the document title when the page sets none", () => {
+    const source = buildPageComponentSource({ tag: "atelier-x-v1", html: "<h1>X</h1>", taskId: "task-1" });
+    expect(source).toContain("const SEO = null;");
   });
 
   it("rejects an invalid tag", () => {
@@ -210,7 +228,7 @@ describe("placement check", () => {
 
   it("reports a page without the element as missing", async () => {
     vi.mocked(renderPageDom).mockResolvedValue("<main></main>");
-    expect(await checkComponentPlacement("https://example.com/x", "atelier-x-v1")).toBe("missing");
+    expect(await checkComponentPlacement("https://example.com/x", "atelier-x-v1", { attempts: 1 })).toBe("missing");
   });
 
   it("reports an unrenderable page as unavailable", async () => {

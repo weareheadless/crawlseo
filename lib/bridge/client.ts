@@ -5,7 +5,7 @@ import path from "node:path";
 const BRIDGE_ROOT = process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge";
 const BRIDGE_CLI = path.join(BRIDGE_ROOT, "src", "cli.mjs");
 
-export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "write_packet" | "disable_embed" | "update_snippet" | "private_editor_revision" | "cms" | "seo_tags";
+export type WixBridgeOperation = "inspect" | "plan" | "deploy" | "publish" | "release" | "verify" | "read_embed" | "write_embed" | "write_packet" | "disable_embed" | "update_snippet" | "private_editor_revision" | "cms" | "seo_tags" | "publish_site";
 
 /** A capability is true only when a bridge explicitly reports it. Unknown bridges fail closed. */
 export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridgeOperation, boolean> {
@@ -13,7 +13,7 @@ export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridge
     ? value as Record<string, unknown> : {};
   if (response.contract !== "wix-bridge-generic-v1") return {
     inspect: false, plan: false, deploy: false, publish: false, release: false, verify: false,
-    read_embed: false, write_embed: false, write_packet: false, disable_embed: false, update_snippet: false, private_editor_revision: false, cms: false, seo_tags: false,
+    read_embed: false, write_embed: false, write_packet: false, disable_embed: false, update_snippet: false, private_editor_revision: false, cms: false, seo_tags: false, publish_site: false,
   };
   const capabilities = response.capabilities;
   const operations = capabilities && typeof capabilities === "object" && !Array.isArray(capabilities)
@@ -36,6 +36,7 @@ export function negotiateWixBridgeCapabilities(value: unknown): Record<WixBridge
     private_editor_revision: false,
     cms: operations.cms === true,
     seo_tags: operations.seo_tags === true,
+    publish_site: operations.publish_site === true,
   };
 }
 
@@ -80,7 +81,7 @@ async function bridgeSiteEnv(alias: string): Promise<Record<string, string>> {
 
 function runBridge(
   alias: string,
-  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "snippets" | "update-snippet" | "create-snippet" | "read-embed" | "write-embed" | "write-packet" | "disable-embed",
+  command: "inspect" | "plan" | "deploy" | "release" | "verify" | "snippet" | "snippets" | "update-snippet" | "create-snippet" | "read-embed" | "write-embed" | "write-packet" | "disable-embed" | "seo-tags" | "publish-site",
   options: {
     siteRepo?: string;
     apply?: boolean;
@@ -89,6 +90,8 @@ function runBridge(
     preserveScope?: boolean;
     name?: string;
     route?: string;
+    title?: string;
+    description?: string;
     allPages?: boolean;
     position?: "HEAD" | "BODY_START" | "BODY_END";
     category?: string;
@@ -108,6 +111,8 @@ function runBridge(
       ...(options.htmlFile ? ["--html-file", options.htmlFile] : []),
       ...(options.name ? ["--name", options.name] : []),
       ...(options.route ? ["--route", options.route] : []),
+      ...(options.title ? ["--title", options.title] : []),
+      ...(options.description ? ["--description", options.description] : []),
       ...(options.allPages ? ["--all-pages"] : []),
       ...(options.position ? ["--position", options.position] : []),
       ...(options.category ? ["--category", options.category] : []),
@@ -262,4 +267,65 @@ export async function createBridgeSnippet(alias: string, input: CreateBridgeSnip
     loadOnce: input.loadOnce ?? false,
     apply: input.apply ?? false,
   });
+}
+
+export type BridgePageSeo = {
+  status: "ok";
+  route: string;
+  pageId: string;
+  currentTitle?: string | null;
+  currentDescription?: string | null;
+  /** Whether the page carries its own title/description, as opposed to a pattern. */
+  hasOverride?: boolean;
+  wouldSet?: { title: string | null; description: string | null };
+  published?: boolean;
+  title?: string | null;
+  description?: string | null;
+  tags?: Array<Record<string, unknown>>;
+  receipt?: string;
+};
+
+/**
+ * Read a static page's saved SEO tags by canonical route. Read-only: the page
+ * must already exist, and the bridge matches it by the canonical URL its tags
+ * carry, because the SEO API does not return page URLs.
+ */
+export async function readBridgePageSeo(alias: string, route: string): Promise<BridgePageSeo> {
+  return runBridge(alias, "seo-tags", { route }) as Promise<BridgePageSeo>;
+}
+
+/**
+ * Set a static page's title and meta description through the Wix Item SEO Tags
+ * API and publish the change. Callers must negotiate `seo_tags` first.
+ */
+export async function setBridgePageSeo(
+  alias: string,
+  route: string,
+  seo: { title?: string; description?: string },
+  apply = false,
+): Promise<BridgePageSeo> {
+  return runBridge(alias, "seo-tags", {
+    route,
+    title: seo.title,
+    description: seo.description,
+    apply,
+  }) as Promise<BridgePageSeo>;
+}
+
+export type BridgeSitePublish = {
+  status: "ok";
+  target: { alias: string; siteId: string };
+  published?: boolean;
+  wouldPublish?: boolean;
+  receipt?: string;
+};
+
+/**
+ * Publish the site's saved revision through the Wix Site Publisher API.
+ * Custom Embeds API writes are drafts until a publish, and a publish from the
+ * connected repository can restore an older saved revision, so a delivery
+ * publishes after its writes. Callers must negotiate `publish_site` first.
+ */
+export async function publishBridgeSite(alias: string, apply = false): Promise<BridgeSitePublish> {
+  return runBridge(alias, "publish-site", { apply }) as Promise<BridgeSitePublish>;
 }
