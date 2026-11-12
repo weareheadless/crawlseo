@@ -23,6 +23,11 @@ write carries that generation so a transferred or stale executor is rejected.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/capabilities?siteId=…` | Read schema version, the selected site's active binding and supported operations. |
+| GET | `/opportunities?siteId=…&limit=…&cursor=…` | Read canonical project Opportunities and their Tasks; cursor-paginated, at most 100 Opportunities. |
+| POST | `/opportunities/{opportunityId}/operations` | Relay an explicit human accept, park or reject decision against the reviewed version. Acceptance creates the canonical Task. |
+| GET | `/tasks/{taskId}?siteId=…` | Read a project-owned Task and its Opportunity. |
+| POST | `/tasks/{taskId}` | Relay an explicit human task-status confirmation. |
+| GET | `/analytics?siteId=…&startDate=…&endDate=…` | Read saved GA4/GSC observations, connection/sync health, coverage and any row truncation. Does not call Google or queue work. |
 | GET, PUT | `/context?siteId=…` | Read or compare-and-swap the current site inventory, business facts, origin and capabilities. |
 | GET | `/findings?siteId=…&runId=…` | Read project/site-scoped findings with source lineage and linked Action revisions, using a bounded cursor. |
 | GET | `/actions?siteId=…` | List current site Actions, bounded to 100 per request. |
@@ -85,6 +90,59 @@ outbox event while incrementing the generation fence in one transaction.
 
 ## Execution state
 
+### Current Opportunity/Task workflow
+
+New recommendation work uses `Opportunity` and `Task`, not `ResearchAction`.
+The Action endpoints below remain for existing Action-bound work; they are not a
+fallback or a second identity for a new Opportunity. The new capabilities are
+`opportunities.read`, `opportunities.decide`, `tasks.read`, `tasks.confirm` and
+`analytics.read`. Read operations require `connector:read`; human-decision writes
+require `connector:write` and the active `helloada` binding generation.
+
+Every new endpoint requires an explicit registered `siteId` in an active project
+and workspace with an active connector binding. Opportunities belong to the
+canonical project (the schema has no site-local Opportunity table). Returned
+envelopes identify both the project and selected site; clients must verify those
+identities. An Opportunity cursor is scoped to that same project.
+
+Decision bodies contain `siteId`, `generation`, `idempotencyKey`, `confirmedBy`
+(the stable human identity), and `confirmationRef` (the original authenticated
+owner message/decision reference). A service credential delegates transport; it
+does not turn an agent's judgment into a human confirmation. The receipt records
+the human separately from the relaying service principal. Owner authentication
+belongs to Site-Agent's existing owner-session/approval boundary: CrawlSEO trusts
+the write-scoped executor's assertion and cannot independently authenticate a
+conversation reference. These fields are an audit trail, not a new identity or
+approval system. Do not expose this mutation as an unrestricted model tool.
+Never manufacture a confirmation or replace the reviewed version with a fresh
+read before writing.
+
+Opportunity decisions additionally carry `operation` (`accept`, `park`, `reject`)
+and `expectedUpdatedAt` from the reviewed Opportunity. A versioned recommendation
+also carries its `expectedDecisionId`. Only detected or parked Opportunities can
+be accepted/parked/rejected. Acceptance uses the shared task-creation gate inside
+the receipt transaction; active work cannot be accepted again to create a second
+Task. Generic decisions cannot bypass acceptance or directly close work.
+
+Task confirmations additionally carry `opportunityId`, `expectedStatus`, and
+`status`. The human flow is `todo → in_progress → delivered → verified_outcome`;
+agent-prepared work may reach `awaiting_human`, which can progress to
+`in_progress` or `delivered`. A closed Task cannot move backwards or skip delivery.
+Delivered work marks its Opportunity delivered; verified work closes it. The
+shared browser and connector services enforce scope, compare-and-swap, and atomic
+Task/Opportunity progression. Outcome recording also progresses the Opportunity
+in its transaction. A human-confirmed verification is not itself a claim of a
+measured traffic/ranking win; measured observations remain separate records.
+
+An exact request replay returns its durable receipt without reapplying the
+transition or changing who confirmed it. Within each operation endpoint,
+reusing a key for changed data conflicts. All accept/park/reject decisions share
+the `opportunity.decide` key namespace; Task confirmations use `task.confirm`.
+Stale versions, status conflicts and transferred executor generations return
+409; cross-project targets return 404. No endpoint publishes a website.
+
+### Existing Action-bound execution
+
 The accepted preparation operation queues one Action revision. Site-Agent may
 prepare a private candidate through the canonical Payload contract and return
 its stable `candidateRef`, authenticated owner review URL and SHA-256 hash of
@@ -110,6 +168,30 @@ diagnostic before acknowledging the event. Retries use exponential backoff;
 operation idempotency keys must be stable for exact request retries and unique
 when the request data changes. The connector execution generation fences stale
 Site-Agent workers after a transfer.
+
+## Google connection and analytics
+
+Google authorization remains in the existing protected project-provisioning and
+Google connection services. Provisioning registers encrypted service-account or
+OAuth connections and site/property-specific GA4/GSC grants, and queues the
+existing GA4/GSC sync jobs. Google property access must actually be granted to
+that identity; an identifier alone is not authorization. The connector never
+accepts or returns Google credential material, provisions alternative grants, or
+starts a sync from a GET.
+
+`/analytics` projects saved `AnalyticsSnapshot` and GSC query/page observations.
+The optional date pair selects a range of at most 366 days (default: the last 90
+completed UTC days). GA4 reports the selected snapshot's own coverage; a snapshot
+overlapping the requested range is not a full-range aggregate. Missing data stays
+unavailable, never synthetic zeroes. Availability, connection health and sync
+health are distinct, so retained observations do not hide a failed connection.
+GSC bounded detail reads report their full row counts and omitted-row counts.
+Clients must not calculate full-property totals from a truncated detail list.
+
+This source contract is not evidence of deployment, a tenant's Google access, or
+Growth UI adoption. Those require the normal release and authenticated tenant
+verification. No live grants, research budgets or customer state are changed by
+the implementation itself.
 
 ## Research limits
 

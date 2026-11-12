@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+const humanConfirmation = {
+  siteId: z.string().trim().min(1).max(120),
+  generation: z.number().int().positive(),
+  idempotencyKey: z.string().trim().min(1).max(240),
+  confirmedBy: z.string().trim().min(1).max(240),
+  confirmationRef: z.string().trim().min(1).max(500),
+};
+
+export const opportunityOperationSchema = z.object({
+  ...humanConfirmation,
+  operation: z.enum(["accept", "park", "reject"]),
+  expectedUpdatedAt: z.string().datetime(),
+  expectedDecisionId: z.string().trim().min(1).max(240).optional(),
+  reason: z.string().trim().max(2000).optional(),
+}).strict();
+
+export const taskConfirmationSchema = z.object({
+  ...humanConfirmation,
+  opportunityId: z.string().trim().min(1).max(120),
+  expectedStatus: z.enum(["todo", "in_progress", "awaiting_human", "delivered", "verified_outcome"]),
+  status: z.enum(["in_progress", "delivered", "verified_outcome"]),
+}).strict();
+
+export const opportunityListSchema = z.object({
+  siteId: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().trim().min(1).max(120).optional(),
+}).strict();
+
 const boundedJson = z.unknown().refine((value) => {
   try { return Buffer.byteLength(JSON.stringify(value)) <= 100_000; } catch { return false; }
 }, "JSON payload is too large or invalid");

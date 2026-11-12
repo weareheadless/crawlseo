@@ -228,22 +228,25 @@ export async function applyHysteresis(
   return [...parked.map((row) => row.id), ...recovered.map((row) => row.id)];
 }
 
-export type HumanDecision = "accepted" | "parked" | "rejected" | "closed";
+export type HumanDecision = "parked" | "rejected";
 
-/** Accept/park/reject/close is a human call, always recorded. */
+/** Acceptance belongs to the task gate; closure belongs to verified task work. */
 export async function decideOpportunity(
-  db: OpportunityDb,
+  db: Pick<OpportunityDb, "opportunity">,
   id: string,
   decision: HumanDecision,
   decidedBy: string,
-  reason?: string
+  reason: string | undefined,
+  scope: { projectId: string; expectedUpdatedAt: Date },
 ): Promise<void> {
-  const status: OpportunityStatus =
-    decision === "accepted" ? "accepted" : decision === "parked" ? "parked" : decision === "rejected" ? "rejected" : "closed";
-  await db.opportunity.update({
-    where: { id },
-    data: { status, decidedBy, decidedAt: new Date(), parkReason: reason ?? null },
+  if (!["parked", "rejected"].includes(decision) || !decidedBy.trim() || !scope.projectId) {
+    throw new Error("Invalid scoped human opportunity decision");
+  }
+  const updated = await db.opportunity.updateMany({
+    where: { id, projectId: scope.projectId, updatedAt: scope.expectedUpdatedAt, status: { in: ["detected", "parked"] } },
+    data: { status: decision, decidedBy, decidedAt: new Date(), parkReason: reason ?? null },
   });
+  if (updated.count !== 1) throw new Error("Opportunity changed or does not belong to this project; refresh before deciding");
 }
 
 export async function edgesSupportingOpportunity(db: EdgeDb, opportunityId: string, relation: EdgeRelation = "supporting") {

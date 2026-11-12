@@ -250,8 +250,8 @@ export function taskPlanFromOpportunity(opportunity: {
  * implementation work. The task and the opportunity transition are written
  * together, with a version precondition that refuses a stale page.
  */
-export async function acceptOpportunityIntoTask(
-  db: TaskDb,
+export async function acceptOpportunityIntoTaskInTransaction(
+  db: Pick<PrismaClient, "task" | "opportunity">,
   opportunityId: string,
   input: {
     title: string;
@@ -280,7 +280,10 @@ export async function acceptOpportunityIntoTask(
     },
   });
   if (!opportunity) throw new Error("opportunity not found");
-  if (!["detected", "parked", "in_progress"].includes(opportunity.status)) {
+  if (input.expectedProjectId && opportunity.projectId !== input.expectedProjectId) {
+    throw new Error("this opportunity does not belong to the site's project");
+  }
+  if (!["detected", "parked"].includes(opportunity.status)) {
     throw new Error(`opportunity status "${opportunity.status}" cannot be accepted into a task`);
   }
   if (!input.assignedTo || input.assignedTo.trim() === "") {
@@ -366,11 +369,17 @@ export async function acceptOpportunityIntoTask(
     });
   };
 
-  if (!db.$transaction) {
-    throw new Error("accepting a recommendation requires a transaction-capable database client");
-  }
-  const task = await db.$transaction((tx) => write(tx));
+  const task = await write(db);
   return task.id;
+}
+
+export async function acceptOpportunityIntoTask(
+  db: TaskDb,
+  opportunityId: string,
+  input: Parameters<typeof acceptOpportunityIntoTaskInTransaction>[2],
+): Promise<string> {
+  if (!db.$transaction) throw new Error("accepting a recommendation requires a transaction-capable database client");
+  return db.$transaction((tx) => acceptOpportunityIntoTaskInTransaction(tx, opportunityId, input));
 }
 
 /**
@@ -400,23 +409,67 @@ export async function syncOpportunityStatus(
   });
 }
 
-export async function confirmHumanStep(
-  db: TaskDb,
+export type HumanTaskStep = {
+  status: "in_progress" | "awaiting_human" | "delivered" | "verified_outcome";
+  confirmedBy: string;
+  expectedProjectId: string;
+  opportunityId: string;
+  expectedStatus?: string;
+};
+
+export class TaskTransitionError extends Error {
+  constructor(message: string, readonly status = 409) { super(message); }
+}
+
+/** Same boundary for browser confirmations and authenticated connector relays. */
+export async function confirmHumanStepInTransaction(
+  db: Pick<PrismaClient, "task" | "opportunity">,
   taskId: string,
-  input: { status: "in_progress" | "awaiting_human" | "delivered" | "verified_outcome"; confirmedBy: string }
+  input: HumanTaskStep,
 ): Promise<void> {
   if (!input.confirmedBy || input.confirmedBy.trim() === "") {
-    throw new Error("human confirmation requires a name (distinct from agent-prepared artifacts)");
+    throw new TaskTransitionError("human confirmation requires a name (distinct from agent-prepared artifacts)", 400);
   }
-  await db.task.update({
-    where: { id: taskId },
+  const task = await db.task.findUnique({ where: { id: taskId }, include: { opportunity: true } });
+  if (!task || !input.expectedProjectId || !input.opportunityId
+      || task.opportunity.projectId !== input.expectedProjectId || task.opportunityId !== input.opportunityId) {
+    throw new TaskTransitionError("Task does not belong to the requested opportunity/project scope", 404);
+  }
+  if (input.expectedStatus !== undefined && input.expectedStatus !== task.status) {
+    throw new TaskTransitionError("Task changed; refresh before confirming");
+  }
+  if (task.status === input.status) return;
+  const transitions: Record<string, readonly string[]> = {
+    todo: ["in_progress"], in_progress: ["awaiting_human", "delivered"],
+    awaiting_human: ["in_progress", "delivered"], delivered: ["verified_outcome"], verified_outcome: [],
+  };
+  if (!transitions[task.status]?.includes(input.status)) {
+    throw new TaskTransitionError(`Invalid task transition: ${task.status} → ${input.status}`);
+  }
+  if (!["accepted", "in_progress", "delivered"].includes(task.opportunity.status)) {
+    throw new TaskTransitionError("Task opportunity is not active");
+  }
+  const updated = await db.task.updateMany({
+    where: { id: taskId, status: task.status, updatedAt: task.updatedAt },
     data: {
       status: input.status,
-      humanConfirmedBy: input.confirmedBy,
+      humanConfirmedBy: input.confirmedBy.trim(),
       humanConfirmedAt: new Date(),
     },
   });
-  await syncOpportunityStatus(db, taskId, input.status);
+  if (updated.count !== 1) throw new TaskTransitionError("Task changed while confirming; refresh before retrying");
+  const next = input.status === "verified_outcome" ? "closed"
+    : input.status === "delivered" ? "delivered" : "in_progress";
+  const opportunity = await db.opportunity.updateMany({
+    where: { id: task.opportunityId, projectId: input.expectedProjectId, status: task.opportunity.status },
+    data: { status: next },
+  });
+  if (opportunity.count !== 1) throw new TaskTransitionError("Opportunity changed while confirming; refresh before retrying");
+}
+
+export async function confirmHumanStep(db: TaskDb, taskId: string, input: HumanTaskStep): Promise<void> {
+  if (!db.$transaction) throw new TaskTransitionError("Task confirmation requires a transaction-capable database client", 500);
+  await db.$transaction((tx) => confirmHumanStepInTransaction(tx, taskId, input));
 }
 
 /**
@@ -449,7 +502,7 @@ export async function recordAgentPreparation(
 }
 
 export async function recordDeliveryOutcome(
-  db: Pick<PrismaClient, "outcomeObservation" | "task">,
+  db: Pick<PrismaClient, "outcomeObservation" | "task" | "opportunity"> & { $transaction?: PrismaClient["$transaction"] },
   input: {
     taskId: string;
     baseline: { metrics: Record<string, { value: number; unit: string }>; observedAt: Date };
@@ -463,23 +516,35 @@ export async function recordDeliveryOutcome(
       throw new Error("an outcome requires a pre-delivery baseline (invariant 9: no baseline ⇒ unmeasured)");
     }
   }
-  const observation = await db.outcomeObservation.create({
-    data: {
-      taskId: input.taskId,
-      baselineMetrics: input.baseline.metrics as never,
-      baselineObservedAt: input.baseline.observedAt,
-      afterMetrics: input.after.metrics as never,
-      afterObservedAt: input.after.observedAt,
-      verdict: input.verdict,
-      measuredBy: input.measuredBy,
-    },
-    select: { id: true },
-  });
-  if (input.verdict !== "pending") {
-    await db.task.update({
-      where: { id: input.taskId },
-      data: { status: input.verdict === "verified_win" ? "verified_outcome" : "delivered" },
+  if (!db.$transaction) throw new Error("recording a delivery outcome requires a transaction-capable database client");
+  return db.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({ where: { id: input.taskId }, select: { id: true, status: true, updatedAt: true, opportunityId: true } });
+    if (!task) throw new Error("task not found");
+    const measured = input.verdict !== "pending";
+    if (measured && task.status !== "delivered" && task.status !== "verified_outcome") {
+      throw new Error("a measured outcome requires a delivered task");
+    }
+    const observation = await tx.outcomeObservation.create({
+      data: {
+        taskId: input.taskId,
+        baselineMetrics: input.baseline.metrics as never,
+        baselineObservedAt: input.baseline.observedAt,
+        afterMetrics: input.after.metrics as never,
+        afterObservedAt: input.after.observedAt,
+        verdict: input.verdict,
+        measuredBy: input.measuredBy,
+      },
+      select: { id: true },
     });
-  }
-  return observation.id;
+    if (!measured) return observation.id;
+    const nextStatus = input.verdict === "verified_win" ? "verified_outcome"
+      : task.status === "verified_outcome" ? "verified_outcome" : "delivered";
+    const changed = await tx.task.updateMany({
+      where: { id: input.taskId, status: task.status, updatedAt: task.updatedAt },
+      data: { status: nextStatus },
+    });
+    if (changed.count !== 1) throw new Error("task changed while recording outcome; refresh and retry");
+    await syncOpportunityStatus(tx as TaskDb, input.taskId, nextStatus);
+    return observation.id;
+  });
 }

@@ -128,7 +128,8 @@ async function main() {
   const awaiting = await db.task.findUniqueOrThrow({ where: { id: taskId } });
   if (awaiting.status !== "awaiting_human") throw new Error("agent preparation did not land in awaiting_human");
   if (awaiting.humanConfirmedBy != null) throw new Error("agent artifact must not carry a human confirmation");
-  await confirmHumanStep(db as never, taskId, { status: "delivered", confirmedBy: "smoke-human" });
+  await confirmHumanStep(db as never, taskId, { status: "in_progress", confirmedBy: "smoke-human", expectedProjectId: project.id, opportunityId: opportunity.id });
+  await confirmHumanStep(db as never, taskId, { status: "delivered", confirmedBy: "smoke-human", expectedProjectId: project.id, opportunityId: opportunity.id });
   console.log("wave2: task created from opportunity, agent-prepared to awaiting_human, human-confirmed delivery");
 
   // Wave 3: baseline + outcome

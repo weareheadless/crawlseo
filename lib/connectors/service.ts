@@ -301,6 +301,20 @@ async function activeSite(projectId: string, siteId?: string) {
   return site;
 }
 
+/** Explicit tenant scope for the current Opportunity/Task and analytics API. */
+export async function requireConnectorSite(principal: ServicePrincipalContext, siteId: string) {
+  const site = await db.site.findFirst({
+    where: { id: siteId, projectId: principal.projectId, retiredAt: null,
+      project: { workspaceId: principal.workspaceId, status: "ACTIVE", workspace: { status: "ACTIVE" } } },
+    include: { connectorBinding: true },
+  });
+  if (!site) throw new ConnectorError("Project site not found", 404);
+  if (!site.connectorBinding || site.connectorBinding.status !== "ACTIVE") {
+    throw new ConnectorError("An active connector binding is required", 409);
+  }
+  return site;
+}
+
 export async function connectorCapabilities(principal: ServicePrincipalContext, siteId: string) {
   const site = await activeSite(principal.projectId, siteId);
   return {
@@ -316,7 +330,7 @@ export async function connectorCapabilities(principal: ServicePrincipalContext, 
       executionSupported: ["helloada", "crawlseo-agent"].includes(site.connectorBinding.executor),
     } : null,
     executionExecutors: ["helloada", "crawlseo-agent"],
-    capabilities: ["policy.read", "policy.write", "findings.read", "actions.read", "preparation.accept", "preparation.cancel", "execution.status.write", "context.write", "events.poll", "events.ack", "budget.read", "budget.policy.write", "budget.reserve", "budget.settle", "providers.reddit-serp", "providers.google-news-rss"],
+    capabilities: ["opportunities.read", "opportunities.decide", "tasks.read", "tasks.confirm", "analytics.read", "policy.read", "policy.write", "findings.read", "actions.read", "preparation.accept", "preparation.cancel", "execution.status.write", "context.write", "events.poll", "events.ack", "budget.read", "budget.policy.write", "budget.reserve", "budget.settle", "providers.reddit-serp", "providers.google-news-rss"],
     researchProviders: [
       // Reddit closed direct access: robots.txt disallows crawlers and the Data API
       // needs a commercial licence, so the provider reads search snippets and the
