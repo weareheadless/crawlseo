@@ -19,6 +19,16 @@ vi.mock("@/lib/bridge/client", () => ({
 
 vi.mock("@/lib/ai/chat", () => ({ chatJson: h.chat }));
 
+// The model call is mocked, so the test supplies the config that would
+// otherwise come from the host's environment. Production keeps requiring it.
+vi.mock("@/lib/ai-seo/writer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai-seo/writer")>();
+  return {
+    ...actual,
+    contentWriterConfig: () => ({ apiKey: "test", baseUrl: "https://example.test/v1", model: "test-model" }),
+  };
+});
+
 vi.mock("@/lib/delivery/wix-early-packet", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/delivery/wix-early-packet")>();
   return { ...actual, readLivePage: h.live };
