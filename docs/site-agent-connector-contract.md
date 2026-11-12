@@ -185,6 +185,12 @@ completed UTC days). GA4 reports the selected snapshot's own coverage; a snapsho
 overlapping the requested range is not a full-range aggregate. Missing data stays
 unavailable, never synthetic zeroes. Availability, connection health and sync
 health are distinct, so retained observations do not hide a failed connection.
+Multiple non-revoked Google grants produce `connection.status: ambiguous`,
+`errorCode: MULTIPLE_GOOGLE_GRANTS`, and a null `propertyId`; the connector does
+not choose a healthier credential or label saved observations as belonging to
+one property. Saved, site-scoped observations remain readable independently of
+that connection error. Repair the grants through the existing provisioning
+service, not through the analytics read endpoint or an ad-hoc database update.
 GSC bounded detail reads report their full row counts and omitted-row counts.
 Clients must not calculate full-property totals from a truncated detail list.
 

@@ -97,7 +97,10 @@ describe("connector analytics read projection", () => {
       { id: "one", provider: "GOOGLE_ANALYTICS", status: "ACTIVE", connection: { status: "ACTIVE" } },
       { id: "two", provider: "GOOGLE_ANALYTICS", status: "ERROR", connection: { status: "ACTIVE" } },
     ]);
-    await expect(getConnectorAnalytics(principal, "site-1")).rejects.toMatchObject({ status: 409 });
+    const result = await getConnectorAnalytics(principal, "site-1");
+    expect(result.ga4).toMatchObject({ propertyId: null,
+      connection: { status: "ambiguous", errorCode: "MULTIPLE_GOOGLE_GRANTS" } });
+    expect(result.gsc.connection.status).toBe("unconnected");
   });
 
   it("projects known numeric metrics and rows without arbitrary nested snapshot fields", async () => {

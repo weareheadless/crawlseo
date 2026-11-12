@@ -53,7 +53,8 @@ function snapshotCoverage(value: unknown) {
     ? { startDate: coverage.startDate, endDate: coverage.endDate } : null;
 }
 
-function connectionState(grant: Grant | undefined) {
+function connectionState(grant: Grant | undefined, ambiguous = false) {
+  if (ambiguous) return { status: "ambiguous", lastSuccessfulAt: null, errorCode: "MULTIPLE_GOOGLE_GRANTS" };
   if (!grant) return { status: "unconnected", lastSuccessfulAt: null, errorCode: null };
   const connectionStatus = grant.connection.status;
   const revoked = grant.status === "REVOKED" || connectionStatus === "REVOKED";
@@ -71,13 +72,13 @@ type Grant = {
   lastSuccessfulAt: Date | null; updatedAt: Date; connection: { status: string };
 };
 
-function selectGrant(grants: Grant[], provider: IntegrationProvider): Grant | undefined {
+function selectGrant(grants: Grant[], provider: IntegrationProvider): { grant: Grant | undefined; ambiguous: boolean } {
   const candidates = grants.filter((grant) => grant.provider === provider);
   const current = candidates.filter((grant) => grant.status !== "REVOKED" && grant.connection.status !== "REVOKED");
-  if (current.length > 1) throw new ConnectorError(`Multiple ${provider} grants are configured; resolve the connection before reporting`, 409);
+  if (current.length > 1) return { grant: undefined, ambiguous: true };
   // No preference for a healthy credential over a broken one: ambiguity is not
   // permission to select another property. Revoked history is informational only.
-  return current[0] ?? candidates.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.id.localeCompare(b.id))[0];
+  return { grant: current[0] ?? candidates.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.id.localeCompare(b.id))[0], ambiguous: false };
 }
 
 const metrics = z.object({ activeUsers: z.number().finite().optional(), totalUsers: z.number().finite().optional(),
@@ -127,8 +128,10 @@ export async function getConnectorAnalytics(principal: ServicePrincipalContext, 
       orderBy: [{ finishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       select: { status: true, finishedAt: true, createdAt: true, errorCode: true, metadata: true } }),
   ]);
-  const gscGrant = selectGrant(grants, IntegrationProvider.GOOGLE_SEARCH_CONSOLE);
-  const ga4Grant = selectGrant(grants, IntegrationProvider.GOOGLE_ANALYTICS);
+  const gscSelection = selectGrant(grants, IntegrationProvider.GOOGLE_SEARCH_CONSOLE);
+  const ga4Selection = selectGrant(grants, IntegrationProvider.GOOGLE_ANALYTICS);
+  const gscGrant = gscSelection.grant;
+  const ga4Grant = ga4Selection.grant;
   const ga4Metrics = analyticsPayload(ga4?.data);
   const snapshotData = ga4?.data && typeof ga4.data === "object" && !Array.isArray(ga4.data) ? ga4.data as Record<string, unknown> : null;
   const actualSnapshotCoverage = snapshotCoverage(snapshotData?.coverage);
@@ -136,8 +139,8 @@ export async function getConnectorAnalytics(principal: ServicePrincipalContext, 
     ?? (ga4 ? { startDate: ga4.periodStart.toISOString().slice(0, 10), endDate: ga4.periodEnd.toISOString().slice(0, 10) } : null);
   const gscHasRows = queryCount > 0 || pageCount > 0;
   const gscCoverage = runCoverage(latestCompletedGscSync);
-  const gscConnection = connectionState(gscGrant);
-  const ga4Connection = connectionState(ga4Grant);
+  const gscConnection = connectionState(gscGrant, gscSelection.ambiguous);
+  const ga4Connection = connectionState(ga4Grant, ga4Selection.ambiguous);
   return {
     schemaVersion: "1.0", projectId: principal.projectId, siteId: site.id, requestedPeriod: range,
     ga4: { status: ga4Metrics ? "available" : ga4 ? "invalid" : "missing", propertyId: ga4Grant?.externalResourceId ?? null,
