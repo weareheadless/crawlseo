@@ -98,17 +98,18 @@ describe("task gate (wave 2)", () => {
   it("human confirmations are recorded distinctly from agent preparation", async () => {
     const { db } = opportunityDb();
     const updated: unknown[] = [];
-    (db as unknown as { task: { update: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> } }).task = {
-      update: vi.fn(async (args: { data: unknown; where: { id: string } }) => {
-        updated.push(args.data);
-        return { id: args.where.id };
+    (db as unknown as { task: { updateMany: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> } }).task = {
+      updateMany: vi.fn(async (args: { data: unknown }) => { updated.push(args.data); return { count: 1 }; }),
+      findUnique: vi.fn().mockResolvedValue({
+        id: "t1", opportunityId: "op1", status: "in_progress", updatedAt: new Date("2026-11-03"),
+        opportunity: { projectId: "p1", status: "in_progress" },
       }),
-      findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }),
     };
-    await confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: "dana" });
+    db.opportunity.updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    await confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: "dana", expectedProjectId: "p1", opportunityId: "op1" });
     expect(updated[0]).toMatchObject({ status: "delivered", humanConfirmedBy: "dana" });
     await expect(
-      confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: " " })
+      confirmHumanStep(db as never, "t1", { status: "delivered", confirmedBy: " ", expectedProjectId: "p1", opportunityId: "op1" })
     ).rejects.toThrow(/human confirmation requires a name/);
   });
 
@@ -156,6 +157,7 @@ describe("measurement spine (wave 3)", () => {
 
   it("outcomes round-trip with all four verdicts and move the task accordingly", async () => {
     const created: unknown[] = [];
+    let taskStatus = "delivered";
     const db = {
       outcomeObservation: {
         create: vi.fn(async (args: { data: Record<string, unknown> }) => {
@@ -163,8 +165,13 @@ describe("measurement spine (wave 3)", () => {
           return { id: `obs-${created.length}` };
         }),
       },
-      task: { update: vi.fn().mockResolvedValue({}) },
+      task: {
+        findUnique: vi.fn(async () => ({ id: "t1", status: taskStatus, updatedAt: new Date("2026-11-03"), opportunityId: "op1" })),
+        updateMany: vi.fn(async (args: { data: { status: string } }) => { taskStatus = args.data.status; return { count: 1 }; }),
+      },
+      opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
+    (db as unknown as { $transaction: (fn: (tx: typeof db) => unknown) => Promise<unknown> }).$transaction = async (fn) => fn(db);
     const baseline = { metrics: { "provider:position": { value: 9, unit: "rank" } }, observedAt: new Date("2026-11-01T00:00:00.000Z") };
     for (const verdict of ["verified_win", "no_effect", "regression", "unmeasured"] as const) {
       await recordDeliveryOutcome(db as never, {
@@ -176,9 +183,7 @@ describe("measurement spine (wave 3)", () => {
       });
     }
     expect(created).toHaveLength(4);
-    expect(db.task.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "t1" }, data: expect.objectContaining({ status: "verified_outcome" }) })
-    );
+    expect(db.task.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "t1" }), data: { status: "verified_outcome" } }));
   });
 });
 

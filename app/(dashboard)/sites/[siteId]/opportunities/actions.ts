@@ -22,8 +22,8 @@ async function requireSiteAccess(siteId: string) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
   const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, projectId: true } });
-  if (!site || (site.userId && site.userId !== userId)) redirect("/sites");
-  return site;
+  if (!site || !site.projectId || (site.userId && site.userId !== userId)) redirect("/sites");
+  return { ...site, projectId: site.projectId };
 }
 
 export async function refreshFunnelAction(siteId: string) {
@@ -43,10 +43,15 @@ export async function decideOpportunityAction(
 ) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
-  await requireSiteAccess(siteId);
+  const site = await requireSiteAccess(siteId);
+  const opportunity = await db.opportunity.findFirst({ where: { id: opportunityId, projectId: site.projectId } });
+  if (!opportunity) throw new Error("Opportunity does not belong to this site's project");
+  if (decision === "accepted") throw new Error("Accept this opportunity through the task-creation gate");
+  if (!["detected", "parked"].includes(opportunity.status)) throw new Error("Active work cannot be parked or rejected");
   const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   const decidedBy = user?.name || user?.email || userId;
-  await decideOpportunity(db as never, opportunityId, decision, decidedBy, reason);
+  await decideOpportunity(db, opportunityId, decision, decidedBy, reason,
+    { projectId: site.projectId, expectedUpdatedAt: opportunity.updatedAt });
   revalidatePath(`/sites/${siteId}/opportunities`);
   revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
   revalidatePath(`/sites/${siteId}/work`);
@@ -111,9 +116,9 @@ export async function confirmTaskStepAction(
 ) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
-  await requireSiteAccess(siteId);
-  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
-  await confirmHumanStep(db as never, taskId, { status, confirmedBy: user?.name || user?.email || userId });
+  const site = await requireSiteAccess(siteId);
+  await confirmHumanStep(db, taskId, { status, confirmedBy: userId,
+    expectedProjectId: site.projectId, opportunityId });
   revalidatePath(`/sites/${siteId}/opportunities/${opportunityId}`);
   revalidatePath(`/sites/${siteId}/work`);
 }
@@ -121,7 +126,9 @@ export async function confirmTaskStepAction(
 export async function attachAgentPlanAction(siteId: string, opportunityId: string, taskId: string) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
-  await requireSiteAccess(siteId);
+  const site = await requireSiteAccess(siteId);
+  const task = await db.task.findFirst({ where: { id: taskId, opportunityId, opportunity: { projectId: site.projectId } } });
+  if (!task) throw new Error("Task does not belong to this site's opportunity");
   await recordAgentPreparation(db as never, taskId, {
     agentId: "crawlseo-agent",
     plan: { note: "Plan drafted by the funnel agent; awaiting human confirmation.", draftedAt: new Date().toISOString() },

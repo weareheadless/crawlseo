@@ -49,11 +49,13 @@ function mockDb(seed: Array<Record<string, unknown>>) {
         opportunities.set(row.id as string, row);
         return row;
       }),
-      updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
+      updateMany: vi.fn(async (args: { where: { id: string | { in: string[] }; status?: string | { in: string[] } }; data: Record<string, unknown> }) => {
         let count = 0;
         const ids = typeof args.where.id === "string" ? [args.where.id] : args.where.id.in;
         for (const id of ids) {
           const row = opportunities.get(id);
+          const status = args.where.status;
+          if (row && status && (typeof status === "string" ? row.status !== status : !status.in.includes(row.status as string))) continue;
           if (row) { Object.assign(row, args.data); count += 1; }
         }
         return { count };
@@ -68,16 +70,16 @@ function mockDb(seed: Array<Record<string, unknown>>) {
     evidenceEdge: { upsert: vi.fn(async () => ({ id: "edge" })), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(1) },
     task: {
       create: vi.fn(async (args: { data: Record<string, unknown> }) => {
-        const row = { id: `task-${tasks.length + 1}`, status: "todo", ...args.data };
+        const row = { id: `task-${tasks.length + 1}`, status: "todo", updatedAt: AT, ...args.data };
         tasks.push(row);
         return { id: row.id };
       }),
-      updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
+      updateMany: vi.fn(async (args: { where: { id: string | { in: string[] }; status?: string; updatedAt?: Date }; data: Record<string, unknown> }) => {
         let count = 0;
         const ids = typeof args.where.id === "string" ? [args.where.id] : args.where.id.in;
         for (const id of ids) {
-          const row = opportunities.get(id);
-          if (row) { Object.assign(row, args.data); count += 1; }
+          const row = tasks.find((entry) => entry.id === id);
+          if (row && (!args.where.status || row.status === args.where.status) && (!args.where.updatedAt || row.updatedAt === args.where.updatedAt)) { Object.assign(row, args.data); count += 1; }
         }
         return { count };
       }),
@@ -86,7 +88,11 @@ function mockDb(seed: Array<Record<string, unknown>>) {
         Object.assign(row, args.data);
         return row;
       }),
-      findUnique: vi.fn(async (args: { where: { id: string } }) => tasks.find((entry) => entry.id === args.where.id) ?? null),
+      findUnique: vi.fn(async (args: { where: { id: string }; include?: { opportunity?: boolean } }) => {
+        const task = tasks.find((entry) => entry.id === args.where.id);
+        if (!task) return null;
+        return args.include?.opportunity ? { ...task, opportunity: opportunities.get(task.opportunityId as string) } : task;
+      }),
       findFirst: vi.fn(async () => null),
       findMany: vi.fn(async () => tasks),
     },
@@ -142,8 +148,8 @@ describe("crawl gap → work lifecycle (ported from the retired action factory)"
     expect(opportunities.get(opportunity.id as string)?.status).toBe("accepted");
     expect(tasks[0]).toMatchObject({ opportunityId: opportunity.id, status: "todo", assignedTo: "dana" });
 
-    await confirmHumanStep(db, taskId, { status: "in_progress", confirmedBy: "dana" });
-    await confirmHumanStep(db, taskId, { status: "delivered", confirmedBy: "dana" });
+      await confirmHumanStep(db, taskId, { status: "in_progress", confirmedBy: "dana", expectedProjectId: "p1", opportunityId: String(opportunity.id) });
+      await confirmHumanStep(db, taskId, { status: "delivered", confirmedBy: "dana", expectedProjectId: "p1", opportunityId: String(opportunity.id) });
     expect(tasks[0].status).toBe("delivered");
 
     await recordDeliveryOutcome(db, {
