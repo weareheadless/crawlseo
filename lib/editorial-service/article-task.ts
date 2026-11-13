@@ -94,6 +94,7 @@ export async function startEditorialArticleTask(input: {
       kind: JobKind.EDITORIAL_ARTICLE,
       payload: { agentTaskId: previous.id, postId: created.postId },
       idempotencyKey: `editorial:${created.postId}`,
+      maxAttempts: 10,
     });
     return db.agentTask.findUniqueOrThrow({ where: { id: previous.id } });
   }
@@ -128,6 +129,9 @@ export async function startEditorialArticleTask(input: {
     kind: JobKind.EDITORIAL_ARTICLE,
     payload: { agentTaskId: task.id, postId: created.postId },
     idempotencyKey: `editorial:${created.postId}`,
+    // Editorial can take several minutes. A claim that is lost to a restart
+    // must not consume the whole budget before a worker finishes the poll.
+    maxAttempts: 10,
   });
 
   return task;
