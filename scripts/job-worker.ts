@@ -304,7 +304,9 @@ export async function processNextJob(): Promise<boolean> {
     const code = error instanceof JobExecutionError ? error.code : "JOB_EXECUTION_FAILED";
     if (error instanceof JobExecutionError && error.defer) {
       if (syncRun.id) await failSyncRun(syncRun.id, code, code).catch(() => undefined);
-      await deferJob(job, workerId, code);
+      // A waiting editorial post is reviewed by a person soon; poll it on a
+      // short leash instead of the two-minute default for background syncs.
+      await deferJob(job, workerId, code, job.kind === JobKind.EDITORIAL_ARTICLE ? 30 : 120);
     } else {
       if (syncRun.id) await failSyncRun(syncRun.id, code, code).catch(() => undefined);
       await failJob(job, workerId, code);
