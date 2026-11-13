@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   site: vi.fn(), transaction: vi.fn(),
-  db: { opportunity: { findMany: vi.fn(), findFirst: vi.fn() }, task: { findFirst: vi.fn() } },
+  db: { opportunity: { findMany: vi.fn(), findFirst: vi.fn(), groupBy: vi.fn() }, task: { findFirst: vi.fn() } },
 }));
 vi.mock("@/lib/db", () => ({ db: { ...mocks.db, $transaction: mocks.transaction } }));
 vi.mock("@/lib/connectors/service", () => ({
@@ -23,10 +23,35 @@ describe("Opportunity/Task connector", () => {
 
   it("reads current Opportunities, not legacy ResearchActions, with explicit pagination", async () => {
     mocks.db.opportunity.findMany.mockResolvedValue([{ id: "one" }, { id: "two" }]);
+    mocks.db.opportunity.groupBy.mockResolvedValue([
+      { status: "detected", _count: { _all: 1 } }, { status: "parked", _count: { _all: 2 } },
+    ]);
     const result = await listConnectorOpportunities(principal, { siteId: "site", limit: 1 });
-    expect(result.opportunities).toEqual([{ id: "one" }]);
+    // Every row carries its projected anchor so a client never parses the title.
+    expect(result.opportunities).toEqual([{ id: "one", pageUrl: null, newPage: null, queries: [] }]);
+    // Counts describe the project, so the pipeline can be shown without reading every page.
+    expect(result.counts).toEqual({ detected: 1, parked: 2, total: 3 });
     expect(result.nextCursor).toBe("one");
     expect(mocks.db.opportunity.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { projectId: "project" }, take: 2 }));
+  });
+
+  it("filters the page by workflow state without narrowing the counts", async () => {
+    mocks.db.opportunity.findMany.mockResolvedValue([{ id: "one" }]);
+    mocks.db.opportunity.groupBy.mockResolvedValue([{ status: "detected", _count: { _all: 1 } }]);
+    const result = await listConnectorOpportunities(principal, { siteId: "site", status: "detected" });
+    expect(mocks.db.opportunity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { projectId: "project", status: "detected" },
+    }));
+    expect(mocks.db.opportunity.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { projectId: "project" } }));
+    expect(result.counts).toEqual({ detected: 1, total: 1 });
+  });
+
+  it("does not recount the project for a cursor page", async () => {
+    mocks.db.opportunity.findFirst.mockResolvedValue({ id: "one" });
+    mocks.db.opportunity.findMany.mockResolvedValue([{ id: "two" }]);
+    const result = await listConnectorOpportunities(principal, { siteId: "site", cursor: "one" });
+    expect(mocks.db.opportunity.groupBy).not.toHaveBeenCalled();
+    expect(result.counts).toBeUndefined();
   });
 
   it("rejects cross-project pagination cursors", async () => {

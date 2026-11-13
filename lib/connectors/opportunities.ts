@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
 import { db } from "@/lib/db";
+import { withOpportunityAnchor } from "@/lib/connectors/opportunity-anchor";
 import { ConnectorError, requireConnectorSite } from "@/lib/connectors/service";
 import { opportunityListSchema, opportunityOperationSchema, taskConfirmationSchema } from "@/lib/connectors/types";
 import { acceptOpportunityIntoTaskInTransaction, confirmHumanStepInTransaction, TaskTransitionError } from "@/lib/funnel/join";
@@ -19,12 +20,22 @@ export async function listConnectorOpportunities(principal: ServicePrincipalCont
   if (input.cursor && !await db.opportunity.findFirst({ where: { id: input.cursor, projectId: principal.projectId }, select: { id: true } })) {
     throw new ConnectorError("Opportunity cursor does not belong to this project", 400);
   }
-  const rows = await db.opportunity.findMany({ where: { projectId: principal.projectId },
+  const rows = await db.opportunity.findMany({ where: { projectId: principal.projectId,
+    ...(input.status ? { status: input.status } : {}) },
     include: { tasks: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" }, take: input.limit + 1,
     ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}) });
+  // The pipeline counts describe the whole project, not the filtered page, so a
+  // client can show "13 to decide / 138 parked" without reading every page.
+  const counts = input.cursor ? undefined : await db.opportunity.groupBy({
+    by: ["status"], where: { projectId: principal.projectId }, _count: { _all: true } });
   const page = rows.slice(0, input.limit);
   return { schemaVersion: "1.0", projectId: principal.projectId, siteId: input.siteId,
-    opportunities: page, nextCursor: rows.length > input.limit ? page.at(-1)!.id : null };
+    opportunities: page.map(withOpportunityAnchor),
+    ...(counts ? { counts: {
+      ...Object.fromEntries(counts.map((row) => [row.status, row._count._all])),
+      total: counts.reduce((sum, row) => sum + row._count._all, 0),
+    } } : {}),
+    nextCursor: rows.length > input.limit ? page.at(-1)!.id : null };
 }
 
 export async function getConnectorTask(principal: ServicePrincipalContext, siteId: string, taskId: string) {
@@ -32,7 +43,8 @@ export async function getConnectorTask(principal: ServicePrincipalContext, siteI
   const task = await db.task.findFirst({ where: { id: taskId, opportunity: { projectId: principal.projectId } },
     include: { opportunity: true } });
   if (!task) throw new ConnectorError("Task not found in this project", 404);
-  return { schemaVersion: "1.0", projectId: principal.projectId, siteId, task };
+  return { schemaVersion: "1.0", projectId: principal.projectId, siteId,
+    task: { ...task, opportunity: withOpportunityAnchor(task.opportunity) } };
 }
 
 /** Reuse the connector's receipt store; no second task ledger or scheduler. */
