@@ -66,6 +66,14 @@ describe("article lane wiring", () => {
     expect(source).toContain("!existingPost && editorialEnabled()");
   });
 
+  it("does not treat a proposed new post URL as an existing post", () => {
+    const source = read("lib/agent-tasks/wix-article.ts");
+    // A new guide is proposed at the URL it will occupy; only the
+    // recommendation's newAsset flag can tell it apart from an update.
+    expect(source).toContain("newAsset !== true");
+    expect(source).toContain("recommendationDecision");
+  });
+
   it("polls through the durable queue and defers instead of retrying", () => {
     const worker = read("scripts/job-worker.ts");
     expect(worker).toContain("JobKind.EDITORIAL_ARTICLE");

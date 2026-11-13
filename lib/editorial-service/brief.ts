@@ -28,6 +28,12 @@ function overlap(needle: Set<string>, haystack: Set<string>): number {
   return hits;
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 function isBoilerplate(url: string, title: string): boolean {
   const haystack = `${url} ${title}`.toLowerCase();
   return /conditions-generales|politique-de|privacy|terms-of|mentions-legales|cookies|gift-card/.test(haystack);
@@ -114,9 +120,24 @@ export async function buildEditorialBrief(input: {
     orderBy: { wordCount: "desc" },
   });
 
-  const query = action.primaryQuery?.trim() ?? "";
   const evidence = (action.evidence ?? {}) as Record<string, unknown>;
-  const topic = `${query} ${action.title}`.trim();
+  const decision = record(record(evidence.recommendationDecision));
+  // The funnel stores the question in the target slug when the opportunity came
+  // from a topic map, not in primaryQuery. "comment-retapisser-un-fauteuil" is
+  // the question; the title carries internal wording ("Test : …").
+  const slugQuery = (() => {
+    const url = typeof record(decision.target).url === "string" ? record(decision.target).url as string : "";
+    try {
+      const last = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
+      return last.replace(/[-_]+/g, " ").trim();
+    } catch {
+      return "";
+    }
+  })();
+  const query = action.primaryQuery?.trim() || slugQuery;
+  const topic = [query, action.title, typeof decision.action === "string" ? decision.action : ""]
+    .filter(Boolean)
+    .join(" ");
   const sourceUrls = selectEvidenceUrls(pages, topic, query);
   if (sourceUrls.length < 2) {
     throw new ResearchServiceError(
