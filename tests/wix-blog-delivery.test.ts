@@ -22,6 +22,61 @@ describe("Wix Blog rich content", () => {
     expect((rich.nodes[0] as { type: string }).type).toBe("HEADING");
   });
 
+  it("keeps inline links and deep headings instead of leaking markdown", () => {
+    const rich = markdownToRicos(
+      "## Section\n\n#### Detail\n\nVoir [/devis](/devis) et **le guide**.",
+      "Post title",
+    );
+    const types = rich.nodes.map((node) => (node as { type: string }).type);
+    expect(types).toEqual(["HEADING", "HEADING", "PARAGRAPH"]);
+    const detail = rich.nodes[1] as { headingData: { level: number }; nodes: Array<{ textData: { text: string } }> };
+    expect(detail.headingData.level).toBe(4);
+    expect(detail.nodes[0].textData.text).toBe("Detail");
+    const paragraph = rich.nodes[2] as {
+      nodes: Array<{ textData: { text: string; decorations: Array<{ type: string; linkData?: { link: { url: string } } }> } }>;
+    };
+    const link = paragraph.nodes.find((node) => node.textData.decorations.some((d) => d.type === "LINK"));
+    expect(link?.textData.text).toBe("/devis");
+    expect(link?.textData.decorations[0].linkData?.link.url).toBe("/devis");
+    expect(JSON.stringify(rich)).not.toContain("](/devis)");
+  });
+
+  it("places inline images where the writer marked them, with credit", () => {
+    const images = new Map([["img_2", {
+      mediaId: "media-1",
+      url: "https://media.wix.com/photo.jpg",
+      altText: "un fauteuil en cours de retapissage",
+      width: 1600,
+      height: 1067,
+      credit: "Photo de Camille Martin sur Unsplash",
+      creditUrl: "https://unsplash.com/@camille",
+    }]]);
+    const rich = markdownToRicos(
+      "## Dégarnissage\n\n<!-- image: img_2 -->\n\nLe tissu se retire.",
+      "Post title",
+      images,
+    );
+    const types = rich.nodes.map((node) => (node as { type: string }).type);
+    expect(types).toEqual(["HEADING", "IMAGE", "PARAGRAPH", "PARAGRAPH"]);
+    const image = rich.nodes[1] as { imageData: { image: { id: string; url: string; altText: string } } };
+    expect(image.imageData.image.id).toBe("media-1");
+    expect(image.imageData.image.altText).toContain("fauteuil");
+    const credit = rich.nodes[2] as { nodes: Array<{ textData: { text: string; decorations: Array<{ type: string; linkData?: { link: { url: string } } }> } }> };
+    expect(credit.nodes[0].textData.text).toBe("Photo de Camille Martin sur Unsplash");
+    expect(credit.nodes[0].textData.decorations[0].linkData?.link.url).toBe("https://unsplash.com/@camille");
+    expect(JSON.stringify(rich)).not.toContain("<!-- image");
+  });
+
+  it("drops a marker whose image could not be imported", () => {
+    const rich = markdownToRicos(
+      "## Dégarnissage\n\n<!-- image: img_9 -->\n\nLe tissu se retire.",
+      "Post title",
+      new Map(),
+    );
+    expect(JSON.stringify(rich)).not.toContain("img_9");
+    expect(rich.nodes.map((node) => (node as { type: string }).type)).toEqual(["HEADING", "PARAGRAPH"]);
+  });
+
   it("converts markdown bold into Ricos BOLD decorations", () => {
     const rich = markdownToRicos(
       "## Section\n\nThis is **important** text.\n\n- **Bold item** with plain text.",

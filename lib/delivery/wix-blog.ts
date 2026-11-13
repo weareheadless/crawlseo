@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { ResearchActionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { recordDraftCoverage } from "@/lib/research/question-coverage";
-import { findUnsplashCover, importUnsplashCover, type UnsplashCover } from "@/lib/delivery/unsplash";
+import { findUnsplashCover, importImageAsset, importUnsplashCover, type UnsplashCover } from "@/lib/delivery/unsplash";
 import { resolveSiteContext } from "@/lib/site/context";
 
 const API_BASE = "https://www.wixapis.com";
@@ -31,6 +31,7 @@ async function assertWixBlogExecutor(siteId: string): Promise<void> {
 function wixCandidateHash(draft: {
   id: string; siteId: string; actionId: string | null; title: string; slug: string;
   metaTitle: string; metaDescription: string; excerpt: string; markdown: string;
+  assets?: unknown;
   action: { id: string; revision: number; targetUrl: string | null } | null;
 }) {
   return createHash("sha256").update(JSON.stringify({
@@ -38,6 +39,7 @@ function wixCandidateHash(draft: {
     title: draft.title, slug: draft.slug, metaTitle: draft.metaTitle,
     metaDescription: draft.metaDescription, excerpt: draft.excerpt,
     markdown: draft.markdown,
+    assets: draft.assets ?? null,
     action: draft.action && { id: draft.action.id, revision: draft.action.revision, targetUrl: draft.action.targetUrl },
   })).digest("hex");
 }
@@ -149,17 +151,65 @@ function textNode(value: string, decorations: unknown[] = []) {
 
 function inlineNodes(value: string): unknown[] {
   const nodes: unknown[] = [];
-  const pattern = /\*\*(.+?)\*\*/g;
+  // Bold and links are the inline forms the writer emits. Everything else
+  // stays literal rather than being silently dropped.
+  const pattern = /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
   let cursor = 0;
   for (const match of value.matchAll(pattern)) {
     const index = match.index ?? 0;
     if (index > cursor) nodes.push(textNode(value.slice(cursor, index)));
-    const bold = match[1]?.trim();
-    if (bold) nodes.push(textNode(bold, [{ type: "BOLD", fontWeightValue: 700 }]));
+    if (match[1]?.trim()) {
+      nodes.push(textNode(match[1].trim(), [{ type: "BOLD", fontWeightValue: 700 }]));
+    } else if (match[2]?.trim() && match[3]) {
+      nodes.push(textNode(match[2].trim(), [{
+        type: "LINK",
+        linkData: { link: { url: match[3], target: "BLANK", rel: { noreferrer: true } } },
+      }]));
+    }
     cursor = index + match[0].length;
   }
   if (cursor < value.length) nodes.push(textNode(value.slice(cursor)));
   return nodes.length > 0 ? nodes : [textNode(value)];
+}
+
+function imageNode(image: { mediaId: string; url: string; altText: string; width: number; height: number }) {
+  return {
+    type: "IMAGE",
+    id: randomUUID().replace(/-/g, "").slice(0, 10),
+    style: {},
+    nodes: [],
+    imageData: {
+      image: {
+        id: image.mediaId,
+        url: image.url,
+        altText: image.altText,
+        width: image.width,
+        height: image.height,
+      },
+      caption: "",
+      link: null,
+    },
+  };
+}
+
+function creditParagraph(value: string, url: string) {
+  return {
+    type: "PARAGRAPH",
+    id: randomUUID().replace(/-/g, "").slice(0, 10),
+    style: { paddingBottom: "18px" },
+    nodes: [{
+      type: "TEXT",
+      id: randomUUID().replace(/-/g, "").slice(0, 10),
+      nodes: [],
+      textData: {
+        text: value,
+        decorations: url
+          ? [{ type: "LINK", linkData: { link: { url, target: "BLANK", rel: { noreferrer: true } } } }]
+          : [],
+      },
+    }],
+    paragraphData: { textStyle: { textAlignment: "AUTO" } },
+  };
 }
 
 function paragraph(value: string) {
@@ -182,7 +232,11 @@ function heading(value: string, level: number) {
   };
 }
 
-export function markdownToRicos(markdown: string, title: string): { documentStyle: object; nodes: unknown[] } {
+export function markdownToRicos(
+  markdown: string,
+  title: string,
+  images: Map<string, ImportedInlineImage> = new Map(),
+): { documentStyle: object; nodes: unknown[] } {
   const nodes: unknown[] = [];
   let list: string[] = [];
 
@@ -217,7 +271,17 @@ export function markdownToRicos(markdown: string, title: string): { documentStyl
       continue;
     }
     flushList();
-    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    const imageMarker = line.match(/^<!--\s*image:\s*([A-Za-z0-9_-]+)\s*-->$/);
+    if (imageMarker) {
+      const image = images.get(imageMarker[1]);
+      if (image) {
+        nodes.push(imageNode(image));
+        if (image.credit) nodes.push(creditParagraph(image.credit, image.creditUrl));
+      }
+      continue;
+    }
+    if (/^<!--.*-->$/.test(line)) continue;
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       const value = headingMatch[2].trim();
@@ -225,7 +289,8 @@ export function markdownToRicos(markdown: string, title: string): { documentStyl
         firstHeadingSkipped = true;
         continue;
       }
-      nodes.push(heading(value, level === 1 ? 2 : level));
+      // The post title is the page H1, so a leading body H1 becomes an H2.
+      nodes.push(heading(value, level === 1 ? 2 : Math.min(6, Math.max(2, level))));
       continue;
     }
     const cleaned = line
@@ -301,9 +366,13 @@ async function slugExists(cfg: WixConfig, slug: string) {
   return (result.dataItems?.length ?? 0) > 0;
 }
 
+function coverCreditText(cover: UnsplashCover): string {
+  return `Cover photo by ${cover.photographer} on Unsplash`;
+}
+
 function withCoverCredit(
   rich: { documentStyle: object; nodes: unknown[] },
-  cover: UnsplashCover,
+  credit: { text: string; url: string },
 ): { documentStyle: object; nodes: unknown[] } {
   const nodes = rich.nodes.filter((node) => {
     if (!node || typeof node !== "object" || Array.isArray(node)) return true;
@@ -316,10 +385,10 @@ function withCoverCredit(
     type: "PARAGRAPH",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
     style: { paddingBottom: "18px" },
-    nodes: [textNode(`Cover photo by ${cover.photographer} on Unsplash`, [
+    nodes: [textNode(credit.text, [
       {
         type: "LINK",
-        linkData: { link: { url: cover.photographerUrl, target: "BLANK", rel: { noreferrer: true } } },
+        linkData: { link: { url: credit.url, target: "BLANK", rel: { noreferrer: true } } },
       },
     ])],
     paragraphData: { textStyle: { textAlignment: "AUTO" } },
@@ -333,6 +402,95 @@ function withCoverCredit(
  * The query the article answers is short and concrete, while a title is a whole
  * sentence; Unsplash matches the sentence badly and returns something unrelated.
  */
+type PlannedAsset = {
+  id: string;
+  role: "cover" | "inline";
+  source: string;
+  url: string;
+  width: number;
+  height: number;
+  alt: string;
+  credit: string;
+  creditUrl: string;
+  photoId: string;
+};
+
+function assetText(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function assetNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** Images the writer chose, stored on the draft for every connector. */
+function plannedAssets(draft: { assets?: unknown }): PlannedAsset[] {
+  if (!Array.isArray(draft.assets)) return [];
+  const rows: PlannedAsset[] = [];
+  for (const row of draft.assets) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const value = row as Record<string, unknown>;
+    const url = assetText(value.url);
+    if (!url) continue;
+    rows.push({
+      id: assetText(value.id, `img_${rows.length + 1}`),
+      role: value.role === "cover" ? "cover" : "inline",
+      source: assetText(value.source, "unsplash"),
+      url,
+      width: assetNumber(value.width, 1600),
+      height: assetNumber(value.height, 1067),
+      alt: assetText(value.alt),
+      credit: assetText(value.credit),
+      creditUrl: assetText(value.credit_url),
+      photoId: assetText(value.photo_id),
+    });
+  }
+  return rows;
+}
+
+type ImportedInlineImage = {
+  mediaId: string;
+  url: string;
+  altText: string;
+  width: number;
+  height: number;
+  credit: string;
+  creditUrl: string;
+};
+
+/**
+ * Move every inline picture into Wix media before the rich content is built.
+ *
+ * A picture that cannot be imported is dropped with a warning: a post must
+ * still publish without it, and its marker is skipped rather than left as text.
+ */
+async function prepareInlineImages(
+  cfg: WixConfig,
+  draft: { slug: string; assets?: unknown },
+): Promise<Map<string, ImportedInlineImage>> {
+  const images = new Map<string, ImportedInlineImage>();
+  for (const asset of plannedAssets(draft)) {
+    if (asset.role !== "inline") continue;
+    try {
+      const imported = await importImageAsset(
+        (method, path, body) => wixRequest(cfg, method, path, body),
+        { url: asset.url, altText: asset.alt, width: asset.width, height: asset.height },
+        `${draft.slug}-${asset.id}.jpg`,
+      );
+      images.set(asset.id, {
+        ...imported,
+        width: asset.width,
+        height: asset.height,
+        credit: asset.credit,
+        creditUrl: asset.creditUrl,
+      });
+    } catch (error) {
+      console.warn(`Wix Blog inline image ${asset.id} was skipped`, error);
+    }
+  }
+  return images;
+}
+
 function coverQuery(draft: { title: string; primaryQuery: string }): string {
   return (draft.primaryQuery || draft.title).trim();
 }
@@ -361,17 +519,42 @@ function coverPayload(cover: UnsplashCover) {
 
 async function importCover(
   cfg: WixConfig,
-  draft: { title: string; primaryQuery: string; slug: string; siteId: string },
+  draft: { title: string; primaryQuery: string; slug: string; siteId: string; assets?: unknown },
 ) {
+  const planned = plannedAssets(draft).find((asset) => asset.role === "cover");
+  if (planned) {
+    const imported = await importImageAsset(
+      (method, path, body) => wixRequest(cfg, method, path, body),
+      { url: planned.url, altText: planned.alt, width: planned.width, height: planned.height },
+      `${draft.slug}-cover.jpg`,
+    );
+    return {
+      ...imported,
+      credit: { text: planned.credit || "Photo via Unsplash", url: planned.creditUrl },
+      cover: {
+        photoId: planned.photoId,
+        url: imported.url,
+        width: planned.width,
+        height: planned.height,
+        altText: planned.alt,
+        photographer: planned.credit,
+        photographerUrl: planned.creditUrl,
+        photoUrl: planned.creditUrl,
+        downloadLocation: "",
+        query: planned.url,
+      } satisfies UnsplashCover,
+    };
+  }
   const cover = await findUnsplashCover(coverQuery(draft), {
     location: await locationForSite(draft.siteId),
     siteId: draft.siteId,
   });
-  return importUnsplashCover(
+  const imported = await importUnsplashCover(
     (method, path, body) => wixRequest(cfg, method, path, body),
     cover,
     draft.slug,
   );
+  return { ...imported, credit: { text: coverCreditText(cover), url: cover.photographerUrl } };
 }
 
 export async function createWixBlogDraftForDraft(contentDraftId: string) {
@@ -445,6 +628,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
       502,
     );
   }
+  const inlineImages = await prepareInlineImages(cfg, draft);
   const searchable = `${draft.title} ${draft.primaryQuery} ${draft.metaTitle}`.toLowerCase();
   const tagIds = cms.tags
     .filter((tag) => tag.label && searchable.includes(tag.label.toLowerCase()))
@@ -467,7 +651,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
       url: importedCover.url,
       altText: importedCover.altText,
     },
-    richContent: withCoverCredit(markdownToRicos(draft.markdown, draft.title), importedCover.cover),
+    richContent: withCoverCredit(markdownToRicos(draft.markdown, draft.title, inlineImages), importedCover.credit),
     seoData: seoData(draft),
   };
 
@@ -637,7 +821,8 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
       502,
     );
   }
-  const richContent = withCoverCredit(markdownToRicos(draft.markdown, title), importedCover.cover);
+  const inlineImages = await prepareInlineImages(cfg, draft);
+  const richContent = withCoverCredit(markdownToRicos(draft.markdown, title, inlineImages), importedCover.credit);
   const updated = await wixRequest<{ draftPost?: { id?: string; title?: string; richContent?: { nodes?: unknown[] } } }>(
     cfg,
     "PATCH",

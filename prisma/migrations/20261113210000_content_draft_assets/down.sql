@@ -1,0 +1,1 @@
+ALTER TABLE "ContentDraft" DROP COLUMN IF EXISTS "assets";

@@ -247,6 +247,9 @@ export async function reconcileEditorialArticleTask(
           excerpt: artifact.excerpt,
           markdown: artifact.body_markdown,
           outline: artifact.outline as unknown as Prisma.InputJsonValue,
+          assets: artifact.assets?.length
+            ? (artifact.assets as unknown as Prisma.InputJsonValue)
+            : undefined,
           brief: {
             schema_version: 2,
             source: "editorial",

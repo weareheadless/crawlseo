@@ -58,6 +58,32 @@ next prepare and asks editorial for a fresh post.
 The artifact hash is stored in the draft's `brief.editorial.content_hash` and in
 the task result. Re-reconciling the same post does not create a second draft.
 
+## Pictures
+
+The writer chooses a cover and inline pictures and stores them on the draft's
+`assets` column, with `id`, `role`, `url`, `width`, `height`, `alt`, `credit`
+and `credit_url`. The body carries `<!-- image: img_2 -->` on its own line under
+the heading the picture belongs to. Nothing about the picture is Wix-specific,
+so Payload can upload the same URLs and place them at the same markers.
+
+The Wix delivery imports each asset into Wix media and inserts a Ricos `IMAGE`
+node at the marker, followed by the Unsplash credit as a linked paragraph. A
+picture that cannot be imported is skipped with a warning; it never blocks a
+publish. The planned cover is used as the hero instead of searching Unsplash a
+second time.
+
+## Wix rich text
+
+`markdownToRicos` is the single conversion point:
+
+- headings `#`–`######`, with the leading H1 dropped when it repeats the title
+  and any remaining H1 rendered as an H2 below the page title;
+- paragraphs and bulleted lists with 18px paragraph spacing and 24/8px heading
+  spacing;
+- `**bold**` and `[text](url)` links, so `/devis` is a link and not literal
+  markdown;
+- image markers and their credit, as above.
+
 ## Configuration
 
 ```bash
