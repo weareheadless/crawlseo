@@ -8,6 +8,12 @@ import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task
 import { editorialEnabled } from "@/lib/editorial-service/client";
 import { startEditorialArticleTask } from "@/lib/editorial-service/article-task";
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 /**
  * The article lane. There is no page and no embed: the reviewed draft is the
  * deliverable, and approval publishes it through Wix Blog in one step.
@@ -35,7 +41,12 @@ export async function createWixArticleTaskForAction(input: {
     throw new ResearchServiceError("An open agent task already exists for this action", 409);
   }
 
-  const existingPost = Boolean(action.targetUrl && isWixBlogTarget(action.targetUrl));
+  // A blog URL is only an existing post when the recommendation did not ask for
+  // a new asset: a new guide is proposed at the URL it will occupy, which does
+  // not exist yet. Old actions carry no newAsset flag and keep the update path.
+  const decisionTarget = record(record(record(action.evidence).recommendationDecision).target);
+  const newAsset = typeof decisionTarget.newAsset === "boolean" ? decisionTarget.newAsset : null;
+  const existingPost = Boolean(action.targetUrl && isWixBlogTarget(action.targetUrl)) && newAsset !== true;
 
   // A new article is written by the editorial service: quote-first, verified,
   // async. An existing post keeps the synchronous update path, which needs the
