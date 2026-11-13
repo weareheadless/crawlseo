@@ -27,6 +27,8 @@ export const opportunityListSchema = z.object({
   siteId: z.string().trim().min(1).max(120),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().trim().min(1).max(120).optional(),
+  /** Restrict the page to one workflow state; counts stay whole-project. */
+  status: z.enum(["detected", "accepted", "in_progress", "delivered", "parked", "rejected", "closed"]).optional(),
 }).strict();
 
 const boundedJson = z.unknown().refine((value) => {

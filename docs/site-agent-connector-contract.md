@@ -23,7 +23,7 @@ write carries that generation so a transferred or stale executor is rejected.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/capabilities?siteId=…` | Read schema version, the selected site's active binding and supported operations. |
-| GET | `/opportunities?siteId=…&limit=…&cursor=…` | Read canonical project Opportunities and their Tasks; cursor-paginated, at most 100 Opportunities. |
+| GET | `/opportunities?siteId=…&limit=…&cursor=…&status=…` | Read canonical project Opportunities and their Tasks; cursor-paginated, at most 100 Opportunities. `status` narrows the page only; the first page also carries whole-project `counts`. |
 | POST | `/opportunities/{opportunityId}/operations` | Relay an explicit human accept, park or reject decision against the reviewed version. Acceptance creates the canonical Task. |
 | GET | `/tasks/{taskId}?siteId=…` | Read a project-owned Task and its Opportunity. |
 | POST | `/tasks/{taskId}` | Relay an explicit human task-status confirmation. |
@@ -104,6 +104,29 @@ and workspace with an active connector binding. Opportunities belong to the
 canonical project (the schema has no site-local Opportunity table). Returned
 envelopes identify both the project and selected site; clients must verify those
 identities. An Opportunity cursor is scoped to that same project.
+
+Each returned Opportunity also carries its anchor, projected from what the
+detector already recorded so a client never parses a display string:
+
+- `pageUrl` — the page the opportunity is about (existing or proposed), or `null`.
+  Sources, in order: the validated editorial proposal's `target.url`, the scored
+  `targetPages`, then the crawl/AEO detector identity
+  (`<type>:<url>:<CODE>`).
+- `newPage` — `true` only when the proposal says the accepted work creates that
+  page; `null` when the record does not say. A URL alone does not prove a page
+  exists.
+- `queries` — the query strings the record itself names (for example an answer
+  engine observation keyed by its exact question). Empty when the record names
+  none. It is not a claim of query coverage.
+
+All three are additive and always present; a client may render them as-is and
+must not derive them from `title` or `dedupKey`.
+
+The list also accepts an optional `status` to narrow the returned page to one
+workflow state, and the first page (no `cursor`) carries `counts`, the number of
+Opportunities per status across the whole project plus `total`. `counts` does not
+narrow with `status`: it is the pipeline, so a client can show "13 to decide /
+138 parked" without reading every page. Later pages omit it to avoid recounting.
 
 Decision bodies contain `siteId`, `generation`, `idempotencyKey`, `confirmedBy`
 (the stable human identity), and `confirmationRef` (the original authenticated
