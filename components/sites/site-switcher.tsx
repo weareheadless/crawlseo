@@ -33,6 +33,8 @@ const SECTION_SEGMENTS = new Set([
   "backlinks",
   "mcp",
   "settings",
+  "evidence",
+  "demand",
   "findings",
   "results",
 ]);
@@ -40,7 +42,17 @@ const SECTION_SEGMENTS = new Set([
 export function siteDestination(pathname: string, search: string, siteId: string) {
   const match = pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/);
   const legacy = match?.[1];
-  const section = legacy === "content-studio" ? "work" : legacy === "opportunities" ? "findings" : legacy;
+  // Old URLs may still be in a bookmark; send the switcher to the live section.
+  const aliases: Record<string, string> = {
+    "content-studio": "work",
+    "legacy-work": "work",
+    results: "work",
+    findings: "opportunities",
+    "legacy-opportunities": "opportunities",
+    research: "evidence",
+    intelligence: "opportunities",
+  };
+  const section = legacy ? aliases[legacy] ?? legacy : legacy;
   const suffix = section && SECTION_SEGMENTS.has(section) ? `/${section}` : "";
   return `/sites/${siteId}${suffix}${search ? `?${search}` : ""}`;
 }
@@ -48,7 +60,7 @@ export function siteDestination(pathname: string, search: string, siteId: string
 export function siteSectionLabel(pathname: string) {
   const section = pathname.match(/\/sites\/[^/]+(?:\/([^/]+))?/)?.[1];
   if (!section) return "Overview";
-  const aliases: Record<string, string> = { "aeo-geo": "AEO / GEO", "keyword-research": "Keyword Research", "domain-overview": "Domain Overview", "content-studio": "Work", opportunities: "Findings" };
+  const aliases: Record<string, string> = { "aeo-geo": "AEO / GEO", "keyword-research": "Keyword Research", "domain-overview": "Domain Overview", "content-studio": "Work", findings: "Opportunities", results: "Work", research: "Evidence", intelligence: "Opportunities" };
   return aliases[section] ?? section.replaceAll("-", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 

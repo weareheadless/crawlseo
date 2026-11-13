@@ -51,7 +51,7 @@ export default async function KeywordResearchPage({ params, searchParams }: Prop
         title="Keyword Research · stored runs"
         description="Review recorded keyword, SERP and market run results. This page is a research lens, not a paid research runner."
       />
-      <div className="mb-4"><PipelineNavigation siteId={siteId} currentStage="research" /></div>
+      <div className="mb-4"><PipelineNavigation siteId={siteId} currentStage="evidence" /></div>
       <KeywordResearchClient
         siteId={siteId}
         hasDataForSEO={readiness.configured}

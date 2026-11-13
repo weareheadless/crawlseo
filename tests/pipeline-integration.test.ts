@@ -42,26 +42,18 @@ describe("pipeline UI integration", () => {
     expect(funnel.items[0].exact).toBe(true);
     // Tools are demoted to evidence producers, not competing top-level stages.
     const sources = groups.find((group) => group.label === "Evidence sources")!;
-    expect(sources.items.map((item) => item.label)).toEqual(["Keywords", "Crawl / Audit", "Vitals", "AEO / GEO", "Research"]);
+    expect(sources.items.map((item) => item.label)).toEqual(["Keywords", "Crawl / Audit", "Vitals", "AEO / GEO"]);
   });
 
-  it("keeps Content Studio editor and GSC opportunity analysis as contextual pages", () => {
-    const content = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "content-studio", "page.tsx"), "utf8");
-    expect(content).toContain("<ContentStudio");
-    expect(content).toContain('initialSelectedActionId={query.actionId ?? null}');
-    expect(content).toContain('currentStage="work"');
-    expect(content).not.toContain("redirect(`/sites/${siteId}/work");
-
-    // The funnel board replaces the old analysis page; the analysis is preserved
-    // read-only under Legacy so no capability is lost.
+  it("carries the opportunity board and evidence collection rules as the live surfaces", () => {
     const opportunities = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "opportunities", "page.tsx"), "utf8");
     for (const feature of ["listOpportunities", "getFunnelCounts", "RefreshFunnelButton", "CompletenessChip", "ScoreBadge"]) {
       expect(opportunities).toContain(feature);
     }
-    const legacy = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "legacy-opportunities", "page.tsx"), "utf8");
-    for (const feature of ["getAllOpportunities", "Striking distance", "Low CTR", "Content decay", "Keyword cannibalization", "CsvExportButton"]) {
-      expect(legacy).toContain(feature);
-    }
+    // Research configuration is collection rules for evidence, not a stage.
+    const config = readFileSync(path.join(app, "(dashboard)", "sites", "[siteId]", "evidence", "config", "page.tsx"), "utf8");
+    expect(config).toContain("<ResearchConfigForm");
+    expect(config).toContain("Back to Evidence");
   });
 
   it("has a matching page for every sidebar destination", () => {
@@ -70,18 +62,18 @@ describe("pipeline UI integration", () => {
   });
 
   it("maps legacy destinations and preserves query filters and action identity", () => {
-    expect(resolvePipelineStage("/sites/s1/intelligence")).toBeNull(); // remains an explicit report lens
-    expect(resolvePipelineStage("/sites/s1/opportunities")).toBe("findings");
+    expect(resolvePipelineStage("/sites/s1/intelligence")).toBe("opportunities");
+    expect(resolvePipelineStage("/sites/s1/opportunities")).toBe("opportunities");
     expect(resolvePipelineStage("/sites/s1/content-studio")).toBe("work");
-    expect(resolvePipelineStage("/sites/s1/aeo-geo")).toBe("findings");
-    expect(resolvePipelineStage("/sites/s1/keyword-research")).toBe("research");
+    expect(resolvePipelineStage("/sites/s1/aeo-geo")).toBe("evidence");
+    expect(resolvePipelineStage("/sites/s1/keyword-research")).toBe("evidence");
     expect(siteDestination("/sites/old/content-studio", "actionId=a7&tab=drafts&dimension=content", "new"))
       .toBe("/sites/new/work?actionId=a7&tab=drafts&dimension=content");
   });
 
   it("keeps switcher site context in the destination and the report label is domain-backed", () => {
-    expect(siteDestination("/sites/old/findings", "tab=technical", "new")).toBe("/sites/new/findings?tab=technical");
-    expect(siteDestination("/sites/old/opportunities", "dimension=seo", "new")).toBe("/sites/new/findings?dimension=seo");
+    expect(siteDestination("/sites/old/findings", "tab=technical", "new")).toBe("/sites/new/opportunities?tab=technical");
+    expect(siteDestination("/sites/old/opportunities", "dimension=seo", "new")).toBe("/sites/new/opportunities?dimension=seo");
     expect(siteSectionLabel("/sites/old/content-studio")).toBe("Work");
     expect(siteSectionLabel("/sites/old/aeo-geo")).toBe("AEO / GEO");
     expect(selectedSiteDomain([{ id: "new", domain: "pipeline-journey.test" }], "new")).toBe("pipeline-journey.test");

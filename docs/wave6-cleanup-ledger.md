@@ -25,21 +25,30 @@ still have producers, and exits non-zero if a frozen table gains a writer.
 Rule (from `docs/seo-funnel-spine-plan.md` §8): every deletion needs either a
 migrated consumer or a frozen read-only cutover.
 
-## Step 1 — legacy routes archived: done
+## Step 1 — legacy routes removed: done
 
-The pre-funnel screens redirect to the funnel surface that replaced them. They
-stay on disk, so the history is still reachable, and `CRAWLSEO_LEGACY_ROUTES=live`
-serves them again without a code change.
+The pre-funnel screens are deleted from disk. Their page trees, the
+`lib/funnel/legacy-routes.ts` archive helper and `tests/wave6-legacy-routes.test.ts`
+are gone, so there is no env flag that can bring them back. `next.config.ts`
+keeps every URL resolving with a redirect, which is what old bookmarks,
+connector links and release references still hit.
 
-| Archived route | Sends the reader to | Mechanism |
-|---|---|---|
-| `/sites/:id/legacy-work` | `/sites/:id/work` | flag-gated redirect |
-| `/sites/:id/legacy-opportunities` | `/sites/:id/opportunities` | flag-gated redirect |
-| `/sites/:id/findings` | `/sites/:id/opportunities` | flag-gated redirect |
-| `/sites/:id/results` | `/sites/:id/work` | flag-gated redirect |
-| `/sites/:id/actions/:id` | `/sites/:id/work` | removed (no flag) |
+| Removed route | Redirects to |
+|---|---|
+| `/sites/:id/content-studio/*` | `/sites/:id/work` |
+| `/sites/:id/legacy-work/*` | `/sites/:id/work` |
+| `/sites/:id/legacy-opportunities/*` | `/sites/:id/opportunities` |
+| `/sites/:id/actions/*` | `/sites/:id/work` |
+| `/sites/:id/findings/*` | `/sites/:id/opportunities` |
+| `/sites/:id/results/*` | `/sites/:id/work` |
+| `/sites/:id/research/*` | `/sites/:id/evidence` |
+| `/sites/:id/intelligence/*` | `/sites/:id/opportunities` |
 
-The sidebar no longer carries a Legacy group: archived screens are URL-only.
+The five funnel stages are now Business → Demand → Opportunities → Work →
+Evidence. Research runs are evidence, not a stage; Findings and Results are the
+Opportunities and Work surfaces under their new names. The sidebar no longer
+carries a Research entry, and `tests/pipeline-stages.test.ts` asserts the new
+order.
 
 ## Step 2 — strict freeze: enabled for the tables that are provably write-free
 

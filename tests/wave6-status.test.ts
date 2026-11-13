@@ -32,12 +32,12 @@ function fakeDb(opts: { actions?: Array<{ createdAt: Date; owner?: string }>; ou
 }
 
 describe("wave 6 status checklist", () => {
-  it("reports step 1 complete: archived by default with five destinations", async () => {
+  it("reports step 1 complete: route trees removed and redirected", async () => {
     const status = await wave6Status(fakeDb());
     const routes = status.checks.find((check) => check.name.includes("legacy routes"));
     expect(routes?.status).toBe("complete");
-    expect(routes?.detail).toContain("archived by default");
-    expect(routes?.detail).toContain("5/5");
+    expect(routes?.detail).toContain("all removed");
+    expect(routes?.detail).toContain("8/8 redirected");
   });
 
   it("reports the freeze as complete only when strict is set", async () => {

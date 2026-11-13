@@ -132,7 +132,7 @@ export default async function AgentTaskPage({ params }: Props) {
               {task.status.replaceAll("_", " ")}
             </span>
             {task.action && (
-              <Link href={`/sites/${siteId}/actions/${task.action.id}`} className="text-xs text-muted-foreground underline underline-offset-2">
+              <Link href={`/sites/${siteId}/work`} className="text-xs text-muted-foreground underline underline-offset-2">
                 Source action
               </Link>
             )}

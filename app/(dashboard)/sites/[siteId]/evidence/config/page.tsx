@@ -5,21 +5,26 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getResearchConfig } from "@/lib/research/policy";
 import { ResearchConfigForm } from "@/components/research/research-config-form";
 
-export default async function ResearchConfigPage({ params }: { params: Promise<{ siteId: string }> }) {
+/**
+ * Collection rules for evidence. This used to live under `/research`, which is
+ * no longer a stage: the settings decide which sources the evidence collectors
+ * read, so they belong to Evidence.
+ */
+export default async function EvidenceConfigPage({ params }: { params: Promise<{ siteId: string }> }) {
   const userId = await getUserIdFromCookies();
-  const { siteId } = await params;
   if (!userId) redirect("/login");
+  const { siteId } = await params;
   const config = await getResearchConfig(siteId);
 
   return (
     <div>
       <PageHeader
-        eyebrow="Research configuration"
-        title="Guide the research"
-        description="Set the sources, recency window and exclusions the research engine uses. Audience, topics and market belong to the business profile."
+        eyebrow="Evidence configuration"
+        title="Guide the collection"
+        description="Set the sources, recency window and exclusions the evidence collectors use. Audience, topics and market belong to the business profile."
         actions={
-          <Link href={`/sites/${siteId}/research`} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
-            Back to Research
+          <Link href={`/sites/${siteId}/evidence`} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+            Back to Evidence
           </Link>
         }
       />

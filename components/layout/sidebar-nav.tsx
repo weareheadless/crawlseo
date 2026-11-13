@@ -27,8 +27,8 @@ export type PipelineNavGroup = { label: string; items: PipelineNavItem[] };
  * Navigation is the funnel (docs/seo-funnel-spine-plan.md §5).
  *
  * The primary group is the five funnel stages in order. Tools are demoted to a
- * single "Evidence sources" group because they produce evidence, not work, and
- * legacy routes live behind one collapsed entry until Wave 6 removes them.
+ * single "Evidence sources" group because they produce evidence, not work.
+ * The legacy screens are removed; `next.config.ts` redirects their URLs.
  */
 export function buildSidebarGroups(siteId?: string): PipelineNavGroup[] {
   const groups: PipelineNavGroup[] = [
@@ -65,7 +65,6 @@ export function buildSidebarGroups(siteId?: string): PipelineNavGroup[] {
         { href: `/sites/${siteId}/crawl`, label: "Crawl / Audit", icon: Bug },
         { href: `/sites/${siteId}/vitals`, label: "Vitals", icon: Gauge },
         { href: `/sites/${siteId}/aeo-geo`, label: "AEO / GEO", icon: Sparkles },
-        { href: `/sites/${siteId}/research`, label: "Research", icon: Radar },
       ],
     },
     {

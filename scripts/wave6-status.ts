@@ -15,7 +15,6 @@ import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 import { FROZEN_CREATES, FROZEN_NOW } from "../lib/funnel/legacy-freeze";
-import { LEGACY_ROUTE_DESTINATION } from "../lib/funnel/legacy-routes";
 import { auditLegacyWriters, scheduledWriters, writersByTable } from "./legacy-writer-audit";
 import { watchLegacyWrites } from "./legacy-write-watch";
 
@@ -74,16 +73,27 @@ export async function wave6Status(db: PrismaClient, opts: { root?: string; hours
 
   const checks: Check[] = [];
 
-  // Step 1 — legacy routes archived.
-  const routeSource = read("lib/funnel/legacy-routes.ts");
-  const archivedByDefault = routeSource.includes('!== "live"');
-  const destinationsDeclared = Object.keys(LEGACY_ROUTE_DESTINATION).length === 5;
+  // Step 1 — legacy routes removed, with redirects keeping their URLs alive.
+  const removedRoutes = [
+    "content-studio",
+    "legacy-work",
+    "legacy-opportunities",
+    "actions",
+    "findings",
+    "results",
+    "research",
+    "intelligence",
+  ];
+  const siteRoutes = "app/(dashboard)/sites/[siteId]";
+  const stillOnDisk = removedRoutes.filter((route) => exists(`${siteRoutes}/${route}`));
+  const config = read("next.config.ts");
+  const redirected = removedRoutes.filter((route) => config.includes(`/sites/:siteId/${route}`));
   const navClean = !read("components/layout/sidebar-nav.tsx").includes("legacy-work");
   checks.push({
     step: 1,
-    name: "legacy routes archived behind a flag",
-    status: archivedByDefault && destinationsDeclared && navClean ? "complete" : "open",
-    detail: `${archivedByDefault ? "archived by default" : "NOT archived by default"}; ${Object.keys(LEGACY_ROUTE_DESTINATION).length}/5 destinations; nav ${navClean ? "clean" : "still lists legacy"}`,
+    name: "legacy routes removed and redirected",
+    status: stillOnDisk.length === 0 && redirected.length === removedRoutes.length && navClean ? "complete" : "open",
+    detail: `${stillOnDisk.length === 0 ? "all removed" : `NOT removed: [${stillOnDisk.join(", ")}]`}; ${redirected.length}/${removedRoutes.length} redirected; nav ${navClean ? "clean" : "still lists legacy"}`,
   });
 
   // Step 2 — freeze flipped, and what it can honestly cover.
