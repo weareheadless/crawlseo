@@ -562,7 +562,7 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     where: { id: contentDraftId },
     include: {
       site: { select: { id: true, domain: true } },
-      action: { select: { id: true, format: true, primaryQuery: true, status: true, targetUrl: true } },
+      action: { select: { id: true, format: true, primaryQuery: true, status: true, targetUrl: true, evidence: true } },
     },
   });
   if (!draft) throw new WixBlogDeliveryError("Content draft not found", 404);
@@ -591,7 +591,9 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
   // An action that names an existing post updates that post. Creating a draft
   // here would publish a second post at the new slug and leave the original
   // untouched, so the delivery points at the post's own draft instead.
-  const targetSlug = draft.action.targetUrl ? blogSlugFromUrl(draft.action.targetUrl) : null;
+  const targetSlug = draft.action.targetUrl && !proposesNewAsset(draft.action.evidence)
+    ? blogSlugFromUrl(draft.action.targetUrl)
+    : null;
   if (targetSlug) {
     const post = await readWixBlogPostBySlug(targetSlug, cfg);
     return db.delivery.create({
@@ -689,6 +691,21 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
       },
     },
   });
+}
+
+/**
+ * True when the recommendation proposes a post that does not exist yet.
+ *
+ * Such an action still carries the URL the post will occupy; treating that URL
+ * as an existing post sends the lane to the update path and fails.
+ */
+export function proposesNewAsset(evidence: unknown): boolean {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
+  const decision = (evidence as Record<string, unknown>).recommendationDecision;
+  if (!decision || typeof decision !== "object" || Array.isArray(decision)) return false;
+  const target = (decision as Record<string, unknown>).target;
+  if (!target || typeof target !== "object" || Array.isArray(target)) return false;
+  return (target as Record<string, unknown>).newAsset === true;
 }
 
 function blogSlugFromUrl(url: string): string | null {
