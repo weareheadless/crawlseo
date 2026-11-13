@@ -173,21 +173,22 @@ function inlineNodes(value: string): unknown[] {
 }
 
 function imageNode(image: { mediaId: string; url: string; altText: string; width: number; height: number }) {
+  // Wix stores an image by media id under `image.src`, with no url or link.
+  // A node with the wrong shape is dropped silently on save, so this must
+  // match a real post's Ricos document.
   return {
     type: "IMAGE",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
-    style: {},
     nodes: [],
     imageData: {
+      containerData: { width: { size: "CONTENT" }, alignment: "CENTER", textWrap: true },
       image: {
-        id: image.mediaId,
-        url: image.url,
-        altText: image.altText,
+        src: { id: image.mediaId },
         width: image.width,
         height: image.height,
       },
+      altText: image.altText,
       caption: "",
-      link: null,
     },
   };
 }
@@ -230,6 +231,11 @@ function heading(value: string, level: number) {
     nodes: [textNode(value, [{ type: "BOLD", fontWeightValue: 700 }])],
     headingData: { level: Math.max(1, Math.min(6, level)), textStyle: { textAlignment: "AUTO" } },
   };
+}
+
+export function countRicosImages(nodes: unknown[]): number {
+  return nodes.filter((node) => Boolean(node) && !Array.isArray(node)
+    && (node as Record<string, unknown>).type === "IMAGE").length;
 }
 
 export function markdownToRicos(
@@ -668,8 +674,10 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
     cfg, "GET", `/blog/v3/draft-posts/${encodeURIComponent(externalId)}?fieldsets=RICH_CONTENT`,
   );
   const verified = saved.draftPost;
+  const savedNodes = verified?.richContent?.nodes ?? [];
   if (!verified || verified.id !== externalId || verified.title !== draft.title
-      || !verified.richContent?.nodes?.length || verified.seoSlug !== draft.slug) {
+      || !savedNodes.length || verified.seoSlug !== draft.slug
+      || countRicosImages(savedNodes) !== inlineImages.size) {
     throw new WixBlogDeliveryError("Wix Blog draft did not pass readback verification", 502);
   }
 
@@ -865,7 +873,9 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
     },
   );
   const verifiedDraft = updated.draftPost;
-  if (!verifiedDraft?.id || verifiedDraft.title !== title || !verifiedDraft.richContent?.nodes?.length) {
+  const updatedNodes = verifiedDraft?.richContent?.nodes ?? [];
+  if (!verifiedDraft?.id || verifiedDraft.title !== title || !updatedNodes.length
+      || countRicosImages(updatedNodes) !== inlineImages.size) {
     throw new WixBlogDeliveryError("Wix Blog update did not pass readback verification", 502);
   }
 
