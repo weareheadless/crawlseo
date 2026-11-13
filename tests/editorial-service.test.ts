@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { editorialEnabled, editorialTerminal } from "@/lib/editorial-service/client";
-import { selectEvidenceUrls } from "@/lib/editorial-service/brief";
+import { internalLinks, selectEvidenceUrls } from "@/lib/editorial-service/brief";
 
 describe("editorial evidence selection", () => {
   const pages = [
@@ -20,10 +20,36 @@ describe("editorial evidence selection", () => {
     expect(urls).toHaveLength(3);
   });
 
+  it("prefers the page that explains the method over a tag or product page", () => {
+    const urls = selectEvidenceUrls(
+      [
+        { url: "https://atelier.example/post/refection-fauteuil", title: "Réfection d'un fauteuil", wordCount: 500 },
+        { url: "https://atelier.example/post/la-tapisserie-traditionnelle", title: "La tapisserie traditionnelle", wordCount: 900 },
+        { url: "https://atelier.example/blog/tags/fauteuil", title: "fauteuil", wordCount: 400 },
+        { url: "https://atelier.example/product-page/fauteuil-paon", title: "Fauteuil paon", wordCount: 600 },
+        { url: "https://atelier.example/", title: "Atelier", wordCount: 400 },
+      ],
+      "retapisser fauteuil dégarnissage sanglage garnissage tapisserie",
+      "comment retapisser un fauteuil",
+      6,
+    );
+    expect(urls.slice(0, 2)).toContain("https://atelier.example/post/la-tapisserie-traditionnelle");
+    expect(urls).toContain("https://atelier.example/post/refection-fauteuil");
+    expect(urls).not.toContain("https://atelier.example/blog/tags/fauteuil");
+    expect(urls).not.toContain("https://atelier.example/product-page/fauteuil-paon");
+  });
+
   it("drops boilerplate and pages too thin to quote", () => {
     const urls = selectEvidenceUrls(pages, "tissus fauteuil", "tissu fauteuil", 10);
     expect(urls).not.toContain("https://atelier.example/mentions-legales");
     expect(urls).not.toContain("https://atelier.example/thin");
+  });
+});
+
+describe("brief requirements", () => {
+  it("keeps the internal links the instruction names", () => {
+    expect(internalLinks("un encadré renvoyant vers /devis et vers /les-ateliers.")).toEqual(["/devis", "/les-ateliers"]);
+    expect(internalLinks("aucun lien ici")).toEqual([]);
   });
 });
 

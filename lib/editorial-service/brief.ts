@@ -36,7 +36,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function isBoilerplate(url: string, title: string): boolean {
   const haystack = `${url} ${title}`.toLowerCase();
-  return /conditions-generales|politique-de|privacy|terms-of|mentions-legales|cookies|gift-card/.test(haystack);
+  return /conditions-generales|politique-de|privacy|terms-of|mentions-legales|cookies|gift-card|\/blog\/tags\/|\/product-page\/|\/shop|\/cart|\/en\//.test(haystack);
 }
 
 /** The page whose text best answers the question, then the homepage as context. */
@@ -48,10 +48,18 @@ export function selectEvidenceUrls(
 ): string[] {
   const wanted = tokens(topic);
   const queryTokens = tokens(query);
-  const score = (page: { url: string; title: string | null; wordCount: number }) =>
-    overlap(wanted, tokens(`${page.title ?? ""} ${page.url}`)) * 10 +
-    overlap(queryTokens, tokens(`${page.title ?? ""} ${page.url}`)) * 40 +
-    Math.min(page.wordCount, 1500) / 1500;
+  const score = (page: { url: string; title: string | null; wordCount: number }) => {
+    const haystack = `${page.title ?? ""} ${page.url}`;
+    // A page that explains a craft is worth more than one that merely mentions
+    // the keyword: guides, steps and restoration are what a how-to quotes.
+    const editorial = /\/(post|blog)\//.test(page.url) ? 20 : 0;
+    const method = /guide|etape|étape|technique|restaur|tapiss|fauteuil|siege|siège/.test(haystack.toLowerCase()) ? 15 : 0;
+    return overlap(wanted, tokens(haystack)) * 10
+      + overlap(queryTokens, tokens(haystack)) * 40
+      + editorial
+      + method
+      + Math.min(page.wordCount, 2000) / 400;
+  };
 
   const ranked = pages
     .filter((page) => page.wordCount >= 150 && !isBoilerplate(page.url, page.title ?? ""))
@@ -79,6 +87,22 @@ export function selectEvidenceUrls(
 
 export type EditorialBrief = Record<string, unknown>;
 
+/** Internal paths the brief asks the writer to link, e.g. `/devis`. */
+export function internalLinks(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.matchAll(/(?:^|[\s(«"])(\/[a-z0-9][a-z0-9\-\/]*)/gi)) {
+    const path = match[1]?.replace(/\/+$/, "");
+    if (path && path.length > 1) found.add(path);
+  }
+  return [...found].slice(0, 5);
+}
+
+function textList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  return [];
+}
+
 export async function buildEditorialBrief(input: {
   actionId: string;
   operatorInstructions?: string;
@@ -91,7 +115,9 @@ export async function buildEditorialBrief(input: {
         select: {
           id: true,
           domain: true,
-          siteProfile: { select: { language: true } },
+          siteProfile: {
+            select: { language: true, country: true, audience: true, topics: true, services: true },
+          },
           siteDeliveryConfig: { select: { bridgeAlias: true, adapters: true, enabled: true } },
         },
       },
@@ -135,10 +161,17 @@ export async function buildEditorialBrief(input: {
     }
   })();
   const query = action.primaryQuery?.trim() || slugQuery;
-  const topic = [query, action.title, typeof decision.action === "string" ? decision.action : ""]
+  // The recommendation names the steps a how-to must cover; the title alone
+  // misses pages like "La tapisserie traditionnelle" that hold the method.
+  const topic = [
+    query,
+    action.title,
+    typeof decision.action === "string" ? decision.action : "",
+    typeof evidence.cluster === "string" ? evidence.cluster : "",
+  ]
     .filter(Boolean)
     .join(" ");
-  const sourceUrls = selectEvidenceUrls(pages, topic, query);
+  const sourceUrls = selectEvidenceUrls(pages, topic, query, 6);
   if (sourceUrls.length < 2) {
     throw new ResearchServiceError(
       `The last crawl has only ${sourceUrls.length} usable page(s); editorial needs at least two sources`,
@@ -146,9 +179,24 @@ export async function buildEditorialBrief(input: {
     );
   }
 
-  const locale = action.site.siteProfile?.language || "en";
+  const profile = action.site.siteProfile;
+  const locale = profile?.language || "en";
   const voice = (process.env.EDITORIAL_VOICE ?? "").trim() || tenant.split("-")[0] || "default";
   const recommendation = action.recommendation ?? "";
+  const business = {
+    name: "",
+    domain: action.site.domain,
+    audience: textList(profile?.audience).join(", "),
+    topics: textList(profile?.topics),
+    services: textList(profile?.services),
+    location: textList(profile?.country).join(", "),
+    locale,
+  };
+  const requirements = {
+    action: recommendation.trim(),
+    why_now: typeof decision.whyNow === "string" ? decision.whyNow : "",
+    must_link: internalLinks(`${recommendation}\n${typeof decision.action === "string" ? decision.action : ""}`),
+  };
   const notes = [recommendation, input.operatorInstructions ?? ""]
     .filter((value) => value.trim())
     .join("\n");
@@ -159,6 +207,8 @@ export async function buildEditorialBrief(input: {
     mode: "brief",
     format: "article",
     locales: [locale],
+    business,
+    requirements,
     topic: {
       question: query || action.title,
       angle: recommendation,
@@ -176,8 +226,8 @@ export async function buildEditorialBrief(input: {
     policy: {
       approval: "none",
       publish: false,
-      min_words: 600,
-      max_words: 1400,
+      min_words: 800,
+      max_words: 1600,
       fact_check_rounds: 2,
       on_unverified: "hold",
       deadline_seconds: 900,
