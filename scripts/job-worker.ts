@@ -24,6 +24,7 @@ import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { resumeWixPageDelivery, runWixPageTask } from "@/lib/agent-tasks/wix-page";
+import { reconcileEditorialArticleTask } from "@/lib/editorial-service/article-task";
 import { loadEnvConfig } from "@next/env";
 import { bridgeKeywordRunToEvidence, releaseBridgedRunResult } from "@/lib/dataforseo/research-evidence";
 import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
@@ -211,6 +212,15 @@ async function executeJob(
       const agentTask = await db.agentTask.findUnique({ where: { id: agentTaskId }, select: { kind: true } });
       if (agentTask?.kind === "wix_page") await runWixPageTask(agentTaskId);
       else await runAgentTask(agentTaskId);
+      return;
+    }
+    case JobKind.EDITORIAL_ARTICLE: {
+      const agentTaskId = text(payload.agentTaskId, "");
+      if (!agentTaskId) throw new JobExecutionError("AGENT_TASK_ID_REQUIRED");
+      const outcome = await reconcileEditorialArticleTask(agentTaskId);
+      // Editorial is slow on purpose: it fetches, writes and verifies. Polling
+      // is not a failed attempt, so it is deferred rather than retried.
+      if (outcome === "waiting") throw new JobExecutionError("EDITORIAL_STILL_WRITING", true);
       return;
     }
     case JobKind.WIX_DELIVERY: {
