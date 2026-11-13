@@ -44,6 +44,12 @@ connector links and release references still hit.
 | `/sites/:id/research/*` | `/sites/:id/evidence` |
 | `/sites/:id/intelligence/*` | `/sites/:id/opportunities` |
 
+The Content Studio draft API went with the screens: `/api/sites/:id/content-studio`,
+`/api/content-drafts/*`, `/api/sites/:id/content-drafts/*` and the
+`/api/actions/:id/draft` + `wix-blog-draft` buttons are deleted. The article lane
+creates its `ContentDraft` in the reconciler; there is no standalone editing
+surface left to keep alive.
+
 The five funnel stages are now Business → Demand → Opportunities → Work →
 Evidence. Research runs are evidence, not a stage; Findings and Results are the
 Opportunities and Work surfaces under their new names. The sidebar no longer

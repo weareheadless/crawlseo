@@ -96,6 +96,17 @@ describe("wave 6 cleanup ledger", () => {
     for (const route of removed) {
       expect(config).toContain(`/sites/:siteId/${route}`);
     }
+    // The screens drove their own API; it is removed with them, not left as a
+    // way to create drafts outside the lane that owns them.
+    for (const api of [
+      "app/api/sites/[siteId]/content-studio",
+      "app/api/sites/[siteId]/content-drafts",
+      "app/api/content-drafts",
+      "app/api/actions/[actionId]/draft",
+      "app/api/actions/[actionId]/wix-blog-draft",
+    ]) {
+      expect(exists(api), `${api} came back`).toBe(false);
+    }
     const nav = read("components/layout/sidebar-nav.tsx");
     for (const route of ["legacy-work", "content-studio", "research"]) {
       expect(nav).not.toContain(`/sites/\${siteId}/${route}`);
