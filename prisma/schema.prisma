@@ -968,6 +968,9 @@ model ContentDraft {
   brief           Json
   model           String
   provider        String
+  /// Images chosen by the writer (cover and inline), destination-neutral.
+  /// The body points at them with `<!-- image: img_2 -->` markers.
+  assets          Json?
   status          ContentDraftStatus @default(READY)
   wixApprovalHash String?
   wixApprovedBy   String?

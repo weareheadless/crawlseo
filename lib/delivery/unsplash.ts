@@ -210,14 +210,23 @@ export async function findUnsplashCover(
   };
 }
 
-export async function importUnsplashCover(
+export type ImportedImage = { mediaId: string; url: string; altText: string };
+
+/**
+ * Import one remote image into the Wix media library.
+ *
+ * The writer already chose and attributed the picture; this only moves the
+ * bytes into Wix so Ricos can reference a media id. It is the same path for a
+ * cover and for an inline image.
+ */
+export async function importImageAsset(
   request: <T>(method: string, path: string, body?: unknown) => Promise<T>,
-  cover: UnsplashCover,
-  slug: string,
-): Promise<{ mediaId: string; url: string; altText: string; cover: UnsplashCover }> {
-  const parsed = new URL(cover.url);
+  image: { url: string; altText: string; width?: number; height?: number },
+  displayName: string,
+): Promise<ImportedImage> {
+  const parsed = new URL(image.url);
   if (parsed.hostname !== "images.unsplash.com") {
-    throw new Error("Unsplash returned an unexpected image host");
+    throw new Error("The image is not hosted on Unsplash's image host");
   }
   parsed.searchParams.set("w", "1600");
   parsed.searchParams.set("q", "85");
@@ -231,7 +240,7 @@ export async function importUnsplashCover(
       url: parsed.toString(),
       mediaType: "IMAGE",
       mimeType: "image/jpeg",
-      displayName: `${slug}-cover.jpg`,
+      displayName: displayName.slice(0, 120),
       private: false,
       labels: ["Unsplash", "CrawlSEO"],
     },
@@ -241,7 +250,19 @@ export async function importUnsplashCover(
   return {
     mediaId: file.id,
     url: file.url ?? parsed.toString(),
-    altText: cover.altText,
-    cover,
+    altText: image.altText,
   };
+}
+
+export async function importUnsplashCover(
+  request: <T>(method: string, path: string, body?: unknown) => Promise<T>,
+  cover: UnsplashCover,
+  slug: string,
+): Promise<{ mediaId: string; url: string; altText: string; cover: UnsplashCover }> {
+  const imported = await importImageAsset(
+    request,
+    { url: cover.url, altText: cover.altText, width: cover.width, height: cover.height },
+    `${slug}-cover.jpg`,
+  );
+  return { ...imported, cover };
 }

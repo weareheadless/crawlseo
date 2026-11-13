@@ -8,6 +8,22 @@ import { ResearchServiceError } from "@/lib/research/service";
  * the article lane — it never asks editorial to publish.
  */
 
+export type EditorialAsset = {
+  id: string;
+  role: "cover" | "inline";
+  source: string;
+  url: string;
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+  credit: string;
+  credit_url: string;
+  photo_url: string;
+  query: string;
+  anchor: string;
+};
+
 export type EditorialArtifact = {
   locale: string;
   revision: number;
@@ -29,6 +45,7 @@ export type EditorialArtifact = {
   sources: Array<{ id: string; url: string; title: string; sha256: string }>;
   coverage: Record<string, unknown>;
   editorial: Record<string, unknown>;
+  assets: EditorialAsset[];
 };
 
 export type EditorialPost = {
