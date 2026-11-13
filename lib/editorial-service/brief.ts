@@ -146,6 +146,25 @@ export async function buildEditorialBrief(input: {
     orderBy: { wordCount: "desc" },
   });
 
+  // A path the brief asks the writer to link has to exist. The crawl holds
+  // every page it saw, including short ones like /devis, so it is the oracle.
+  const knownPaths = new Set(
+    (
+      await db.auditPage.findMany({
+        where: { crawlId: crawl.id, statusCode: 200 },
+        select: { url: true },
+      })
+    )
+      .map((page) => {
+        try {
+          return new URL(page.url).pathname.replace(/\/+$/, "");
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean),
+  );
+
   const evidence = (action.evidence ?? {}) as Record<string, unknown>;
   const decision = record(record(evidence.recommendationDecision));
   // The funnel stores the question in the target slug when the opportunity came
@@ -195,7 +214,8 @@ export async function buildEditorialBrief(input: {
   const requirements = {
     action: recommendation.trim(),
     why_now: typeof decision.whyNow === "string" ? decision.whyNow : "",
-    must_link: internalLinks(`${recommendation}\n${typeof decision.action === "string" ? decision.action : ""}`),
+    must_link: internalLinks(`${recommendation}\n${typeof decision.action === "string" ? decision.action : ""}`)
+      .filter((path) => knownPaths.has(path.replace(/\/+$/, ""))),
   };
   const notes = [recommendation, input.operatorInstructions ?? ""]
     .filter((value) => value.trim())
