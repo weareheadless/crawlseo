@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownToRicos, proposesNewAsset } from "@/lib/delivery/wix-blog";
+import { countRicosImages, markdownToRicos, proposesNewAsset } from "@/lib/delivery/wix-blog";
 
 describe("Wix Blog delivery target", () => {
   it("tells a proposed new post from an existing one", () => {
@@ -67,9 +67,10 @@ describe("Wix Blog rich content", () => {
     );
     const types = rich.nodes.map((node) => (node as { type: string }).type);
     expect(types).toEqual(["HEADING", "IMAGE", "PARAGRAPH", "PARAGRAPH"]);
-    const image = rich.nodes[1] as { imageData: { image: { id: string; url: string; altText: string } } };
-    expect(image.imageData.image.id).toBe("media-1");
-    expect(image.imageData.image.altText).toContain("fauteuil");
+    const image = rich.nodes[1] as { imageData: { image: { src: { id: string } }; altText: string } };
+    expect(image.imageData.image.src.id).toBe("media-1");
+    expect(image.imageData.altText).toContain("fauteuil");
+    expect(countRicosImages(rich.nodes)).toBe(1);
     const credit = rich.nodes[2] as { nodes: Array<{ textData: { text: string; decorations: Array<{ type: string; linkData?: { link: { url: string } } }> } }> };
     expect(credit.nodes[0].textData.text).toBe("Photo de Camille Martin sur Unsplash");
     expect(credit.nodes[0].textData.decorations[0].linkData?.link.url).toBe("https://unsplash.com/@camille");
