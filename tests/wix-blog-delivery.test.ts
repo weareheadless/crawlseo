@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { markdownToRicos } from "@/lib/delivery/wix-blog";
+import { markdownToRicos, proposesNewAsset } from "@/lib/delivery/wix-blog";
+
+describe("Wix Blog delivery target", () => {
+  it("tells a proposed new post from an existing one", () => {
+    expect(proposesNewAsset({ recommendationDecision: { target: { url: "https://x/post/new", newAsset: true } } })).toBe(true);
+    expect(proposesNewAsset({ recommendationDecision: { target: { url: "https://x/post/old", newAsset: false } } })).toBe(false);
+    expect(proposesNewAsset({})).toBe(false);
+    expect(proposesNewAsset(null)).toBe(false);
+  });
+});
 
 describe("Wix Blog rich content", () => {
   it("skips a duplicate H1, maps headings, paragraphs, and bullets", () => {
