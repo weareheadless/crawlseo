@@ -77,5 +77,8 @@ service is reachable from the worker.
   post's current body.
 - `ResearchAction`, `ContentDraft` and `Delivery` stay: the article lane still
   stores its artifact and receipt there.
-- The Content Studio UI and its API routes are still present, unlinked. They are
-  removed in the data-retirement slice.
+- Content Studio is gone, including its API: `/api/sites/:id/content-studio/drafts`,
+  `/api/content-drafts/*`, `/api/sites/:id/content-drafts/*` and the
+  `/api/actions/:id/draft` + `wix-blog-draft` buttons it drove. A draft is now
+  created by the lane that owns it — the article reconciler above, or the page
+  lane.
