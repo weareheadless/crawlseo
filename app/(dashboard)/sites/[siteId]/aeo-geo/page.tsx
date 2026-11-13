@@ -126,8 +126,8 @@ export default async function AeoGeoPage({
         title="AEO / GEO"
         description="Answer-engine access, identity signals, observed visibility and the gaps that follow. Access does not imply visibility."
       />
-      <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="findings" /></div>
-      <div className="-mt-3 mb-4 text-sm"><Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/findings`}>View all Findings →</Link></div>
+      <div className="mb-5"><PipelineNavigation siteId={siteId} currentStage="evidence" /></div>
+      <div className="-mt-3 mb-4 text-sm"><Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/opportunities`}>View all Findings →</Link></div>
 
       <nav className="flex flex-wrap gap-1 rounded-lg border border-border/60 bg-panel/60 p-1 text-sm">
         {tabs.map((item) => (
@@ -286,7 +286,7 @@ export default async function AeoGeoPage({
                   {row.action && (
                     <Link
                       className="mt-1 inline-block text-sm text-primary underline underline-offset-2"
-                      href={`/sites/${siteId}/actions/${row.action.id}`}
+                      href={`/sites/${siteId}/work`}
                     >
                       Action: {row.action.title}
                     </Link>

@@ -144,7 +144,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ siteI
         </div>
         <Link
           className="mt-3 inline-block text-sm text-primary underline underline-offset-2"
-          href={`/sites/${siteId}/research/config`}
+          href={`/sites/${siteId}/evidence/config`}
         >
           View and edit research configuration
         </Link>

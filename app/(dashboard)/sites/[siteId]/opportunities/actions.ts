@@ -10,6 +10,7 @@ import { recordAgentPreparation, confirmHumanStep } from "@/lib/funnel/join";
 import { acceptOpportunityForSite } from "@/lib/funnel/accept";
 import { decideOpportunity } from "@/lib/funnel/opportunity";
 import { prepareOpportunityWithAgent } from "@/lib/agent-tasks/opportunity-task";
+import { canAccessSite } from "@/lib/site/access";
 
 /**
  * Funnel actions. Detection is automatic; these are the human decisions the
@@ -22,7 +23,7 @@ async function requireSiteAccess(siteId: string) {
   const userId = await getUserIdFromCookies();
   if (!userId) redirect("/login");
   const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, projectId: true } });
-  if (!site || !site.projectId || (site.userId && site.userId !== userId)) redirect("/sites");
+  if (!site || !site.projectId || !canAccessSite(userId, site)) redirect("/sites");
   return { ...site, projectId: site.projectId };
 }
 

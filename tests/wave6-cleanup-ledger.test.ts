@@ -27,6 +27,8 @@ const DELETED = [
   "tests/crawl-actions.test.ts",
   "tests/seo-actions-authority.test.ts",
   "tests/crawl-gap-action-lifecycle.test.ts",
+  "lib/funnel/legacy-routes.ts",
+  "tests/wave6-legacy-routes.test.ts",
 ];
 
 const GATED: string[] = [];
@@ -75,13 +77,29 @@ describe("wave 6 cleanup ledger", () => {
     expect(doc).toContain("CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict");
   });
 
-  it("archives the legacy routes rather than leaving them reachable", () => {
-    const routes = read("lib/funnel/legacy-routes.ts");
-    for (const route of ["legacy-work", "legacy-opportunities", "actions", "findings", "results"]) {
-      expect(routes).toContain(route);
+  it("removes the legacy route trees and redirects them in next.config", () => {
+    const removed = [
+      "content-studio",
+      "legacy-work",
+      "legacy-opportunities",
+      "intelligence",
+      "actions",
+      "findings",
+      "results",
+      "research",
+    ];
+    for (const route of removed) {
+      expect(exists(`app/(dashboard)/sites/[siteId]/${route}`), `${route} came back`).toBe(false);
+    }
+    // The page trees are gone; redirects keep old links and connector URLs working.
+    const config = read("next.config.ts");
+    for (const route of removed) {
+      expect(config).toContain(`/sites/:siteId/${route}`);
     }
     const nav = read("components/layout/sidebar-nav.tsx");
-    expect(nav).not.toContain("legacy-work");
+    for (const route of ["legacy-work", "content-studio", "research"]) {
+      expect(nav).not.toContain(`/sites/\${siteId}/${route}`);
+    }
   });
 
   it("records the dropped table and the reversible migration", () => {

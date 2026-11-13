@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { listTasks, listOpportunities } from "@/lib/funnel/views";
+import { canAccessSite } from "@/lib/site/access";
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -35,7 +36,7 @@ export default async function WorkPage({ params }: Props) {
   if (!userId) redirect("/login");
 
   const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, domain: true, projectId: true } });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site || !canAccessSite(userId, site)) redirect("/sites");
 
   if (!site.projectId) {
     return (

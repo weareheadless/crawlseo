@@ -62,7 +62,14 @@ export default async function EvidencePage({ params, searchParams }: Props) {
         eyebrow={site.domain}
         title="Evidence"
         description="Every observation the funnel reasons from, with its producer and age. Nothing here is a guess."
-        actions={<RefreshFunnelButton siteId={siteId} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href={`/sites/${siteId}/evidence/config`} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+              Collection rules
+            </Link>
+            <RefreshFunnelButton siteId={siteId} />
+          </div>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-muted/50 p-1">

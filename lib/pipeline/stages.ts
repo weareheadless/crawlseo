@@ -1,17 +1,37 @@
 export const PIPELINE_STAGES = [
-  { id: "business", label: "Business", href: "/business", owner: "Business", inputs: "Your audience, services, markets and goals", outputs: "Business context for research and work" },
-  { id: "research", label: "Research", href: "/research", owner: "Research", inputs: "Business context and research policy", outputs: "Evidence and research findings" },
-  { id: "findings", label: "Findings", href: "/findings", owner: "Findings", inputs: "Recorded research and SEO evidence", outputs: "Actionable findings for Work" },
-  { id: "work", label: "Work", href: "/work", owner: "Work", inputs: "Findings and selected actions", outputs: "Reviewed, delivered work and verification" },
-  { id: "results", label: "Results", href: "/results", owner: "Results", inputs: "Delivery, verification and observations", outputs: "Measured changes and decisions" },
+  { id: "business", label: "Business", href: "/business", owner: "Business", inputs: "Your audience, services, markets and goals", outputs: "Business context for demand and work" },
+  { id: "demand", label: "Demand", href: "/demand", owner: "Demand", inputs: "Business context, search and market evidence", outputs: "The demand map: clusters, queries and our position" },
+  { id: "opportunities", label: "Opportunities", href: "/opportunities", owner: "Opportunities", inputs: "Demand map and recorded evidence", outputs: "Scored opportunities for a human decision" },
+  { id: "work", label: "Work", href: "/work", owner: "Work", inputs: "Accepted opportunities", outputs: "Reviewed, delivered work and its receipts" },
+  { id: "evidence", label: "Evidence", href: "/evidence", owner: "Evidence", inputs: "Every collection and research source", outputs: "The audit trail behind every score" },
 ] as const;
 
 export type PipelineStageId = (typeof PIPELINE_STAGES)[number]["id"];
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
+/**
+ * Routes that are not stages still belong to one. They are lenses on a stage,
+ * never additional steps: a crawl is evidence, an old action is work.
+ */
 const LEGACY_LENSES: Readonly<Record<string, PipelineStageId>> = {
-  "keyword-research": "research", keywords: "research", crawl: "findings", opportunities: "findings",
-  findings: "findings", "aeo-geo": "findings", "content-studio": "work",
+  "keyword-research": "evidence",
+  keywords: "evidence",
+  "saved-keywords": "evidence",
+  crawl: "evidence",
+  pages: "evidence",
+  vitals: "evidence",
+  alerts: "evidence",
+  backlinks: "evidence",
+  "aeo-geo": "evidence",
+  "domain-overview": "evidence",
+  research: "evidence",
+  findings: "opportunities",
+  intelligence: "opportunities",
+  "legacy-opportunities": "opportunities",
+  "content-studio": "work",
+  actions: "work",
+  results: "work",
+  "legacy-work": "work",
 };
 
 export function buildStageUrl(siteId: string, stage: PipelineStageId, suffix?: string): string {
@@ -44,7 +64,6 @@ export function resolvePipelineStage(pathname: string): PipelineStageId | null {
   if (parts[offset] !== "sites" || !parts[offset + 1]) return null;
   const route = parts[offset + 2];
   if (!route || route === "settings") return null;
-  if (route === "actions") return parts[offset + 3] ? "work" : null;
   const stage = PIPELINE_STAGES.find((item) => item.href.slice(1) === route);
   return stage?.id ?? LEGACY_LENSES[route] ?? null;
 }

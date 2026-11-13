@@ -1,4 +1,5 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
+import { canAccessSite } from "@/lib/site/access";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -42,7 +43,7 @@ export default async function SettingsPage({ params }: Props) {
       },
     },
   });
-  if (!site || site.userId !== userId) redirect("/sites");
+  if (!site || !canAccessSite(userId, site)) redirect("/sites");
 
   // Check API key status
   const [apiKeys, platformGrant, operations, deliveryConfig, designProfile, locales] = await Promise.all([
