@@ -64,6 +64,8 @@ describe("article lane wiring", () => {
     expect(source).toContain("startEditorialArticleTask");
     // An existing post keeps the update path; only a new asset is editorial work.
     expect(source).toContain("!existingPost && editorialEnabled()");
+    const brief = read("lib/editorial-service/brief.ts");
+    expect(brief).toContain('target: { mode: "new", url: action.targetUrl ?? "" }');
   });
 
   it("does not treat a proposed new post URL as an existing post", () => {

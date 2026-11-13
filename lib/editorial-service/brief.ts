@@ -168,7 +168,9 @@ export async function buildEditorialBrief(input: {
     },
     evidence: { source_urls: sourceUrls, min_sources: Math.min(2, sourceUrls.length) },
     voice,
-    target: { mode: "new" },
+    // The URL the funnel proposed is where the post will live, so the writer
+    // keeps its slug instead of inventing one or suffixing a retry.
+    target: { mode: "new", url: action.targetUrl ?? "" },
     // CrawlSEO owns the owner gate and the publication; editorial stops at the
     // verified artifact so there is exactly one place that can publish.
     policy: {
