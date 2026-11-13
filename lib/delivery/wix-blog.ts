@@ -149,7 +149,22 @@ function textNode(value: string, decorations: unknown[] = []) {
   };
 }
 
-function inlineNodes(value: string): unknown[] {
+/** A site domain from the database, as the base of its own absolute links. */
+export function siteBaseUrl(domain: string): string {
+  const value = (domain || "").trim().replace(/\/+$/, "");
+  if (!value) return "";
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function absoluteUrl(url: string, base: string): string {
+  // A brief names internal paths ("/devis"); Wix stores a link as written, so a
+  // relative one would resolve under /post/ and 404. External links are already
+  // absolute and pass through.
+  if (!base || !url.startsWith("/") || url.startsWith("//")) return url;
+  return `${base.replace(/\/+$/, "")}${url}`;
+}
+
+function inlineNodes(value: string, base = ""): unknown[] {
   const nodes: unknown[] = [];
   // Bold and links are the inline forms the writer emits. Everything else
   // stays literal rather than being silently dropped.
@@ -163,7 +178,7 @@ function inlineNodes(value: string): unknown[] {
     } else if (match[2]?.trim() && match[3]) {
       nodes.push(textNode(match[2].trim(), [{
         type: "LINK",
-        linkData: { link: { url: match[3], target: "BLANK", rel: { noreferrer: true } } },
+        linkData: { link: { url: absoluteUrl(match[3], base), target: "BLANK", rel: { noreferrer: true } } },
       }]));
     }
     cursor = index + match[0].length;
@@ -213,12 +228,12 @@ function creditParagraph(value: string, url: string) {
   };
 }
 
-function paragraph(value: string) {
+function paragraph(value: string, base = "") {
   return {
     type: "PARAGRAPH",
     id: randomUUID().replace(/-/g, "").slice(0, 10),
     style: { paddingBottom: "18px" },
-    nodes: inlineNodes(value),
+    nodes: inlineNodes(value, base),
     paragraphData: { textStyle: { textAlignment: "AUTO" } },
   };
 }
@@ -242,6 +257,7 @@ export function markdownToRicos(
   markdown: string,
   title: string,
   images: Map<string, ImportedInlineImage> = new Map(),
+  baseUrl = "",
 ): { documentStyle: object; nodes: unknown[] } {
   const nodes: unknown[] = [];
   let list: string[] = [];
@@ -257,7 +273,7 @@ export function markdownToRicos(
         id: randomUUID().replace(/-/g, "").slice(0, 10),
         style: {},
         listItemData: {},
-        nodes: [paragraph(item)],
+        nodes: [paragraph(item, baseUrl)],
       })),
       bulletedListData: { indentation: 0, offset: 0 },
     });
@@ -303,7 +319,7 @@ export function markdownToRicos(
       .replace(/^\s*>\s?/, "")
       .replace(/^\s*\d+\.\s+/, "")
       .replace(/`(.*?)`/g, "$1");
-    nodes.push(paragraph(cleaned));
+    nodes.push(paragraph(cleaned, baseUrl));
   }
   flushList();
   return { documentStyle: {}, nodes };
@@ -659,7 +675,10 @@ export async function createWixBlogDraftForDraft(contentDraftId: string) {
       url: importedCover.url,
       altText: importedCover.altText,
     },
-    richContent: withCoverCredit(markdownToRicos(draft.markdown, draft.title, inlineImages), importedCover.credit),
+    richContent: withCoverCredit(
+      markdownToRicos(draft.markdown, draft.title, inlineImages, siteBaseUrl(draft.site.domain)),
+      importedCover.credit,
+    ),
     seoData: seoData(draft),
   };
 
@@ -847,7 +866,10 @@ export async function publishWixBlogUpdateForDraft(contentDraftId: string, userI
     );
   }
   const inlineImages = await prepareInlineImages(cfg, draft);
-  const richContent = withCoverCredit(markdownToRicos(draft.markdown, title, inlineImages), importedCover.credit);
+  const richContent = withCoverCredit(
+    markdownToRicos(draft.markdown, title, inlineImages, siteBaseUrl(draft.site.domain)),
+    importedCover.credit,
+  );
   const updated = await wixRequest<{ draftPost?: { id?: string; title?: string; richContent?: { nodes?: unknown[] } } }>(
     cfg,
     "PATCH",

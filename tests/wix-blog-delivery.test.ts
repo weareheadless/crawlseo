@@ -26,6 +26,20 @@ describe("Wix Blog rich content", () => {
     expect(heading.nodes[0].textData.text).toBe("Section");
   });
 
+  it("resolves an internal path against the site, not the post", () => {
+    const rich = markdownToRicos(
+      "Pour un projet, [demandez un devis](/devis). Et [la source](https://example.org/a).",
+      "Post title",
+      new Map(),
+      "https://atelier.example",
+    );
+    const node = rich.nodes[0] as {
+      nodes: Array<{ textData: { decorations: Array<{ linkData?: { link: { url: string } } }> } }>;
+    };
+    const urls = node.nodes.flatMap((part) => part.textData.decorations).map((d) => d.linkData?.link.url);
+    expect(urls).toEqual(["https://atelier.example/devis", "https://example.org/a"]);
+  });
+
   it("keeps a different first H1 as a body heading", () => {
     const rich = markdownToRicos("# Different title\n\nBody.", "Post title");
     expect((rich.nodes[0] as { type: string }).type).toBe("HEADING");
