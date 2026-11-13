@@ -32,6 +32,7 @@ export function sourceForJobKind(kind: JobKind): SyncSource {
       return SyncSource.RESEARCH;
     case JobKind.AGENT_TASK:
     case JobKind.WIX_DELIVERY:
+    case JobKind.EDITORIAL_ARTICLE:
       return SyncSource.AGENT;
   }
 }

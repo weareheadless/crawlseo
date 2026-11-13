@@ -2100,6 +2100,7 @@ enum JobKind {
   RESEARCH_RUN
   AGENT_TASK
   WIX_DELIVERY
+  EDITORIAL_ARTICLE
 }
 
 enum JobStatus {

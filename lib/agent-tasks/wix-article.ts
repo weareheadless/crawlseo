@@ -5,6 +5,8 @@ import { generateDraftForAction, generateWixBlogUpdateDraftForAction } from "@/l
 import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { approveAndPublishWixBlogDraft } from "@/lib/delivery/wix-blog";
 import { markOpportunityTaskDelivered } from "@/lib/agent-tasks/opportunity-task";
+import { editorialEnabled } from "@/lib/editorial-service/client";
+import { startEditorialArticleTask } from "@/lib/editorial-service/article-task";
 
 /**
  * The article lane. There is no page and no embed: the reviewed draft is the
@@ -34,6 +36,18 @@ export async function createWixArticleTaskForAction(input: {
   }
 
   const existingPost = Boolean(action.targetUrl && isWixBlogTarget(action.targetUrl));
+
+  // A new article is written by the editorial service: quote-first, verified,
+  // async. An existing post keeps the synchronous update path, which needs the
+  // post's current body. Without an editorial service the old generator runs,
+  // so this switch is safe to deploy before the service is configured.
+  if (!existingPost && editorialEnabled()) {
+    return startEditorialArticleTask({
+      actionId: action.id,
+      operatorInstructions: input.operatorInstructions,
+    });
+  }
+
   let draft = action.drafts[0] ?? null;
   if (!draft || draft.format !== "article") {
     // An existing post is updated from its current body; a new article is
