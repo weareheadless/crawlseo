@@ -57,7 +57,9 @@ describe("project integrations", () => {
     expect(result.top_pages).toEqual([{ path: "/", views: 20 }]);
     expect(result.sources).toEqual([{ source: "Organic Search", sessions: 8, users: 7 }]);
     expect(result.organic_queries).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    // Five weekly reports plus the six-report 90-day history capture.
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    expect(result.history.daily).toEqual([]);
     vi.unstubAllGlobals();
   });
 

@@ -48,7 +48,9 @@ export default async function DashboardPage({
   // Onboarding state
   const hasSites = sites.length > 0;
   const hasGscConnected = sites.some((s) => s.gscProperty);
-  const hasSyncedData = sites.some((s) => s._count.keywords > 0);
+  // A low-volume property can persist page rows while Google withholds query
+  // rows; either observation means the first sync landed.
+  const hasSyncedData = sites.some((s) => s._count.keywords > 0 || s._count.pages > 0);
   const hasCrawled = sites.some((s) => s._count.crawls > 0);
   const firstSiteId = sites[0]?.id;
 
@@ -80,7 +82,10 @@ export default async function DashboardPage({
 
   const siteCards = await Promise.all(
     sites.map(async (site) => {
-      if (site._count.keywords === 0) {
+      // Search Console can return page rows while withholding query rows for a
+      // low-volume site. Treat either observation as real data; "no keywords"
+      // alone means the query report was sampled empty, not that nothing synced.
+      if (site._count.keywords === 0 && site._count.pages === 0) {
         return {
           site,
           metrics: null as Awaited<ReturnType<typeof getSitePeriodMetrics>> | null,
@@ -151,7 +156,7 @@ export default async function DashboardPage({
 
             {!metrics ? (
               <div className="mt-6 rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                Waiting for first GSC sync…
+                No query data yet. Search Console has no rows for this site.
               </div>
             ) : (
               <div className="mt-5 grid grid-cols-2 gap-3">

@@ -81,16 +81,34 @@ function selectGrant(grants: Grant[], provider: IntegrationProvider): { grant: G
   return { grant: current[0] ?? candidates.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.id.localeCompare(b.id))[0], ambiguous: false };
 }
 
-const metrics = z.object({ activeUsers: z.number().finite().optional(), totalUsers: z.number().finite().optional(),
-  sessions: z.number().finite().optional(), screenPageViews: z.number().finite().optional() });
-const delta = z.object({ activeUsers: z.number().finite().nullable().optional(), totalUsers: z.number().finite().nullable().optional(),
-  sessions: z.number().finite().nullable().optional(), screenPageViews: z.number().finite().nullable().optional() });
+const metrics = z.object({ activeUsers: z.number().finite().optional(), newUsers: z.number().finite().optional(),
+  totalUsers: z.number().finite().optional(), sessions: z.number().finite().optional(),
+  engagedSessions: z.number().finite().optional(), engagementRate: z.number().finite().optional(),
+  screenPageViews: z.number().finite().optional(), eventCount: z.number().finite().optional(),
+  averageSessionDuration: z.number().finite().optional() });
+const delta = z.object({ activeUsers: z.number().finite().nullable().optional(), newUsers: z.number().finite().nullable().optional(),
+  totalUsers: z.number().finite().nullable().optional(), sessions: z.number().finite().nullable().optional(),
+  engagedSessions: z.number().finite().nullable().optional(), engagementRate: z.number().finite().nullable().optional(),
+  screenPageViews: z.number().finite().nullable().optional(), eventCount: z.number().finite().nullable().optional(),
+  averageSessionDuration: z.number().finite().nullable().optional() });
+const historyDay = z.object({ date: z.string(), sessions: z.number().finite(), activeUsers: z.number().finite(),
+  screenPageViews: z.number().finite(), eventCount: z.number().finite() });
+const analyticsHistory = z.object({
+  coverage: z.object({ startDate: z.string(), endDate: z.string(), days: z.number().int().positive() }),
+  daily: z.array(historyDay).optional(),
+  pages: z.array(z.object({ path: z.string(), views: z.number().finite(), sessions: z.number().finite() })).optional(),
+  channels: z.array(z.object({ channel: z.string(), sessions: z.number().finite(), users: z.number().finite(), engagementRate: z.number().finite() })).optional(),
+  devices: z.array(z.object({ device: z.string(), sessions: z.number().finite(), users: z.number().finite() })).optional(),
+  countries: z.array(z.object({ country: z.string(), sessions: z.number().finite(), users: z.number().finite() })).optional(),
+  events: z.array(z.object({ event: z.string(), count: z.number().finite() })).optional(),
+});
 const analyticsSummary = z.object({
   current_week: metrics.refine((value) => Object.keys(value).length > 0),
   previous_week: metrics.optional(), delta_pct: delta.optional(),
   top_pages: z.array(z.object({ path: z.string(), views: z.number().finite() })).optional(),
   sources: z.array(z.object({ source: z.string(), sessions: z.number().finite(), users: z.number().finite() })).optional(),
   organic_queries: z.array(z.object({ query: z.string(), sessions: z.number().finite(), users: z.number().finite(), views: z.number().finite() })).optional(),
+  history: analyticsHistory.optional(),
 });
 
 function analyticsPayload(value: unknown): Record<string, unknown> | null {
@@ -134,6 +152,7 @@ export async function getConnectorAnalytics(principal: ServicePrincipalContext, 
   const ga4Grant = ga4Selection.grant;
   const ga4Metrics = analyticsPayload(ga4?.data);
   const snapshotData = ga4?.data && typeof ga4.data === "object" && !Array.isArray(ga4.data) ? ga4.data as Record<string, unknown> : null;
+  const ga4History = ga4Metrics?.history ?? null;
   const actualSnapshotCoverage = snapshotCoverage(snapshotData?.coverage);
   const coverage = actualSnapshotCoverage
     ?? (ga4 ? { startDate: ga4.periodStart.toISOString().slice(0, 10), endDate: ga4.periodEnd.toISOString().slice(0, 10) } : null);
@@ -144,7 +163,7 @@ export async function getConnectorAnalytics(principal: ServicePrincipalContext, 
   return {
     schemaVersion: "1.0", projectId: principal.projectId, siteId: site.id, requestedPeriod: range,
     ga4: { status: ga4Metrics ? "available" : ga4 ? "invalid" : "missing", propertyId: ga4Grant?.externalResourceId ?? null,
-      observedAt: ga4?.capturedAt.toISOString() ?? null, coverage, data: ga4Metrics,
+      observedAt: ga4?.capturedAt.toISOString() ?? null, coverage, data: ga4Metrics, history: ga4History,
       snapshotId: ga4?.id ?? null, connection: ga4Connection, latestSync: syncHealth(latestGa4Sync) },
     gsc: { status: gscHasRows ? "available" : "missing", propertyId: gscGrant?.externalResourceId ?? null,
       observedAt: gscHasRows ? latestCompletedGscSync?.finishedAt?.toISOString() ?? gscGrant?.lastSuccessfulAt?.toISOString() ?? null : null,

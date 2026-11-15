@@ -10,6 +10,8 @@ export type AnalyticsSummary = {
   top_pages: Array<{ path: string; views: number }>;
   sources: Array<{ source: string; sessions: number; users: number }>;
   organic_queries: Array<{ query: string; sessions: number; users: number; views: number }>;
+  /** Daily rows and dimension tables the connector can answer any range from. */
+  history: AnalyticsHistory;
 };
 
 type ReportRow = {
@@ -83,9 +85,14 @@ async function totals(
     dimensionFilter: hostFilter(filter),
     metrics: [
       { name: "activeUsers" },
+      { name: "newUsers" },
       { name: "totalUsers" },
       { name: "sessions" },
+      { name: "engagedSessions" },
+      { name: "engagementRate" },
       { name: "screenPageViews" },
+      { name: "eventCount" },
+      { name: "averageSessionDuration" },
     ],
   });
   const row = result.rows?.[0];
@@ -168,6 +175,136 @@ async function organicQueries(
   }
 }
 
+
+export type AnalyticsHistory = {
+  coverage: { startDate: string; endDate: string; days: number };
+  daily: Array<{ date: string; sessions: number; activeUsers: number; screenPageViews: number; eventCount: number }>;
+  pages: Array<{ path: string; views: number; sessions: number }>;
+  channels: Array<{ channel: string; sessions: number; users: number; engagementRate: number }>;
+  devices: Array<{ device: string; sessions: number; users: number }>;
+  countries: Array<{ country: string; sessions: number; users: number }>;
+  events: Array<{ event: string; count: number }>;
+};
+
+const HISTORY_DAYS = 90;
+
+/** The completed-day window the connector can answer any range from. */
+export function ga4HistoryWindow(today = new Date()): { startDate: string; endDate: string; days: number } {
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1));
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (HISTORY_DAYS - 1));
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10), days: HISTORY_DAYS };
+}
+
+function gaDate(value: string | undefined): string {
+  // GA4 returns yyyymmdd for the date dimension.
+  return /^\d{8}$/.test(value ?? "") ? `${value!.slice(0, 4)}-${value!.slice(4, 6)}-${value!.slice(6, 8)}` : value ?? "";
+}
+
+async function history(
+  provider: GoogleCredentialProvider,
+  propertyId: string,
+  filter?: AnalyticsFilter
+): Promise<AnalyticsHistory> {
+  const coverage = ga4HistoryWindow();
+  const range = { startDate: coverage.startDate, endDate: coverage.endDate };
+  // A dimension the property does not collect (for example an event report on
+  // a property with no custom events) must not fail the whole sync: totals are
+  // still valid and the empty block is honest.
+  const safe = (report: () => Promise<{ rows?: ReportRow[] }>) =>
+    report().catch(() => ({ rows: [] as ReportRow[] }));
+  const [daily, pages, channels, devices, countries, events] = await Promise.all([
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "date" }],
+      metrics: [
+        { name: "sessions" },
+        { name: "activeUsers" },
+        { name: "screenPageViews" },
+        { name: "eventCount" },
+      ],
+      orderBys: [{ dimension: { dimensionName: "date" } }],
+      limit: HISTORY_DAYS,
+    })),
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "landingPagePlusQueryString" }],
+      metrics: [{ name: "screenPageViews" }, { name: "sessions" }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+      limit: 20,
+    })),
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "sessionDefaultChannelGroup" }],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }, { name: "engagementRate" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit: 12,
+    })),
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "deviceCategory" }],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit: 10,
+    })),
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "country" }],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit: 15,
+    })),
+    safe(() => runReport(provider, propertyId, {
+      dateRanges: [range],
+      dimensionFilter: hostFilter(filter),
+      dimensions: [{ name: "eventName" }],
+      metrics: [{ name: "eventCount" }],
+      orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
+      limit: 15,
+    })),
+  ]);
+  return {
+    coverage,
+    daily: (daily.rows ?? []).map((row) => ({
+      date: gaDate(row.dimensionValues?.[0]?.value),
+      sessions: Math.round(value(row, 0)),
+      activeUsers: Math.round(value(row, 1)),
+      screenPageViews: Math.round(value(row, 2)),
+      eventCount: Math.round(value(row, 3)),
+    })),
+    pages: (pages.rows ?? []).map((row) => ({
+      path: row.dimensionValues?.[0]?.value ?? "",
+      views: Math.round(value(row, 0)),
+      sessions: Math.round(value(row, 1)),
+    })),
+    channels: (channels.rows ?? []).map((row) => ({
+      channel: row.dimensionValues?.[0]?.value || "(not set)",
+      sessions: Math.round(value(row, 0)),
+      users: Math.round(value(row, 1)),
+      engagementRate: Math.round(value(row, 2) * 10_000) / 10_000,
+    })),
+    devices: (devices.rows ?? []).map((row) => ({
+      device: row.dimensionValues?.[0]?.value || "(not set)",
+      sessions: Math.round(value(row, 0)),
+      users: Math.round(value(row, 1)),
+    })),
+    countries: (countries.rows ?? []).map((row) => ({
+      country: row.dimensionValues?.[0]?.value || "(not set)",
+      sessions: Math.round(value(row, 0)),
+      users: Math.round(value(row, 1)),
+    })),
+    events: (events.rows ?? []).map((row) => ({
+      event: row.dimensionValues?.[0]?.value || "(not set)",
+      count: Math.round(value(row, 0)),
+    })),
+  };
+}
+
 function percentChange(current: number, previous: number): number | null {
   return previous ? Math.round(((current - previous) / previous) * 1000) / 10 : null;
 }
@@ -183,12 +320,13 @@ export async function fetchAnalyticsSummary(
   },
   filter?: AnalyticsFilter
 ): Promise<AnalyticsSummary> {
-  const [current, previous, pages, trafficSources, queries] = await Promise.all([
+  const [current, previous, pages, trafficSources, queries, captured] = await Promise.all([
     totals(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
     totals(provider, propertyId, dates.previousStart, dates.previousEnd, filter),
     topPages(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
     sources(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
     organicQueries(provider, propertyId, dates.currentStart, dates.currentEnd, filter),
+    history(provider, propertyId, filter),
   ]);
 
   const delta_pct = Object.fromEntries(
@@ -201,5 +339,6 @@ export async function fetchAnalyticsSummary(
     top_pages: pages,
     sources: trafficSources,
     organic_queries: queries,
+    history: captured,
   };
 }

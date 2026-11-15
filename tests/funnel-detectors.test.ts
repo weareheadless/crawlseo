@@ -244,7 +244,10 @@ describe("page-level defect economics (spine plan §2.3, §3)", () => {
     ];
     const { db, created } = mockDb(seed);
     await runDetectors(db as never, "p1", { now: NOW });
-    expect(created.filter((row) => row.type === "O7_technical_defect")).toHaveLength(3);
+    // Three pages sharing one defect is one delivery, not three decisions.
+    const defects = created.filter((row) => row.type === "O7_technical_defect");
+    expect(defects).toHaveLength(1);
+    expect(String(defects[0].title)).toContain("3 pages");
   });
 
   it("takes a defect's worth from the page's impressions, not a query volume", async () => {
@@ -269,6 +272,24 @@ describe("page-level defect economics (spine plan §2.3, §3)", () => {
     const o8 = created.filter((row) => row.type === "O8_structured_data_gap");
     expect(o8).toHaveLength(1);
     expect(String(o8[0].title)).toContain("12 pages");
+  });
+
+  it("collapses an issue covering a quarter of crawled pages even below the page floor", async () => {
+    const seed = Array.from({ length: 2 }, (_, i) =>
+      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "identity", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") })
+    );
+    // Six crawled pages: two affected pages are a third of the site, so one
+    // delivery closes the whole issue.
+    const small = mockDb(seed);
+    await runDetectors(small.db as never, "p1", { now: NOW, crawledPages: 6 });
+    const grouped = small.created.filter((row) => row.type === "O8_structured_data_gap");
+    expect(grouped).toHaveLength(1);
+    expect(String(grouped[0].title)).toContain("2 pages");
+
+    // The same two pages on a large site are not systemic and stay separate.
+    const large = mockDb(seed);
+    await runDetectors(large.db as never, "p1", { now: NOW, crawledPages: 100 });
+    expect(large.created.filter((row) => row.type === "O8_structured_data_gap")).toHaveLength(2);
   });
 
   it("parks overflow above the open cap instead of growing without bound", async () => {

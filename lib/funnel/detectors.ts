@@ -53,8 +53,18 @@ export const DETECTOR_THRESHOLDS = {
   hysteresis: 3,
   /** open opportunities per project before overflow parks (plan §3) */
   openCap: 100,
-  /** pages sharing one issue before it becomes a single site-level opportunity */
-  siteLevelIssuePages: 10,
+  /**
+   * Pages sharing one issue before it becomes a single site-level opportunity.
+   * Three is the floor: one delivery closes all three, so separate rows would
+   * ask the owner to decide the same fix three times.
+   */
+  siteLevelIssuePages: 3,
+  /**
+   * The other half of the grouping rule: a defect found on a quarter of the
+   * crawled pages is systemic even when the site is too small to reach three
+   * pages. Both conditions are per issue key, never across issues.
+   */
+  siteLevelIssueShare: 0.25,
   /** pages sharing one issue that make it systemic enough to act on */
   systemicIssuePages: 3,
   /**
@@ -247,15 +257,28 @@ type PageIssue = {
  */
 export function collapsePageIssues(
   issues: PageIssue[],
-  opts: { minPages: number; siteTitle: (issueKey: string, count: number) => string }
+  opts: {
+    minPages: number;
+    /** Pages the latest crawl assessed; enables the share half of the rule. */
+    totalPages?: number | null;
+    /** Fraction of crawled pages that makes an issue systemic. */
+    share?: number;
+    siteTitle: (issueKey: string, count: number) => string;
+  }
 ): DetectorCandidate[] {
   const groups = new Map<string, PageIssue[]>();
   for (const issue of issues) {
     groups.set(issue.issueKey, [...(groups.get(issue.issueKey) ?? []), issue]);
   }
+  const share = opts.share ?? DETECTOR_THRESHOLDS.siteLevelIssueShare;
+  const totalPages = typeof opts.totalPages === "number" && Number.isFinite(opts.totalPages) && opts.totalPages > 0
+    ? opts.totalPages
+    : null;
   const out: DetectorCandidate[] = [];
   for (const [issueKey, group] of groups) {
-    if (group.length < opts.minPages) {
+    const systemic = group.length >= opts.minPages
+      || (totalPages !== null && group.length / totalPages >= share);
+    if (!systemic) {
       for (const issue of group) out.push(issue.candidate);
       continue;
     }
@@ -367,6 +390,12 @@ type DetectContext = {
    * comparable window; comparing daily rows treated normal oscillation as a trend.
    */
   previousRank?: Evidence[];
+  /**
+   * Pages the latest completed crawl assessed. Grouping uses the share of
+   * crawled pages, not a hard page count alone, so a small site's systemic
+   * defect is not split into one row per page.
+   */
+  crawledPages?: number;
 };
 
 function byKind(evidence: Evidence[], kind: string): Evidence[] {
@@ -774,7 +803,7 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O7_technical_defect",
-    detect: (evidence) => {
+    detect: (evidence, ctx) => {
       const demand = pageDemandByUrl(evidence);
       const crawlable = latestCrawlRows(evidence).filter(
         (row) => (num(row, "first_party:issueCount") ?? 0) > 0 && dim(row, "impact") === "crawlability"
@@ -825,13 +854,15 @@ const DETECTORS: Detector[] = [
       }
       return collapsePageIssues(issues, {
         minPages: DETECTOR_THRESHOLDS.siteLevelIssuePages,
+        totalPages: ctx.crawledPages,
+        share: DETECTOR_THRESHOLDS.siteLevelIssueShare,
         siteTitle: (issueKey, count) => `${humanizeIssue(issueKey)} on ${count} pages`,
       });
     },
   },
   {
     type: "O8_structured_data_gap",
-    detect: (evidence) => {
+    detect: (evidence, ctx) => {
       const knowledge = byKind(evidence, "knowledge_fact");
       const demand = pageDemandByUrl(evidence);
       const issues: PageIssue[] = latestCrawlRows(evidence)
@@ -873,6 +904,8 @@ const DETECTORS: Detector[] = [
         });
       return collapsePageIssues(issues, {
         minPages: DETECTOR_THRESHOLDS.siteLevelIssuePages,
+        totalPages: ctx.crawledPages,
+        share: DETECTOR_THRESHOLDS.siteLevelIssueShare,
         siteTitle: (_issueKey, count) => `Missing structured data on ${count} pages`,
       });
     },
@@ -1105,7 +1138,7 @@ export type DetectorRunResult = {
 export async function runDetectors(
   db: DetectorDb,
   projectId: string,
-  opts: { detectedBy?: string; now?: Date; dryRun?: boolean; brandTerms?: string[] } = {}
+  opts: { detectedBy?: string; now?: Date; dryRun?: boolean; brandTerms?: string[]; crawledPages?: number } = {}
 ): Promise<DetectorRunResult> {
   const detectedBy = opts.detectedBy ?? "funnel-detectors";
   const now = opts.now ?? new Date();
@@ -1131,7 +1164,7 @@ export async function runDetectors(
   };
   for (const detector of DETECTORS) {
     if (disabledTypes.has(detector.type)) continue;
-    for (const candidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms })) {
+    for (const candidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms, crawledPages: opts.crawledPages })) {
       remember(candidate);
       if (opts.dryRun) {
         candidates.push(candidate);

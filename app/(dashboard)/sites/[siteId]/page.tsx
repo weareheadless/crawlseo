@@ -6,7 +6,6 @@ import { DashboardMetrics } from "@/components/dashboard/metrics";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
 import { TopKeywords } from "@/components/dashboard/top-keywords";
 import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState } from "@/components/ui/empty-state";
 import { SyncButton } from "@/components/sites/sync-button";
 import { DataLagBadge } from "@/components/ui/data-lag-badge";
 import {
@@ -14,7 +13,6 @@ import {
   VitalsButton,
 } from "@/components/sites/action-buttons";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
-import { getAllOpportunities } from "@/lib/seo-opportunities";
 import { TimeframeSelect } from "@/components/sites/timeframe-select";
 import { parseSeoTimeframe } from "@/lib/seo-timeframes";
 import { getFunnelOverview } from "@/lib/funnel/views";
@@ -37,7 +35,7 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
       domain: true,
       gscProperty: true,
       projectId: true,
-      _count: { select: { keywords: true } },
+      _count: { select: { keywords: true, pages: true } },
     },
   });
 
@@ -57,10 +55,6 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
     select: { perfScore: true, lcp: true, url: true },
   });
 
-  const opportunities =
-    site._count.keywords > 0
-      ? await getAllOpportunities(siteId)
-      : null;
   const funnel = site.projectId ? await getFunnelOverview(db, site.projectId) : null;
 
   return (
@@ -178,14 +172,14 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
         </div>
       )}
 
-      {site._count.keywords === 0 ? (
-        <EmptyState
-          icon="↻"
-          title="Waiting for GSC data"
-          description="Run a sync to pull keywords, pages, and traffic for the last 28 days."
-        />
-      ) : (
-        <div className="space-y-6">
+      {site._count.keywords === 0 && site._count.pages === 0 ? (
+        <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          <strong className="font-medium text-foreground">No query data yet.</strong>{" "}
+          Search Console has not reported queries for this site in the selected window. Crawl health,
+          opportunities and page-level rows stay available; run a sync to refresh.
+        </div>
+      ) : null}
+      <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="panel p-4">
               <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -231,7 +225,6 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
             <CsvExportButton siteId={siteId} type="pages" />
           </div>
         </div>
-      )}
     </div>
   );
 }

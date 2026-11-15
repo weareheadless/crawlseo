@@ -434,10 +434,19 @@ export async function refreshFunnelForSite(
       parked: owned.parked,
     };
   }
+  // Grouping is share-based as well as count-based: the denominator is the
+  // pages the latest completed crawl actually assessed, not the pages that
+  // happened to have an issue.
+  const latestCompletedCrawl = await db.crawl.findFirst({
+    where: { siteId, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { pagesFound: true },
+  });
   const detection = await runDetectors(db, site.projectId, {
     detectedBy: opts.detectedBy ?? "funnel-refresh",
     // The site's own name is not an opportunity: a brand query already ranks.
     brandTerms: brandTermsFromDomain(site.domain),
+    ...(latestCompletedCrawl?.pagesFound ? { crawledPages: latestCompletedCrawl.pagesFound } : {}),
   });
   return {
     ...evidence.backfill,
