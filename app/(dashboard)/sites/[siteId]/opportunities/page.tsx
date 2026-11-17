@@ -68,21 +68,51 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   // Type chips count the current status/leg view, not the whole project: after
   // the §3 rules most rows are parked, and a chip reading 170 when 5 are open is
   // a lie about the board.
-  const typeCounts = await db.opportunity.groupBy({
-    by: ["type"],
-    where: {
-      projectId: site.projectId,
-      status: tab.statuses?.length ? { in: tab.statuses } : undefined,
-      evidenceCompleteness: query.leg && query.leg !== "all" ? { in: [query.leg as never] } : undefined,
-    },
-    _count: { _all: true },
-  });
+  // The board needs several independent counts before it can render its
+  // filters. Issuing them one after another made every tab click pay the sum of
+  // their round trips; they share no inputs, so they go out together.
+  const [typeCounts, kindsPresent, gapFindings, openRows, proposalState] = await Promise.all([
+    db.opportunity.groupBy({
+      by: ["type"],
+      where: {
+        projectId: site.projectId,
+        status: tab.statuses?.length ? { in: tab.statuses } : undefined,
+        evidenceCompleteness: query.leg && query.leg !== "all" ? { in: [query.leg as never] } : undefined,
+      },
+      _count: { _all: true },
+    }),
+    db.evidenceRecord.groupBy({
+      by: ["kind"],
+      where: { projectId: site.projectId, supersededById: null },
+      _count: { _all: true },
+    }),
+    // O13/O14 need a finding that states a gap, not just any finding. Research
+    // that returned themes only leaves them enabled-but-empty, which reads as
+    // "nothing found" when the truth is "no gap was stated".
+    db.evidenceRecord.count({
+      where: {
+        projectId: site.projectId,
+        kind: "research_finding",
+        OR: [
+          { dimensions: { path: ["painPoint"], equals: "true" } },
+          { dimensions: { path: ["positioningGap"], equals: "true" } },
+        ],
+      },
+    }),
+    // Counts must describe the view the chips switch between, not every row the
+    // project has ever produced. Closed and superseded rows are audit history.
+    db.opportunity.findMany({
+      where: { projectId: site.projectId, status: { in: tab.statuses } },
+      select: { detectedBy: true, recommendationDecision: true },
+    }),
+    // The funnel strip describes the proposal board, not every row the project
+    // has ever produced.
+    db.opportunity.findMany({
+      where: { projectId: site.projectId, detectedBy: { in: ["phase3:topic-map", "phase5:weekly"] } },
+      select: { status: true, evidenceCompleteness: true },
+    }),
+  ]);
   const typeTotal = typeCounts.reduce((sum, entry) => sum + entry._count._all, 0);
-  const kindsPresent = await db.evidenceRecord.groupBy({
-    by: ["kind"],
-    where: { projectId: site.projectId, supersededById: null },
-    _count: { _all: true },
-  });
   const present = new Set(kindsPresent.map((row) => row.kind));
   const disabledDetectors: Array<{ type: string; missing: string[] }> = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
     const missing = needs.filter((kind) => !present.has(kind));
@@ -91,16 +121,6 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   // O13/O14 need a finding that states a gap, not just any finding. Research that
   // returned themes only leaves them enabled-but-empty, which reads as "nothing
   // found" when the truth is "no gap was stated".
-  const gapFindings = await db.evidenceRecord.count({
-    where: {
-      projectId: site.projectId,
-      kind: "research_finding",
-      OR: [
-        { dimensions: { path: ["painPoint"], equals: "true" } },
-        { dimensions: { path: ["positioningGap"], equals: "true" } },
-      ],
-    },
-  });
   if (gapFindings === 0) {
     disabledDetectors.push({ type: "O13_user_pain_point", missing: ["gap-typed research_finding"] });
     disabledDetectors.push({ type: "O14_offer_positioning_gap", missing: ["gap-typed research_finding"] });
@@ -110,12 +130,6 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
   // detector that has ever written to this project. "All sources" is explicit.
   const PROPOSAL_SOURCES = ["phase3:topic-map", "phase5:weekly"];
   const source = query.source ?? "proposals";
-  // Counts must describe the view the chips switch between, not every row the
-  // project has ever produced. Closed and superseded rows are audit history.
-  const openRows = await db.opportunity.findMany({
-    where: { projectId: site.projectId, status: { in: tab.statuses } },
-    select: { detectedBy: true, recommendationDecision: true },
-  });
   const proposalRows = openRows.filter((row) => PROPOSAL_SOURCES.includes(row.detectedBy));
   const proposalCount = proposalRows.length;
   const proposalLaneCounts: Record<string, number> = {};
@@ -124,12 +138,6 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     if (lane) proposalLaneCounts[lane] = (proposalLaneCounts[lane] ?? 0) + 1;
   }
   const allSourcesCount = openRows.length;
-  // The funnel strip describes the proposal board, not every row the project
-  // has ever produced.
-  const proposalState = await db.opportunity.findMany({
-    where: { projectId: site.projectId, detectedBy: { in: PROPOSAL_SOURCES } },
-    select: { status: true, evidenceCompleteness: true },
-  });
   const proposalStateCounts = {
     detected: proposalState.filter((row) => row.status === "detected").length,
     accepted: proposalState.filter((row) => row.status === "accepted" || row.status === "in_progress").length,

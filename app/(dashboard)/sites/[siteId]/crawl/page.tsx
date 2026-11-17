@@ -24,36 +24,44 @@ export default async function CrawlPage({ params }: Props) {
   });
   if (!site) redirect("/sites");
 
-  // Check for running crawl
-  const runningCrawl = await db.crawl.findFirst({
-    where: { siteId, status: "RUNNING" },
-    select: { id: true, pagesFound: true, startedAt: true },
-  });
-
-  const latest = await db.crawl.findFirst({
-    where: { siteId, status: "COMPLETED" },
-    orderBy: { finishedAt: "desc" },
-    include: {
-      issues: {
-        orderBy: [{ severity: "asc" }, { type: "asc" }],
-        take: 1000,
+  const [runningCrawl, latest] = await Promise.all([
+    // Check for running crawl
+    db.crawl.findFirst({
+      where: { siteId, status: "RUNNING" },
+      select: { id: true, pagesFound: true, startedAt: true },
+    }),
+    db.crawl.findFirst({
+      where: { siteId, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      include: {
+        issues: {
+          orderBy: [{ severity: "asc" }, { type: "asc" }],
+          take: 1000,
+        },
       },
-    },
-  });
+    }),
+  ]);
 
-  // Get AuditPage data for the latest crawl
-  const auditPages = latest
-    ? await db.auditPage.findMany({
-        where: { crawlId: latest.id },
-        orderBy: { contentScore: "desc" },
-        take: 200,
-      })
-    : [];
+  // Full-page table and the totals that tell the reader when a table is partial:
+  // a capped list that hides its cap understates the crawl, and this page once
+  // showed a 1000-issue slice as if it were every issue.
+  const [auditPages, storedAuditPages, storedIssues] = latest
+    ? await Promise.all([
+        db.auditPage.findMany({
+          where: { crawlId: latest.id },
+          orderBy: { contentScore: "desc" },
+          take: 200,
+        }),
+        db.auditPage.count({ where: { crawlId: latest.id } }),
+        db.crawlIssue.count({ where: { crawlId: latest.id } }),
+      ])
+    : [[], 0, 0];
 
   const realIssues = latest?.issues.filter((i) => {
     const kind = (i.details as { kind?: string } | null)?.kind;
     return kind !== "crawl_summary" && kind !== "content_score";
   }) || [];
+  const issuesTruncated = storedIssues > (latest?.issues.length ?? 0);
 
   const bySeverity = {
     CRITICAL: realIssues.filter((i) => i.severity === "CRITICAL").length,
@@ -125,6 +133,12 @@ export default async function CrawlPage({ params }: Props) {
                 <p className="text-sm text-muted-foreground">
                   Ranked by severity and share of crawled pages affected, not raw issue count.
                 </p>
+                {issuesTruncated && (
+                  <p className="mt-1 text-xs text-warning">
+                    Showing {latest.issues.length} of {storedIssues} stored issues, so shares are
+                    computed from this slice. Re-run the crawl with a smaller page cap to see every issue.
+                  </p>
+                )}
               </div>
               <ul className="divide-y divide-border/40">
                 {issuePriorities.slice(0, 5).map((issue, index) => (
@@ -170,7 +184,7 @@ export default async function CrawlPage({ params }: Props) {
               <div className="border-b border-border/60 px-5 py-4">
                 <h3 className="font-heading text-lg font-semibold">Crawled pages</h3>
                 <p className="text-sm text-muted-foreground">
-                  {auditPages.length} pages stored with full metadata
+                  {auditPages.length} of {storedAuditPages} pages shown, highest content score first
                 </p>
               </div>
               <div className="overflow-x-auto">

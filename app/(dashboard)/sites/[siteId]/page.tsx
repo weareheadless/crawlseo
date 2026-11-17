@@ -43,19 +43,19 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
     redirect("/sites");
   }
 
-  const latestCrawl = await db.crawl.findFirst({
-    where: { siteId, status: "COMPLETED" },
-    orderBy: { finishedAt: "desc" },
-    select: { healthScore: true, issuesFound: true, pagesFound: true, finishedAt: true },
-  });
-
-  const latestVital = await db.vitalsReport.findFirst({
-    where: { siteId },
-    orderBy: { date: "desc" },
-    select: { perfScore: true, lcp: true, url: true },
-  });
-
-  const funnel = site.projectId ? await getFunnelOverview(db, site.projectId) : null;
+  const [latestCrawl, latestVital, funnel] = await Promise.all([
+    db.crawl.findFirst({
+      where: { siteId, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      select: { healthScore: true, issuesFound: true, pagesFound: true, finishedAt: true },
+    }),
+    db.vitalsReport.findFirst({
+      where: { siteId },
+      orderBy: { date: "desc" },
+      select: { perfScore: true, lcp: true, url: true },
+    }),
+    site.projectId ? getFunnelOverview(db, site.projectId) : Promise.resolve(null),
+  ]);
 
   return (
     <div>

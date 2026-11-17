@@ -68,36 +68,115 @@ export function seoMetricsDateRange(startDate: string, endDate: string): SeoMetr
   return { start, end };
 }
 
-/** Impression-weighted average position */
-function weightedPosition(
-  rows: { position: number; impressions: number }[]
-): number {
-  let weighted = 0;
-  let weight = 0;
-  for (const row of rows) {
-    const w = Math.max(row.impressions, 0);
-    weighted += row.position * w;
-    weight += w;
-  }
-  if (weight === 0) {
-    if (rows.length === 0) return 0;
-    return rows.reduce((s, r) => s + r.position, 0) / rows.length;
-  }
-  return weighted / weight;
+/**
+ * One window of totals, computed by Postgres.
+ *
+ * These functions used to stream every Page and Keyword row for the window into
+ * Node and sum them there. A 90-day view of a mid-size site is tens of thousands
+ * of rows per call, and the portfolio dashboard did it once per site, twice
+ * (current and previous window). That load is what made navigation feel like a
+ * download and what pushed the host into swap. SQL returns one row instead.
+ *
+ * Semantics are preserved exactly:
+ * - headline traffic comes from Page rows when they exist (they carry the full
+ *   site totals, query rows omit anonymised searches), otherwise Keyword rows;
+ * - average position is impression-weighted, falling back to a plain average
+ *   when no row has impressions;
+ * - uniqueKeywords always counts distinct queries from Keyword rows.
+ */
+type WindowTotals = {
+  clicks: number;
+  impressions: number;
+  weighted: number;
+  weight: number;
+  plain: number;
+  row_count: number;
+  unique_keywords: number;
+};
+
+async function windowTotals(
+  siteId: string,
+  range: SeoMetricsDateRange
+): Promise<{ page: WindowTotals; keyword: WindowTotals }> {
+  const [row] = await db.$queryRaw<Array<{
+    page_clicks: number; page_impressions: number; page_weighted: number;
+    page_weight: number; page_plain: number; page_rows: number;
+    keyword_clicks: number; keyword_impressions: number; keyword_weighted: number;
+    keyword_weight: number; keyword_plain: number; keyword_rows: number;
+    unique_keywords: number;
+  }>>`
+    WITH page_totals AS (
+      SELECT
+        COALESCE(SUM("clicks"), 0)::float8 AS clicks,
+        COALESCE(SUM("impressions"), 0)::float8 AS impressions,
+        COALESCE(SUM("position" * GREATEST("impressions", 0)), 0)::float8 AS weighted,
+        COALESCE(SUM(GREATEST("impressions", 0)), 0)::float8 AS weight,
+        COALESCE(AVG("position"), 0)::float8 AS plain,
+        COUNT(*)::int AS row_count
+      FROM "Page"
+      WHERE "siteId" = ${siteId}
+        AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+        AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    ),
+    keyword_totals AS (
+      SELECT
+        COALESCE(SUM("clicks"), 0)::float8 AS clicks,
+        COALESCE(SUM("impressions"), 0)::float8 AS impressions,
+        COALESCE(SUM("position" * GREATEST("impressions", 0)), 0)::float8 AS weighted,
+        COALESCE(SUM(GREATEST("impressions", 0)), 0)::float8 AS weight,
+        COALESCE(AVG("position"), 0)::float8 AS plain,
+        COUNT(*)::int AS row_count,
+        COUNT(DISTINCT NULLIF("query", ''))::int AS unique_queries
+      FROM "Keyword"
+      WHERE "siteId" = ${siteId}
+        AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+        AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    )
+    SELECT
+      p.clicks AS page_clicks,
+      p.impressions AS page_impressions,
+      p.weighted AS page_weighted,
+      p.weight AS page_weight,
+      p.plain AS page_plain,
+      p.row_count AS page_rows,
+      k.clicks AS keyword_clicks,
+      k.impressions AS keyword_impressions,
+      k.weighted AS keyword_weighted,
+      k.weight AS keyword_weight,
+      k.plain AS keyword_plain,
+      k.row_count AS keyword_rows,
+      COALESCE(k.unique_queries, 0) AS unique_keywords
+    FROM page_totals p, keyword_totals k
+  `;
+
+  const toTotals = (source: "page" | "keyword"): WindowTotals => ({
+    clicks: row[`${source}_clicks`],
+    impressions: row[`${source}_impressions`],
+    weighted: row[`${source}_weighted`],
+    weight: row[`${source}_weight`],
+    plain: row[`${source}_plain`],
+    row_count: row[`${source}_rows`],
+    unique_keywords: source === "keyword" ? row.unique_keywords : 0,
+  });
+
+  return { page: toTotals("page"), keyword: toTotals("keyword") };
 }
 
-function aggregatePeriod(
-  rows: { clicks: number; impressions: number; position: number; query?: string }[]
-): PeriodMetrics {
-  const clicks = rows.reduce((s, r) => s + r.clicks, 0);
-  const impressions = rows.reduce((s, r) => s + r.impressions, 0);
-  const queries = new Set(rows.map((r) => r.query).filter(Boolean));
+function positionOf(totals: WindowTotals): number {
+  if (totals.weight > 0) return totals.weighted / totals.weight;
+  // A row set with no impressions has no weight to blend by; the plain average
+  // is what the previous in-JS implementation returned in that case.
+  return totals.row_count > 0 ? totals.plain : 0;
+}
+
+function periodFrom(totals: WindowTotals, keywordsFrom?: WindowTotals): PeriodMetrics {
+  const impressions = totals.impressions;
   return {
-    clicks,
+    clicks: totals.clicks,
     impressions,
-    avgPosition: weightedPosition(rows),
-    avgCtr: impressions > 0 ? clicks / impressions : 0,
-    uniqueKeywords: queries.size,
+    avgPosition: positionOf(totals),
+    avgCtr: impressions > 0 ? totals.clicks / impressions : 0,
+    uniqueKeywords: keywordsFrom ? keywordsFrom.unique_keywords : totals.unique_keywords,
   };
 }
 
@@ -118,44 +197,20 @@ export async function getSitePeriodMetrics(
   const currentRange = dateRange ?? parseRange(days);
   const prevRange = dateRange ? previousDateRange(dateRange) : previousRange(days);
 
-  const [currentPages, previousPages, currentKeywords, previousKeywords] = await Promise.all([
-    db.page.findMany({
-      where: {
-        siteId,
-        date: { gte: currentRange.start, lte: currentRange.end },
-      },
-      select: { clicks: true, impressions: true, position: true },
-    }),
-    db.page.findMany({
-      where: {
-        siteId,
-        date: { gte: prevRange.start, lte: prevRange.end },
-      },
-      select: { clicks: true, impressions: true, position: true },
-    }),
-    db.keyword.findMany({
-      where: {
-        siteId,
-        date: { gte: currentRange.start, lte: currentRange.end },
-      },
-      select: { query: true, clicks: true, impressions: true, position: true },
-    }),
-    db.keyword.findMany({
-      where: {
-        siteId,
-        date: { gte: prevRange.start, lte: prevRange.end },
-      },
-      select: { query: true, clicks: true, impressions: true, position: true },
-    }),
+  const [currentTotals, previousTotals] = await Promise.all([
+    windowTotals(siteId, currentRange),
+    windowTotals(siteId, prevRange),
   ]);
 
   // Page-level rows carry the complete site totals. Query-level rows omit
   // anonymised searches, so they must not be used for headline traffic.
-  const current = {
-    ...aggregatePeriod(currentPages.length > 0 ? currentPages : currentKeywords),
-    uniqueKeywords: new Set(currentKeywords.map((row) => row.query).filter(Boolean)).size,
-  };
-  const previous = aggregatePeriod(previousPages.length > 0 ? previousPages : previousKeywords);
+  const current = periodFrom(
+    currentTotals.page.row_count > 0 ? currentTotals.page : currentTotals.keyword,
+    currentTotals.keyword
+  );
+  const previous = periodFrom(
+    previousTotals.page.row_count > 0 ? previousTotals.page : previousTotals.keyword
+  );
 
   return {
     current,
@@ -173,7 +228,10 @@ export async function getSitePeriodMetrics(
   };
 }
 
-/** Aggregate keyword rows across the period (sum metrics, weighted position). */
+/**
+ * Aggregate keyword rows across the period (sum metrics, weighted position).
+ * Grouping happens in Postgres; only `limit` rows come back.
+ */
 export async function getTopKeywords(
   siteId: string,
   days = 28,
@@ -181,51 +239,35 @@ export async function getTopKeywords(
   dateRange?: SeoMetricsDateRange
 ): Promise<KeywordRow[]> {
   const range = dateRange ?? parseRange(days);
-  const rows = await db.keyword.findMany({
-    where: {
-      siteId,
-      date: { gte: range.start, lte: range.end },
-    },
-    select: {
-      query: true,
-      clicks: true,
-      impressions: true,
-      position: true,
-    },
-  });
+  const rows = await db.$queryRaw<Array<{
+    query: string;
+    clicks: number;
+    impressions: number;
+    weighted: number;
+    weight: number;
+  }>>`
+    SELECT
+      "query" AS query,
+      SUM("clicks")::float8 AS clicks,
+      SUM("impressions")::float8 AS impressions,
+      SUM("position" * GREATEST("impressions", 1))::float8 AS weighted,
+      SUM(GREATEST("impressions", 1))::float8 AS weight
+    FROM "Keyword"
+    WHERE "siteId" = ${siteId}
+      AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+      AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    GROUP BY "query"
+    ORDER BY SUM("clicks") DESC, SUM("impressions") DESC, "query" ASC
+    LIMIT ${limit}
+  `;
 
-  const byQuery = new Map<
-    string,
-    { clicks: number; impressions: number; weightedPos: number }
-  >();
-
-  for (const row of rows) {
-    const existing = byQuery.get(row.query) ?? {
-      clicks: 0,
-      impressions: 0,
-      weightedPos: 0,
-    };
-    existing.clicks += row.clicks;
-    existing.impressions += row.impressions;
-    existing.weightedPos += row.position * Math.max(row.impressions, 1);
-    byQuery.set(row.query, existing);
-  }
-
-  return Array.from(byQuery.entries())
-    .map(([query, data]) => {
-      const weight = Math.max(data.impressions, 1);
-      const position = data.weightedPos / weight;
-      const ctr = data.impressions > 0 ? data.clicks / data.impressions : 0;
-      return {
-        query,
-        clicks: data.clicks,
-        impressions: data.impressions,
-        position,
-        ctr,
-      };
-    })
-    .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
-    .slice(0, limit);
+  return rows.map((row) => ({
+    query: row.query,
+    clicks: row.clicks,
+    impressions: row.impressions,
+    position: row.weight > 0 ? row.weighted / row.weight : 0,
+    ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
+  }));
 }
 
 export async function getTopPages(
@@ -235,51 +277,35 @@ export async function getTopPages(
   dateRange?: SeoMetricsDateRange
 ): Promise<PageRow[]> {
   const range = dateRange ?? parseRange(days);
-  const rows = await db.page.findMany({
-    where: {
-      siteId,
-      date: { gte: range.start, lte: range.end },
-    },
-    select: {
-      url: true,
-      clicks: true,
-      impressions: true,
-      position: true,
-    },
-  });
+  const rows = await db.$queryRaw<Array<{
+    url: string;
+    clicks: number;
+    impressions: number;
+    weighted: number;
+    weight: number;
+  }>>`
+    SELECT
+      "url" AS url,
+      SUM("clicks")::float8 AS clicks,
+      SUM("impressions")::float8 AS impressions,
+      SUM("position" * GREATEST("impressions", 1))::float8 AS weighted,
+      SUM(GREATEST("impressions", 1))::float8 AS weight
+    FROM "Page"
+    WHERE "siteId" = ${siteId}
+      AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+      AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    GROUP BY "url"
+    ORDER BY SUM("clicks") DESC, SUM("impressions") DESC, "url" ASC
+    LIMIT ${limit}
+  `;
 
-  const byUrl = new Map<
-    string,
-    { clicks: number; impressions: number; weightedPos: number }
-  >();
-
-  for (const row of rows) {
-    const existing = byUrl.get(row.url) ?? {
-      clicks: 0,
-      impressions: 0,
-      weightedPos: 0,
-    };
-    existing.clicks += row.clicks;
-    existing.impressions += row.impressions;
-    existing.weightedPos += row.position * Math.max(row.impressions, 1);
-    byUrl.set(row.url, existing);
-  }
-
-  return Array.from(byUrl.entries())
-    .map(([url, data]) => {
-      const weight = Math.max(data.impressions, 1);
-      const position = data.weightedPos / weight;
-      const ctr = data.impressions > 0 ? data.clicks / data.impressions : 0;
-      return {
-        url,
-        clicks: data.clicks,
-        impressions: data.impressions,
-        position,
-        ctr,
-      };
-    })
-    .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
-    .slice(0, limit);
+  return rows.map((row) => ({
+    url: row.url,
+    clicks: row.clicks,
+    impressions: row.impressions,
+    position: row.weight > 0 ? row.weighted / row.weight : 0,
+    ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
+  }));
 }
 
 export async function getDailyTraffic(
@@ -288,42 +314,34 @@ export async function getDailyTraffic(
 ): Promise<DailyTraffic[]> {
   const range = parseRange(days);
 
-  // Prefer page-level rows when present (cleaner site totals);
-  // fall back to keyword rows.
-  const pages = await db.page.findMany({
-    where: {
-      siteId,
-      date: { gte: range.start, lte: range.end },
-    },
-    select: { date: true, clicks: true, impressions: true },
-    orderBy: { date: "asc" },
-  });
+  // Prefer page-level rows when present (cleaner site totals); fall back to
+  // keyword rows. One grouped query per attempt instead of every raw row.
+  const pages = await db.$queryRaw<DailyTraffic[]>`
+    SELECT
+      to_char("date", 'YYYY-MM-DD') AS date,
+      SUM("clicks")::float8 AS clicks,
+      SUM("impressions")::float8 AS impressions
+    FROM "Page"
+    WHERE "siteId" = ${siteId}
+      AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+      AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `;
+  if (pages.length > 0) return pages;
 
-  const source =
-    pages.length > 0
-      ? pages
-      : await db.keyword.findMany({
-          where: {
-            siteId,
-            date: { gte: range.start, lte: range.end },
-          },
-          select: { date: true, clicks: true, impressions: true },
-          orderBy: { date: "asc" },
-        });
-
-  const aggregated = new Map<string, { clicks: number; impressions: number }>();
-
-  for (const row of source) {
-    const dateStr = row.date.toISOString().slice(0, 10);
-    const current = aggregated.get(dateStr) ?? { clicks: 0, impressions: 0 };
-    current.clicks += row.clicks;
-    current.impressions += row.impressions;
-    aggregated.set(dateStr, current);
-  }
-
-  return Array.from(aggregated.entries())
-    .map(([date, metrics]) => ({ date, ...metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  return db.$queryRaw<DailyTraffic[]>`
+    SELECT
+      to_char("date", 'YYYY-MM-DD') AS date,
+      SUM("clicks")::float8 AS clicks,
+      SUM("impressions")::float8 AS impressions
+    FROM "Keyword"
+    WHERE "siteId" = ${siteId}
+      AND "date" >= (${range.start}::timestamptz AT TIME ZONE 'UTC')
+      AND "date" <= (${range.end}::timestamptz AT TIME ZONE 'UTC')
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `;
 }
 
 export function formatPosition(position: number): string {
