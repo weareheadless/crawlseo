@@ -12,6 +12,7 @@ import { worktreeBrief } from "@/lib/agent-tasks/prompt";
 import {
   componentAccepts,
   extractConfigVariants,
+  rankConfigComponents,
   type ConfigVariant,
 } from "@/lib/agent-tasks/page-preview";
 
@@ -102,6 +103,21 @@ export async function createPreviewArtifact(
   status: string,
   routeUrl?: string | null,
 ): Promise<void> {
+  const html = await buildPreviewDocument(worktreePath, status, routeUrl);
+  if (!html) return;
+  await addAgentArtifact(taskId, { kind: "preview_html", content: html, maxChars: PREVIEW_MAX_CHARS });
+}
+
+/**
+ * The renderable preview for a run's diff, or null when there is nothing to
+ * mount. Kept free of the database so the document can be built and inspected
+ * on its own.
+ */
+export async function buildPreviewDocument(
+  worktreePath: string,
+  status: string,
+  routeUrl?: string | null,
+): Promise<string | null> {
   const changed = parseGitStatusFiles(status);
   const elementFiles = changed
     .filter((file) => /^src\/public\/custom-elements\/[^/]+\.js$/i.test(file))
@@ -120,21 +136,28 @@ export async function createPreviewArtifact(
     if (variants.length >= 6) break;
   }
 
-  // With no changed component, the config still describes a component in the
-  // repository; render the one that declares a `config` attribute.
+  // With no changed component, the config still describes components in the
+  // repository, and the keys say which ones. Picking by consumption, not by
+  // directory order, is what stops the preview from mounting an unrelated
+  // widget: a related-listings element also declares `config`, and it renders a
+  // "Similar listings" heading with no listings under it.
   let previewFiles = elementFiles;
   if (previewFiles.length === 0 && variants.length > 0) {
     const directory = path.join(worktreePath, "src/public/custom-elements");
-    const names = await readdir(directory).catch(() => [] as string[]);
-    for (const name of names.filter((entry) => entry.endsWith(".js")).slice(0, 12)) {
+    const names = (await readdir(directory).catch(() => [] as string[])).filter((entry) => entry.endsWith(".js"));
+    const sources: Array<{ file: string; source: string }> = [];
+    for (const name of names) {
       const source = await readFile(path.join(directory, name), "utf8").catch(() => "");
-      if (componentAccepts(source, "config")) {
-        previewFiles.push(`src/public/custom-elements/${name}`);
-      }
+      if (source) sources.push({ file: `src/public/custom-elements/${name}`, source });
     }
-    previewFiles = previewFiles.slice(0, 3);
+    const ranked = rankConfigComponents(sources, variants);
+    const top = ranked[0]?.score ?? 0;
+    // Keep near-equal consumers: a page that mounts a hero element and a
+    // content element splits its keys between them, and both belong in the
+    // preview. A card widget that merely shares a generic key scores far below.
+    previewFiles = ranked.filter((entry) => entry.score * 2 >= top).slice(0, 3).map((entry) => entry.file);
   }
-  if (previewFiles.length === 0) return;
+  if (previewFiles.length === 0) return null;
 
   const components: Array<{ file: string; tag: string; source: string; configurable: boolean; modes: boolean }> = [];
   for (const file of previewFiles) {
@@ -154,26 +177,17 @@ export async function createPreviewArtifact(
       // A deleted or unreadable file cannot be previewed.
     }
   }
-  if (components.length === 0) return;
+  if (components.length === 0) return null;
 
   let previewPath = "";
-  let categoryKey = "";
-  let locale = "";
   if (routeUrl) {
     try {
       const parsed = new URL(routeUrl);
       previewPath = `${parsed.pathname}${parsed.search}`;
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      categoryKey = parts.at(-1) ?? "";
-      locale = /^en(?:\/|$)/i.test(parts[0] ?? "") ? "en" : "fr";
     } catch {
       previewPath = "";
     }
   }
-  const shared = [
-    locale ? `locale="${locale}"` : "",
-    categoryKey ? `category-key="${categoryKey}"` : "",
-  ].filter(Boolean).join(" ");
   const routeScript = previewPath
     ? `<script>history.replaceState(null,"",${JSON.stringify(previewPath)});</script>`
     : "";
@@ -181,36 +195,37 @@ export async function createPreviewArtifact(
 
   const sections = components.map(({ file, tag, source, configurable, modes }) => {
     // One block per config variant, so every market or locale the page can
-    // render is reviewable together. `mode="all"` on a single mount would
-    // otherwise render only the hero. Each block is labelled with its own
-    // language and carries `lang`, so the two are never mistaken for one page.
+    // render is reviewable together. A component that watches `mode` is mounted
+    // once with `mode="all"`: the Wix page splits the same component across
+    // three slots (hero, collection, content), and the preview has no slots, so
+    // anything less than "all" would show a third of the page.
     const render = configurable && variants.length > 0
       ? variants.map((variant) => {
           const config = variant.config && typeof variant.config === "object" && !Array.isArray(variant.config)
             ? variant.config as Record<string, unknown>
             : {};
-          const locale = typeof config.locale === "string" ? config.locale.trim().toLowerCase() : "";
-          const language = locale ? languageName(locale) : variant.name;
+          const configLocale = typeof config.locale === "string" ? config.locale.trim().toLowerCase() : "";
+          const language = configLocale ? languageName(configLocale) : variant.name;
           return `
-    <section class="preview-block"${locale ? ` lang="${escapeHtml(locale)}"` : ""}>
+    <section class="preview-block"${configLocale ? ` lang="${escapeHtml(configLocale)}"` : ""}>
       <div class="preview-label">
         <span class="preview-locale">${label(language)}</span>
-        <span class="preview-meta">${label(variant.name)} · ${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</span>
+        <span class="preview-meta">${label(variant.name)} · ${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}${modes ? " · mode=all" : ""}</span>
       </div>
-      <${tag} ${shared}${locale ? ` lang="${escapeHtml(locale)}"` : ""}${modes ? ' mode="all"' : ""} config="${escapeHtml(JSON.stringify(variant.config))}"></${tag}>
+      <${tag}${configLocale ? ` locale="${escapeHtml(configLocale)}"` : ""}${modes ? ' mode="all"' : ""} config="${escapeHtml(JSON.stringify(variant.config))}"></${tag}>
     </section>`;
         }).join("\n")
       : `
     <section class="preview-block">
       <div class="preview-label"><span class="preview-meta">${label(file)}${previewPath ? ` · ${label(previewPath)}` : ""}</span></div>
-      <${tag} ${shared}></${tag}>
+      <${tag}></${tag}>
     </section>`;
     return `${render}
     ${routeScript}
     <script>${source}</script>`;
   }).join("\n");
 
-  const html = `<!doctype html>
+  const build = (note: string) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -227,12 +242,21 @@ export async function createPreviewArtifact(
 </style>
 </head>
 <body>
-<div class="preview-note">Preview of the changed page and component. Page copy comes from the page's own config; live Wix data, listings and page chrome are not loaded. Each language is a separate block with its own header.</div>
+<div class="preview-note">${note}</div>
 ${sections}
 </body>
 </html>`;
-  await addAgentArtifact(taskId, { kind: "preview_html", content: html });
+
+  let html = build(PREVIEW_NOTE);
+  if (html.length > PREVIEW_MAX_CHARS) html = build(`${PREVIEW_NOTE}${PREVIEW_TRUNCATED_NOTE}`);
+  return html;
 }
+
+const PREVIEW_MAX_CHARS = 1_000_000;
+const PREVIEW_NOTE = "Preview of the page the run changes, mounted from the page's own config. Live Wix data, listings and the site header are not loaded. Each language is a separate block with its own header.";
+const PREVIEW_TRUNCATED_NOTE = ` This document is longer than the ${formatBytes(PREVIEW_MAX_CHARS)} preview limit and is cut at that point, so the last blocks are incomplete.`;
+
+/** The language's own name, e.g. "Español", so a block header is readable. */
 
 /** The language's own name, e.g. "Español", so a block header is readable. */
 function languageName(code: string): string {

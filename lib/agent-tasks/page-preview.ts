@@ -130,6 +130,43 @@ export function componentAccepts(source: string, attribute: string): boolean {
   return new RegExp(`['"]${escapeRegExp(attribute)}['"]`).test(match[1]);
 }
 
+/**
+ * The components a page's config actually drives, best match first.
+ *
+ * When a run changes a page file and no component file, the preview has no
+ * direct statement of which element the page mounts. The config keys are that
+ * statement: a component that reads `sectionsEyebrow`, `guides` and `faq` is the
+ * component those keys were written for. Weighting each hit by key length keeps
+ * a specific key ahead of a ubiquitous one (`title` appears in almost every
+ * component), which is what separates the page shell from a card widget that
+ * merely mentions a title.
+ *
+ * A zero score means no component consumes this page, and the caller renders
+ * nothing rather than guessing.
+ */
+export function rankConfigComponents(
+  components: Array<{ file: string; source: string }>,
+  variants: ConfigVariant[],
+): Array<{ file: string; score: number }> {
+  const keys = new Set<string>();
+  for (const variant of variants) {
+    const config = variant.config;
+    if (config && typeof config === "object" && !Array.isArray(config)) {
+      for (const key of Object.keys(config)) keys.add(key);
+    }
+  }
+  const scored: Array<{ file: string; score: number }> = [];
+  for (const component of components) {
+    if (!componentAccepts(component.source, "config")) continue;
+    let score = 0;
+    for (const key of keys) {
+      if (component.source.includes(key)) score += key.length;
+    }
+    if (score > 0) scored.push({ file: component.file, score });
+  }
+  return scored.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
