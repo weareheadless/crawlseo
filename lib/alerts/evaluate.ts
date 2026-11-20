@@ -11,11 +11,14 @@ export type AlertFire = {
 };
 
 /**
- * Evaluate enabled alerts for a user. Lightweight rules for v1.
+ * Evaluate every enabled alert in the workspace. Alerts belong to a site, and
+ * the workspace has one operator: filtering them by the account that happened
+ * to create the row hid every alert on a site created under another account.
  */
-export async function evaluateAlertsForUser(userId: string): Promise<AlertFire[]> {
+export async function evaluateAlertsForUser(_userId: string): Promise<AlertFire[]> {
+  void _userId;
   const alerts = await db.alert.findMany({
-    where: { userId, enabled: true },
+    where: { enabled: true },
     include: { site: { select: { id: true, domain: true } } },
   });
 
@@ -118,7 +121,9 @@ export async function evaluateAlertsForUser(userId: string): Promise<AlertFire[]
 }
 
 export async function ensureDefaultAlerts(userId: string, siteId: string) {
-  const existing = await db.alert.count({ where: { userId, siteId } });
+  // One set of rules per site for the workspace; the creator is recorded only
+  // so the row keeps its author.
+  const existing = await db.alert.count({ where: { siteId } });
   if (existing > 0) return;
 
   await db.alert.createMany({

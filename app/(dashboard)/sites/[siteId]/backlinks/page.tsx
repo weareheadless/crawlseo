@@ -1,5 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
+import { resolveDataForSeoReadiness } from "@/lib/dataforseo/readiness";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { BacklinksClient } from "@/components/research/backlinks-client";
@@ -15,14 +16,13 @@ export default async function BacklinksPage({ params }: Props) {
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { userId: true, domain: true },
+    select: { userId: true, domain: true, projectId: true },
   });
   if (!site) redirect("/sites");
 
-  const hasDataForSEO = !!(await db.apiKey.findUnique({
-    where: { userId_provider: { userId, provider: "dataforseo" } },
-    select: { id: true },
-  }));
+  // Read the credential the way the client does: a project grant or the
+  // workspace key, not only a key stored by whoever is signed in.
+  const hasDataForSEO = (await resolveDataForSeoReadiness({ projectId: site.projectId, userId })).configured;
 
   return (
     <div>

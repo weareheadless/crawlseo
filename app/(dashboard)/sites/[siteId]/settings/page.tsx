@@ -47,9 +47,10 @@ export default async function SettingsPage({ params }: Props) {
 
   // Check API key status
   const [apiKeys, platformGrant, operations, deliveryConfig, designProfile, locales] = await Promise.all([
+    // Workspace-wide: one key per provider, whichever account stored it.
     db.apiKey.findMany({
-      where: { userId },
       select: { provider: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
     }),
     site.projectId
       ? db.projectApiKeyGrant.findFirst({

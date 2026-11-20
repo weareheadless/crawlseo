@@ -10,9 +10,11 @@ export async function GET() {
     }
 
     const [keys, platformDataForSeo] = await Promise.all([
+      // Workspace-wide: the key belongs to the workspace, whichever account
+      // stored it.
       db.apiKey.findMany({
-        where: { userId },
         select: { provider: true, createdAt: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
       }),
       db.providerCredential.findUnique({
         where: { provider_label: { provider: "dataforseo", label: "crawlseo-platform" } },
@@ -25,6 +27,10 @@ export async function GET() {
     };
 
     for (const key of keys) {
+      const current = providers[key.provider];
+      // Rows are newest first; a provider with an older duplicate keeps the
+      // most recent credential in the status the settings form shows.
+      if (current?.connected && current.updatedAt) continue;
       providers[key.provider] = {
         connected: true,
         updatedAt: key.updatedAt.toISOString(),
@@ -69,30 +75,37 @@ export async function POST(req: Request) {
       return Response.json({ error: "Unsupported provider" }, { status: 400 });
     }
 
-    const saved = await db.apiKey.upsert({
-      where: {
-        userId_provider: {
-          userId,
-          provider: body.provider,
-        },
-      },
-      create: {
-        userId,
-        provider: body.provider,
-        encryptedLogin: encrypt(body.login),
-        encryptedPassword: encrypt(body.password),
-      },
-      update: {
-        encryptedLogin: encrypt(body.login),
-        encryptedPassword: encrypt(body.password),
-      },
+    // The workspace keeps one key per provider: updating the stored credential
+    // replaces it instead of adding a second row under the signed-in account.
+    const existing = await db.apiKey.findFirst({
+      where: { provider: body.provider },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
     });
+    const saved = existing
+      ? await db.apiKey.update({
+          where: { id: existing.id },
+          data: {
+            encryptedLogin: encrypt(body.login),
+            encryptedPassword: encrypt(body.password),
+          },
+        })
+      : await db.apiKey.create({
+          data: {
+            userId,
+            provider: body.provider,
+            encryptedLogin: encrypt(body.login),
+            encryptedPassword: encrypt(body.password),
+          },
+        });
 
     // Keep project ownership explicit when a user adds the provider key after
     // a project was provisioned. The research worker never resolves a project
     // credential indirectly at execution time.
     const projects = await db.project.findMany({
-      where: { sites: { some: { userId } } },
+      // Every project with a site is in this workspace, so the key is granted
+      // to all of them regardless of which account created the site.
+      where: { sites: { some: {} } },
       select: { id: true },
     });
     const managedGrants = await db.projectApiKeyGrant.findMany({
@@ -151,14 +164,7 @@ export async function DELETE(req: Request) {
       return Response.json({ error: "Missing provider" }, { status: 400 });
     }
 
-    await db.apiKey.delete({
-      where: {
-        userId_provider: {
-          userId,
-          provider: body.provider,
-        },
-      },
-    });
+    await db.apiKey.deleteMany({ where: { provider: body.provider } });
 
     return Response.json({ success: true });
   } catch (error) {

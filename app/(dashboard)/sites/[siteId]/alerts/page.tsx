@@ -22,8 +22,9 @@ export default async function AlertsPage({ params }: Props) {
 
   await ensureDefaultAlerts(userId, siteId);
 
+  // One workspace: every rule stored for this site, whichever account added it.
   const alerts = await db.alert.findMany({
-    where: { userId, siteId },
+    where: { siteId },
     orderBy: { type: "asc" },
   });
 

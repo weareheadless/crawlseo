@@ -80,9 +80,11 @@ describe("production web release slots", () => {
     expect(releaseBranch).toContain('readlink -f -- "$CRAWLSEO_WEB_RELEASE_DIR"');
     expect(releaseBranch).toContain('[[ ! -d "$release_dir" || ! -f "$release_dir/server.js" || ! -f "$release_dir/.next/BUILD_ID" ]]');
     expect(releaseBranch).toContain('cd "$release_dir"');
-    expect(releaseBranch).toContain('exec node server.js');
+    // The server is started through the cluster launcher beside this script, so
+    // both branches use every configured core and share one code path.
+    expect(releaseBranch).toContain('exec node "$script_dir/cluster-server.cjs"');
     expect(releaseBranch).not.toMatch(/\b(rm|cp|mv)\b/);
-    expect(startup).toContain("exec node .next/standalone/server.js");
+    expect(startup).toContain('exec node "$script_dir/cluster-server.cjs"');
   });
 
   it("requires explicit staging inputs", () => {

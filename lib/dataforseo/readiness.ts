@@ -14,6 +14,13 @@ export async function resolveDataForSeoReadiness(input: { projectId: string | nu
   try {
     if (getPlatformDataForSeoCredentials()) return { configured: true, source: "platform", projectId: input.projectId };
   } catch { /* Incomplete platform configuration is not a usable credential. */ }
-  const legacy = await db.apiKey.findUnique({ where: { userId_provider: { userId: input.userId, provider: "dataforseo" } }, select: { id: true } });
+  // One workspace keeps one key per provider. Which account stored it is not a
+  // boundary: the operator who signed in may be a different account than the
+  // one that added the key.
+  const legacy = await db.apiKey.findFirst({
+    where: { provider: "dataforseo" },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
   return legacy ? { configured: true, source: "legacy", projectId: input.projectId } : { configured: false, source: "none", projectId: input.projectId };
 }

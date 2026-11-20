@@ -10,7 +10,6 @@ export async function GET() {
     }
 
     const alerts = await db.alert.findMany({
-      where: { userId },
       include: { site: { select: { domain: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
 
     if (body.action === "ensure" && body.siteId) {
       const site = await db.site.findFirst({
-        where: { id: body.siteId, userId },
+        where: { id: body.siteId },
         select: { userId: true },
       });
       if (!site) {

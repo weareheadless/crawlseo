@@ -650,8 +650,11 @@ export async function provisionProject(
       });
       dataforseoGrantSource = "platform";
     } else if (operator) {
-      const dataforseoKey = await tx.apiKey.findUnique({
-        where: { userId_provider: { userId: operator.id, provider: DATAFORSEO_PROVIDER } },
+      // The workspace key, whichever account stored it: the provisioning
+      // operator is not necessarily the account that added the credential.
+      const dataforseoKey = await tx.apiKey.findFirst({
+        where: { provider: DATAFORSEO_PROVIDER },
+        orderBy: { updatedAt: "desc" },
         select: { id: true },
       });
       if (dataforseoKey) {
