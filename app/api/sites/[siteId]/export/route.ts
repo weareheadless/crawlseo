@@ -14,7 +14,7 @@ export async function GET(
 
     const { siteId } = await params;
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true, domain: true },
     });
     if (!site) {

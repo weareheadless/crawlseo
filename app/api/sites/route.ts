@@ -16,7 +16,8 @@ export async function GET() {
 
     const [queriedSites, superseded] = await Promise.all([
       db.site.findMany({
-        where: { userId },
+        // Workspace-wide, like the dashboard: one operator workspace, so the
+        // API list and the page list show the same sites.
         select: {
           id: true,
           domain: true,

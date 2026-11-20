@@ -11,51 +11,56 @@ vi.mock("@/lib/db", () => ({ db: mockDb }));
 
 import { researchActionAccess, userOwnsAgentTask, userOwnsDelivery, userOwnsResearchAction, userOwnsResearchRun, userOwnsSite } from "@/lib/auth/research-action-access";
 
-describe("research Action cookie ownership", () => {
+/**
+ * The workspace has one operator. Pages list every site and render every task,
+ * so the API must answer for the same records; gating on `site.userId` made a
+ * console that rendered fine poll its own task and get 404 forever.
+ */
+describe("workspace-wide access", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("scopes an Action lookup by both its id and the owning user", async () => {
+  it("looks an Action up by id for any signed-in user", async () => {
     mockDb.researchAction.findFirst.mockResolvedValue({ id: "action-1" });
     await expect(userOwnsResearchAction("action-1", "user-1")).resolves.toBe(true);
     expect(mockDb.researchAction.findFirst).toHaveBeenCalledWith({
-      where: { id: "action-1", OR: [{ site: { userId: "user-1" } }, { site: { userId: null } }] },
+      where: { id: "action-1" },
       select: { id: true },
     });
   });
 
-  it("does not expose an Action when it is missing or owned by another user", async () => {
+  it("still refuses an Action that does not exist", async () => {
     mockDb.researchAction.findFirst.mockResolvedValue(null);
     await expect(userOwnsResearchAction("action-1", "user-2")).resolves.toBe(false);
   });
 
-  it("scopes site-level Action listing and creation by owner", async () => {
-    mockDb.site.findFirst.mockResolvedValue(null);
-    await expect(userOwnsSite("site-1", "user-2")).resolves.toBe(false);
+  it("does not serve a request without a session", async () => {
+    mockDb.researchAction.findFirst.mockResolvedValue({ id: "action-1" });
+    mockDb.site.findFirst.mockResolvedValue({ id: "site-1" });
+    await expect(userOwnsResearchAction("action-1", " ")).resolves.toBe(false);
+    await expect(userOwnsSite("site-1", "")).resolves.toBe(false);
+    expect(mockDb.researchAction.findFirst).not.toHaveBeenCalled();
+    expect(mockDb.site.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("scopes site-level Actions to the site, not the account", async () => {
+    mockDb.site.findFirst.mockResolvedValue({ id: "site-1" });
+    await expect(userOwnsSite("site-1", "user-2")).resolves.toBe(true);
     expect(mockDb.site.findFirst).toHaveBeenCalledWith({
-      where: { id: "site-1", OR: [{ userId: "user-2" }, { userId: null }] },
+      where: { id: "site-1" },
       select: { id: true },
     });
   });
 
-  it("scopes research runs and delivery measurements through their owning site", async () => {
-    mockDb.researchRun.findFirst.mockResolvedValue(null);
-    mockDb.delivery.findFirst.mockResolvedValue(null);
-    await expect(userOwnsResearchRun("run-1", "user-2")).resolves.toBe(false);
-    await expect(userOwnsDelivery("delivery-1", "user-2")).resolves.toBe(false);
-    expect(mockDb.researchRun.findFirst).toHaveBeenCalledWith({
-      where: { id: "run-1", OR: [{ site: { userId: "user-2" } }, { site: { userId: null } }] }, select: { id: true },
-    });
-    expect(mockDb.delivery.findFirst).toHaveBeenCalledWith({
-      where: { id: "delivery-1", OR: [{ action: { site: { userId: "user-2" } } }, { action: { site: { userId: null } } }] }, select: { id: true },
-    });
-  });
-
-  it("scopes agent tasks through their owning site", async () => {
-    mockDb.agentTask.findFirst.mockResolvedValue(null);
-    await expect(userOwnsAgentTask("task-1", "user-2")).resolves.toBe(false);
-    expect(mockDb.agentTask.findFirst).toHaveBeenCalledWith({
-      where: { id: "task-1", OR: [{ site: { userId: "user-2" } }, { site: { userId: null } }] }, select: { id: true },
-    });
+  it("resolves research runs, deliveries and agent tasks by id", async () => {
+    mockDb.researchRun.findFirst.mockResolvedValue({ id: "run-1" });
+    mockDb.delivery.findFirst.mockResolvedValue({ id: "delivery-1" });
+    mockDb.agentTask.findFirst.mockResolvedValue({ id: "task-1" });
+    await expect(userOwnsResearchRun("run-1", "user-2")).resolves.toBe(true);
+    await expect(userOwnsDelivery("delivery-1", "user-2")).resolves.toBe(true);
+    await expect(userOwnsAgentTask("task-1", "user-2")).resolves.toBe(true);
+    expect(mockDb.researchRun.findFirst).toHaveBeenCalledWith({ where: { id: "run-1" }, select: { id: true } });
+    expect(mockDb.delivery.findFirst).toHaveBeenCalledWith({ where: { id: "delivery-1" }, select: { id: true } });
+    expect(mockDb.agentTask.findFirst).toHaveBeenCalledWith({ where: { id: "task-1" }, select: { id: true } });
   });
 
   it("reports an owner-visible Action on an externally managed site as external", async () => {
@@ -90,10 +95,10 @@ describe("research Action cookie ownership", () => {
     await expect(researchActionAccess("action-1", "user-1")).resolves.toBe("owner");
   });
 
-  it("does not reveal an external Action to a different user", async () => {
+  it("answers for an Action created under another account in the same workspace", async () => {
     mockDb.researchAction.findFirst.mockResolvedValue({
       site: { userId: "user-1", connectorBinding: { status: "ACTIVE", executor: "helloada" } },
     });
-    await expect(researchActionAccess("action-1", "user-2")).resolves.toBe("missing");
+    await expect(researchActionAccess("action-1", "user-2")).resolves.toBe("external");
   });
 });

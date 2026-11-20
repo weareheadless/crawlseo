@@ -15,7 +15,7 @@ export async function GET(
     }
 
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: {
         id: true,
         domain: true,
@@ -76,7 +76,7 @@ export async function PUT(
 
     // Verify ownership
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true },
     });
 
@@ -129,7 +129,7 @@ export async function DELETE(
 
     // Verify ownership
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true },
     });
 

@@ -12,7 +12,9 @@ export async function syncVitalsForSite(
     select: { userId: true, domain: true },
   });
 
-  if (!site || site.userId !== userId) {
+  // Workspace-wide: the job payload carries the account that queued it, and
+  // any signed-in account may run vitals for any site in the workspace.
+  if (!site || !userId?.trim()) {
     throw new Error("Site not found or unauthorized");
   }
 

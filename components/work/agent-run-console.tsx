@@ -90,9 +90,11 @@ export function AgentRunConsole({
   const [messages, setMessages] = useState(initialMessages);
   const [jobStatus, setJobStatus] = useState(initialJobStatus);
   const [runRequested, setRunRequested] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
   const [now, setNow] = useState(0);
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -101,7 +103,7 @@ export function AgentRunConsole({
   const chatRef = useRef<HTMLDivElement>(null);
   const stickToChat = useRef(true);
 
-  const polling = runRequested || status === "RUNNING" || BUSY_JOB.has(jobStatus ?? "");
+  const polling = !blocked && (runRequested || status === "RUNNING" || BUSY_JOB.has(jobStatus ?? ""));
 
   // A run is queued by the action bar, which is a different component. The
   // event lets the console start reporting immediately instead of waiting for
@@ -124,23 +126,37 @@ export function AgentRunConsole({
     const tick = async () => {
       try {
         const response = await fetch(`/crawlseo/api/agent-tasks/${taskId}/progress`, { cache: "no-store" });
-        if (response.ok) {
-          const body = (await response.json()) as ProgressResponse;
+        if (!response.ok) {
+          // A refused poll is not transient. Retrying it every two seconds is
+          // how a console with no access to its own task sat on "Live" forever
+          // while the network tab filled with 404s; say what happened and stop.
+          const body = (await response.json().catch(() => null)) as { error?: string } | null;
           if (stopped) return;
-          setStatus(body.task.status);
-          setStage(body.task.progress.stage);
-          setLines(body.task.progress.lines);
-          setDropped(body.task.progress.dropped);
-          setStartedAt(body.task.progress.startedAt);
-          setMessages((previous) => mergeMessages(previous, body.messages));
-          setJobStatus(body.job?.status ?? null);
-          const working = body.task.status === "RUNNING" || BUSY_JOB.has(body.job?.status ?? "");
-          if (!working) {
-            setRunRequested(false);
-            // The run wrote its artifacts; load the preview and actions.
-            router.refresh();
-            return;
-          }
+          setPollError(
+            body?.error
+              ? `${body.error} (HTTP ${response.status})`
+              : `Could not read this run (HTTP ${response.status}).`,
+          );
+          setBlocked(true);
+          setRunRequested(false);
+          return;
+        }
+        const body = (await response.json()) as ProgressResponse;
+        if (stopped) return;
+        setPollError(null);
+        setStatus(body.task.status);
+        setStage(body.task.progress.stage);
+        setLines(body.task.progress.lines);
+        setDropped(body.task.progress.dropped);
+        setStartedAt(body.task.progress.startedAt);
+        setMessages((previous) => mergeMessages(previous, body.messages));
+        setJobStatus(body.job?.status ?? null);
+        const working = body.task.status === "RUNNING" || BUSY_JOB.has(body.job?.status ?? "");
+        if (!working) {
+          setRunRequested(false);
+          // The run wrote its artifacts; load the preview and actions.
+          router.refresh();
+          return;
         }
       } catch {
         // A dropped poll is transient; keep the console on its last state.
@@ -251,6 +267,12 @@ export function AgentRunConsole({
           {polling ? "Live" : "Stopped"}
         </span>
       </div>
+
+      {pollError && (
+        <p className="border-b border-danger/30 bg-danger/5 px-4 py-2 text-[11px] text-danger">
+          {pollError}
+        </p>
+      )}
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div className="relative border-b border-border/60 lg:border-b-0 lg:border-r">

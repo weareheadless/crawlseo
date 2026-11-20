@@ -16,13 +16,13 @@ export async function POST(req: Request) {
     const syncDays = Number.isFinite(requestedDays)
       ? Math.min(365, Math.max(7, Math.round(requestedDays)))
       : 90;
-    // Single-operator dashboard: a signed-in operator may sync project-owned
-    // sites as well as their own. Another user's owned site stays private.
+    // Workspace-wide access: any signed-in account may sync any site in the
+    // workspace, which is what the dashboard already lists.
     const site = await db.site.findUnique({
       where: { id: siteId },
       select: { userId: true, projectId: true },
     });
-    if (!site || (site.userId !== null && site.userId !== userId)) {
+    if (!site) {
       return Response.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 

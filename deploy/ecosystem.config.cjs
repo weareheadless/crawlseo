@@ -9,6 +9,9 @@ module.exports = {
         NODE_ENV: "production",
         PORT: "3001",
         CRAWLSEO_WEB_RELEASE_DIR: "/SEO/.releases/web/current",
+        // Read-mostly UI: one Next worker per core keeps a page burst from
+        // queueing behind one render. Sessions live in Postgres.
+        CRAWLSEO_WEB_WORKERS: process.env.CRAWLSEO_WEB_WORKERS || "2",
       },
       kill_timeout: 10000,
       listen_timeout: 10000,

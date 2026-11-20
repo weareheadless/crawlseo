@@ -13,7 +13,7 @@ export async function GET(
 
     const { siteId } = await params;
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true },
     });
     if (!site) {
@@ -73,7 +73,7 @@ export async function POST(
 
     const { siteId } = await params;
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true },
     });
     if (!site) {
@@ -127,7 +127,7 @@ export async function DELETE(
 
     const { siteId } = await params;
     const site = await db.site.findFirst({
-      where: { id: siteId, userId },
+      where: { id: siteId },
       select: { userId: true },
     });
     if (!site) {

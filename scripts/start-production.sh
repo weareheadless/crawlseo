@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The launcher lives beside this script, outside the release, so every release
+# starts the same way.
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 if [[ ${CRAWLSEO_WEB_RELEASE_DIR+x} ]]; then
   if [[ -z "$CRAWLSEO_WEB_RELEASE_DIR" ]]; then
     echo "CRAWLSEO_WEB_RELEASE_DIR is set but empty" >&2
@@ -29,7 +33,7 @@ if [[ ${CRAWLSEO_WEB_RELEASE_DIR+x} ]]; then
       break
     fi
   done
-  exec node server.js
+  exec node "$script_dir/cluster-server.cjs"
 fi
 
 # Backwards-compatible path for deployments that have not adopted release slots.
@@ -45,4 +49,5 @@ if [ -f .env.local ]; then
   cp .env.local .next/standalone/.env
 fi
 
-exec node .next/standalone/server.js
+cd .next/standalone
+exec node "$script_dir/cluster-server.cjs"
