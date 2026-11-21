@@ -363,13 +363,30 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
     //    Research disabled is a declared state, and then the bundle runs from
     //    first-party demand alone.
     const bundleIdempotency = bundleKey(site.id, month);
-    const existingBundle = await db.researchRun.findFirst({
-      where: { siteId: site.id, idempotencyKey: bundleIdempotency },
-      select: { id: true, status: true },
-    });
+    const bundleJobKey = `cycle:${month}:bundle`;
+    const [existingBundle, bundleJob] = await Promise.all([
+      db.researchRun.findFirst({
+        where: { siteId: site.id, idempotencyKey: bundleIdempotency },
+        select: { id: true, status: true },
+      }),
+      // The job row, not only the run: a bundle that failed before it could claim
+      // a run left no ResearchRun behind, and re-enqueueing the same key returned
+      // that failed row while the stage reported "queued". The month then looked
+      // scheduled and spent nothing, every tick, with no reason shown.
+      db.job.findUnique({
+        where: { siteId_kind_idempotencyKey: { siteId: site.id, kind: JobKind.BUNDLE, idempotencyKey: bundleJobKey } },
+        select: { status: true, lastErrorCode: true },
+      }),
+    ]);
 
     if (existingBundle) {
       push("bundle", "monthly", "skipped", `bundle ${existingBundle.id} already ${existingBundle.status.toLowerCase()} for ${month}`);
+    } else if (bundleJob?.status === "FAILED") {
+      // A refusal (no market, no credentials, over cap) is a decision for the
+      // owner, not something to retry: report it with its reason.
+      push("bundle", "monthly", "failed", `bundle refused for ${month}: ${bundleJob.lastErrorCode ?? "unknown reason"}`);
+    } else if (bundleJob) {
+      push("bundle", "monthly", "skipped", `bundle job already ${bundleJob.status.toLowerCase()} for ${month}`);
     } else if (!knowledgeReady) {
       push("bundle", "monthly", "blocked", "blocked: knowledge is not usable");
     } else if (!researchFinished) {
@@ -384,7 +401,7 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
           siteId: site.id,
           kind: JobKind.BUNDLE,
           payload: { month, approval: `scheduled:site-cycle:${month}` },
-          idempotencyKey: `cycle:${month}:bundle`,
+          idempotencyKey: bundleJobKey,
           maxAttempts: 2,
         });
         push("bundle", "monthly", "queued", `month ${month}`);

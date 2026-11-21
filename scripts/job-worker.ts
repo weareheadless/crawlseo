@@ -32,7 +32,7 @@ import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
 import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
 import { runSiteCycle } from "@/lib/jobs/site-cycle";
-import { runMonthlyBundle } from "@/lib/research/monthly-bundle";
+import { BundleError, runMonthlyBundle } from "@/lib/research/monthly-bundle";
 
 loadEnvConfig(process.cwd());
 
@@ -210,12 +210,23 @@ async function executeJob(
       if (!job.siteId) throw new JobExecutionError("BUNDLE_SITE_REQUIRED");
       const month = text(payload.month, "");
       if (!month) throw new JobExecutionError("BUNDLE_MONTH_REQUIRED");
-      const result = await runMonthlyBundle(db, {
-        siteId: job.siteId,
-        month,
-        mode: "execute",
-        approval: text(payload.approval, `scheduled:site-cycle:${month}`),
-      });
+      let result: Awaited<ReturnType<typeof runMonthlyBundle>>;
+      try {
+        result = await runMonthlyBundle(db, {
+          siteId: job.siteId,
+          month,
+          mode: "execute",
+          approval: text(payload.approval, `scheduled:site-cycle:${month}`),
+        });
+      } catch (error) {
+        // A refusal is a fact about the tenant (no market, no credentials, over
+        // cap), not a transient crash. Reporting it as JOB_EXECUTION_FAILED hid
+        // the reason from the cycle and from the owner; the message is the point.
+        if (error instanceof BundleError) {
+          throw new JobExecutionError(`BUNDLE_REFUSED_${error.exitCode}: ${error.message.slice(0, 200)}`);
+        }
+        throw error;
+      }
       if (result.status === "failed" || result.status === "refused") {
         // A refused bundle (budget, credentials, plan) is not retried blindly:
         // the plan is rebuilt on the next cycle with the current facts.

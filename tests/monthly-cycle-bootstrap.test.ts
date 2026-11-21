@@ -42,7 +42,8 @@ function db() {
         },
       ]),
     },
-    job: { findUnique: vi.fn(async () => null) },
+    // A bundle that was refused before claiming a run leaves only a job row.
+    job: { findUnique: vi.fn(async (): Promise<{ status: string; lastErrorCode: string | null } | null> => null) },
     crawl: { create: vi.fn(async () => ({ id: "crawl-1" })), findFirst: vi.fn(async () => ({ id: "crawl-1" })) },
     evidenceRecord: { count: vi.fn(async () => 12) },
     researchRun: { findFirst: vi.fn(async () => null) },
@@ -92,7 +93,8 @@ describe("site cycle bootstrap", () => {
 function dbFor(site: Record<string, unknown>, monthResearch: { id: string; status: string } | null = null) {
   return {
     site: { findMany: vi.fn(async () => [site]) },
-    job: { findUnique: vi.fn(async () => null) },
+    // A bundle that was refused before claiming a run leaves only a job row.
+    job: { findUnique: vi.fn(async (): Promise<{ status: string; lastErrorCode: string | null } | null> => null) },
     crawl: { create: vi.fn(async () => ({ id: "crawl-1" })), findFirst: vi.fn(async () => ({ id: "crawl-1" })) },
     evidenceRecord: { count: vi.fn(async () => 12) },
     researchRun: {
@@ -174,5 +176,42 @@ describe("failed research retry", () => {
       idempotencyKey: "research-run:run-failed:retry",
       payload: { researchRunId: "run-failed" },
     }));
+  });
+});
+
+describe("bundle job reporting", () => {
+  /**
+   * A bundle that is refused before it can claim a run (no market, no
+   * credentials, over cap) leaves no ResearchRun behind. The stage reported
+   * "queued" every tick because the job row already existed, so a month could
+   * look scheduled forever while nothing was measured and no reason was shown.
+   */
+  it("reports a refused bundle with its reason instead of queueing it again", async () => {
+    store.ensure.mockResolvedValue({ steps: [{ step: "business-knowledge", status: "ok", detail: "existing" }] });
+    const database = dbFor(activeSite(), { id: "run-1", status: "COMPLETED" });
+    database.job.findUnique = vi.fn(async (args?: { where?: { siteId_kind_idempotencyKey?: { kind: string } } }) =>
+      args?.where?.siteId_kind_idempotencyKey?.kind === "BUNDLE"
+        ? { status: "FAILED", lastErrorCode: "BUNDLE_REFUSED_2: the site has no audience market or country" }
+        : null
+    ) as never;
+
+    const results = await runSiteCycle(database as never, { now: new Date("2026-11-04T00:00:00.000Z") });
+    const bundle = results[0].stages.find((stage) => stage.stage === "bundle");
+    expect(bundle?.status).toBe("failed");
+    expect(bundle?.detail).toContain("no audience market");
+    expect(store.enqueue).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "BUNDLE" }));
+  });
+
+  it("does not re-queue a bundle job that is still pending", async () => {
+    store.ensure.mockResolvedValue({ steps: [{ step: "business-knowledge", status: "ok", detail: "existing" }] });
+    const database = dbFor(activeSite(), { id: "run-1", status: "COMPLETED" });
+    database.job.findUnique = vi.fn(async (args?: { where?: { siteId_kind_idempotencyKey?: { kind: string } } }) =>
+      args?.where?.siteId_kind_idempotencyKey?.kind === "BUNDLE" ? { status: "PENDING", lastErrorCode: null } : null
+    ) as never;
+
+    const results = await runSiteCycle(database as never, { now: new Date("2026-11-04T00:00:00.000Z") });
+    const bundle = results[0].stages.find((stage) => stage.stage === "bundle");
+    expect(bundle?.status).toBe("skipped");
+    expect(bundle?.detail).toContain("already pending");
   });
 });
