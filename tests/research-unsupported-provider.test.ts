@@ -44,6 +44,16 @@ vi.mock("@/lib/site/context", () => ({
   })),
 }));
 vi.mock("@/lib/connectors/events", () => ({ emitConnectorEvent: vi.fn() }));
+vi.mock("@/lib/projects/business-knowledge-extract", () => ({
+  ensureBusinessKnowledge: vi.fn(async () => ({ state: "existing", documentId: "business-1", revision: 1, extracted: [], contentLanguage: null })),
+}));
+vi.mock("@/lib/site/brief", () => ({
+  buildSiteBrief: vi.fn(async () => ({
+    siteId: "site-1", projectId: "project-1", domain: "example.com", language: "en", country: "US",
+    market: null, audienceMarket: null, audienceCountry: null, audience: null,
+    topics: [], goals: [], facts: [], withheldFields: [],
+  })),
+}));
 
 import { runResearchRun } from "@/lib/research/runner";
 

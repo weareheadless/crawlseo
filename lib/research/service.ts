@@ -445,6 +445,7 @@ export async function createResearchFinding(
     type: IngestResearchFindingInput["type"];
     theme: string;
     primaryQuery?: string;
+    demandQueries?: string[];
     summary: string;
     confidence: number;
     sentiment?: string;

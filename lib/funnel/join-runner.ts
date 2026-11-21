@@ -131,10 +131,14 @@ async function queryForOpportunity(
       select: { dimensions: true },
     });
     for (const row of evidence) {
-      const dimensions = (row.dimensions ?? {}) as { query?: unknown; theme?: unknown; question?: unknown; painPointSummary?: unknown; findingId?: unknown };
+      const dimensions = (row.dimensions ?? {}) as {
+        query?: unknown; demandQueries?: unknown; theme?: unknown; question?: unknown; painPointSummary?: unknown; findingId?: unknown;
+      };
       // `query` is the finding's primary_query: the phrase research wants
-      // validated. It comes before the theme, which is a sentence.
-      for (const candidate of [dimensions.query, dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
+      // validated. The other demand forms follow, then the theme, which is a
+      // sentence rather than a phrase.
+      const demandForms = Array.isArray(dimensions.demandQueries) ? dimensions.demandQueries : [];
+      for (const candidate of [dimensions.query, ...demandForms, dimensions.theme, dimensions.question, dimensions.painPointSummary]) {
         if (usableQuery(candidate)) return (candidate as string).trim();
       }
       // Findings stored before primary_query existed have no phrase in evidence;
@@ -142,9 +146,11 @@ async function queryForOpportunity(
       if (typeof dimensions.findingId === "string") {
         const finding = await db.researchFinding.findUnique({
           where: { id: dimensions.findingId },
-          select: { primaryQuery: true },
+          select: { primaryQuery: true, demandQueries: true },
         });
-        if (usableQuery(finding?.primaryQuery)) return (finding!.primaryQuery as string).trim();
+        for (const candidate of [finding?.primaryQuery, ...(finding?.demandQueries ?? [])]) {
+          if (usableQuery(candidate)) return (candidate as string).trim();
+        }
       }
     }
   }

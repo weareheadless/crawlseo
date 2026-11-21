@@ -31,7 +31,8 @@ import { syncArticleRunToResearchRun } from "@/lib/dataforseo/run-shadow";
 import { bridgePrelaunchRunToEvidence, bridgeSeoResearchRunToEvidence } from "@/lib/dataforseo/seo-research-evidence";
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
 import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
-import { runMonthlyCycle } from "@/lib/jobs/monthly-cycle";
+import { runSiteCycle } from "@/lib/jobs/site-cycle";
+import { runMonthlyBundle } from "@/lib/research/monthly-bundle";
 
 loadEnvConfig(process.cwd());
 
@@ -205,6 +206,30 @@ async function executeJob(
       }
       return;
     }
+    case JobKind.BUNDLE: {
+      if (!job.siteId) throw new JobExecutionError("BUNDLE_SITE_REQUIRED");
+      const month = text(payload.month, "");
+      if (!month) throw new JobExecutionError("BUNDLE_MONTH_REQUIRED");
+      const result = await runMonthlyBundle(db, {
+        siteId: job.siteId,
+        month,
+        mode: "execute",
+        approval: text(payload.approval, `scheduled:site-cycle:${month}`),
+      });
+      if (result.status === "failed" || result.status === "refused") {
+        // A refused bundle (budget, credentials, plan) is not retried blindly:
+        // the plan is rebuilt on the next cycle with the current facts.
+        throw new JobExecutionError(`BUNDLE_${result.error?.slice(0, 80) || result.status.toUpperCase()}`);
+      }
+      if (result.runId) {
+        try {
+          await refreshFunnelForSite(db, job.siteId, { detectedBy: "bundle-job" });
+        } catch (error) {
+          console.error("[CrawlSEO worker] funnel refresh after bundle failed", error);
+        }
+      }
+      return;
+    }
     case JobKind.AGENT_TASK: {
       if (!job.siteId) throw new JobExecutionError("AGENT_SITE_REQUIRED");
       const agentTaskId = text(payload.agentTaskId, "");
@@ -326,23 +351,24 @@ export async function main(): Promise<void> {
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
 
-  // The monthly cycle runs from the worker, not from a script someone remembers
-  // to run: every site, once a month, crawl -> search console -> research, and the
-  // research run's completion runs the tenant pipeline.
+  // The site cycle runs from the worker, not from a script someone remembers to
+  // run. Every site gets the same stages: daily knowledge, weekly crawl/search
+  // console/sweep, research at the owner's cadence, and the monthly bundle once
+  // the month's research has finished. A running cycle is never re-entered.
   const cycleEveryMs = Number(process.env.MONTHLY_CYCLE_INTERVAL_MS ?? 6 * 60 * 60 * 1000);
   let cycleRunning = false;
   const runCycle = async () => {
     if (cycleRunning) return;
     cycleRunning = true;
     try {
-      const results = await runMonthlyCycle(db);
+      const results = await runSiteCycle(db);
       const queued = results.flatMap((site) => site.stages.filter((stage) => stage.status === "queued").map((stage) => `${site.domain}:${stage.stage}`));
       const failed = results.flatMap((site) => site.stages.filter((stage) => stage.status === "failed").map((stage) => `${site.domain}:${stage.stage}=${stage.detail}`));
       if (queued.length || failed.length) {
-        console.log(`[CrawlSEO worker] monthly cycle: ${queued.length} queued, ${failed.length} failed`, JSON.stringify({ queued, failed }));
+        console.log(`[CrawlSEO worker] site cycle: ${queued.length} queued, ${failed.length} failed`, JSON.stringify({ queued, failed }));
       }
     } catch (error) {
-      console.error("[CrawlSEO worker] monthly cycle failed", error instanceof Error ? error.message : "unknown");
+      console.error("[CrawlSEO worker] site cycle failed", error instanceof Error ? error.message : "unknown");
     } finally {
       cycleRunning = false;
     }

@@ -49,6 +49,9 @@ describe("business knowledge extraction site selection", () => {
     const db = {
       project: { findUniqueOrThrow },
       evidenceRecord: { findMany: vi.fn(async () => []) },
+      // No completed crawl in this fixture: the extractor falls back to fetching.
+      crawl: { findFirst: vi.fn(async () => null) },
+      auditPage: { findMany: vi.fn(async () => []) },
       businessKnowledgeDocument: { findUnique: vi.fn(async () => null) },
     } as never;
 

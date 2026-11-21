@@ -12,6 +12,7 @@ import {
   type ResolvedAddress,
 } from "@/lib/crawler/engine";
 import { htmlToText } from "@/lib/projects/business-knowledge-extract";
+import { knowledgeFactMeta, knowledgeFactValue } from "@/lib/projects/business-knowledge-facts";
 import { resolveSiteContext } from "@/lib/site/context";
 import {
   RECOMMENDATION_POLICY_VERSION,
@@ -563,30 +564,6 @@ function buildFullPage(
   };
 }
 
-function factValue(value: unknown): string[] {
-  if (!value || typeof value !== "object") return [];
-  const row = value as { value?: unknown };
-  if (typeof row.value === "string") return [row.value];
-  if (Array.isArray(row.value)) return row.value.filter((entry): entry is string => typeof entry === "string");
-  return [];
-}
-
-function factMeta(value: unknown): { sourceUrl: string | null; provenanceKind: string; provenanceStatus: string; publicationUse: string } {
-  if (!value || typeof value !== "object") {
-    return { sourceUrl: null, provenanceKind: "unknown", provenanceStatus: "unknown", publicationUse: "unknown" };
-  }
-  const row = value as {
-    provenance?: { evidenceUri?: unknown; kind?: unknown; status?: unknown };
-    publicationUse?: unknown;
-  };
-  return {
-    sourceUrl: typeof row.provenance?.evidenceUri === "string" ? row.provenance.evidenceUri : null,
-    provenanceKind: typeof row.provenance?.kind === "string" ? row.provenance.kind : "unknown",
-    provenanceStatus: typeof row.provenance?.status === "string" ? row.provenance.status : "unknown",
-    publicationUse: typeof row.publicationUse === "string" ? row.publicationUse : "unknown",
-  };
-}
-
 function metric(metrics: unknown, key: string): number | null {
   const value = (metrics as Record<string, { value?: unknown } | undefined> | null)?.[key]?.value;
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -701,9 +678,9 @@ export async function buildEvidencePacket(db: PacketDb, opts: PacketOptions): Pr
     limitations.push("no business knowledge document exists; offer fit may be unverified");
   } else if (revision?.fields && typeof revision.fields === "object" && !Array.isArray(revision.fields)) {
     for (const [field, value] of Object.entries(revision.fields as Record<string, unknown>)) {
-      const values = factValue(value);
+      const values = knowledgeFactValue(value);
       if (values.length === 0) continue;
-      const meta = factMeta(value);
+      const meta = knowledgeFactMeta(value);
       if (meta.publicationUse === "prohibited") continue;
       businessFacts.push({
         id: factId(field),

@@ -8,6 +8,7 @@ import { readQueryPagePerformance } from "@/lib/funnel/gsc-performance";
 import { runJoinFollowUps } from "@/lib/funnel/join-runner";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { extractBusinessKnowledgeFromSite } from "@/lib/projects/business-knowledge-extract";
+import { hasUsableKnowledgeFields } from "@/lib/projects/business-knowledge-facts";
 import { normalizeResearchCadence } from "@/lib/research/policy";
 import { researchCadenceWindow } from "@/lib/research/schedule";
 import { createResearchRun } from "@/lib/research/service";
@@ -138,20 +139,6 @@ async function deriveTopics(
     });
   }
   return topics;
-}
-
-function hasUsableKnowledgeFields(fields: unknown): boolean {
-  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return false;
-  for (const [key, entry] of Object.entries(fields as Record<string, unknown>)) {
-    // A language tag alone is not a business fact: the why-leg needs an offer,
-    // audience, service or differentiator it can actually cite.
-    if (key === "contentLanguage") continue;
-    const value = entry && typeof entry === "object" ? (entry as { value?: unknown }).value : entry;
-    if (typeof value === "string" && value.trim().length > 0) return true;
-    if (Array.isArray(value) && value.some((item) => typeof item === "string" && item.trim().length > 0)) return true;
-    if (value != null && typeof value !== "string" && typeof value !== "object") return true;
-  }
-  return false;
 }
 
 export type TenantAnalysisOptions = {

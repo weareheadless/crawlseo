@@ -20,11 +20,14 @@ import { isWixBlogTarget } from "@/lib/agent-tasks/targets";
 import { autoAgentDecision } from "@/lib/research/automation";
 import { reclassifyUnstableActionTargets } from "@/lib/editorial/action-policy";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
+import { ensureBusinessKnowledge } from "@/lib/projects/business-knowledge-extract";
+import { buildSiteBrief } from "@/lib/site/brief";
+import { proposeKnowledgeFromResearch, type KnowledgeProposalResult } from "@/lib/research/knowledge-proposal";
 import { buildPageInventory } from "@/lib/research/page-inventory";
 import { assessCoverage, type CoveragePage } from "@/lib/research/page-coverage";
 import { verifySiteClaim } from "@/lib/research/site-claims";
 import type { CoverageAssessment } from "@/lib/funnel/decision";
-import { countryFromText, resolveSiteContext } from "@/lib/site/context";
+import { countryFromText } from "@/lib/site/context";
 import { emitConnectorEvent } from "@/lib/connectors/events";
 import { sourceRecencyIssue } from "@/lib/research/quality";
 import { bridgeFindingsToEvidence } from "@/lib/research/finding-evidence";
@@ -320,6 +323,14 @@ export async function runResearchRun(runId: string) {
   if (!dispatchAllowed) return (await db.researchRun.findUnique({ where: { id: run.id } })) ?? run;
 
   try {
+    // Business facts are a precondition, not an optional input: without them the
+    // synthesis can only produce findings that fit any site in the market. Extract
+    // once from the site's own pages when the project has none, and fail the run
+    // with a named reason rather than reporting a thin analysis as complete.
+    const knowledge = run.projectId
+      ? await ensureBusinessKnowledge(db, { projectId: run.projectId, siteId: site.id })
+      : null;
+
     const brief = run.brief as Record<string, unknown>;
     const topics = stringList(run.topics);
     const effectiveTopics = topics.length > 0 ? topics : stringList(brief.topics);
@@ -348,14 +359,14 @@ export async function runResearchRun(runId: string) {
       : `${provider}: provider is not implemented; no results were reported for this capability`);
     // The brief may target a market explicitly; otherwise the site's own context
     // answers, and a site with no language fails loudly instead of running in
-    // English.
-    const context = await resolveSiteContext(db, site.id);
-    const language = typeof brief.language === "string" && brief.language.trim() ? brief.language : context.language;
-    const market = typeof brief.market === "string" && brief.market.trim() ? brief.market : (context.market ?? "");
+    // English. One read supplies both the run's locale and the synthesis prompt.
+    const siteBrief = await buildSiteBrief(db, site.id);
+    const language = typeof brief.language === "string" && brief.language.trim() ? brief.language : siteBrief.language;
+    const market = typeof brief.market === "string" && brief.market.trim() ? brief.market : (siteBrief.market ?? "");
     // Keyword and SERP data follow the audience, not the office. A Tulum agency
     // selling to US buyers is measured in en/US even though the business and its
     // market are Mexican.
-    const country = context.audienceCountry ?? countryFromText(market) ?? context.country;
+    const country = siteBrief.audienceCountry ?? countryFromText(market) ?? siteBrief.country;
     const constraints = site.siteProfile?.constraints && typeof site.siteProfile.constraints === "object" && !Array.isArray(site.siteProfile.constraints)
       ? site.siteProfile.constraints as Record<string, unknown> : {};
     const exclusions = stringList(constraints.exclusions ?? constraints.excludedTopics).slice(0, 100);
@@ -597,12 +608,17 @@ export async function runResearchRun(runId: string) {
       };
 
       synthesis = await synthesizeResearch({
-        siteDomain: site.domain,
+        // The run may narrow the market or the audience; the facts and goals come
+        // from the same site read every other analysis path uses.
+        brief: {
+          ...siteBrief,
+          language,
+          market: market || siteBrief.market,
+          audience: typeof brief.audience === "string" && brief.audience.trim() ? brief.audience : siteBrief.audience,
+          topics: effectiveTopics,
+          goals: stringList(brief.goals).length > 0 ? stringList(brief.goals) : siteBrief.goals,
+        },
         title: run.title,
-        topics: effectiveTopics,
-        goals: stringList(site.researchPolicy?.goals),
-        audience: typeof brief.audience === "string" ? brief.audience : null,
-        market: typeof brief.market === "string" ? brief.market : null,
         questions: stringList(brief.questions),
         sources: savedSources,
         candidatePages: inventory?.sampled ?? [],
@@ -713,6 +729,22 @@ export async function runResearchRun(runId: string) {
       }
     }
 
+    // Research also feeds the business document, as an advised proposal next to
+    // its source. It never overwrites a confirmed fact, and the owner accepts the
+    // revision: the working revision is the review queue.
+    let knowledgeProposal: KnowledgeProposalResult | null = null;
+    if (run.projectId && savedSources.length > 0) {
+      try {
+        knowledgeProposal = await proposeKnowledgeFromResearch(db, {
+          projectId: run.projectId,
+          siteId: site.id,
+          runId: run.id,
+        });
+      } catch (error) {
+        console.error("[research] knowledge proposal failed", error);
+      }
+    }
+
     // Existing findings are not frozen at their first assessment. This runs even
     // when the run created no new findings; reuse is keyed to the sealed packet,
     // so only changed evidence or policy costs a model call.
@@ -750,6 +782,15 @@ export async function runResearchRun(runId: string) {
     const report = {
       schema_version: 1,
       generated_at: new Date().toISOString(),
+      // Which business facts the synthesis could actually reason from: a run that
+      // extracted nothing is visible instead of looking like a full analysis.
+      context: {
+        knowledge: knowledge
+          ? { source: knowledge.state, document_id: knowledge.documentId, revision: knowledge.revision, extracted: knowledge.extracted }
+          : null,
+        fact_fields: siteBrief.facts.map((fact) => `${fact.field}:${fact.status}`),
+        withheld_fact_fields: siteBrief.withheldFields,
+      },
       providers: [
         ...(useReddit ? ["reddit_serp"] : []),
         ...(providers.includes("news") ? ["google_news_rss"] : []),
@@ -783,12 +824,16 @@ export async function runResearchRun(runId: string) {
             provider: synthesis.provider,
             findings: synthesis.findings,
             actions: synthesis.actions,
+            // Demand forms the shape bound discarded, so a silently narrowed
+            // keyword plan is visible in the run.
+            demand_queries_dropped: synthesis.droppedDemandQueries,
             // Claims the crawl contradicted, kept so the overreach is visible in
             // the run rather than disappearing silently.
             rejected_findings: synthesis.rejected,
           }
         : null,
       action_ids: actionIds,
+      knowledge_proposal: knowledgeProposal,
       reclassified,
       automation,
     };

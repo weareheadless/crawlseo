@@ -22,6 +22,8 @@ import {
   bridgeBusinessKnowledgeToEvidence,
   type BusinessKnowledgeBridgeResult,
 } from "@/lib/projects/business-knowledge-evidence";
+import { demandCandidateSince, researchCandidateQueries } from "@/lib/research/demand-candidates";
+import { bundleKey } from "@/lib/research/schedule";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
@@ -71,6 +73,13 @@ export type BundleCaps = {
   /** Hard ceiling for the whole bundle, before any paid call. */
   capMicros: number;
 };
+
+/**
+ * Share of the keyword cap reserved for demand research observed. Proven Search
+ * Console demand keeps the rest of the monthly rotation; without a reservation a
+ * site with more queries than the cap would never buy a research form at all.
+ */
+export const RESEARCH_CANDIDATE_RESERVE_SHARE = 0.2;
 
 export const DEFAULT_BUNDLE_CAPS: BundleCaps = {
   keywordQueries: 30,
@@ -176,6 +185,16 @@ export type BundlePlan = {
     offTopicQueries: number;
     /** False when no taxonomy is approved yet, so every query was ranked. */
     taxonomyApplied: boolean;
+    /** Demand forms research observed in the window, before the taxonomy gate. */
+    researchCandidateQueries: number;
+    /** Forms an approved topic claims: the ones eligible for paid measurement. */
+    researchCandidatesClaimed: number;
+    /** Forms no approved topic claims, so they were not measured. */
+    researchCandidatesUnclaimed: number;
+    /** Claimed forms reserved inside this month's keyword cap. */
+    researchCandidatesReserved: number;
+    /** Claimed forms the named reserve bound left out. */
+    researchCandidatesOmitted: number;
   };
   paidCalls: PlannedPaidCall[];
   estimatedMicros: number;
@@ -473,6 +492,37 @@ export function selectQueriesForBundle(
     omitted: Math.max(0, ranked.length - selected.length),
     unmeasuredBefore: unmeasured.length,
   };
+}
+
+/**
+ * Merge the candidate pool for the keyword cap.
+ *
+ * A named share of the cap is reserved for forms research observed, because a
+ * site with more Search Console queries than the cap would otherwise never buy
+ * one. The rest of the pool is unchanged: proven in-market demand, then the
+ * remaining claimed research forms, then off-topic queries. Duplicates collapse
+ * to one entry.
+ */
+export function planKeywordCandidates(input: {
+  researchClaimed: string[];
+  inMarket: string[];
+  offTopic: string[];
+  cap: number;
+}): { ordered: string[]; researchReserved: number; researchOmitted: number } {
+  const reserve = Math.min(
+    input.researchClaimed.length,
+    Math.max(1, Math.floor(input.cap * RESEARCH_CANDIDATE_RESERVE_SHARE))
+  );
+  const reserved = input.researchClaimed.slice(0, reserve);
+  const remaining = input.researchClaimed.slice(reserve);
+  const seen = new Set<string>();
+  const ordered = [...reserved, ...input.inMarket, ...remaining, ...input.offTopic].filter((query) => {
+    const key = normalizePhrase(query);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { ordered, researchReserved: reserved.length, researchOmitted: remaining.length };
 }
 
 /**
@@ -904,7 +954,23 @@ export async function buildBundlePlan(input: {
   const offTopic = taxonomy
     ? candidateQueries.filter((query) => !queryMatchesTaxonomy(taxonomy, query))
     : [];
-  const orderedQueries = [...inMarket, ...offTopic];
+  // Research sees the need in the buyer's words; the bundle decides whether it is
+  // real demand. Claimed forms are bought from a named share of the cap, so the
+  // proven Search Console rotation still gets the rest.
+  const researchSelection = await researchCandidateQueries(db, {
+    projectId: site.projectId,
+    siteId: site.id,
+    since: demandCandidateSince(input.now),
+    taxonomy,
+    limit: caps.keywordQueries,
+  });
+  const keywordPool = planKeywordCandidates({
+    researchClaimed: researchSelection.candidates,
+    inMarket,
+    offTopic,
+    cap: caps.keywordQueries,
+  });
+  const orderedQueries = keywordPool.ordered;
 
   const keywordSelection = selectQueriesForBundle(orderedQueries, measuredKeywordSet, caps.keywordQueries);
   const brandTopics = taxonomy ? taxonomy.topics.filter((topic) => isBrandTopic(topic)) : [];
@@ -1012,12 +1078,22 @@ export async function buildBundlePlan(input: {
 
   if (keywordQueries.length < caps.keywordQueries) {
     warnings.push(
-      `only ${keywordQueries.length} Search Console queries are available for a ${caps.keywordQueries}-query cap`
+      `only ${keywordQueries.length} queries are available for a ${caps.keywordQueries}-query cap`
     );
   }
   if (keywordSelection.omitted > 0) {
     warnings.push(
       `${keywordSelection.omitted} of ${candidateQueries.length} queries get no paid call this month (cap ${caps.keywordQueries}); the bundle takes unmeasured queries first, so the rest rotate in over following months`
+    );
+  }
+  if (researchSelection.unclaimed.length > 0) {
+    warnings.push(
+      `${researchSelection.unclaimed.length} demand form(s) research observed match no approved topic and were not measured: they wait for a taxonomy decision`
+    );
+  }
+  if (keywordPool.researchOmitted > 0) {
+    warnings.push(
+      `${keywordPool.researchOmitted} claimed demand form(s) stayed outside this month's ${keywordPool.researchReserved}-query research reserve`
     );
   }
   if (serpSelection.brandSkipped > 0) {
@@ -1154,6 +1230,11 @@ export async function buildBundlePlan(input: {
       unmeasuredMarkets: (input.contextMarkets ?? []).filter((code) => code !== locale.country),
       offTopicQueries: offTopic.length,
       taxonomyApplied: Boolean(taxonomy),
+      researchCandidateQueries: researchSelection.available,
+      researchCandidatesClaimed: researchSelection.candidates.length,
+      researchCandidatesUnclaimed: researchSelection.unclaimed.length,
+      researchCandidatesReserved: keywordPool.researchReserved,
+      researchCandidatesOmitted: researchSelection.omitted + keywordPool.researchOmitted,
     },
     paidCalls,
     estimatedMicros,
@@ -1183,9 +1264,7 @@ export async function findBundleRun(
   return run ? summarizeRun(run) : null;
 }
 
-export function bundleKey(siteId: string, month: string): string {
-  return `monthly:${siteId}:${month}:bundle`;
-}
+export { bundleKey } from "@/lib/research/schedule";
 
 export function receiptFromRun(run: {
   id: string;

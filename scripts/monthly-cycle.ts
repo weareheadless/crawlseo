@@ -1,14 +1,14 @@
 /**
- * Queue the monthly cycle for every site, or report what it would queue.
+ * Run the site cycle for every site, or report what it would do.
  *
  *   npx tsx scripts/monthly-cycle.ts [--dry-run] [--site <siteId>]
  *
  * The worker runs the same function on a timer; this exists for operators and for
- * a manual backfill of a month that was missed. Nothing about it is per-tenant.
+ * proving a change on one disposable site. Nothing about it is per-tenant.
  */
 import { PrismaClient } from "@prisma/client";
 
-import { runMonthlyCycle } from "@/lib/jobs/monthly-cycle";
+import { runSiteCycle } from "@/lib/jobs/site-cycle";
 
 function value(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -19,13 +19,13 @@ async function main() {
   const db = new PrismaClient();
   const dryRun = process.argv.includes("--dry-run");
   const siteId = value("--site");
-  const results = await runMonthlyCycle(db, {
+  const results = await runSiteCycle(db, {
     dryRun,
     siteIds: siteId ? [siteId] : undefined,
   });
 
   for (const site of results) {
-    process.stdout.write(`\n${site.domain}  ${site.month}\n`);
+    process.stdout.write(`\n${site.domain}  ${site.month}  ${site.week}\n`);
     for (const stage of site.stages) {
       process.stdout.write(`  ${stage.status.padEnd(8)} ${stage.stage.padEnd(15)} ${stage.detail}\n`);
     }

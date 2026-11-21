@@ -46,6 +46,8 @@ export type EvidenceLine = {
   headline: string;
   /** Metric chips with declared unit and source, for the provenance badge. */
   metrics: Array<{ label: string; value: number | null; unit: string; source: string }>;
+  /** Where the evidence came from, when the producer recorded it (a research source). */
+  sourceUrl: string | null;
 };
 
 export type OpportunityRow = {
@@ -213,6 +215,7 @@ export function headlineFor(record: RawEvidence): string {
 
 function evidenceLine(record: RawEvidence, leg: EvidenceLeg): EvidenceLine {
   const m = metricsOf(record);
+  const dimensions = (record.dimensions ?? {}) as { sourceUrl?: unknown };
   return {
     id: record.id,
     kind: record.kind,
@@ -220,6 +223,7 @@ function evidenceLine(record: RawEvidence, leg: EvidenceLeg): EvidenceLine {
     observedAt: record.observedAt,
     leg,
     headline: headlineFor(record),
+    sourceUrl: typeof dimensions.sourceUrl === "string" ? dimensions.sourceUrl : null,
     metrics: Object.entries(m).map(([label, value]) => ({
       label: label.split(":").slice(1).join(":"),
       value: value.value,

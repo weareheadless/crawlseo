@@ -55,3 +55,13 @@ export function researchCadenceWindow(cadence: ResearchCadence, now: Date, timeZ
   }
   return { key: `${cadence}:${formatDate(start)}`, start: localMidnightUtc(start, timeZone), end: localMidnightUtc(end, timeZone) };
 }
+
+/**
+ * The idempotency key of one site's monthly evidence bundle.
+ *
+ * It lives beside the other period keys so the scheduler and the bundle agree on
+ * identity without the scheduler importing the paid collection module.
+ */
+export function bundleKey(siteId: string, month: string): string {
+  return `monthly:${siteId}:${month}:bundle`;
+}

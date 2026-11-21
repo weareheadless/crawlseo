@@ -183,6 +183,14 @@ export default async function OpportunityDetailPage({ params }: Props) {
                   <p className="text-sm text-foreground">{line.headline}</p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     {evidenceKindLabel(line.kind)} · {line.producer} · {relativeTime(line.observedAt)}
+                    {line.sourceUrl && (
+                      <>
+                        {" · "}
+                        <a href={line.sourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+                          source
+                        </a>
+                      </>
+                    )}
                   </p>
                 </li>
               ))}

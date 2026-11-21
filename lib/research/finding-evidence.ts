@@ -19,7 +19,7 @@ import type { AnalysisLedger } from "@/lib/recommendation/ledger";
  * that pipeline is still the producer.
  */
 
-export type FindingBridgeDb = Pick<PrismaClient, "researchFinding" | "evidenceRecord"> &
+export type FindingBridgeDb = Pick<PrismaClient, "researchFinding" | "researchSource" | "evidenceRecord"> &
   Parameters<typeof storeEvidenceRecord>[0] &
   AssessmentRunDb;
 
@@ -29,6 +29,7 @@ type StoredFinding = {
   type: string;
   theme: string;
   primaryQuery?: string | null;
+  demandQueries?: string[] | null;
   summary: string;
   confidence: number;
   sentiment: string | null;
@@ -71,7 +72,7 @@ function findingTitle(finding: StoredFinding): string {
   return finding.summary.trim().slice(0, 120);
 }
 
-export function findingDimensions(finding: StoredFinding): Record<string, string | number | boolean | null> {
+export function findingDimensions(finding: StoredFinding): Record<string, string | number | boolean | string[] | null> {
   const isPainPoint = PAIN_POINT_TYPES.has(finding.type);
   const isPositioning = POSITIONING_TYPES.has(finding.type);
   return {
@@ -82,6 +83,9 @@ export function findingDimensions(finding: StoredFinding): Record<string, string
     title: findingTitle(finding),
     // The phrase to validate; the join runner collects on this, not on the theme.
     query: finding.primaryQuery ?? null,
+    // The other forms buyers type for the same need, so a paid measurement can
+    // start from the wording the research actually observed.
+    demandQueries: finding.demandQueries ?? [],
     // The detectors read these two flags; a finding without a winnable gap
     // stays context and never becomes a task.
     painPoint: isPainPoint ? "true" : null,
@@ -166,6 +170,7 @@ export async function bridgeFindingsToEvidence(
       type: true,
       theme: true,
       primaryQuery: true,
+      demandQueries: true,
       summary: true,
       confidence: true,
       sentiment: true,
@@ -176,6 +181,27 @@ export async function bridgeFindingsToEvidence(
     },
   })) as StoredFinding[];
 
+  // The source URL travels with the evidence: an opportunity that cites a finding
+  // has to show where the finding came from, not only that it exists.
+  const citedSourceIds = [...new Set(findings.flatMap((finding) =>
+    Array.isArray(finding.evidenceSourceIds)
+      ? finding.evidenceSourceIds.filter((id): id is string => typeof id === "string")
+      : []
+  ))];
+  const citedSources = citedSourceIds.length
+    ? await db.researchSource.findMany({ where: { id: { in: citedSourceIds } }, select: { id: true, url: true } })
+    : [];
+  const urlBySource = new Map(citedSources.map((source) => [source.id, source.url]));
+  const firstSourceUrl = (finding: StoredFinding): string | null => {
+    const ids = Array.isArray(finding.evidenceSourceIds) ? finding.evidenceSourceIds : [];
+    for (const id of ids) {
+      if (typeof id !== "string") continue;
+      const url = urlBySource.get(id);
+      if (url) return url;
+    }
+    return null;
+  };
+
   const maxAssessments = Math.max(0, Math.min(opts.maxAssessments ?? 6, 12));
   let stored = 0;
   let actionable = 0;
@@ -185,6 +211,7 @@ export async function bridgeFindingsToEvidence(
 
   for (const finding of findings) {
     const dimensions = findingDimensions(finding);
+    dimensions.sourceUrl = firstSourceUrl(finding);
     if (dimensions.painPoint === "true" || dimensions.positioningGap === "true") actionable += 1;
     const eligible = dimensions.painPoint === "true" || dimensions.positioningGap === "true";
 

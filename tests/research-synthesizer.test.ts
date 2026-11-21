@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
+import type { SiteBrief } from "@/lib/site/brief";
+
+function brief(overrides: Partial<SiteBrief> = {}): SiteBrief {
+  return {
+    siteId: "site-1", projectId: "project-1", domain: "casamigo.net",
+    language: "en", country: "MX", market: null, audienceMarket: null, audienceCountry: null,
+    audience: null, topics: [], goals: [], facts: [], withheldFields: [],
+    ...overrides,
+  };
+}
 
 const sources = [{
   provider: "reddit_rss",
@@ -52,11 +62,8 @@ describe("research synthesis", () => {
     })));
 
     const result = await synthesizeResearch({
-      siteDomain: "casamigo.net",
+      brief: brief({ topics: ["Tulum real estate"], audience: "international buyers", market: "Mexico" }),
       title: "Buyer concerns",
-      topics: ["Tulum real estate"],
-      audience: "international buyers",
-      market: "Mexico",
       questions: ["What concerns do buyers raise?"],
       sources,
       candidatePages: ["https://www.casamigo.net/"],
@@ -93,9 +100,8 @@ describe("research synthesis", () => {
     })));
 
     const result = await synthesizeResearch({
-      siteDomain: "casamigo.net",
+      brief: brief({ topics: ["Tulum real estate"] }),
       title: "Buyer concerns",
-      topics: ["Tulum real estate"],
       questions: [],
       sources,
       candidatePages: ["https://www.casamigo.net/"],
@@ -116,7 +122,7 @@ describe("research synthesis", () => {
       ],
     })));
     const result = await synthesizeResearch({
-      siteDomain: "casamigo.net", title: "Buyer concerns", topics: ["ownership"], questions: [], sources, candidatePages: [],
+      brief: brief({ topics: ["ownership"] }), title: "Buyer concerns", questions: [], sources, candidatePages: [],
     });
     expect(result.findings).toHaveLength(1);
     expect(result.actions).toHaveLength(1);
@@ -138,9 +144,8 @@ describe("research synthesis", () => {
       actions: [],
     })));
     const result = await synthesizeResearch({
-      siteDomain: "example.test",
+      brief: brief({ domain: "example.test", topics: ["ownership"] }),
       title: "Ownership",
-      topics: ["ownership"],
       questions: [],
       sources,
       candidatePages: [],
@@ -168,7 +173,7 @@ describe("research synthesis", () => {
     })));
 
     const result = await synthesizeResearch({
-      siteDomain: "casamigo.net", title: "Buyer concerns", topics: ["ownership"], questions: [], sources, candidatePages: [],
+      brief: brief({ topics: ["ownership"] }), title: "Buyer concerns", questions: [], sources, candidatePages: [],
     });
     expect(result.findings).toHaveLength(1);
     expect(result.actions).toEqual([]);
@@ -179,12 +184,95 @@ describe("research synthesis", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({ findings: [], actions: [] })));
 
     await expect(synthesizeResearch({
-      siteDomain: "casamigo.net",
+      brief: brief({ topics: ["Tulum real estate"] }),
       title: "Buyer concerns",
-      topics: ["Tulum real estate"],
       questions: [],
       sources,
       candidatePages: [],
     })).rejects.toThrow("no valid findings");
+  });
+});
+
+describe("research synthesis business context", () => {
+  it("puts recorded business facts and their provenance status in the prompt", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubEnv("CONTENT_LLM_BASE_URL", "https://llm.test/v1");
+    vi.stubEnv("CONTENT_LLM_MODEL", "test-model");
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(String(init?.body ?? ""));
+      return completion({
+        findings: [{
+          type: "CONTENT_GAP",
+          theme: "Beginner course",
+          summary: "Buyers ask what a first course includes before booking.",
+          confidence: 60,
+          source_indexes: [0],
+        }],
+        actions: [],
+      });
+    }));
+
+    await synthesizeResearch({
+      brief: brief({
+        topics: ["freediving"],
+        facts: [
+          { field: "services", value: "Freediving courses", status: "assumed", kind: "ai_observation", sourceUrl: null },
+          { field: "differentiators", value: "Small groups", status: "owner_confirmed", kind: "owner_input", sourceUrl: null },
+        ],
+        withheldFields: ["prohibitedClaims"],
+      }),
+      title: "Market questions",
+      questions: [],
+      sources,
+      candidatePages: [],
+    });
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toContain("Freediving courses");
+    expect(bodies[0]).toContain("assumed");
+    expect(bodies[0]).toContain("owner_confirmed");
+    expect(bodies[0]).not.toContain("prohibitedClaims");
+  });
+});
+
+describe("demand forms on a finding", () => {
+  it("keeps shape-valid forms, drops duplicates and over-long text, and counts the drops", async () => {
+    vi.stubEnv("CONTENT_LLM_API_KEY", "test-key");
+    vi.stubEnv("CONTENT_LLM_BASE_URL", "https://llm.test/v1");
+    vi.stubEnv("CONTENT_LLM_MODEL", "test-model");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(completion({
+      findings: [{
+        type: "CONCERN",
+        theme: "Ownership",
+        summary: "Buyers ask whether a foreigner can own property directly.",
+        confidence: 70,
+        source_indexes: [0],
+        primary_query: "can foreigners own property in mexico",
+        demand_queries: [
+          "can foreigners own property in mexico",
+          "  buying   property in mexico as a foreigner ",
+          "can foreigners own property in mexico",
+          "x".repeat(90),
+          42,
+        ],
+      }],
+      actions: [],
+    })));
+
+    const result = await synthesizeResearch({
+      brief: brief({ topics: ["real estate"] }),
+      title: "Buyer concerns",
+      questions: [],
+      sources,
+      candidatePages: [],
+    });
+
+    expect(result.findings[0].demandQueries).toEqual([
+      "can foreigners own property in mexico",
+      "buying property in mexico as a foreigner",
+    ]);
+    // The duplicate, the over-long phrase and the non-string are reported.
+    expect(result.droppedDemandQueries).toBe(3);
   });
 });

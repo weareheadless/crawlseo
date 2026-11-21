@@ -30,6 +30,10 @@ export function sourceForJobKind(kind: JobKind): SyncSource {
       return SyncSource.DATAFORSEO;
     case JobKind.RESEARCH_RUN:
       return SyncSource.RESEARCH;
+    case JobKind.BUNDLE:
+      // A bundle is a paid provider run: its cost and receipt belong to the same
+      // ledger as the other DataForSEO work.
+      return SyncSource.DATAFORSEO;
     case JobKind.AGENT_TASK:
     case JobKind.WIX_DELIVERY:
     case JobKind.EDITORIAL_ARTICLE:

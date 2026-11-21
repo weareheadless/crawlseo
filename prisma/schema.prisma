@@ -1136,6 +1136,10 @@ model ResearchFinding {
   theme               String
   /// The search phrase the finding wants validated (synthesizer `primary_query`).
   primaryQuery        String?
+  /// The forms buyers actually type for this need (synthesizer `demand_queries`).
+  /// The model proposes the phrasing; paid measurement decides whether each form
+  /// is real demand. Code validates shape only (count, length, duplicates).
+  demandQueries       String[]
   summary             String
   confidence          Int                 @default(50)
   sentiment           String?
@@ -2101,6 +2105,7 @@ enum JobKind {
   SEO_RESEARCH
   ARTICLE_KEYWORD_RESEARCH
   RESEARCH_RUN
+  BUNDLE
   AGENT_TASK
   WIX_DELIVERY
   EDITORIAL_ARTICLE

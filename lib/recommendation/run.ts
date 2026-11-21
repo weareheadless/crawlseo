@@ -59,7 +59,7 @@ export type FindingForAssessment = {
   observedAt: Date;
   sourceIds: string[];
   dedupKey: string;
-  dimensions: Record<string, string | number | boolean | null>;
+  dimensions: Record<string, string | number | boolean | string[] | null>;
 };
 
 export type FindingAssessmentResult = {

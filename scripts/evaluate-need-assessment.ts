@@ -22,6 +22,7 @@ import { writeFileSync } from "node:fs";
 import { db } from "@/lib/db";
 import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
 import { buildPageInventory } from "@/lib/research/page-inventory";
+import { buildSiteBrief } from "@/lib/site/brief";
 import { synthesizeResearch } from "@/lib/research/synthesizer";
 import { assessFinding } from "@/lib/recommendation/run";
 import { AnalysisLedger } from "@/lib/recommendation/ledger";
@@ -163,10 +164,13 @@ async function main() {
         })
       : [];
     const inventory = buildPageInventory(pages.map((page) => ({ url: page.url, contentScore: page.contentScore })));
+    const siteBrief = await buildSiteBrief(db, site.id);
     const synthesis = await synthesizeResearch({
-      siteDomain: site.domain,
+      brief: {
+        ...siteBrief,
+        topics: Array.isArray(run.topics) ? run.topics.filter((topic): topic is string => typeof topic === "string") : [],
+      },
       title: run.title,
-      topics: Array.isArray(run.topics) ? run.topics.filter((topic): topic is string => typeof topic === "string") : [],
       questions: [],
       sources: sources.map((source) => ({
         provider: source.provider,

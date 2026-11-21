@@ -16,6 +16,8 @@ const scoreInputs = {
 function fakeDb(seed: {
   opportunities: Array<Record<string, unknown>>;
   facts?: Array<Record<string, unknown>>;
+  supportingEdges?: Array<{ fromId: string }>;
+  supportingEvidence?: Array<Record<string, unknown>>;
 }) {
   const opportunities = seed.opportunities.map((row) => ({ ...row }));
   const edges: Array<Record<string, unknown>> = [];
@@ -39,11 +41,12 @@ function fakeDb(seed: {
     },
     evidenceRecord: {
       findMany: vi.fn(async (args?: { where?: { kind?: string } }) =>
-        (args?.where?.kind === "knowledge_fact" ? seed.facts ?? [] : [])
+        (args?.where?.kind === "knowledge_fact" ? seed.facts ?? [] : seed.supportingEvidence ?? [])
       ),
+      findManySupporting: vi.fn(),
     },
     evidenceEdge: {
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async () => seed.supportingEdges ?? []),
       upsert: vi.fn(async (args: { create: Record<string, unknown> }) => {
         edges.push(args.create);
         return { id: `edge-${edges.length}` };
@@ -156,5 +159,40 @@ describe("join follow-up execution", () => {
     const result = await runJoinFollowUps(db, { projectId: "p1", now: AT, maxSpendMicros: 0, collectors: { keywordMetrics: collector } });
     expect(collector).not.toHaveBeenCalled();
     expect(result.skipped[0].reason).toBe("spend ceiling reached");
+  });
+});
+
+describe("demand forms as the how-leg query", () => {
+  it("measures a finding's demand form when it has no primary query", async () => {
+    const calls: string[][] = [];
+    const { db } = fakeDb({
+      opportunities: [opportunity({ type: "O13_user_pain_point", evidenceCompleteness: "why" })],
+      supportingEdges: [{ fromId: "ev-finding" }],
+      supportingEvidence: [{
+        id: "ev-finding",
+        kind: "research_finding",
+        observedAt: AT,
+        dimensions: { query: null, demandQueries: ["abat jour sur mesure"] },
+        metrics: {},
+      }],
+    });
+
+    const result = await runJoinFollowUps(db, {
+      projectId: "p1",
+      now: AT,
+      maxSpendMicros: 1_000,
+      collectors: {
+        keywordMetrics: async ({ queries }) => {
+          calls.push(queries);
+          return {
+            evidence: [{ id: "ev-metrics", kind: "keyword_metrics", observedAt: AT, dimensions: { query: queries[0] }, metrics: {} }],
+            spentMicros: 10,
+          };
+        },
+      },
+    });
+
+    expect(calls).toEqual([["abat jour sur mesure"]]);
+    expect(result.joined.some((entry) => entry.leg === "how")).toBe(true);
   });
 });

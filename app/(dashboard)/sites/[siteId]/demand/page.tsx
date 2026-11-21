@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { listDemandClusters } from "@/lib/funnel/views";
+import { measuredQueries } from "@/lib/funnel/acquisition";
+import { demandCandidateSince, researchCandidateQueries } from "@/lib/research/demand-candidates";
+import { loadTopicTaxonomy } from "@/lib/research/topic-taxonomy";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Chip } from "@/components/funnel/badges";
@@ -49,6 +52,21 @@ export default async function DemandMapPage({ params }: Props) {
   }
 
   const clusters = await listDemandClusters(db, site.projectId);
+  // Demand research observed, in the buyer's words, before any of it is bought.
+  // The same reader the monthly bundle uses, so this list cannot disagree with
+  // what the plan will measure.
+  const taxonomy = await loadTopicTaxonomy(db, siteId);
+  const [research, measured] = await Promise.all([
+    researchCandidateQueries(db, {
+      projectId: site.projectId,
+      siteId,
+      since: demandCandidateSince(new Date()),
+      taxonomy,
+    }),
+    measuredQueries(db, site.projectId),
+  ]);
+  const phraseKey = (value: string) => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  const unmeasuredResearch = research.candidates.filter((query) => !measured.fresh.has(phraseKey(query)));
   const openTotal = clusters.reduce((sum, cluster) => sum + cluster.openOpportunities, 0);
   // Opportunities exist before clusters do. Saying "0 open" while the board has
   // work would be a lie, so the unclustered remainder is stated explicitly.
@@ -83,6 +101,37 @@ export default async function DemandMapPage({ params }: Props) {
           <p className="mt-1 font-heading text-2xl font-semibold">{unclustered}</p>
         </div>
       </div>
+
+      <section className="mb-6 panel px-4 py-3">
+        <h2 className="font-heading text-base font-semibold">Suggested by research</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Phrases buyers used in the sources this site&apos;s research read. A phrase a topic claims competes for the
+          monthly keyword cap; one no topic claims waits for a taxonomy decision before it is bought.
+        </p>
+        {unmeasuredResearch.length === 0 && research.unclaimed.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No demand form is waiting. The next research run proposes them from the sources it reads.
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {unmeasuredResearch.slice(0, 12).map((query) => (
+              <li key={query} className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground">
+                {query}
+              </li>
+            ))}
+            {research.unclaimed.slice(0, 6).map((query) => (
+              <li key={query} className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground" title="No approved topic claims this phrase yet">
+                {query}
+              </li>
+            ))}
+          </ul>
+        )}
+        {(unmeasuredResearch.length > 12 || research.unclaimed.length > 6) && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Showing 12 claimed and 6 unclaimed; {research.candidates.length} claimed and {research.unclaimed.length} unclaimed in total.
+          </p>
+        )}
+      </section>
 
       {clusters.length === 0 ? (
         <EmptyState

@@ -185,7 +185,7 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
-type ContextDb = Pick<PrismaClient, "site" | "siteProfile" | "businessKnowledgeDocument">;
+export type ContextDb = Pick<PrismaClient, "site" | "siteProfile" | "businessKnowledgeDocument">;
 
 /**
  * Read the owner's accepted business knowledge for a project, falling back to the
@@ -284,7 +284,7 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
     ?? (statedMarket && countryFromText(statedMarket) ? statedMarket : null)
     ?? null;
   const audienceText = typeof profile?.audience === "string" ? profile.audience : null;
-  let audienceCountry = countryFromText(audienceMarket) ?? countryFromText(audienceText);
+  const audienceCountry = countryFromText(audienceMarket) ?? countryFromText(audienceText);
   let audienceSource: ContextSource = audienceCountry ? "site_profile" : "unknown";
   if (audienceCountry && firstString(factValue(fields, "audienceMarket"))) audienceSource = "business_knowledge";
 

@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 import { writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import { hasUsableKnowledgeFields } from "@/lib/projects/business-knowledge-facts";
+import { buildPageInventory } from "@/lib/research/page-inventory";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { chatJson } from "@/lib/ai/chat";
 
@@ -102,6 +104,10 @@ export type ExtractBusinessKnowledgeResult = {
   revision: number;
   state: string;
   pagesRead: number;
+  /** Where the pages came from, so a thin extraction is not mistaken for an empty site. */
+  pagesFromCrawl: number;
+  pagesFetched: number;
+  pagesUnreadable: number;
 };
 
 type ExtractDb = PrismaClient;
@@ -153,13 +159,51 @@ export async function extractBusinessKnowledgeFromPages(
   return { contentLanguage, fields: parsed, extracted, pagesRead: pages.length };
 }
 
+function sectionOf(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\/+/, "").split("/")[0] || "/";
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * Pages the site's own crawl already retrieved.
+ *
+ * The crawl stored the text, so re-fetching the same pages over HTTP was both
+ * slower and the main reason extraction failed on sites behind a WAF. The sample
+ * is the crawl's page-type inventory, so this reads the same pages the
+ * synthesizer sees rather than a second, different selection.
+ */
+async function crawlExtractionPages(db: ExtractDb, siteId: string, limit: number) {
+  const crawl = await db.crawl.findFirst({
+    where: { siteId, status: "COMPLETED" },
+    orderBy: { finishedAt: "desc" },
+    select: { id: true },
+  });
+  if (!crawl) return [];
+  const inventory = buildPageInventory(
+    await db.auditPage.findMany({ where: { crawlId: crawl.id }, select: { url: true, contentScore: true } }),
+    limit
+  );
+  if (inventory.sampled.length === 0) return [];
+  const stored = await db.auditPage.findMany({
+    where: { crawlId: crawl.id, url: { in: inventory.sampled }, contentText: { not: null } },
+    select: { url: true, title: true, contentText: true },
+  });
+  return stored
+    .map((page) => ({ url: page.url, title: page.title ?? "", text: (page.contentText ?? "").slice(0, MAX_CHARS_PER_PAGE) }))
+    .filter((page) => page.text.trim().length > 0);
+}
+
 /**
  * Read the site's own pages and write a working business-knowledge revision.
  *
- * Pages come from traffic evidence first, then one representative per top-level
- * sitemap section, then the root. Traffic pages alone miss service sections that
- * rarely rank — a service offered on its own page was absent from an earlier
- * extraction for exactly that reason.
+ * Pages come from the latest completed crawl first (its text is already stored
+ * and its sample covers every page type), then one representative per top-level
+ * sitemap section the crawl did not reach, then the root. Traffic evidence ranks
+ * the candidates only when the site has never been crawled. Every source is
+ * counted in the result, so a thin extraction says why it was thin.
  */
 export async function extractBusinessKnowledgeFromSite(
   db: ExtractDb,
@@ -211,14 +255,27 @@ export async function extractBusinessKnowledgeFromSite(
   } catch {
     // No sitemap: traffic pages and the root are still enough to start.
   }
-  const urls = [...new Set([`${origin}/`, ...ranked, ...sitemapSections])].slice(0, MAX_PAGES);
-
-  const pages: Array<{ url: string; text: string; title: string }> = [];
-  for (const url of urls) {
+  const pages = await crawlExtractionPages(db, site.id, MAX_PAGES);
+  const fromCrawl = pages.length;
+  const coveredSections = new Set(pages.map((page) => sectionOf(page.url)));
+  // Without a crawl, traffic pages rank the fetch order; with one, the crawl's
+  // page-type sample already leads and only uncovered sections are fetched.
+  const candidates = [
+    `${origin}/`,
+    ...(fromCrawl === 0 ? ranked : []),
+    ...sitemapSections.filter((url) => !coveredSections.has(sectionOf(url))),
+  ];
+  let pagesFetched = 0;
+  let pagesUnreadable = 0;
+  for (const url of [...new Set(candidates)]) {
+    if (pages.length >= MAX_PAGES) break;
+    if (pages.some((page) => page.url === url)) continue;
     const page = await fetchPage(url);
+    pagesFetched += 1;
     if (page) pages.push(page);
+    else pagesUnreadable += 1;
   }
-  if (pages.length === 0) throw new Error("no page could be fetched");
+  if (pages.length === 0) throw new Error("no page could be read: the crawl stored no text and no page could be fetched");
 
   const knowledge = await extractBusinessKnowledgeFromPages(pages);
   const parsed = knowledge.fields;
@@ -291,6 +348,9 @@ export async function extractBusinessKnowledgeFromSite(
       revision: 0,
       state: "dry-run",
       pagesRead: pages.length,
+      pagesFromCrawl: fromCrawl,
+      pagesFetched,
+      pagesUnreadable,
     };
   }
 
@@ -327,5 +387,65 @@ export async function extractBusinessKnowledgeFromSite(
     revision: result.revision,
     state: result.state,
     pagesRead: pages.length,
+    pagesFromCrawl: fromCrawl,
+    pagesFetched,
+    pagesUnreadable,
+  };
+}
+
+export class BusinessKnowledgeMissingError extends Error {
+  constructor(reason: string) {
+    super(`BUSINESS_KNOWLEDGE_MISSING: ${reason}`);
+    this.name = "BusinessKnowledgeMissingError";
+  }
+}
+
+export type EnsureBusinessKnowledgeResult = {
+  documentId: string;
+  revision: number;
+  state: "existing" | "extracted";
+  extracted: string[];
+  contentLanguage: string | null;
+};
+
+/**
+ * The one gate every analysis path uses: a project either has a usable business
+ * knowledge document or gets one from its own pages before anything reads it.
+ *
+ * It throws rather than returning empty. A research run with no business facts
+ * produces findings that could have been written for any site in the market, and
+ * the run report used to present that as a completed analysis.
+ */
+export async function ensureBusinessKnowledge(
+  db: ExtractDb,
+  opts: { projectId: string; siteId?: string }
+): Promise<EnsureBusinessKnowledgeResult> {
+  const head = await db.businessKnowledgeDocument.findUnique({
+    where: { projectId: opts.projectId },
+    select: {
+      logicalId: true,
+      revision: true,
+      revisions: { orderBy: { revision: "desc" }, take: 1, select: { fields: true } },
+    },
+  });
+  if (head && hasUsableKnowledgeFields(head.revisions[0]?.fields)) {
+    return { documentId: head.logicalId, revision: head.revision, state: "existing", extracted: [], contentLanguage: null };
+  }
+
+  let extracted: ExtractBusinessKnowledgeResult;
+  try {
+    extracted = await extractBusinessKnowledgeFromSite(db, opts);
+  } catch (error) {
+    throw new BusinessKnowledgeMissingError(error instanceof Error ? error.message.slice(0, 200) : "extraction failed");
+  }
+  if (extracted.extracted.length === 0) {
+    throw new BusinessKnowledgeMissingError(`no business fact could be extracted from ${extracted.pagesRead} page(s)`);
+  }
+  return {
+    documentId: extracted.documentId,
+    revision: extracted.revision,
+    state: "extracted",
+    extracted: extracted.extracted,
+    contentLanguage: extracted.contentLanguage,
   };
 }

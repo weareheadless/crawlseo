@@ -15,6 +15,10 @@ requirements.
   to demand qualification: one job-map pass, the taxonomy projected from it,
   per-query demand verdicts in tranches, and the guardrails that keep it from
   drifting back into word matching.
+- **[Research and business context to opportunities](research-to-opportunities-plan.md)**
+  — the active implementation plan for making knowledge present at run time,
+  feeding it to every model call, turning research findings into paid keyword
+  candidates, and automating the daily/weekly/monthly cycle.
 
 ## Active operating docs
 
