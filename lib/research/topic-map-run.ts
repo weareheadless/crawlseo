@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { knowledgeFieldList, knowledgeFieldText } from "@/lib/projects/business-knowledge-facts";
+import { demandCandidateSince, researchCandidateQueries } from "@/lib/research/demand-candidates";
 import { loadJobMap, proposeJobMap, saveJobMap, type JobMap } from "@/lib/research/job-map";
 import {
   buildTopicMap,
@@ -69,6 +70,10 @@ export class TopicMapRunError extends Error {
   }
 }
 
+function normalizeQuery(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function monthOf(value: string | undefined, now: Date): string {
   const month = value?.trim() || now.toISOString().slice(0, 7);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new TopicMapRunError("month must be YYYY-MM", 2);
@@ -100,6 +105,30 @@ export async function runTopicMap(db: TopicMapRunDb, input: RunTopicMapInput): P
 
   const warnings: string[] = [];
   const rawData = await loadTopicMapData(db, site.id, month, null);
+  // A new site has no measured query and still knows what buyers ask: the research
+  // findings already named it. They enter the job map as unmeasured hypotheses
+  // (zero impressions, no volume), so the first taxonomy is not blocked on a
+  // bundle that has not run yet. The bundle then measures what the taxonomy claims.
+  const researchForms = await researchCandidateQueries(db, {
+    projectId: site.projectId,
+    siteId: site.id,
+    since: demandCandidateSince(now),
+    taxonomy: null,
+    limit: 200,
+  });
+  const formQueries = [...researchForms.candidates, ...researchForms.unclaimed];
+  const seenQuery = new Set(rawData.queries.map((row) => normalizeQuery(row.query)));
+  const demandQueries = rawData.queries.map((query) => ({
+    query: query.query,
+    impressions: query.impressions,
+    volume: query.volume,
+  }));
+  for (const form of formQueries) {
+    const key = normalizeQuery(form);
+    if (seenQuery.has(key)) continue;
+    seenQuery.add(key);
+    demandQueries.push({ query: form, impressions: 0, volume: null });
+  }
   let jobMap: JobMap | null = await loadJobMap(db, site.id);
   if (!jobMap || input.refreshJobMap) {
     const proposed = await proposeJobMap({
@@ -125,7 +154,7 @@ export async function runTopicMap(db: TopicMapRunDb, input: RunTopicMapInput): P
       pages: [...rawData.pages]
         .sort((a, b) => b.wordCount - a.wordCount)
         .map((page) => ({ path: page.path, title: page.title, h1: page.h1, wordCount: page.wordCount })),
-      queries: rawData.queries.map((query) => ({ query: query.query, impressions: query.impressions, volume: query.volume })),
+      queries: demandQueries,
       previous: jobMap,
     });
     if (!proposed.jobMap) {
@@ -160,6 +189,9 @@ export async function runTopicMap(db: TopicMapRunDb, input: RunTopicMapInput): P
   const stored = await storeTopicMap(db, map);
   const report = {
     version: 1,
+    // How the job map was seeded, so "the taxonomy came from research" is visible
+    // in the run rather than inferred from the topics.
+    demandInput: { measuredQueries: rawData.queries.length, researchForms: formQueries.length },
     map,
     checksum: topicMapChecksum(map),
     stored,
@@ -176,7 +208,13 @@ export async function runTopicMap(db: TopicMapRunDb, input: RunTopicMapInput): P
     trigger: (input.approval?.startsWith("auto:") ? "SCHEDULED" : "MANUAL") as "SCHEDULED" | "MANUAL",
     status: "COMPLETED" as const,
     title: `Topic map — ${month}`,
-    brief: { month, taxonomy: "stored-v1", ai: Boolean(input.ai), approvalReference: input.approval ?? null } as never,
+    brief: {
+      month,
+      taxonomy: "stored-v1",
+      ai: Boolean(input.ai),
+      approvalReference: input.approval ?? null,
+      demandInput: { measuredQueries: rawData.queries.length, researchForms: formQueries.length },
+    } as never,
     topics: map.clusters.map((cluster) => cluster.name) as never,
     recencyDays: 31,
     promptVersion: "topic-map-v1",

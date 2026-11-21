@@ -101,6 +101,7 @@ function dbFor(site: Record<string, unknown>, monthResearch: { id: string; statu
       findFirst: vi.fn(async (args?: { where?: { idempotencyKey?: unknown } }) =>
         args?.where?.idempotencyKey ? null : monthResearch
       ),
+      update: vi.fn(async () => ({})),
     },
     siteProfile: { findUnique: vi.fn(async () => ({ topics: store.topics, audience: null })) },
     businessKnowledgeDocument: { findUnique: vi.fn(async () => null) },
@@ -156,5 +157,22 @@ describe("site cycle dependency order", () => {
     expect(stages.find((stage) => stage.stage === "research")?.status).toBe("skipped");
     expect(stages.find((stage) => stage.stage === "research")?.detail).toContain("disabled");
     expect(stages.find((stage) => stage.stage === "bundle")?.status).toBe("queued");
+  });
+});
+
+describe("failed research retry", () => {
+  it("retries a failed scheduled run once instead of ending research for the window", async () => {
+    store.ensure.mockResolvedValue({ steps: [{ step: "business-knowledge", status: "ok", detail: "existing" }] });
+    const database = dbFor(activeSite(), { id: "run-failed", status: "FAILED" });
+    const results = await runSiteCycle(database as never, { now: new Date("2026-11-04T00:00:00.000Z") });
+
+    const research = results[0].stages.find((stage) => stage.stage === "research");
+    expect(research?.status).toBe("queued");
+    expect(research?.detail).toContain("retrying failed run run-failed");
+    expect(store.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "RESEARCH_RUN",
+      idempotencyKey: "research-run:run-failed:retry",
+      payload: { researchRunId: "run-failed" },
+    }));
   });
 });

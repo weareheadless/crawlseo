@@ -217,8 +217,33 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
       push("research", "weekly", "skipped", "research disabled by the owner");
     } else if (!researchKey) {
       push("research", "weekly", "skipped", "manual cadence: no scheduled run");
-    } else if (existingRun) {
+    } else if (existingRun && existingRun.status !== "FAILED") {
       push("research", "weekly", "skipped", `run ${existingRun.id} already ${existingRun.status.toLowerCase()} in ${period}`);
+    } else if (existingRun) {
+      // A failed scheduled run used to end research for the whole window: its
+      // schedule key is unique, so nothing could ever retry it. One bounded retry
+      // keeps the cycle alive without looping on a provider that keeps refusing.
+      if (opts.dryRun) {
+        push("research", "weekly", "queued", `would retry failed run ${existingRun.id}`);
+      } else {
+        try {
+          await db.researchRun.update({
+            where: { id: existingRun.id },
+            data: { status: "QUEUED", errorCode: null, completedAt: null, startedAt: null },
+          });
+          await enqueueJob({
+            projectId: site.projectId,
+            siteId: site.id,
+            kind: JobKind.RESEARCH_RUN,
+            payload: { researchRunId: existingRun.id },
+            idempotencyKey: `research-run:${existingRun.id}:retry`,
+            maxAttempts: 1,
+          });
+          push("research", "weekly", "queued", `retrying failed run ${existingRun.id}`);
+        } catch (error) {
+          push("research", "weekly", "failed", error instanceof Error ? error.message.slice(0, 160) : "failed");
+        }
+      }
     } else if (opts.dryRun) {
       push("research", "weekly", "queued", `would queue for ${period}`);
     } else {
@@ -265,9 +290,20 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
 
     // 5. Topic map and taxonomy, monthly, before the bundle: the taxonomy decides
     //    which queries the bundle may buy, so refreshing it after the spend would
-    //    apply this month's decision next month. The map is approved automatically
-    //    (the model proposes the job map, the taxonomy is its projection) and the
-    //    review marker asks a person to read it; see lib/research/taxonomy-review.ts.
+    //    apply this month's decision next month. It waits for this month's research
+    //    because research forms are a legitimate seed for it: a site with no
+    //    measured query still knows what buyers ask. The map is approved
+    //    automatically (the model proposes the job map, the taxonomy is its
+    //    projection) and the review marker asks a person to read it.
+    const researchDisabled = site.researchPolicy?.enabled === false;
+    const monthResearch = await db.researchRun.findFirst({
+      where: { siteId: site.id, createdAt: { gte: bounds.start, lt: bounds.end } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true },
+    });
+    const researchFinished = researchDisabled || Boolean(
+      monthResearch && (monthResearch.status === "COMPLETED" || monthResearch.status === "PARTIAL")
+    );
     const topicMapIdempotency = topicMapKey(site.id, month);
     const existingTopicMap = await db.researchRun.findFirst({
       where: { siteId: site.id, idempotencyKey: topicMapIdempotency },
@@ -278,11 +314,16 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
       orderBy: { finishedAt: "desc" },
       select: { id: true },
     });
-    const measuredDemand = site.projectId
-      ? await db.evidenceRecord.count({
-          where: { projectId: site.projectId, siteId: site.id, kind: { in: ["keyword_rank", "keyword_metrics"] }, supersededById: null },
-        })
-      : 0;
+    const [measuredDemand, researchFindings] = site.projectId
+      ? await Promise.all([
+          db.evidenceRecord.count({
+            where: { projectId: site.projectId, siteId: site.id, kind: { in: ["keyword_rank", "keyword_metrics"] }, supersededById: null },
+          }),
+          db.evidenceRecord.count({
+            where: { projectId: site.projectId, siteId: site.id, kind: "research_finding", supersededById: null },
+          }),
+        ])
+      : [0, 0];
 
     if (existingTopicMap?.status === "COMPLETED") {
       push("topic-map", "monthly", "skipped", `topic map ${existingTopicMap.id} already completed for ${month}`);
@@ -290,8 +331,11 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
       push("topic-map", "monthly", "blocked", "blocked: knowledge is not usable");
     } else if (!completedCrawl) {
       push("topic-map", "monthly", "blocked", "blocked: no completed crawl to map pages from");
-    } else if (measuredDemand === 0) {
-      push("topic-map", "monthly", "skipped", "no measured demand yet: the first bundle seeds it");
+    } else if (!researchFinished) {
+      push("topic-map", "monthly", "blocked",
+        monthResearch ? `blocked: research run ${monthResearch.id} is ${monthResearch.status.toLowerCase()}` : "blocked: no research run this month");
+    } else if (measuredDemand === 0 && researchFindings === 0) {
+      push("topic-map", "monthly", "skipped", "no measured demand or research finding to model yet");
     } else if (opts.dryRun) {
       push("topic-map", "monthly", "queued", `would rebuild the taxonomy for ${month}`);
     } else {
@@ -315,17 +359,9 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
     }
 
     // 6. Monthly bundle. It measures demand, so it runs after the month's research
-    //    has named that demand. Research disabled is a declared state, and then the
-    //    bundle runs from Search Console alone.
-    const researchDisabled = site.researchPolicy?.enabled === false;
-    const monthResearch = await db.researchRun.findFirst({
-      where: { siteId: site.id, createdAt: { gte: bounds.start, lt: bounds.end } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, status: true },
-    });
-    const researchFinished = researchDisabled || Boolean(
-      monthResearch && (monthResearch.status === "COMPLETED" || monthResearch.status === "PARTIAL")
-    );
+    //    has named that demand and after the taxonomy that gates it was refreshed.
+    //    Research disabled is a declared state, and then the bundle runs from
+    //    first-party demand alone.
     const bundleIdempotency = bundleKey(site.id, month);
     const existingBundle = await db.researchRun.findFirst({
       where: { siteId: site.id, idempotencyKey: bundleIdempotency },

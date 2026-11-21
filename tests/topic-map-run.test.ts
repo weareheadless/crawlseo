@@ -28,6 +28,8 @@ vi.mock("@/lib/research/topic-map", () => ({
 vi.mock("@/lib/research/topic-taxonomy", () => ({
   projectTopicTaxonomy: () => ({ generatedAt: "2026-11-21T10:00:00.000Z", topics: [{ id: "t1" }] }),
   saveTopicTaxonomy: mocks.saveTopicTaxonomy,
+  // The job map is built from research forms, which have no taxonomy yet.
+  queryMatchesTaxonomy: () => false,
 }));
 vi.mock("@/lib/research/taxonomy-review", () => ({ recordTaxonomyApproval: mocks.recordTaxonomyApproval }));
 vi.mock("@/lib/site/context", () => ({ providerCountry: () => "FR", resolveSiteContext: vi.fn() }));
@@ -60,6 +62,12 @@ function db() {
   return {
     site: {
       findUnique: vi.fn(async () => ({ id: "s1", domain: "example.test", projectId: "p1", retiredAt: null })),
+    },
+    evidenceRecord: {
+      // Research already named demand, even though nothing is measured.
+      findMany: vi.fn(async () => [
+        { dimensions: { query: "abat jour sur mesure", demandQueries: ["lampe artisanale"] } },
+      ]),
     },
     researchRun: {
       findFirst: vi.fn(async (): Promise<{ id: string; status: string; report?: unknown } | null> => null),
@@ -98,6 +106,13 @@ describe("automatic topic map", () => {
 
     expect(result.status).toBe("completed");
     expect(mocks.saveJobMap).toHaveBeenCalled();
+    // Research already named the demand: the job map models those phrases as
+    // unmeasured hypotheses instead of waiting for a bundle that has not run.
+    const jobMapInput = (mocks.proposeJobMap.mock.calls[0][0]) as { queries: Array<{ query: string; impressions: number; volume: number | null }> };
+    expect(jobMapInput.queries).toEqual([
+      { query: "abat jour sur mesure", impressions: 0, volume: null },
+      { query: "lampe artisanale", impressions: 0, volume: null },
+    ]);
     expect(mocks.saveTopicTaxonomy).toHaveBeenCalled();
     expect(mocks.storeTopicMap).toHaveBeenCalled();
     expect(mocks.recordTaxonomyApproval).toHaveBeenCalledWith(

@@ -215,11 +215,14 @@ subset, which is how the knowledge fields got dropped from synthesis.
    `researchCandidatesOmitted`. Cap and cost estimate unchanged.
 5. `queryForOpportunity` in the join runner prefers `dims.query`, then the first
    `dims.demandQueries` entry — same collector, no new measurement path.
-6. **Cold start:** when no taxonomy is approved, research candidates are not
-   bought; they are counted as `researchCandidatesUnclaimed`. Month 1 uses
-   discovery seeds (business knowledge) → measured queries → topic map →
-   taxonomy; month 2 admits research candidates. This is ordering, not a special
-   case in code.
+6. **Cold start:** a product row is only bought when the approved taxonomy
+   claims it, so an unclaimed form is counted as `researchCandidatesUnclaimed`.
+   Month 1 does not have to wait for measurement: the topic map seeds its job map
+   from the research forms themselves (unmeasured: zero impressions, no volume),
+   so the first taxonomy can claim them and the first bundle can buy them. The
+   discovery-seed path stays as the entry point for a site whose research found no
+   sources at all. This is ordering plus one seed source, not a special case in
+   code.
 
 **Why.** This is the loop the product is for: research sees a need in the
 buyer's words, DataForSEO answers whether it is a real, winnable query.
@@ -457,7 +460,8 @@ does not mistake them for forgotten work.
 - **M5** — `lib/jobs/site-cycle.ts` replaces `lib/jobs/monthly-cycle.ts`. Daily
   knowledge, weekly crawl + Search Console + sweep, research at the owner's
   cadence, monthly topic map, monthly bundle behind `JobKind.BUNDLE` and
-  dependent on the month's research.
+  dependent on the month's research. A failed scheduled research run is retried
+  once per window instead of ending research until the next one.
 - **M7 — automatic taxonomy with a review notice (2026-11-21).** The monthly stage
   runs `lib/research/topic-map-run.ts` (the same function the CLI uses) with
   `approval: "auto:site-cycle:<month>"`, `refreshJobMap: true` and the synthesis
@@ -468,7 +472,11 @@ does not mistake them for forgotten work.
   `markTaxonomyReviewedAction` records the check. A new taxonomy clears the
   acknowledgement, so the notice returns for the new version only. The topic map
   runs *before* the bundle so the taxonomy that gates this month's spend is
-  refreshed this month, not next.
+  refreshed this month, not next, and it waits for this month's research run
+  because research findings seed it: `runTopicMap` passes the observed demand
+  forms to `proposeJobMap` with zero impressions and no volume, so a site with no
+  measured query still gets a taxonomy built from what buyers actually ask. The
+  run report records `demandInput: { measuredQueries, researchForms }`.
 - **M6** — research evidence carries `sourceUrl` (shown as a link on the
   opportunity's Research stage) and the demand page lists forms research
   suggested but the cap has not bought. **Deviation:** the Business page already
