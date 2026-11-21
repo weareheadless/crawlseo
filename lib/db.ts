@@ -4,9 +4,36 @@ import { withFrozenLegacyFunnel } from "@/lib/funnel/legacy-freeze";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
+/**
+ * Pool size per process.
+ *
+ * Prisma defaults to `cpus * 2 + 1` connections, which is 13 on this box, but a
+ * Next server runs several processes (`CRAWLSEO_WEB_WORKERS`) and every page
+ * render issues its queries concurrently. When the pool is full a request waits
+ * for a free connection and the wait compounds: twenty concurrent board
+ * renders went from 0.5 s to 9.4 s, and the queue surfaced as
+ * "Timed out fetching a new connection from the connection pool" 500s.
+ *
+ * Postgres here allows 100 connections and serves a 250 MB database, so each
+ * web worker gets a pool sized for the pages it serves rather than for the
+ * core count. Set CRAWLSEO_DB_POOL to override.
+ */
+function databaseUrl(): string | undefined {
+  const url = process.env.DATABASE_URL;
+  if (!url) return undefined;
+  const pool = process.env.CRAWLSEO_DB_POOL?.trim();
+  if (!pool || !/^\d+$/.test(pool)) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set("connection_limit", pool);
+  // A busy pool must queue briefly rather than fail the page.
+  parsed.searchParams.set("pool_timeout", "20");
+  return parsed.toString();
+}
+
 const rawClient =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasources: { db: { url: databaseUrl() } },
     log:
       process.env.NODE_ENV === "development"
         ? ["error", "warn"]

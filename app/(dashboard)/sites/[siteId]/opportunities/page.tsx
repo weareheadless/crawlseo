@@ -184,6 +184,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           <Link
             key={cell.label}
             href={cell.href}
+            prefetch={false}
             className="panel px-4 py-3 transition hover:border-primary/40"
           >
             <p className="text-atom-caption uppercase tracking-[0.12em] text-muted-foreground">{cell.label}</p>
@@ -202,7 +203,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
               "rounded-lg px-3 py-1.5 text-xs font-medium transition",
               !query.lane ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
-          >
+           prefetch={false}>
             All sources · {allSourcesCount}
           </Link>
           <Link
@@ -212,7 +213,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
               "rounded-lg px-3 py-1.5 text-xs font-medium transition",
               source === "proposals" ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
-          >
+           prefetch={false}>
             New proposals · {proposalCount}
           </Link>
           {OPPORTUNITY_LANES.map((lane) => (
@@ -225,7 +226,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition",
                 query.lane === lane.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
               )}
-            >
+             prefetch={false}>
               {lane.label} · {proposalLaneCounts[lane.key] ?? 0}
             </Link>
           ))}
@@ -244,7 +245,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition",
                 entry.key === tab.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
               )}
-            >
+             prefetch={false}>
               {entry.label}
             </Link>
           ))}
@@ -264,7 +265,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition",
                 (query.leg ?? "all") === entry.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
               )}
-            >
+             prefetch={false}>
               {entry.label}
             </Link>
           ))}
@@ -284,7 +285,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             "rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium transition",
             !query.type || query.type === "all" ? "border-primary/50 bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
           )}
-        >
+         prefetch={false}>
           All types · {typeTotal}
         </Link>
         {typeCounts
@@ -300,7 +301,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
               query.type === entry.type ? "border-primary/50 bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
             title={OPPORTUNITY_LABELS[entry.type]?.label}
-          >
+           prefetch={false}>
             {OPPORTUNITY_LABELS[entry.type]?.code ?? entry.type} · {entry._count._all}
           </Link>
         ))}

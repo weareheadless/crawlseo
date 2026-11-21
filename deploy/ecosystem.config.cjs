@@ -12,6 +12,9 @@ module.exports = {
         // Read-mostly UI: one Next worker per core keeps a page burst from
         // queueing behind one render. Sessions live in Postgres.
         CRAWLSEO_WEB_WORKERS: process.env.CRAWLSEO_WEB_WORKERS || "2",
+        // Per-process Prisma pool. Two workers x 12 leaves headroom inside
+        // Postgres's 100 connections and stops page renders queueing on 7.
+        CRAWLSEO_DB_POOL: process.env.CRAWLSEO_DB_POOL || "12",
       },
       kill_timeout: 10000,
       listen_timeout: 10000,

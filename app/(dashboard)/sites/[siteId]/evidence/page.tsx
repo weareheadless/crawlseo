@@ -82,7 +82,7 @@ export default async function EvidencePage({ params, searchParams }: Props) {
               "rounded-lg px-3 py-1.5 text-xs font-medium transition",
               entry.key === filter.key ? "bg-background text-foreground shadow-[var(--shadow-1)]" : "text-muted-foreground hover:text-foreground"
             )}
-          >
+           prefetch={false}>
             {entry.label}
           </Link>
         ))}

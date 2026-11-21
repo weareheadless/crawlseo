@@ -138,7 +138,7 @@ export default async function AeoGeoPage({
             className={`rounded-md px-3 py-1.5 font-medium transition ${
               item === tab ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
-          >
+           prefetch={false}>
             {tabLabels[item]} <span className="font-data text-xs text-muted-foreground">{counts[item]}</span>
           </Link>
         ))}
@@ -150,7 +150,7 @@ export default async function AeoGeoPage({
           <h2 className="font-heading text-lg font-semibold">Access</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Technical signals from the latest completed crawl. They do not measure whether an answer engine
-            mentions the site. <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`}>Review asked answers and citations</Link> for evaluation evidence.
+            mentions the site. <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`} prefetch={false}>Review asked answers and citations</Link> for evaluation evidence.
           </p>
           {!crawl ? (
             <p className="mt-4 rounded-lg bg-muted/30 p-4 text-sm">Crawl evidence unavailable; access is unknown.</p>
@@ -177,7 +177,7 @@ export default async function AeoGeoPage({
           <h2 className="font-heading text-lg font-semibold">Identity signals · {identity.length}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Structured data and identity facts that answer engines use to recognise the business.
-            {" "}<Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`}>Compare with observed answer evidence</Link>.
+            {" "}<Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=questions`} prefetch={false}>Compare with observed answer evidence</Link>.
           </p>
           {identity.length === 0 ? (
             <p className="mt-4 rounded-lg bg-muted/30 p-4 text-sm">
@@ -331,7 +331,7 @@ export default async function AeoGeoPage({
                   <Link
                     className="mt-2 inline-block text-xs text-primary underline underline-offset-2"
                     href={`/sites/${siteId}/work?dimension=${dimension}`}
-                  >
+                   prefetch={false}>
                     Open {dimension.toUpperCase()} work
                   </Link>
                 </div>
@@ -345,7 +345,7 @@ export default async function AeoGeoPage({
             <p className="mt-2 text-xs text-muted-foreground">
               {identity.length} crawl issue{identity.length === 1 ? "" : "s"} about schema or identity are
               currently classified as technical work, so they do not appear in the AEO count above.{" "}
-              <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=identity`}>
+              <Link className="text-primary underline underline-offset-2" href={`/sites/${siteId}/aeo-geo?tab=identity`} prefetch={false}>
                 Review them in Identity
               </Link>
               .
