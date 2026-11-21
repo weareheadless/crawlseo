@@ -47,10 +47,25 @@ export default async function CrawlPage({ params }: Props) {
   // showed a 1000-issue slice as if it were every issue.
   const [auditPages, storedAuditPages, storedIssues] = latest
     ? await Promise.all([
+        // The table renders url, status, score, words and link counts. Selecting
+        // the whole row also fetched `contentText` for every page: 1.7 MB of body
+        // copy per 200 rows, serialised into the payload the browser downloads.
         db.auditPage.findMany({
           where: { crawlId: latest.id },
           orderBy: { contentScore: "desc" },
           take: 200,
+          select: {
+            id: true,
+            url: true,
+            statusCode: true,
+            contentScore: true,
+            wordCount: true,
+            internalLinks: true,
+            h1Count: true,
+            imageCount: true,
+            imagesMissingAlt: true,
+            responseTimeMs: true,
+          },
         }),
         db.auditPage.count({ where: { crawlId: latest.id } }),
         db.crawlIssue.count({ where: { crawlId: latest.id } }),
