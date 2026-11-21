@@ -285,6 +285,7 @@ export async function ingestResearchFinding(
         type: input.type,
         theme: input.theme,
         primaryQuery: input.primaryQuery ?? null,
+        demandQueries: input.demandQueries ?? [],
         summary: input.summary,
         confidence: input.confidence,
         sentiment: input.sentiment,
@@ -462,7 +463,18 @@ export async function createResearchFinding(
   const existing = await db.researchFinding.findFirst({
     where: { runId, type: input.type, theme: input.theme },
   });
-  if (existing) return existing;
+  if (existing) {
+    // A retried run re-synthesizes its findings against the same run row. When
+    // the earlier row predates demand forms (or the model supplied none that
+    // time), the retry would silently keep the gap; keep the row and fill it.
+    if (existing.demandQueries.length === 0 && input.demandQueries && input.demandQueries.length > 0) {
+      return db.researchFinding.update({
+        where: { id: existing.id },
+        data: { demandQueries: input.demandQueries },
+      });
+    }
+    return existing;
+  }
 
   return db.$transaction(async (tx) => {
     const finding = await tx.researchFinding.create({
@@ -471,6 +483,7 @@ export async function createResearchFinding(
         type: input.type,
         theme: input.theme,
         primaryQuery: input.primaryQuery ?? null,
+        demandQueries: input.demandQueries ?? [],
         summary: input.summary,
         confidence: input.confidence,
         sentiment: input.sentiment,

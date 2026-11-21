@@ -45,6 +45,7 @@ describe("research findings", () => {
     const finding = ingestResearchFindingSchema.parse({
       type: "CONCERN",
       theme: "Ownership",
+      demandQueries: ["tulum condo ownership", "can a foreigner own property in mexico"],
       summary: "Buyers repeatedly ask how title and ownership work for condos.",
       confidence: 72,
       sources: [{
@@ -57,6 +58,7 @@ describe("research findings", () => {
     });
     expect(finding.confidence).toBe(72);
     expect(finding.sources).toHaveLength(1);
+    expect(finding.demandQueries).toEqual(["tulum condo ownership", "can a foreigner own property in mexico"]);
   });
 });
 

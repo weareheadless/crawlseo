@@ -454,7 +454,10 @@ does not mistake them for forgotten work.
   bridge dimensions, `lib/research/demand-candidates.ts`,
   `planKeywordCandidates` in the bundle (20% cap reserve, deduplicated), and the
   join runner's query preference. `coverage` reports claimed, unclaimed, reserved
-  and omitted counts.
+  and omitted counts. **Fixed during tenant validation:** both finding writers
+  accepted `demandQueries` and did not persist it, so every row stored `[]` and
+  the loop had nothing to measure. `createResearchFinding` also fills the forms on
+  a retried finding that has none, instead of returning the empty row.
 - **M4** — `lib/research/knowledge-proposal.ts`, called after the findings bridge.
   Advised, source-attributed, never over a confirmed field, one revision per run.
 - **M5** — `lib/jobs/site-cycle.ts` replaces `lib/jobs/monthly-cycle.ts`. Daily
