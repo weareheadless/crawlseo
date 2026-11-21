@@ -456,12 +456,19 @@ does not mistake them for forgotten work.
   Advised, source-attributed, never over a confirmed field, one revision per run.
 - **M5** — `lib/jobs/site-cycle.ts` replaces `lib/jobs/monthly-cycle.ts`. Daily
   knowledge, weekly crawl + Search Console + sweep, research at the owner's
-  cadence, monthly bundle behind `JobKind.BUNDLE` and dependent on the month's
-  research. **Deviation:** the topic map is *not* scheduled. It requires an
-  approval reference and proposes a taxonomy a person accepts
-  (`docs/seo-intent-job-map-plan.md`); automating it would create a second,
-  unapproved taxonomy path. Research candidates that need a new topic therefore
-  wait, and the bundle reports them as unclaimed.
+  cadence, monthly topic map, monthly bundle behind `JobKind.BUNDLE` and
+  dependent on the month's research.
+- **M7 — automatic taxonomy with a review notice (2026-11-21).** The monthly stage
+  runs `lib/research/topic-map-run.ts` (the same function the CLI uses) with
+  `approval: "auto:site-cycle:<month>"`, `refreshJobMap: true` and the synthesis
+  review on. The job map decides the topics, the taxonomy is its projection, and
+  it is used immediately to gate paid measurement. `lib/research/taxonomy-review.ts`
+  stores an approval marker with the taxonomy's `generatedAt`; the notice on the
+  site overview and the demand page asks a person to read it, and
+  `markTaxonomyReviewedAction` records the check. A new taxonomy clears the
+  acknowledgement, so the notice returns for the new version only. The topic map
+  runs *before* the bundle so the taxonomy that gates this month's spend is
+  refreshed this month, not next.
 - **M6** — research evidence carries `sourceUrl` (shown as a link on the
   opportunity's Research stage) and the demand page lists forms research
   suggested but the cap has not bought. **Deviation:** the Business page already

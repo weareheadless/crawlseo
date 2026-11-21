@@ -7,6 +7,7 @@ import { listDemandClusters } from "@/lib/funnel/views";
 import { measuredQueries } from "@/lib/funnel/acquisition";
 import { demandCandidateSince, researchCandidateQueries } from "@/lib/research/demand-candidates";
 import { loadTopicTaxonomy } from "@/lib/research/topic-taxonomy";
+import { TaxonomyReviewNotice } from "@/components/research/taxonomy-review-notice";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Chip } from "@/components/funnel/badges";
@@ -82,6 +83,8 @@ export default async function DemandMapPage({ params }: Props) {
         description="What customers need, how they search for it, and where we stand. Opportunities are slices of this map."
         actions={<RefreshFunnelButton siteId={siteId} />}
       />
+
+      <TaxonomyReviewNotice siteId={siteId} showMapLink={false} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="panel px-4 py-3">

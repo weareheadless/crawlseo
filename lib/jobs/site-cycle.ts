@@ -5,6 +5,8 @@ import { normalizeResearchCadence, type ResearchCadence } from "@/lib/research/p
 import { researchCadenceWindow } from "@/lib/research/schedule";
 import { createResearchRun } from "@/lib/research/service";
 import { bundleKey } from "@/lib/research/schedule";
+import { topicMapKey } from "@/lib/research/topic-map";
+import { runTopicMap } from "@/lib/research/topic-map-run";
 import { runWeeklyRefresh } from "@/lib/research/weekly-refresh";
 import { resolveSiteContext } from "@/lib/site/context";
 import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
@@ -31,7 +33,7 @@ import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
  */
 
 export type SiteCycleCadence = "daily" | "weekly" | "monthly";
-export type SiteCycleStageName = "knowledge" | "crawl" | "search-console" | "weekly-sweep" | "research" | "bundle";
+export type SiteCycleStageName = "knowledge" | "crawl" | "search-console" | "weekly-sweep" | "research" | "topic-map" | "bundle";
 export type SiteCycleStatus = "queued" | "completed" | "skipped" | "blocked" | "failed";
 
 export type SiteCycleStage = {
@@ -261,7 +263,58 @@ export async function runSiteCycle(db: PrismaClient, opts: SiteCycleOptions = {}
       }
     }
 
-    // 5. Monthly bundle. It measures demand, so it runs after the month's research
+    // 5. Topic map and taxonomy, monthly, before the bundle: the taxonomy decides
+    //    which queries the bundle may buy, so refreshing it after the spend would
+    //    apply this month's decision next month. The map is approved automatically
+    //    (the model proposes the job map, the taxonomy is its projection) and the
+    //    review marker asks a person to read it; see lib/research/taxonomy-review.ts.
+    const topicMapIdempotency = topicMapKey(site.id, month);
+    const existingTopicMap = await db.researchRun.findFirst({
+      where: { siteId: site.id, idempotencyKey: topicMapIdempotency },
+      select: { id: true, status: true },
+    });
+    const completedCrawl = await db.crawl.findFirst({
+      where: { siteId: site.id, status: "COMPLETED" },
+      orderBy: { finishedAt: "desc" },
+      select: { id: true },
+    });
+    const measuredDemand = site.projectId
+      ? await db.evidenceRecord.count({
+          where: { projectId: site.projectId, siteId: site.id, kind: { in: ["keyword_rank", "keyword_metrics"] }, supersededById: null },
+        })
+      : 0;
+
+    if (existingTopicMap?.status === "COMPLETED") {
+      push("topic-map", "monthly", "skipped", `topic map ${existingTopicMap.id} already completed for ${month}`);
+    } else if (!knowledgeReady) {
+      push("topic-map", "monthly", "blocked", "blocked: knowledge is not usable");
+    } else if (!completedCrawl) {
+      push("topic-map", "monthly", "blocked", "blocked: no completed crawl to map pages from");
+    } else if (measuredDemand === 0) {
+      push("topic-map", "monthly", "skipped", "no measured demand yet: the first bundle seeds it");
+    } else if (opts.dryRun) {
+      push("topic-map", "monthly", "queued", `would rebuild the taxonomy for ${month}`);
+    } else {
+      try {
+        const map = await runTopicMap(db, {
+          siteId: site.id,
+          month,
+          mode: "execute",
+          approval: `auto:site-cycle:${month}`,
+          ai: true,
+          refreshJobMap: true,
+          now,
+        });
+        push("topic-map", "monthly", map.status === "existing" ? "skipped" : "completed",
+          map.map
+            ? `${map.map.clusters.length} cluster(s), ${map.taxonomy?.topics.length ?? 0} topic(s), auto-approved for review`
+            : `existing run ${map.runId}`);
+      } catch (error) {
+        push("topic-map", "monthly", "failed", error instanceof Error ? error.message.slice(0, 160) : "failed");
+      }
+    }
+
+    // 6. Monthly bundle. It measures demand, so it runs after the month's research
     //    has named that demand. Research disabled is a declared state, and then the
     //    bundle runs from Search Console alone.
     const researchDisabled = site.researchPolicy?.enabled === false;

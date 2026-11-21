@@ -5,12 +5,13 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
+import { requireSiteAccess } from "@/lib/site/require-access";
 import { refreshFunnelForSite } from "@/lib/funnel/backfill";
 import { recordAgentPreparation, confirmHumanStep } from "@/lib/funnel/join";
 import { acceptOpportunityForSite } from "@/lib/funnel/accept";
 import { decideOpportunity } from "@/lib/funnel/opportunity";
 import { prepareOpportunityWithAgent } from "@/lib/agent-tasks/opportunity-task";
-import { canAccessSite } from "@/lib/site/access";
+
 
 /**
  * Funnel actions. Detection is automatic; these are the human decisions the
@@ -18,14 +19,6 @@ import { canAccessSite } from "@/lib/site/access";
  * refresh evidence, accept/park an opportunity, and confirm execution steps.
  * None of them spends money or calls a paid provider.
  */
-
-async function requireSiteAccess(siteId: string) {
-  const userId = await getUserIdFromCookies();
-  if (!userId) redirect("/login");
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, projectId: true } });
-  if (!site || !site.projectId || !canAccessSite(userId, site)) redirect("/sites");
-  return { ...site, projectId: site.projectId };
-}
 
 export async function refreshFunnelAction(siteId: string) {
   await requireSiteAccess(siteId);

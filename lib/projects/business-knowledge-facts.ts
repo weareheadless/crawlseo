@@ -55,3 +55,21 @@ export function hasUsableKnowledgeFields(fields: unknown): boolean {
   }
   return false;
 }
+
+/** The first value of a stored or raw field, as text. */
+export function knowledgeFieldText(fields: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = fields?.[key];
+  const values = knowledgeFactValue(value);
+  if (values.length > 0) return values[0];
+  const raw = value && typeof value === "object" ? (value as { value?: unknown }).value : value;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+/** Every value of a stored or raw field. */
+export function knowledgeFieldList(fields: Record<string, unknown> | null | undefined, key: string): string[] {
+  const value = fields?.[key];
+  const values = knowledgeFactValue(value);
+  if (values.length > 0) return values;
+  const raw = value && typeof value === "object" ? (value as { value?: unknown }).value : value;
+  return typeof raw === "string" ? raw.split(/[;,]/).map((entry) => entry.trim()).filter(Boolean) : [];
+}

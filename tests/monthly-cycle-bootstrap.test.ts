@@ -15,11 +15,18 @@ vi.mock("@/lib/research/service", () => ({ createResearchRun: store.createRun })
 vi.mock("@/lib/site/context", () => ({
   resolveSiteContext: vi.fn(async () => ({ language: "en", market: null })),
 }));
+vi.mock("@/lib/research/topic-map", () => ({
+  topicMapKey: (siteId: string, month: string) => `topic-map:${siteId}:${month}`,
+}));
+vi.mock("@/lib/research/topic-map-run", () => ({
+  runTopicMap: vi.fn(async () => ({ status: "completed", runId: "tm-1", map: { clusters: [] }, taxonomy: { topics: [] } })),
+}));
 vi.mock("@/lib/research/weekly-refresh", () => ({
   runWeeklyRefresh: vi.fn(async () => ({ status: "completed", week: "2026-W45", news: { stored: 0 }, timely: { stored: 0, proposals: [] } })),
 }));
 
 import { runSiteCycle } from "@/lib/jobs/site-cycle";
+import { runTopicMap } from "@/lib/research/topic-map-run";
 
 function db() {
   return {
@@ -36,7 +43,8 @@ function db() {
       ]),
     },
     job: { findUnique: vi.fn(async () => null) },
-    crawl: { create: vi.fn(async () => ({ id: "crawl-1" })) },
+    crawl: { create: vi.fn(async () => ({ id: "crawl-1" })), findFirst: vi.fn(async () => ({ id: "crawl-1" })) },
+    evidenceRecord: { count: vi.fn(async () => 12) },
     researchRun: { findFirst: vi.fn(async () => null) },
     businessKnowledgeDocument: { findUnique: vi.fn(async () => null) },
     siteProfile: {
@@ -85,7 +93,8 @@ function dbFor(site: Record<string, unknown>, monthResearch: { id: string; statu
   return {
     site: { findMany: vi.fn(async () => [site]) },
     job: { findUnique: vi.fn(async () => null) },
-    crawl: { create: vi.fn(async () => ({ id: "crawl-1" })) },
+    crawl: { create: vi.fn(async () => ({ id: "crawl-1" })), findFirst: vi.fn(async () => ({ id: "crawl-1" })) },
+    evidenceRecord: { count: vi.fn(async () => 12) },
     researchRun: {
       // The bundle's existence check asks by idempotency key; the dependency
       // checks ask by schedule or by month window.
@@ -130,6 +139,13 @@ describe("site cycle dependency order", () => {
     const bundle = results[0].stages.find((stage) => stage.stage === "bundle");
     expect(bundle?.status).toBe("queued");
     expect(store.enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: "BUNDLE" }));
+    // The taxonomy is refreshed and approved automatically, before the bundle is
+    // queued, and says so on the run.
+    expect(runTopicMap).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      approval: expect.stringMatching(/^auto:site-cycle:/),
+      mode: "execute",
+      refreshJobMap: true,
+    }));
   });
 
   it("runs the bundle from first-party demand when research is disabled", async () => {

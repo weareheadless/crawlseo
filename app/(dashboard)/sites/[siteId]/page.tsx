@@ -16,6 +16,7 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { TimeframeSelect } from "@/components/sites/timeframe-select";
 import { parseSeoTimeframe } from "@/lib/seo-timeframes";
 import { getFunnelOverview } from "@/lib/funnel/views";
+import { TaxonomyReviewNotice } from "@/components/research/taxonomy-review-notice";
 
 interface SitePageProps {
   params: Promise<{ siteId: string }>;
@@ -73,6 +74,8 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
           </div>
         }
       />
+
+      <TaxonomyReviewNotice siteId={siteId} />
 
       {/* The funnel, in order. Each stage links to its surface. */}
       <ol className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-5">
