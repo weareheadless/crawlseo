@@ -27,6 +27,8 @@ function llm() {
           businessName: "Atelier Céramique",
           services: ["Lampes artisanales"],
           location: "Lyon",
+          // Paraphrased by the model: no page contains this verbatim.
+          differentiators: ["Small groups"],
         }),
       },
     }],
@@ -76,9 +78,11 @@ describe("business knowledge extraction source", () => {
     const result = await extractBusinessKnowledgeFromSite(db(pages) as never, { projectId: "p1", siteId: "s1", dryRun: true });
 
     expect(result.pagesFromCrawl).toBe(3);
+    expect(result.extracted).toContain("differentiators");
+    expect(result.unattributed).toEqual(["differentiators"]);
     expect(result.pagesFetched).toBe(0);
     expect(result.pagesUnreadable).toBe(0);
-    expect(result.extracted).toEqual(["businessName", "services", "location"]);
+    expect(result.extracted).toEqual(["businessName", "services", "location", "differentiators"]);
     // Only the sitemap and the model were called: no page was re-fetched.
     const pageFetches = fetch.mock.calls.map(([url]) => String(url)).filter((url) => url === "https://example.test/");
     expect(pageFetches).toHaveLength(0);
@@ -126,5 +130,30 @@ describe("business knowledge extraction source", () => {
       .rejects.toBeInstanceOf(BusinessKnowledgeMissingError);
     await expect(ensureBusinessKnowledge(db(null) as never, { projectId: "p1", siteId: "s1" }))
       .rejects.toThrow("BUSINESS_KNOWLEDGE_MISSING");
+  });
+});
+
+describe("business knowledge facts without a page source", () => {
+  it("accepts a null evidence URI: no page contained the value verbatim", async () => {
+    const { businessKnowledgeFieldsSchema } = await import("@/lib/projects/business-knowledge");
+    const parsed = businessKnowledgeFieldsSchema.safeParse({
+      differentiators: {
+        value: ["Small groups"],
+        provenance: {
+          kind: "ai_observation",
+          sourceId: "crawler-extractor",
+          originSystem: "crawlseo",
+          originRecordId: "abc123",
+          originRevision: null,
+          actor: { type: "model", id: "crawler-extractor" },
+          status: "assumed",
+          recordedAt: "2026-11-21T10:00:00.000Z",
+          observedAt: "2026-11-21T10:00:00.000Z",
+          evidenceUri: null,
+        },
+        publicationUse: "internal_only",
+      },
+    });
+    expect(parsed.success).toBe(true);
   });
 });

@@ -98,6 +98,8 @@ export type ExtractBusinessKnowledgeResult = {
   extracted: string[];
   /** The values themselves, so an evaluation can inspect them without writing. */
   fields: Extracted;
+  /** Fields no page contains verbatim: written without an evidence URI. */
+  unattributed: string[];
   /** Pages the extractor read, with their retrieved text. */
   pageUrls: string[];
   documentId: string;
@@ -342,6 +344,7 @@ export async function extractBusinessKnowledgeFromSite(
     return {
       contentLanguage,
       extracted: Object.keys(changes),
+      unattributed: Object.keys(changes).filter((field) => !attribute(parsed[field as keyof Extracted])),
       fields: parsed,
       pageUrls: pages.map((page) => page.url),
       documentId: "",
@@ -381,6 +384,9 @@ export async function extractBusinessKnowledgeFromSite(
   return {
     contentLanguage,
     extracted: Object.keys(changes),
+    // The same page-attribution test the fact writer used: a field with no page
+    // that contains it is written with no evidence URI, and reported here.
+    unattributed: Object.keys(changes).filter((field) => !attribute(parsed[field as keyof Extracted])),
     fields: parsed,
     pageUrls: pages.map((page) => page.url),
     documentId: result.documentId,

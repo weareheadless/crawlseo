@@ -13,7 +13,10 @@ const provenance = z.object({
   originRevision: z.union([z.number().int().positive(), z.string().min(1).max(200), z.null()]),
   actor: z.object({ type: z.enum(["owner", "workspace_admin", "service", "researcher", "model", "unknown"]), id: identifier }).strict(),
   status: z.enum(["owner_confirmed", "admin_confirmed", "advised", "assumed", "verified", "disputed", "deferred", "not_applicable", "unknown"]),
-  recordedAt: rfc3339DateTime, observedAt: rfc3339DateTime, evidenceUri: absoluteUri, quote: z.string().max(2000).optional(),
+  // An AI observation that no page verifiably supports has no evidence URI. It is
+  // still a fact with provenance (kind, status, actor); claiming a page it does
+  // not appear on would be worse than naming none.
+  recordedAt: rfc3339DateTime, observedAt: rfc3339DateTime, evidenceUri: absoluteUri.nullable(), quote: z.string().max(2000).optional(),
 }).strict();
 const textFact = z.object({ value: z.string().max(2000), provenance, publicationUse: z.enum(["approved", "internal_only", "prohibited", "unknown"]), locale: z.string().min(2).max(35).optional(), validFrom: rfc3339DateTime.nullable().optional(), validUntil: rfc3339DateTime.nullable().optional() }).strict();
 const listFact = z.object({ value: z.array(z.string().min(1).max(500)).min(1).max(30), provenance, publicationUse: z.enum(["approved", "internal_only", "prohibited", "unknown"]), locale: z.string().min(2).max(35).optional(), validFrom: rfc3339DateTime.nullable().optional(), validUntil: rfc3339DateTime.nullable().optional() }).strict();

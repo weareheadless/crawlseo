@@ -393,7 +393,7 @@ export async function ensureTenantAnalysis(
       replace(step({
         step: "business-knowledge",
         status: opts.dryRun ? "ok" : "fixed",
-        detail: `${opts.dryRun ? "dry run extracted" : "extracted"} ${extraction.extracted.length} field(s) from ${extraction.pagesRead} page(s), revision ${extraction.revision}`,
+        detail: `${opts.dryRun ? "dry run extracted" : "extracted"} ${extraction.extracted.length} field(s) from ${extraction.pagesRead} page(s)${extraction.unattributed.length ? `, ${extraction.unattributed.length} without a page source` : ""}, revision ${extraction.revision}`,
       }));
     } catch (error) {
       replace(step({
