@@ -28,7 +28,7 @@ Per cluster, per week, from measured SERP data:
 - **Share of voice** — CTR-weighted visibility across the tracked queries, ours
   and each named competitor's, computed from the same snapshots.
 - **A cluster is won** when our share of voice exceeds every named competitor's
-  for four consecutive weekly samples, and at least one delivered opportunity in
+  for four consecutive monthly samples, and at least one delivered opportunity in
   that cluster has been measured as won.
 
 Those three numbers are the product. Everything below exists to make them true.
@@ -80,7 +80,7 @@ owner: every number is an `EvidenceRecord`, every projection is recomputed.
         │             the membership row exists)
  3  Competitor evidence  competitor_rank per query/domain, from the same snapshot
         │
- 4  Tracked grid      declare the queries we track, sample them weekly, capped
+ 4  Tracked grid      declare the queries we track; chart free daily history,
         │
  5  Winning            page-level gap brief, backlink gap, SoV scoreboard,
                        before/after proof
@@ -113,7 +113,7 @@ configuration choice.
 | [CMP-001](https://github.com/weareheadless/crawlseo/issues/166) | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
 | [CMP-002](https://github.com/weareheadless/crawlseo/issues/167) | Every opportunity on the board belongs to the topic it serves | — |
 | [CMP-003](https://github.com/weareheadless/crawlseo/issues/168) | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | CMP-001, CMP-002 |
-| [CMP-004](https://github.com/weareheadless/crawlseo/issues/169) | Weekly rank-over-time per tracked query, with the grid no longer empty | CMP-001, CMP-002 |
+| [CMP-004](https://github.com/weareheadless/crawlseo/issues/169) | Weekly rank-over-time per tracked query from free history, with the grid no longer empty | CMP-001, CMP-002 |
 | [CMP-005](https://github.com/weareheadless/crawlseo/issues/170) | Every tracked query has a measured volume, so the board shows click upside instead of parked rows | CMP-004 |
 | [CMP-006](https://github.com/weareheadless/crawlseo/issues/171) | Each opportunity names the pages above us and the specific deficit on ours | CMP-002 |
 | [CMP-007](https://github.com/weareheadless/crawlseo/issues/172) | A link play with actual targets: domains linking to the pages above us, not to us | CMP-003 |
@@ -129,13 +129,37 @@ cap reports the cap, it does not silently stop. Per site, per month:
 
 | Item | Volume | Cost |
 |---|---|---|
-| Weekly SERP sampling of the tracked grid | ~300 queries × 4 weeks | ~$2.40 |
-| Monthly refresh of grid volume | ~1,200 queries | ~$1.80 |
+| First-party weekly position history (Search Console rows we already store) | every tracked query, daily rows bucketed to weeks | **$0** |
+| Monthly competitor sample on the watch list | 24–28 queries (live opportunities + one head per cluster) | ~$0.06 |
+| Monthly volume for the tracked grid | ~1,200 queries, re-bought only when the grid changes | ~$1.80 |
 | Backlink gap (one bulk call per competitor set) | ~5 domains | < $0.50 |
 | Competitor page fetches (cached 30 days, top 3 per opportunity) | ~60 URLs | $0 |
+| Outcome proof, at delivery + 28 days | only the queries being proved | $0 |
 
-No new paid product is introduced. Ranks are sampled from the SERP call the
-monthly bundle already buys; the only new spend is sampling it more often.
+Fleet total: about **$5/month** for all active sites, most of it the one-off grid
+volume; the SERP sampling itself is cents.
+
+### Why not a weekly SERP sample
+
+Measured on daily Search Console rows with ≥10 impressions at both ends:
+
+| Gap | Real movement (median) | Noise floor of one day's estimate |
+|---|---|---|
+| 1 day | 0.40 | 2.14 |
+| 7 days | 0.80 | 1.14 |
+| 14 days | 1.10 | 0.80 |
+| 28 days | 1.35 | 0.57 |
+
+A day averages ~14 impressions per query, so one day's position is itself ±2
+places. A weekly SERP would report a move smaller than the uncertainty of the data
+judging it. Bucketing the free daily rows into weeks does clear the noise: median
+weekly bucket-over-bucket movement is **3.00** on one site (957 queries with ≥4
+weeks) and **2.31** on another. The bundle also caps SERPs at 10 per site per
+month (`DEFAULT_BUNDLE_CAPS.serpQueries`), so a 300-query weekly grid is not
+reachable without a second collector buying the same fact.
+
+No new paid product is introduced. The trend comes from evidence we already hold;
+SERP spend only answers "who is there", monthly, on the queries we act on.
 
 ## Invariants (review checklist for every issue)
 

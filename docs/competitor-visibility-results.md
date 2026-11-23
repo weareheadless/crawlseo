@@ -66,17 +66,25 @@ specific queries they beat you on — not "competition: medium".
 
 ## CMP-004 — Track a keyword grid weekly and chart its position history
 
-**Today.** Nothing is tracked: `tracked` is false on all 540 clusters. Ranks are
-sampled once a month, inside the bundle. The rank-history endpoint exists, is
-correct, and no screen calls it — there is no rank-over-time chart in the product.
+**Today.** Nothing is tracked: `tracked` is false on all 540 clusters. The
+rank-history endpoint exists, is correct, and no screen calls it — there is no
+rank-over-time chart in the product. Meanwhile a year of daily position history
+sits unread in the database, for free.
+
+**Why not sample the SERP weekly.** Measured on our own data: a week apart, a
+query's real move is 0.8 positions, while one day's own average position is
+uncertain by 1.1. Weekly SERP buying would report noise. Bucketing the free daily
+history into weeks clears it — the real weekly move is 3.0 positions.
 
 **What the ticket makes true.** A declared grid per cluster (the cluster head plus
-its strongest members), sampled weekly, and a chart per query that keeps Search
-Console's average position and the sampled SERP rank as two labelled lines —
-never merged. One sample shows "no trend yet", not a flat line.
+its strongest members), a weekly position line built from history we already own
+at **no cost**, and the monthly sampled SERP positions overlaid as a separate,
+labelled series — never merged. One week of history shows "no trend yet", not a
+flat line. The monthly sample runs only on queries we act on: 24–28 per site,
+about **6 cents**.
 
-**How you'd see it.** You can watch a query move week to week and know which
-source each point came from. Cost is about $2.40 per site per month.
+**How you'd see it.** You can watch a query move week to week, know which source
+each point came from, and pay essentially nothing for the trend.
 
 ---
 
