@@ -1,0 +1,183 @@
+# Competitor visibility: what each issue delivers
+
+Companion to [the plan](competitive-visibility-plan.md). One block per issue, in
+plain SEO terms: what breaks today, what the ticket makes true, and how you would
+know it worked without reading the code.
+
+---
+
+## CMP-001 — Store SERP snapshots that name real ranking domains
+
+**Today.** Every SERP sample we buy is mostly Google's own redirect wrappers.
+247 of the 340 organic URLs ever stored are `google.com/goto?url=…`; the newest
+sample was 6 of 6 wrappers with `domain: "google.com"`. The collector then asks
+"does our domain appear in these URLs", which can never match a wrapper, and
+concludes "we don't rank, competitors cover it" on **83 of 85** samples —
+including queries where we rank first.
+
+**What that costs you.** Three of your content-gap opportunities on Susi, ten on
+casamigo, eleven on Atelier are built on that false conclusion. Work gets queued
+against gaps that do not exist, and every real rank we hold from a sampled SERP
+is invisible.
+
+**What the ticket makes true.** A snapshot is a list of real domains at real
+positions. If we rank, the position is a number. If we genuinely are absent, the
+snapshot says so — and an all-wrapper response is recorded as *unobserved*, never
+as coverage.
+
+**How you'd see it.** Open any opportunity sourced from a SERP: it names the
+domain sitting above us. Compare with the live SERP yourself; it matches.
+
+---
+
+## CMP-002 — File every opportunity under the cluster it serves
+
+**Today.** 645 of 691 opportunities on Susi are attached to no topic. The cluster
+page therefore says "no opportunity in this cluster yet" while 22 live
+opportunities sit on the board next door. A cluster cannot be worked as a
+cluster, and the cluster-play detector can never fire.
+
+**What the ticket makes true.** Every detected opportunity lands in the topic its
+query belongs to, resolved from the taxonomy a human already approved. Queries
+with no approved topic stay visibly unclustered — nothing is guessed.
+
+**How you'd see it.** Pick a cluster: it lists the work that serves it, and the
+demand map's "in a cluster" and "not yet clustered" tiles add up to the board
+total.
+
+---
+
+## CMP-003 — Measure who ranks for our queries, per cluster
+
+**Today.** `competitor_rank` holds **zero rows** on all eight sites. No competitor
+has ever been measured. The demand map computes "competitor strength" from data
+that does not exist, so it always shows none, and cluster discovery can never say
+"these queries belong to someone else".
+
+**What the ticket makes true.** For each of our queries, the domains that rank
+above us, at what position, from the sample we already paid for. A leaderboard
+per cluster: who ranks, on how many of our queries, at what average position, and
+which queries they hold that we do not.
+
+**How you'd see it.** A cluster page that names the domains beating you and the
+specific queries they beat you on — not "competition: medium".
+
+---
+
+## CMP-004 — Track a keyword grid weekly and chart its position history
+
+**Today.** Nothing is tracked: `tracked` is false on all 540 clusters. Ranks are
+sampled once a month, inside the bundle. The rank-history endpoint exists, is
+correct, and no screen calls it — there is no rank-over-time chart in the product.
+
+**What the ticket makes true.** A declared grid per cluster (the cluster head plus
+its strongest members), sampled weekly, and a chart per query that keeps Search
+Console's average position and the sampled SERP rank as two labelled lines —
+never merged. One sample shows "no trend yet", not a flat line.
+
+**How you'd see it.** You can watch a query move week to week and know which
+source each point came from. Cost is about $2.40 per site per month.
+
+---
+
+## CMP-005 — Measure the volume of every tracked query
+
+**Today.** On Susi, 53 of 1,226 clustered queries have a measured volume. The
+consequence is not cosmetic: 119 striking-distance opportunities are parked, 110
+of them below threshold, **median score 1.0**. They have a position and
+impressions; they lack a volume, so the score treats them as a hypothesis and caps
+them at 15 — under the park threshold of 3 after the multipliers.
+
+Atelier: 38 of 184. Casamigo: 265 — and casamigo is the site with a live board.
+
+**What the ticket makes true.** Every tracked query carries a measured volume with
+its source and date, so an opportunity states its click upside ("+340 clicks/month
+at position 3") instead of being parked. Queries that could not be measured say
+"not measured" — no invented number.
+
+**How you'd see it.** The board orders by realistic upside and the parked pile
+shrinks because the work became measurable, not because a threshold was lowered.
+
+---
+
+## CMP-006 — Name the pages above us and the specific deficit on ours
+
+**Today.** The "how we win it" half of every opportunity is a constant. The scorer
+gives every opportunity a page-strength of 0.5 and no authority gap — numbers
+nobody measured — and the content-gap summary names no competitor and no page. You
+cannot hand it to a writer.
+
+**What the ticket makes true.** For each opportunity: the three pages ranking
+above us, and for each one what it has that ours does not — word count, headings,
+schema type, freshness, internal links. A one-line deficit on the board, a diff
+table on the detail page. When nothing measurable differs, it says so.
+
+**How you'd see it.** "interieurlumiere.com ranks 2 for 'kit lampe' with 1,840
+words and Product schema; our page has 420 words and no schema." A writer starts
+from that without opening a browser.
+
+---
+
+## CMP-007 — Turn the backlink gap into a list of link targets
+
+**Today.** The backlink detector cannot fire. It looks for a metric —
+`referringDomainGap` — that no code writes, and the database holds 2 backlink
+records in total, both about our own domain. So there has never been a link
+opportunity, only a link section.
+
+**What the ticket makes true.** For a query worth winning: the domains linking to
+the pages above us and not to us, with their metrics, plus the competitor URL they
+cite. O9 fires with a real number and produces a task carrying the target list.
+
+**How you'd see it.** A link task you can act on Monday morning without opening a
+third-party tool.
+
+---
+
+## CMP-008 — Compute measured share of voice per cluster
+
+**Today.** "Share of voice" is `1 − (ourBest − 1) / 19` — a restatement of our own
+best position, with no competitor in it, and `share_of_voice` evidence has zero
+rows. `competitorStrength` renders 0 when there is no data, which reads as "no
+competition" rather than "unknown".
+
+**What the ticket makes true.** A weekly, measured share of voice per cluster:
+each domain credited `ctrAtPosition(rank)` across the tracked queries, our share
+against each named competitor, the queries we lose and to whom. A cluster with no
+sample reads *unobserved* — never 0 %.
+
+**How you'd see it.** One number you can put in a client report, and a status per
+cluster: winning, contending, losing. Winning is defined: top share for four
+consecutive weeks and at least one measured delivered win.
+
+---
+
+## CMP-009 — Prove each delivered task moved the position it promised
+
+**Today.** 17 tasks, **zero** outcome measurements. Nothing the system ships is
+ever checked, so every claim about effectiveness is untested and the product
+cannot answer "did it work".
+
+**What the ticket makes true.** A baseline captured at acceptance (our position
+and the competitor URL ahead), a measure 28 days after delivery: before → after,
+the competitor's movement on the same query, and a verdict. A win is only recorded
+after a human confirms; the system never marks its own work as won.
+
+**How you'd see it.** Per delivered item: what moved, by how much, against whom,
+over which dates, with the honest limitation that seasonality and algorithm
+changes are not excluded. And the cluster scoreboard counts measured wins against
+delivered work.
+
+---
+
+## The order that matters
+
+CMP-001 and CMP-002 first: without attributable snapshots and attached
+opportunities, everything after measures the wrong thing. Then CMP-003 and
+CMP-004, which give the board its memory and its opponent. CMP-005 unblocks the
+parked work that is already real. CMP-006 and CMP-007 make each opportunity
+actionable. CMP-008 and CMP-009 close the loop so the next cycle starts from
+measured ground.
+
+The end state per cluster is three numbers a client understands — coverage,
+measured share of voice, and a measured win — each traceable to a stored sample.

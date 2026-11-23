@@ -19,6 +19,9 @@ requirements.
   — the active plan for making the board say who holds the positions we want, why
   they hold them, and what moved after the work shipped. Measured current state,
   spend, and the CMP-001…009 issues.
+- **[What each issue delivers](competitor-visibility-results.md)** — the same plan
+  in plain SEO terms: what breaks today, what each CMP issue makes true, and how
+  you would know it worked.
 
 ## Active operating docs
 
