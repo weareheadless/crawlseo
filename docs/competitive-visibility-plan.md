@@ -110,15 +110,15 @@ configuration choice.
 
 | Work ID | Result an SEO can see | Depends on |
 |---|---|---|
-| ORD-001 | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
-| ORD-002 | Every opportunity on the board belongs to the topic it serves | — |
-| ORD-003 | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | ORD-001 |
-| ORD-004 | Weekly rank-over-time per tracked query, with the grid no longer empty | ORD-001, ORD-002 |
-| ORD-005 | Every tracked query has a measured volume, so the board shows click upside instead of parked rows | ORD-004 |
-| ORD-006 | Each opportunity names the pages above us and the specific deficit on ours | ORD-002 |
-| ORD-007 | A link play with actual targets: domains linking to the pages above us, not to us | ORD-003 |
-| ORD-008 | A cluster scoreboard: our share of voice vs each competitor, and the queries we lose | ORD-003, ORD-004 |
-| ORD-009 | Proof per delivered task: did the position move, did we pass the competitor | ORD-004, ORD-008 |
+| [CMP-001](https://github.com/weareheadless/crawlseo/issues/166) | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
+| [CMP-002](https://github.com/weareheadless/crawlseo/issues/167) | Every opportunity on the board belongs to the topic it serves | — |
+| [CMP-003](https://github.com/weareheadless/crawlseo/issues/168) | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | CMP-001, CMP-002 |
+| [CMP-004](https://github.com/weareheadless/crawlseo/issues/169) | Weekly rank-over-time per tracked query, with the grid no longer empty | CMP-001, CMP-002 |
+| [CMP-005](https://github.com/weareheadless/crawlseo/issues/170) | Every tracked query has a measured volume, so the board shows click upside instead of parked rows | CMP-004 |
+| [CMP-006](https://github.com/weareheadless/crawlseo/issues/171) | Each opportunity names the pages above us and the specific deficit on ours | CMP-002 |
+| [CMP-007](https://github.com/weareheadless/crawlseo/issues/172) | A link play with actual targets: domains linking to the pages above us, not to us | CMP-003 |
+| [CMP-008](https://github.com/weareheadless/crawlseo/issues/173) | A cluster scoreboard: our share of voice vs each competitor, and the queries we lose | CMP-003, CMP-004 |
+| [CMP-009](https://github.com/weareheadless/crawlseo/issues/174) | Proof per delivered task: did the position move, did we pass the competitor | CMP-004, CMP-008 |
 
 ## Spend
 
