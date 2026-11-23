@@ -15,6 +15,10 @@ requirements.
   to demand qualification: one job-map pass, the taxonomy projected from it,
   per-query demand verdicts in tranches, and the guardrails that keep it from
   drifting back into word matching.
+- **[Competitor visibility and opportunity quality](competitive-visibility-plan.md)**
+  — the active plan for making the board say who holds the positions we want, why
+  they hold them, and what moved after the work shipped. Measured current state,
+  spend, and the CMP-001…009 issues.
 
 ## Active operating docs
 
