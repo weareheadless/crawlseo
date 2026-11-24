@@ -37,6 +37,11 @@ export function buildClusterEvidenceIds(
   const metrics = new Map<string, { id: string; observedAt: Date }>();
   const serps = new Map<string, { id: string; observedAt: Date }>();
   const memberships = new Map<string, string[]>();
+  /**
+   * Who ranks above us, per query. A `competitor_rank` row is one domain's position on
+   * one SERP, so a query has several; the top two are the ones the work has to beat.
+   */
+  const competitors = new Map<string, Array<{ id: string; domain: string; position: number; observedAt: Date }>>();
 
   for (const row of rows) {
     const dimensions = asRecord(row.dimensions);
@@ -52,6 +57,21 @@ export function buildClusterEvidenceIds(
     } else if (row.kind === "serp_snapshot" && query) {
       const current = serps.get(query);
       if (!current || row.observedAt > current.observedAt) serps.set(query, { id: row.id, observedAt: row.observedAt });
+    } else if (row.kind === "competitor_rank" && query) {
+      // CMP-003: the domain and its absolute position are the whole point of the row.
+      const domain = typeof dimensions.domain === "string" ? dimensions.domain : null;
+      const position =
+        typeof dimensions.rankAbsolute === "number"
+          ? dimensions.rankAbsolute
+          : typeof asRecord(asRecord(row.metrics)["provider:position"]).value === "number"
+            ? (asRecord(asRecord(row.metrics)["provider:position"]).value as number)
+            : null;
+      if (domain && position != null) {
+        competitors.set(query, [
+          ...(competitors.get(query) ?? []),
+          { id: row.id, domain, position, observedAt: row.observedAt },
+        ]);
+      }
     } else if (row.kind === "keyword_universe_membership") {
       const cluster = typeof dimensions.cluster === "string" ? dimensions.cluster : null;
       if (cluster) memberships.set(cluster, [...(memberships.get(cluster) ?? []), row.id]);
@@ -69,10 +89,31 @@ export function buildClusterEvidenceIds(
     const rankFor = (query: string, index: number) =>
       (ranks.get(normalize(query)) ?? [])
         .sort((a, b) => b.impressions - a.impressions || b.observedAt.getTime() - a.observedAt.getTime())[index];
+    /**
+     * The best-placed sampled domains for a query, lowest position first.
+     *
+     * Deduped by domain: a query is sampled monthly, so the same domain holds the same
+     * position in several rows and sending three copies of it spends the evidence budget
+     * on one competitor. The newest row for a domain wins.
+     */
+    const bestCompetitors = (query: string, count: number) => {
+      const byDomain = new Map<string, { id: string; domain: string; position: number; observedAt: Date }>();
+      for (const row of competitors.get(normalize(query)) ?? []) {
+        const held = byDomain.get(row.domain);
+        if (!held || row.observedAt > held.observedAt) byDomain.set(row.domain, row);
+      }
+      return [...byDomain.values()].sort((a, b) => a.position - b.position).slice(0, count);
+    };
     for (const query of queries.slice(0, 2)) {
       const key = normalize(query.query);
       const rank = rankFor(query.query, 0);
       if (rank) ids.push(rank.id);
+      // The two best-placed competitors on this query come first in the remaining
+      // budget, so the proposal can say who it has to beat and cite the row that
+      // proves it. Without these the model writes a self-assessment ("we sit at
+      // 27") and calls it a content gap — measured 2026-11-24: 0 of 45 live
+      // content-gap rows named a competitor.
+      for (const competitor of bestCompetitors(query.query, 2)) ids.push(competitor.id);
       const metric = metrics.get(key);
       if (metric) ids.push(metric.id);
       const serp = serps.get(key);
@@ -86,7 +127,9 @@ export function buildClusterEvidenceIds(
       const rank = rankFor(query.query, 1);
       if (rank) ids.push(rank.id);
     }
-    const unique = [...new Set(ids)].slice(0, 8);
+    // 8 → 14: two competitors per top query are now in this budget, and a cap that
+    // silently dropped them would defeat the purpose of adding them.
+    const unique = [...new Set(ids)].slice(0, 14);
     result.set(cluster.slug, unique.length > 0 ? unique : (memberships.get(cluster.slug) ?? []).slice(0, 6));
   }
   return result;
@@ -123,6 +166,11 @@ export function buildClusterEvidenceCatalogue(
         impressions: metric("first_party:impressions"),
         volume: metric("provider:volume"),
         url: typeof dimensions.url === "string" ? dimensions.url : null,
+        // CMP-003: a competitor row is meaningless without the domain that holds the
+        // position. `position` above is *our* Search Console position, so a competitor
+        // row would otherwise arrive with a null position and no name — unusable.
+        domain: typeof dimensions.domain === "string" ? dimensions.domain : null,
+        rank: metric("provider:position") ?? (typeof dimensions.rankAbsolute === "number" ? dimensions.rankAbsolute : null),
       });
     }
     catalogue.set(cluster.slug, entries);
