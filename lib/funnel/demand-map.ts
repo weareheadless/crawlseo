@@ -60,7 +60,7 @@ export type ClusterRollup = {
   intent: string;
   trackedQueries: number;
   ourBestPosition: number | null;
-  competitorStrength: number; // 0–1: average presence of competitors above us
+  competitorStrength: number | null; // 0–1: average presence of competitors above us; null when nobody was measured
   coverageRatio: number; // 0–1: tracked queries with an on-site URL ranking
   shareOfVoice: number | null; // our CTR-weighted share vs competitors, when computable
   openOpportunities: number;
@@ -125,7 +125,7 @@ export async function recomputeDemandMap(db: DemandMapDb, projectId: string): Pr
       pos && pos.competitors.size
         ? [...pos.competitors.values()].reduce((acc, list) => acc + Math.min(...list), 0) / pos.competitors.size
         : null;
-    const competitorStrength = competitorAvg == null ? 0 : Math.max(0, Math.min(1, 1 - (competitorAvg - 1) / 19));
+    const competitorStrength = competitorAvg == null ? null : Math.max(0, Math.min(1, 1 - (competitorAvg - 1) / 19));
     return {
       clusterId: cluster.id,
       slug: cluster.slug,

@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Chip, CompletenessChip, ScoreBadge, StatusChip, relativeTime } from "@/components/funnel/badges";
 import { RankTrendChart } from "@/components/funnel/rank-trend-chart";
 import { DeclareGridButton } from "@/components/funnel/declare-grid-button";
+import { CompetitorLeaderboardPanel } from "@/components/funnel/competitor-leaderboard-panel";
+import { clusterCompetitors } from "@/lib/funnel/competitor-leaderboard";
 import { buildRankChart, combineWeeklySeries, sampledRankSeries, weeklyRankSeries } from "@/lib/funnel/rank-series";
 
 interface Props {
@@ -130,6 +132,19 @@ export default async function ClusterPage({ params }: Props) {
   });
   const chart = buildRankChart({ weekly: combined.points, sampled, suppressed: combined.suppressed });
 
+  // CMP-003: who ranks for this cluster, read from snapshots we already bought.
+  // The declared competitor list is emphasis only, so a site with none renders the
+  // same measurement as a site with ten.
+  const profile = await db.siteProfile.findUnique({ where: { siteId }, select: { competitors: true } });
+  const declaredCompetitors = Array.isArray(profile?.competitors)
+    ? (profile.competitors as unknown[]).filter((domain): domain is string => typeof domain === "string")
+    : [];
+  const leaderboard = await clusterCompetitors(db, {
+    projectId: site.projectId,
+    clusterSlug: cluster.slug,
+    declared: declaredCompetitors,
+  });
+
   return (
     <div className="mx-auto max-w-4xl">
       <nav className="mb-4 text-xs text-muted-foreground">
@@ -210,6 +225,11 @@ export default async function ClusterPage({ params }: Props) {
           chart={chart}
           title={gridQueries.length > 0 ? "Tracked queries, week by week" : "Position over time"}
         />
+      </section>
+
+      <section className="mb-5" aria-label="Who ranks for this cluster">
+        <h2 className="mb-2 font-heading text-sm font-semibold">Who ranks here</h2>
+        <CompetitorLeaderboardPanel board={leaderboard} />
       </section>
 
       <section aria-label="Opportunities in this cluster">
