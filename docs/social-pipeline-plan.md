@@ -121,7 +121,7 @@ so it is the check that the brief holds only verified specifics.
 
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
-| SOC-014 | cicero | Social render + publish API for the delivery adapter | [#4](https://github.com/weareheadless/cicero/issues/4) |
+| SOC-014 | cicero | Social render + publish API for the delivery adapter | [#4](https://github.com/weareheadless/cicero/issues/4) — merged |
 | SOC-006 | crawlseo | meta_facebook delivery lane with receipts and idempotency | [#194](https://github.com/weareheadless/crawlseo/issues/194) |
 
 ### Cross-cutting
