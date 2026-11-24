@@ -92,11 +92,27 @@ export type OrganicSerpResult = {
   checkedAt: string | null;
   itemTypes: string[];
   organic: Array<{
+    /** `rank_group`: the position among organic results only. */
     rank: number | null;
+    /**
+     * `rank_absolute`: the position on the whole page, including blocks that sit
+     * above the organic list. Our position is reported from this field: a result
+     * at organic 1 behind a feature block is not page position 1, and the CTR
+     * curve the scoring uses is per page position.
+     */
+    rankAbsolute: number | null;
     domain: string;
     title: string;
     url: string;
     description: string;
+    /**
+     * The provider's real-identity fields for this result. On live output the
+     * `url` is frequently an opaque `google.com/goto` wrapper; the breadcrumb then
+     * holds the actual host and path, so attribution reads these rather than
+     * trusting `url`.
+     */
+    breadcrumb: string | null;
+    websiteName: string | null;
   }>;
   peopleAlsoAsk: Array<{ question: string; url: string }>;
   relatedSearches: string[];
@@ -314,13 +330,15 @@ function normalizeOrganicSerp(data: unknown): OrganicSerpResult | null {
       : [],
     organic: items
       .filter((item) => item?.type === "organic")
-      .slice(0, 10)
       .map((item) => ({
         rank: asNumber(item?.rank_group),
+        rankAbsolute: asNumber(item?.rank_absolute),
         domain: String(item?.domain ?? "").slice(0, 253),
         title: String(item?.title ?? "").slice(0, 500),
         url: String(item?.url ?? "").slice(0, 2_000),
         description: String(item?.description ?? "").slice(0, 1_000),
+        breadcrumb: typeof item?.breadcrumb === "string" ? item.breadcrumb.slice(0, 2_000) : null,
+        websiteName: typeof item?.website_name === "string" ? item.website_name.slice(0, 253) : null,
       })),
     peopleAlsoAsk: nestedItems("people_also_ask").slice(0, 8).map((item) => ({
       question: String(item?.title ?? "").slice(0, 500),
@@ -638,6 +656,20 @@ function isRetryableSerpTaskError(error: unknown): boolean {
   return Boolean(match && RETRYABLE_SERP_TASK_CODES.has(match[1]));
 }
 
+/**
+ * Bound the requested SERP depth.
+ *
+ * The funnel scores positions 1–10 and targets the top ten, so ten is the floor
+ * that still answers "who ranks where". Twenty keeps a margin for feature blocks
+ * that push organic results down the page. Higher depths are allowed but cost
+ * more per call: DataForSEO bills live SERP by depth, and the recorded
+ * `serpPerQueryMicros` estimate was measured at depth 10.
+ */
+function normalizeSerpDepth(depth: number | undefined): number {
+  if (depth == null || !Number.isFinite(depth)) return 20;
+  return Math.max(10, Math.min(100, Math.trunc(depth)));
+}
+
 export async function executeDataForSeoOrganicSerp(input: {
   projectId: string;
   keyword: string;
@@ -645,6 +677,12 @@ export async function executeDataForSeoOrganicSerp(input: {
   locationCode: number;
   /** SERP device. Rankings are device-specific, so it is explicit, not implied. */
   device?: "desktop" | "mobile";
+  /**
+   * How many results to ask for. Defaults to 20, which covers the scoring window
+   * plus the feature blocks above it. Raising it is a deliberate caller decision
+   * with a per-call cost.
+   */
+  depth?: number;
 }): Promise<DataForSeoSerpResearchResult> {
   const credentials = await credentialsForProject(input.projectId);
   const body = [{
@@ -653,8 +691,10 @@ export async function executeDataForSeoOrganicSerp(input: {
     location_code: input.locationCode,
     device: input.device ?? "desktop",
     os: input.device === "mobile" ? "android" : "windows",
-    depth: 10,
-    group_organic_results: true,
+    depth: normalizeSerpDepth(input.depth),
+    // Grouped results collapse the organic list into blocks, and are what
+    // returned local/redirect sets instead of ranked pages. Positions must come
+    // from the ungrouped list or "who ranks third" is unanswerable.
   }];
   let response;
   try {

@@ -346,7 +346,7 @@ describe("DataForSEO organic SERP contract", () => {
             datetime: "2026-08-29 10:00:00 +00:00",
             item_types: ["organic", "people_also_ask", "related_searches", "local_pack"],
             items: [
-              { type: "organic", rank_group: 1, domain: "school.example", title: "Freediving school", url: "https://school.example", description: "Courses." },
+              { type: "organic", rank_group: 1, rank_absolute: 2, domain: "school.example", title: "Freediving school", url: "https://school.example", description: "Courses." },
               { type: "people_also_ask", items: [{ title: "Is freediving safe?", url: "https://example.com/safe" }] },
               { type: "related_searches", items: [{ title: "cenote freediving" }] },
               { type: "local_pack", items: [{ title: "Playa Freediving", url: "https://map.example", rating: 4.8 }] },
@@ -373,24 +373,29 @@ describe("DataForSEO organic SERP contract", () => {
         itemTypes: ["organic", "people_also_ask", "related_searches", "local_pack"],
         organic: [{
           rank: 1,
+          rankAbsolute: 2,
           domain: "school.example",
           title: "Freediving school",
           url: "https://school.example",
           description: "Courses.",
+          breadcrumb: null,
+          websiteName: null,
         }],
         peopleAlsoAsk: [{ question: "Is freediving safe?", url: "https://example.com/safe" }],
         relatedSearches: ["cenote freediving"],
         localPack: [{ title: "Playa Freediving", url: "https://map.example", rating: 4.8 }],
       },
     });
+    // CMP-001: ungrouped results, and a depth that covers the scoring window plus
+    // the feature blocks above it. Grouping collapsed the organic list into blocks
+    // and returned wrapper URLs instead of ranked pages.
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual([{
       keyword: "freediving playa del carmen",
       language_code: "en",
       location_code: 2840,
       device: "desktop",
       os: "windows",
-      depth: 10,
-      group_organic_results: true,
+      depth: 20,
     }]);
   });
 
