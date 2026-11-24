@@ -5,6 +5,7 @@ import { partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
+import { TARGET_POSITION } from "@/lib/funnel/impact";
 import { clusterFindings } from "@/lib/research/finding-evidence";
 import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/cluster-resolver";
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
@@ -625,8 +626,17 @@ const DETECTORS: Detector[] = [
     // still earns almost nothing. The second is the commoner one — 49 impressions
     // at position 5.6 with a 0% CTR is a title problem, not a ranking problem —
     // and it used to be invisible because the band started at 11.
-    detect: (evidence, ctx) =>
-      byKind(evidence, "keyword_rank")
+    detect: (evidence, ctx) => {
+      // CMP-005: both rank detectors must read demand the same way. O1 has always
+      // looked up the bought volume for a query; O2 did not, so the same query
+      // scored differently depending on which detector happened to fire.
+      const volumeByQuery = new Map<string, number>();
+      for (const row of byKind(evidence, "keyword_metrics")) {
+        const query = dim(row, "query");
+        const volume = num(row, "provider:volume");
+        if (query && volume != null) volumeByQuery.set(query, volume);
+      }
+      return byKind(evidence, "keyword_rank")
         .filter((row) => {
           if (isBrandQuery(byQuery(row), ctx.brandTerms)) return false;
           const position = rankOf(row.metrics);
@@ -645,28 +655,44 @@ const DETECTORS: Detector[] = [
           const clicks = num(row, "first_party:clicks") ?? 0;
           const ctr = num(row, "first_party:ctr") ?? 0;
           const snippet = position <= 10;
+          // CMP-005: a striking-distance row is a *ranking* play, so its target is
+          // the position the play is expected to reach — not the position it is
+          // currently at. Passing `position` here made the incremental upside the
+          // CTR gap between the current position and itself, which understated 57
+          // live rows by a median 2.7×. The snippet play below keeps `position`,
+          // because a snippet rewrite is not expected to change the rank.
+          const targetPosition = snippet ? position : TARGET_POSITION.O2_striking_distance;
+          // CMP-005: read the measured demand the same way O1 does. This branch used
+          // to pass first-party impressions as if they were a search volume and
+          // never looked at a bought volume at all, so the two detectors disagreed
+          // about the same query.
+          const query = byQuery(row);
+          const providerVolume = num(row, "provider:volume") ?? volumeByQuery.get(query) ?? null;
+          const measuredVolume = providerVolume != null && providerVolume >= DETECTOR_THRESHOLDS.minVolume;
+          const knowledge = businessValueForQuery(evidence, query);
           return {
             type: "O2_striking_distance" as const,
             title: snippet
-              ? `Snippet not earning the click: "${byQuery(row)}" at position ${Math.round(position)}`
-              : `Striking distance: "${byQuery(row)}" gets impressions, no clicks`,
+              ? `Snippet not earning the click: "${query}" at position ${Math.round(position)}`
+              : `Striking distance: "${query}" gets impressions, no clicks`,
             summary: snippet
               ? `Position ${Math.round(position)} with ${Math.round(impressions)} impressions but ${Math.round(clicks)} clicks (${(ctr * 100).toFixed(1)}%). The rank is there and the snippet is not earning the click; the cause may be the title, the description, or a SERP feature taking the click.`
               : `Position ${Math.round(position)} with ${Math.round(impressions)} impressions and low CTR — the title/meta is not earning the click.`,
-            dedupKey: `O2:${byQuery(row)}:${dim(row, "url") ?? ""}`,
+            dedupKey: `O2:${query}:${dim(row, "url") ?? ""}`,
             clusterSlug: dim(row, "cluster"),
             whyEvidenceIds: [],
             howEvidenceIds: [row.id],
             scoreInputs: scoreDefaults({
               worth: {
-                volume: impressions,
+                // A measured search volume is the market size; impressions are only
+                // the reachable slice of it. Prefer the volume when it exists.
+                volume: measuredVolume ? (providerVolume as number) : impressions,
                 ctrAtPosition: ctr,
-                businessValue: businessValueForQuery(evidence, byQuery(row)).value,
-                businessValueSource: businessValueForQuery(evidence, byQuery(row)).source,
-                volumeSource: "first_party",
+                businessValue: knowledge.value,
+                businessValueSource: knowledge.source,
+                volumeSource: measuredVolume ? "provider" : "first_party",
                 currentPosition: position,
-                // The snippet play targets the CTR the position already deserves.
-                targetPosition: position,
+                targetPosition,
                 windowDays: dimNum(row, "windowDays"),
                 observedCtr: ctr,
                 observedImpressions: impressions,
@@ -676,7 +702,8 @@ const DETECTORS: Detector[] = [
               freshness: freshnessFactor(row.observedAt, new Date()),
             }),
           };
-        }),
+        });
+    },
   },
   {
     type: "O3_content_gap",
