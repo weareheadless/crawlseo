@@ -5,6 +5,7 @@ import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
+import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/cluster-resolver";
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
 
@@ -1147,6 +1148,12 @@ export async function runDetectors(
   })) as Evidence[];
   const evidence = selectCurrentEvidence(allEvidence);
   const previousRank = previousWindowEvidence(allEvidence);
+  // One resolver, built once per run. Which cluster a query belongs to is a
+  // stored fact (an accepted membership row), not an inference, so it is read
+  // here and never guessed from the query's words.
+  const byQuery = await clusterByQuery(db, projectId);
+  const slugToId = new Map<string, string>();
+  for (const resolution of byQuery.values()) slugToId.set(resolution.slug, resolution.clusterId);
 
   const available = new Set(evidence.map((row) => row.kind));
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
@@ -1154,6 +1161,21 @@ export async function runDetectors(
     return missing.length > 0 ? [{ type: detector.type, missing }] : [];
   });
   const disabledTypes = new Set(disabled.map((entry) => entry.type));
+
+  /**
+   * The cluster an opportunity belongs to, or null when its query has no accepted
+   * membership row. Resolving from the dedup key's query is reading a stored fact
+   * back; a key whose segment matches no membership stays unclustered.
+   */
+  const clusterIdFor = (candidate: DetectorCandidate): string | null => {
+    const resolved = resolveCluster({
+      query: queryFromDedupKey(candidate.dedupKey),
+      slug: candidate.clusterSlug ?? null,
+      byQuery,
+      slugToId,
+    });
+    return resolved?.clusterId ?? null;
+  };
 
   let created = 0;
   let updated = 0;
@@ -1178,7 +1200,7 @@ export async function runDetectors(
         summary: candidate.summary,
         dedupKey: candidate.dedupKey,
         detectedBy,
-        clusterId: null,
+        clusterId: clusterIdFor(candidate),
         scoreInputs: candidate.scoreInputs,
         whyEvidenceIds: candidate.whyEvidenceIds,
         howEvidenceIds: candidate.howEvidenceIds,
@@ -1205,7 +1227,7 @@ export async function runDetectors(
       summary: candidate.summary,
       dedupKey: candidate.dedupKey,
       detectedBy,
-      clusterId: null,
+      clusterId: clusterIdFor(candidate),
       scoreInputs: candidate.scoreInputs,
       whyEvidenceIds: candidate.whyEvidenceIds,
       howEvidenceIds: candidate.howEvidenceIds,
