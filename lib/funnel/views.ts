@@ -199,6 +199,18 @@ export function headlineFor(record: RawEvidence): string {
     }
     case "serp_snapshot":
       return `SERP analysed for "${str(record, "query") ?? "query"}"`;
+    case "competitor_rank": {
+      // A competitor row is a domain *and* a position. Showing only the query, as the
+      // fallback did, made the row indistinguishable from our own rank and hid the one
+      // fact it exists to state.
+      const domain = str(record, "domain") ?? "a competitor";
+      const raw = dims(record).rankAbsolute;
+      const position = num("provider:position") ?? (typeof raw === "number" ? raw : null);
+      const query = str(record, "query") ?? "this query";
+      return position == null
+        ? `${domain} ranks for "${query}"`
+        : `${domain} at position ${Math.round(position)} for "${query}"`;
+    }
     case "ai_visibility_observation":
       return `AI answer observed for "${str(record, "question") ?? "question"}"`;
     case "knowledge_fact": {

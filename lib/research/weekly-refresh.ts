@@ -271,7 +271,17 @@ export async function runWeeklyRefresh(
           where: {
             projectId: site.projectId,
             siteId: site.id,
-            kind: { in: ["keyword_rank", "keyword_metrics", "serp_snapshot", "keyword_universe_membership"] },
+            // CMP-003: `competitor_rank` belongs here. A cluster whose queries were sampled
+          // but whose competitors are not sent cannot produce a competitive proposal.
+          kind: {
+            in: [
+              "keyword_rank",
+              "keyword_metrics",
+              "serp_snapshot",
+              "competitor_rank",
+              "keyword_universe_membership",
+            ],
+          },
             supersededById: null,
           },
           select: { id: true, kind: true, dimensions: true, metrics: true, observedAt: true },

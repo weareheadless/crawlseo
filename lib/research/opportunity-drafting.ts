@@ -37,6 +37,18 @@ export type DraftEvidence = {
   impressions: number | null;
   volume: number | null;
   url: string | null;
+  /**
+   * The domain that holds a sampled SERP position, when the row is a
+   * `competitor_rank`. Null on every other kind.
+   */
+  domain?: string | null;
+  /**
+   * The position *the domain above* holds, for a `competitor_rank` row.
+   *
+   * Distinct from `position`, which is our own Search Console position. Keeping the
+   * two apart is what stops a competitor's #3 being read as our own rank.
+   */
+  rank?: number | null;
 };
 
 export type DraftAeoQuestion = {
@@ -165,6 +177,31 @@ const KINDS: ProposalKind[] = ["article", "update", "cluster_hub", "business", "
 const EFFORTS: ProposalEffort[] = ["small", "medium", "large", "unknown"];
 const CONFIDENCES: ProposalConfidence[] = ["high", "medium", "low"];
 
+/**
+ * CMP-003: the evidence rows a cluster payload sends, with competitor rows kept.
+ *
+ * `competitor_rank` rows arrive as several rows per query (one per domain), so a plain
+ * head-slice can spend the whole budget on them and drop our own rank row — or drop them
+ * and leave the model with no competitor at all. Both sides are guaranteed a place: the
+ * first two competitor rows and the first two of every other kind are always kept, then
+ * the rest fill the remaining budget in order.
+ */
+function evidenceForPayload(evidence: DraftEvidence[], limit: number): DraftEvidence[] {
+  const kept: DraftEvidence[] = [];
+  const seen = new Set<string>();
+  const keep = (row: DraftEvidence) => {
+    if (seen.has(row.id) || kept.length >= limit) return;
+    seen.add(row.id);
+    kept.push(row);
+  };
+  const competitors = evidence.filter((row) => row.kind === "competitor_rank");
+  const others = evidence.filter((row) => row.kind !== "competitor_rank");
+  for (const row of competitors.slice(0, 2)) keep(row);
+  for (const row of others.slice(0, 2)) keep(row);
+  for (const row of [...others.slice(2), ...competitors.slice(2)]) keep(row);
+  return kept;
+}
+
 function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
   return {
     slug: cluster.slug,
@@ -181,6 +218,19 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
     reviewFlags: cluster.reviewFlags,
     gaps: cluster.gaps.slice(0, 5),
     outOfMarket: cluster.excludedQueries.slice(0, 5),
+    /**
+     * CMP-003: who actually holds each query in this cluster, from sampled SERPs.
+     *
+     * Without this the model can only describe our own position ("we sit at 27") and
+     * calls that a competitive gap. Measured 2026-11-24: 0 of 45 live content-gap rows
+     * named a competitor domain, because the payload carried no competitor field at all.
+     *
+     * `aboveUs` is the sampled domains placed better than our own recorded position for
+     * that query, lowest first, each with the evidence id that proves it. When we have
+     * no recorded position the best-placed sampled domains are listed instead — "we do
+     * not rank" is a different claim from "we rank below these".
+     */
+    competitors: competitorSummary(cluster, evidence),
     queries: cluster.queries.slice(0, 10).map((query) => ({
       query: query.query,
       impressions: query.impressions,
@@ -193,7 +243,66 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
       words: page.wordCount,
       title: page.title,
     })),
-    evidence: evidence.slice(0, 12),
+    evidence: evidenceForPayload(evidence, 16),
+  };
+}
+
+/**
+ * Exposed for the test that pins the payload shape. Not part of the public contract of the
+ * drafting call; `clusterPayload` is the only production caller.
+ */
+export const competitorSummaryForTest = competitorSummary;
+
+/**
+ * The competitive picture for one cluster, built only from sampled rows we already hold.
+ *
+ * Nothing is inferred: a domain appears because a `competitor_rank` row named it at a
+ * position, and the row's evidence id travels with it so the model can cite it and a
+ * person can check it.
+ */
+function competitorSummary(cluster: TopicCluster, evidence: DraftEvidence[]) {
+  const byQuery = new Map<string, Map<string, { domain: string; position: number; evidenceId: string }>>();
+  for (const row of evidence) {
+    if (row.kind !== "competitor_rank") continue;
+    if (!row.query || !row.domain || row.rank == null) continue;
+    // One line per domain per query: a monthly sample writes the same domain again, and
+    // three copies of one competitor is not three competitors.
+    const held = byQuery.get(row.query) ?? new Map();
+    const existing = held.get(row.domain);
+    if (!existing || row.rank < existing.position) {
+      held.set(row.domain, { domain: row.domain, position: row.rank, evidenceId: row.id });
+    }
+    byQuery.set(row.query, held);
+  }
+
+  const ourPosition = new Map(cluster.queries.map((query) => [query.query, query.position ?? null]));
+  const entries = [...byQuery.entries()].map(([query, rows]) => {
+    const ours = ourPosition.get(query) ?? null;
+    const sorted = [...rows.values()].sort((a, b) => a.position - b.position);
+    // "Above us" means a better (lower) number than our own recorded position. With no
+    // recorded position, "we do not rank" and every sampled domain is ahead by definition.
+    const aboveUs = ours == null ? sorted : sorted.filter((row) => row.position < ours);
+    return {
+      query,
+      ourPosition: ours == null ? null : Number(ours.toFixed(1)),
+      aboveUs: aboveUs.slice(0, 3),
+    };
+  });
+
+  const total = entries.reduce((sum, entry) => sum + entry.aboveUs.length, 0);
+  return {
+    /** Queries in this cluster where a sampled domain placed above us. */
+    aboveUsCount: total,
+    queries: entries.filter((entry) => entry.aboveUs.length > 0).slice(0, 6),
+    /** Stated when sampled SERPs exist but none placed a domain above us. */
+    ...(total === 0
+      ? {
+          reason:
+            byQuery.size === 0
+              ? "No competitor SERP has been sampled for this cluster, so who holds these queries is unknown — not empty."
+              : "Every sampled query has us at or above the best sampled competitor.",
+        }
+      : {}),
   };
 }
 
@@ -210,9 +319,11 @@ function businessPayload(input: DraftInput) {
 const SYSTEM = [
   "You are an SEO strategist drafting a proposal board for one business.",
   "Write in the business's language, given in locale.language. Do not mix languages in one board.",
-  "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, and the evidence rows the map cites.",
+  "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, who holds each query in sampled search results, and the evidence rows the map cites.",
   "Decide for each cluster whether there is work worth proposing. It is correct to propose nothing for a cluster: say why in the batch summary.",
   "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
+  "A cluster's competitors field states who holds its queries. When it names a domain above us, say which queries that domain holds and what the work does about it; that is the difference between a competitive gap and a note about our own ranking. Cite the competitor evidence id that proves the position. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
+  "Our own position and a competitor's position are different numbers. Never present a competitor's rank as ours, and never describe a query as a gap without saying who is ahead of us or that nobody was sampled.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
   "Respect the market scope. A local offer is limited to the business location and service area; a national or international offer is not. Queries listed under outOfMarket are already excluded: never build a proposal on them.",
@@ -485,7 +596,7 @@ export async function draftTimelyProposals(input: DraftInput): Promise<DraftResu
       name: cluster.name,
       marketScope: cluster.marketScope,
       demand: cluster.metrics,
-      evidence: (input.evidenceByCluster.get(cluster.slug) ?? []).slice(0, 12),
+      evidence: evidenceForPayload(input.evidenceByCluster.get(cluster.slug) ?? [], 12),
     })),
   };
   const system = [
