@@ -30,6 +30,7 @@ import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
 import {
   buildClusterEvidenceCatalogue,
   buildClusterEvidenceIds,
+  selectClusterEvidence,
 } from "@/lib/research/opportunity-evidence";
 
 loadEnvConfig(process.cwd());
@@ -170,7 +171,8 @@ async function main(): Promise<void> {
       }),
     ]);
 
-    const evidenceByCluster = buildClusterEvidenceIds(map.clusters, evidenceRows);
+    const evidenceSelection = selectClusterEvidence(map.clusters, evidenceRows);
+    const evidenceByCluster = evidenceSelection.idsByCluster;
     const aeoEvidence = aeoRows.flatMap((row) => {
       const dimensions = row.dimensions as { question?: string } | null;
       const metrics = row.metrics as Record<string, { value?: number }> | null;
@@ -490,6 +492,9 @@ async function main(): Promise<void> {
         errors: draft.errors,
         truncations: [
           ...draft.truncations,
+          // CMP-003: the competitor-context bounds drop queries by design. Say how many,
+          // per cluster, so a bound never reads as "there was nothing there".
+          ...evidenceSelection.truncations,
           // The crawl read is bounded by a constant; say so when it binds.
           ...(crawlRowTotal > crawlRows.length
             ? [`${crawlRowTotal - crawlRows.length} crawl findings were not sent to the drafting call`]

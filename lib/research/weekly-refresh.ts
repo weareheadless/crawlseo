@@ -14,7 +14,7 @@ import {
 } from "@/lib/research/question-coverage-evidence";
 import { buildNewsQueriesForSite } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
-import { buildClusterEvidenceCatalogue, buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
+import { buildClusterEvidenceCatalogue, selectClusterEvidence } from "@/lib/research/opportunity-evidence";
 import { draftTimelyProposals, TIMELY_WINDOW_DAYS } from "@/lib/research/opportunity-drafting";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
@@ -287,7 +287,7 @@ export async function runWeeklyRefresh(
           select: { id: true, kind: true, dimensions: true, metrics: true, observedAt: true },
         })
       : [];
-    const clusterEvidence = map ? buildClusterEvidenceIds(map.clusters, clusterEvidenceRows) : new Map<string, string[]>();
+    const clusterEvidence = map ? selectClusterEvidence(map.clusters, clusterEvidenceRows).idsByCluster : new Map<string, string[]>();
 
     // Expire timely items that were detected but never accepted. Expiry is a
     // park, not a delete: the row and its evidence stay for audit.
