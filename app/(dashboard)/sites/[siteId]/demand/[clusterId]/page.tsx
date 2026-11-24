@@ -10,6 +10,8 @@ import { Chip, CompletenessChip, ScoreBadge, StatusChip, relativeTime } from "@/
 import { RankTrendChart } from "@/components/funnel/rank-trend-chart";
 import { DeclareGridButton } from "@/components/funnel/declare-grid-button";
 import { CompetitorLeaderboardPanel } from "@/components/funnel/competitor-leaderboard-panel";
+import { ShareOfVoicePanel } from "@/components/funnel/share-of-voice-panel";
+import { clusterScoreboard } from "@/lib/funnel/share-of-voice";
 import { clusterCompetitors } from "@/lib/funnel/competitor-leaderboard";
 import { buildRankChart, combineWeeklySeries, sampledRankSeries, weeklyRankSeries } from "@/lib/funnel/rank-series";
 
@@ -145,6 +147,14 @@ export default async function ClusterPage({ params }: Props) {
     declared: declaredCompetitors,
   });
 
+  // CMP-008: the measured share of voice for this cluster, from stored samples. Reading
+  // only — the weekly series is written by the pass, not by a page view.
+  const scoreboard = await clusterScoreboard(db, {
+    projectId: site.projectId,
+    clusterSlug: cluster.slug,
+    domain: site.domain,
+  });
+
   return (
     <div className="mx-auto max-w-4xl">
       <nav className="mb-4 text-xs text-muted-foreground">
@@ -226,6 +236,8 @@ export default async function ClusterPage({ params }: Props) {
           title={gridQueries.length > 0 ? "Tracked queries, week by week" : "Position over time"}
         />
       </section>
+
+      <ShareOfVoicePanel board={scoreboard} />
 
       <section className="mb-5" aria-label="Who ranks for this cluster">
         <h2 className="mb-2 font-heading text-sm font-semibold">Who ranks here</h2>
