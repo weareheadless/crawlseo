@@ -9,6 +9,8 @@ import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
 import { ImpactPanel } from "@/components/funnel/impact-panel";
 import { LinkTargetPanel } from "@/components/funnel/link-target-panel";
+import { PageGapPanel } from "@/components/funnel/page-gap-panel";
+import { storedPageGap } from "@/lib/funnel/competitor-page-gap";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -67,6 +69,12 @@ export default async function OpportunityDetailPage({ params }: Props) {
         : null,
     observedAt: supportingRecord?.observedAt ?? null,
   };
+
+  // CMP-006: the pages winning this query, from the profiles a previous pass
+  // already fetched. Reading stored evidence only — a page view never crawls.
+  const pageGapResult = impactContext.query && site.projectId
+    ? await storedPageGap(db, { projectId: site.projectId, query: impactContext.query })
+    : null;
 
   // CMP-007: a link-gap opportunity shows its target list. Read from the own-domain
   // profile row the gap was written on — the names, not only the count, because
@@ -136,6 +144,8 @@ export default async function OpportunityDetailPage({ params }: Props) {
         query={impactContext.query}
         observedAt={impactContext.observedAt}
       />
+
+      {pageGapResult && <PageGapPanel gap={pageGapResult} />}
 
       {linkTargets && (
         <LinkTargetPanel
