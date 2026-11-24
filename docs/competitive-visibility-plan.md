@@ -48,7 +48,7 @@ questions above cannot be answered, in order of damage.
 | `provider:referringDomainGap` writes | **0** (2 `backlink_profile` rows total) | O9 backlink gap can never fire |
 | `DemandMapCluster.tracked` true | **0 of 540 clusters** | the tracked grid is empty everywhere |
 | `keyword_rank` rows / producers | 39,700 / `search_console` only | ranks are monthly GSC averages, never sampled SERPs |
-| Clustered queries with a measured volume (Susi) | **53 of 1,226** | impact collapses to `hypothesis`, score capped at 15 |
+| Clustered queries with a measured volume (Susi) | **53 of 1,226** | impact collapses to `hypothesis`; ceiling is 30 when the decision is `actionable` (`15` for legacy rows with no readiness), and the multiplier lands live rows at 8–20 |
 | Opportunities attached to a cluster (Susi) | **46 of 691** | the cluster page says "no opportunity here" |
 | `evidenceRecord` of kind `internal_link_graph` / `vitals` | 0 / 0 | two detectors have no input at all |
 | `OutcomeObservation` rows / `Task` rows | **0 / 17** | delivered work is never measured |
@@ -64,9 +64,23 @@ looks empty of good work:
   casamigo's 10 come from that claim.
 - **O2 (striking distance) is the strongest detector we have and it is dormant.**
   On Susi, 119 O2 rows are parked, 110 with `score_below_threshold` and a median
-  score of 1.0, because the query has impressions but no volume, so impact is
-  `hypothesis` and the score is capped at 15 — under the 3-point park threshold
-  once freshness and completeness multiply in.
+  score of 1.0. **The obvious cause is the wrong one.** 103 of the 144 parked O2
+  rows are already `measured`, not `hypothesis`; their median reach is 17
+  impressions, which is above the 10-impression floor. They score zero because
+  103 of 103 carry `targetPosition == currentPosition` and 99 of 103 a
+  `currentCtr` of 0, so `observed × max(0, targetCtr − currentCtr)` is **zero by
+  construction** — the detector's striking-distance branch inherits the snippet
+  branch's target, which is the position we already hold. Only 41 of the 144 lack
+  reach, and those are the ones a purchased volume can move. Buying volume for
+  every clustered query would leave the other 103 exactly where they are.
+- **The score is not a measurement of winnability.** `winProbability` is a
+  geometric mean of five inputs; on live rows `authorityGap` is the literal `0.5`
+  on 70 of 75, and `pageStrength` and `serpCompetition` are `0.5` on **75 of
+  75**. Priority therefore orders work by volume × rank distance ÷ effort alone: a
+  DA-70 incumbent and a forum thread score the same at equal volume. The
+  replacement data is already stored — `provider:difficulty` is written on 606 of
+  708 `keyword_metrics` rows and 47 of the 116 queries the live board cites — and
+  no scoring path reads it (`grep difficulty lib/funnel/` returns nothing).
 - **The rank comparison O11 uses is two days of one window.**
   `previousWindowEvidence` picks the second-newest `windowEnd`, which for a daily
   rolling 28-day sync is yesterday's *current* window, not the `previous`-role
@@ -150,6 +164,7 @@ configuration choice.
 | Work ID | Result an SEO can see | Depends on |
 |---|---|---|
 | [CMP-011](https://github.com/weareheadless/crawlseo/issues/176) | A reader with no writer fails the build; a board nobody can action fails the audit | CMP-001, CMP-002 |
+| [CMP-012](https://github.com/weareheadless/crawlseo/issues/177) | Priority reflects the fight we are in: difficulty, authority and page strength instead of three `0.5` literals | CMP-003, CMP-005, CMP-007 |
 | [CMP-001](https://github.com/weareheadless/crawlseo/issues/166) | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
 | [CMP-002](https://github.com/weareheadless/crawlseo/issues/167) | Every opportunity on the board belongs to the topic it serves | — |
 | [CMP-003](https://github.com/weareheadless/crawlseo/issues/168) | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | CMP-001, CMP-002 |

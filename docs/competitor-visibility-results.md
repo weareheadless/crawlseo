@@ -92,9 +92,15 @@ each point came from, and pay essentially nothing for the trend.
 
 **Today.** On Susi, 53 of 1,226 clustered queries have a measured volume. The
 consequence is not cosmetic: 119 striking-distance opportunities are parked, 110
-of them below threshold, **median score 1.0**. They have a position and
-impressions; they lack a volume, so the score treats them as a hypothesis and caps
-them at 15 — under the park threshold of 3 after the multipliers.
+of them below threshold, **median score 1.0**.
+
+It is tempting to say they lack a volume. They mostly do not. 103 of the 144
+parked rows are already `measured`, with a median reach of 17 impressions — above
+the floor. They score zero because the play targets the position it already
+holds: `targetPosition == currentPosition` on all 103, current CTR 0 on 99, and
+the upside is `observed × max(0, target − current)`, which is zero by arithmetic.
+Only 41 rows are genuinely missing reach. Fixing the target is free and moves a
+hundred rows; buying volume moves the 41.
 
 Atelier: 38 of 184. Casamigo: 265 — and casamigo is the site with a live board.
 
@@ -201,6 +207,29 @@ and the movement between them, and you can check it in Search Console.
 
 ---
 
+## CMP-012 — Priority should reflect who we are fighting
+
+**Today.** Every opportunity carries a "chance we win this" number, and that
+number is three constants. `authorityGap` is literally `0.5` on 70 of 75 live
+opportunities; `pageStrength` and `serpCompetition` are `0.5` on **all 75**. So the
+board orders work by volume, rank distance and effort — and nothing else.
+
+**What that costs you.** A query where the top three results are national brands
+sorts exactly level with one where a forum post is third, at the same volume. That
+comparison is the job. The product currently performs it by writing `0.5` in three
+places, which reads like a measured fair fight and is not one.
+
+**The annoying part.** The data already exists. Keyword difficulty is stored for
+606 of 708 keyword rows, and 47 of the 116 queries the live board actually cites
+already have it. Nothing in the scoring path ever reads it. This is a wiring fix
+plus an honest `null`, not a new data purchase.
+
+**How you'd see it.** Two opportunities with the same volume and the same position
+stop scoring the same when one has a DA-70 incumbent. And a row where the inputs
+are assumed rather than measured says so, instead of looking confident.
+
+---
+
 ## CMP-011 — Nothing on the board can be produced by nothing
 
 **Today.** The layer knows the *names* of nineteen things it can store and
@@ -233,7 +262,9 @@ the crawl never saw, 9 on one site alone.
 ## The order that matters
 
 CMP-001 and CMP-002 first: without attributable snapshots and attached
-opportunities, everything after measures the wrong thing. **CMP-011 lands with
+opportunities, everything after measures the wrong thing. CMP-012 belongs with
+CMP-005, because buying volume for queries the board still ranks flat is spending
+money to sort a list badly. **CMP-011 lands with
 them**, because it is the guard that stops the next ten findings from being
 discovered one conversation at a time — and it is what fixes CMP-009 and CMP-010
 rather than sitting beside them. CMP-010 sits with them
