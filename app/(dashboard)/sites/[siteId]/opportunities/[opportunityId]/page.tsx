@@ -7,6 +7,8 @@ import { getOpportunityDetail, type EvidenceLine } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
 import { ImpactPanel } from "@/components/funnel/impact-panel";
+import { PageGapPanel } from "@/components/funnel/page-gap-panel";
+import { storedPageGap } from "@/lib/funnel/competitor-page-gap";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -39,7 +41,7 @@ export default async function OpportunityDetailPage({ params }: Props) {
   const { siteId, opportunityId } = await params;
   if (!userId) redirect("/login");
 
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, domain: true } });
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { userId: true, domain: true, projectId: true } });
   if (!site) redirect("/sites");
 
   const detail = await getOpportunityDetail(db, opportunityId);
@@ -65,6 +67,12 @@ export default async function OpportunityDetailPage({ params }: Props) {
         : null,
     observedAt: supportingRecord?.observedAt ?? null,
   };
+
+  // CMP-006: the pages winning this query, from the profiles a previous pass
+  // already fetched. Reading stored evidence only — a page view never crawls.
+  const pageGapResult = impactContext.query && site.projectId
+    ? await storedPageGap(db, { projectId: site.projectId, query: impactContext.query })
+    : null;
 
   const label = OPPORTUNITY_LABELS[detail.type];
   const decided = detail.status !== "detected";
@@ -123,6 +131,8 @@ export default async function OpportunityDetailPage({ params }: Props) {
         query={impactContext.query}
         observedAt={impactContext.observedAt}
       />
+
+      {pageGapResult && <PageGapPanel gap={pageGapResult} />}
 
       <Stage number={1} title="Why this exists" subtitle="The evidence that produced this opportunity. Both legs, always shown.">
         <div className="grid gap-4 sm:grid-cols-2">

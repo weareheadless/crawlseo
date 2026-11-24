@@ -42,7 +42,7 @@ type LinkInfo = {
   statusCode: number | null;
 };
 
-type PageSnapshot = {
+export type PageSnapshot = {
   url: string;
   statusCode: number;
   redirectUrl: string | null;
@@ -331,7 +331,15 @@ export function documentMarkup(html: string): string {
 /*  Parse a fetched HTML page into a snapshot                         */
 /* ------------------------------------------------------------------ */
 
-function parseHtml(
+/**
+ * Parse one fetched HTML document into the same profile the site crawl extracts.
+ *
+ * Exported for CMP-006: a competitor page is read with the identical extraction as
+ * our own pages, so a word count or an H1 count means the same thing on both sides
+ * of the comparison. Sharing the parser is the whole point — a second parser would
+ * drift and make the diff meaningless.
+ */
+export function parseHtml(
   url: string,
   html: string,
   statusCode: number,
@@ -628,8 +636,18 @@ function pinnedTransport(
         headers: init.headers,
         signal: init.signal,
         servername: target.hostname,
-        lookup: ((_hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void) => {
-          callback(null, init.address, init.family);
+        // The shim must answer in the shape the caller asked for: Node requests
+        // `{ all: true }` when it wants an address list, and answering with a bare
+        // address there fails with "Invalid IP address: undefined" before a socket
+        // is opened. Measured 2026-11-24: this broke every direct fetch through
+        // `fetchPublicDocument`, including CMP-006's competitor reads.
+        lookup: ((_hostname: string, options: unknown, callback: (error: NodeJS.ErrnoException | null, addressOrList?: unknown, family?: number) => void) => {
+          const address = { address: init.address, family: init.family };
+          if (options && typeof options === "object" && (options as { all?: boolean }).all) {
+            callback(null, [address]);
+            return;
+          }
+          callback(null, address.address, address.family);
         }) as never,
       },
       (response) => {

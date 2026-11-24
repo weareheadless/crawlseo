@@ -145,7 +145,7 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "single_point",
   },
   onpage_crawl: {
-    producers: ["lib/dataforseo/onpage-adapter", "lib/funnel/backfill", "lib/crawler/engine"],
+    producers: ["lib/dataforseo/onpage-adapter", "lib/funnel/backfill", "lib/crawler/engine", "lib/funnel/competitor-page-gap"],
     dimensions: {
       required: ["url"],
       // O6 reads the fact-mismatch verdict off the crawl row, and it needs the
@@ -155,6 +155,10 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
         "factMismatch", "question", "field",
         // Page identity, written by the onpage adapter.
         "title", "canonical", "wordCount", "h1Count", "internalLinks", "providerCheck",
+        // CMP-006: a competitor page read for the gap brief. `scope: "competitor"`
+        // separates it from our own pages in the same kind; the rest is the profile
+        // the diff compares, and `unreadable` records why a page could not be read.
+        "scope", "query", "headings", "schemaTypes", "lastModified", "unreadable",
       ],
     },
     // The adapter's own page score, alongside the issue count the detectors read.

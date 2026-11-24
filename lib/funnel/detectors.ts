@@ -368,7 +368,11 @@ function scoreDefaults(over: PartialScoreInputs): Omit<ScoreInputs, "evidenceCom
     winProbability: {
       rankDistance: null,
       authorityGap: null,
-      pageStrength: 0.5,
+      // CMP-006: page strength is a *measurement* — the share of compared
+      // dimensions where our page is at least as strong as the competitors' — so
+      // when nobody measured it the answer is null, not 0.5. A literal 0.5 here
+      // silently multiplied every non-technical score by a number nobody observed.
+      pageStrength: null,
       serpCompetition: 0.5,
       playTypeFactor: 0.6,
       ...(over.winProbability ?? {}),
