@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildClusterEvidenceCatalogue, buildClusterEvidenceIds } from "@/lib/research/opportunity-evidence";
+import {
+  COMPETITOR_CONTEXT_BOUNDS,
+  buildClusterEvidenceCatalogue,
+  buildClusterEvidenceIds,
+  orderByOpportunity,
+  selectClusterEvidence,
+} from "@/lib/research/opportunity-evidence";
 import { competitorSummaryForTest } from "@/lib/research/opportunity-drafting";
 import type { TopicCluster } from "@/lib/research/topic-map";
 
@@ -108,6 +114,9 @@ describe("CMP-003 competitor rows reach the drafting payload", () => {
     // A query sampled monthly yields one row per domain per sample. With a plain head
     // slice these fill the budget and the model gets three copies of one competitor and
     // none of our own rank.
+    //
+    // We rank 12th here, so the domain that matters is the one just above us, not the
+    // leader 9 places up the page. c4 (11th) is a one-place fight; c1 (3rd) is not.
     const rows = [
       ourRank("r1", "lampe artisanale", 12, 300),
       competitor("c1", "lampe artisanale", "vintage-nancy.fr", 3),
@@ -120,9 +129,72 @@ describe("CMP-003 competitor rows reach the drafting payload", () => {
     const selected = ids.get("lamps") ?? [];
     // Our own rank row survives alongside the competitors.
     expect(selected).toContain("r1");
+    // The nearest fight above us is the one the work is aimed at.
+    expect(selected).toContain("c4");
+    expect(selected).toContain("c3");
+    // The leader is still carried for context, but it is not what crowds out the fight.
     expect(selected).toContain("c1");
-    // And the budget is still a budget.
-    expect(selected.length).toBeLessThanOrEqual(14);
+    // c2 (7th) is two places further than c3 and three further than c4, and the bound is
+    // a bound: the three nearest above us plus the leader is what is sent.
+    expect(selected).not.toContain("c2");
+    expect(selected.length).toBeLessThanOrEqual(COMPETITOR_CONTEXT_BOUNDS.evidencePerCluster);
+  });
+
+  it("sends the queries where we rank nowhere before the ones we already win", () => {
+    // The bug this guards, measured 2026-11-24 on atelier-harmonie: a gap query earns ~0
+    // impressions, so ordering by impressions selected the queries we already ranked
+    // top 10 for and dropped every real gap. 0 of 5 such queries reached the model.
+    const rows = [
+      ourRank("r1", "lampe artisanale", 6, 4000),
+      competitor("c1", "lampe artisanale", "pinterest.com", 4),
+      ourRank("r2", "abat jour pagode", 11, 3),
+      competitor("c2", "abat jour pagode", "carcassepourabat-jour.com", 1),
+      // No rank row at all: we do not rank for this, and somebody holds it.
+      competitor("c3", "tapisserie de siège", "bucherie.com", 1),
+      competitor("c4", "tapisserie de siège", "ecoute-bergere.fr", 26),
+    ];
+    const ids = buildClusterEvidenceIds(
+      [cluster({ queries: [
+        { query: "lampe artisanale", impressions: 4000, position: 6, volume: 500 },
+        { query: "abat jour pagode", impressions: 3, position: 11, volume: 50 },
+        { query: "tapisserie de siège", impressions: 0, position: null, volume: 90 },
+      ] as never })],
+      rows
+    );
+    const selected = ids.get("lamps") ?? [];
+    // The gap query is sent even though it has zero impressions.
+    expect(selected).toContain("c3");
+    // And the two-place fight is sent ahead of the query we already lead.
+    expect(selected).toContain("c2");
+  });
+
+  it("still sends a cluster's own rank evidence when no SERP was ever sampled", () => {
+    // Most clusters have no competitor rows at all. An ordering built for the ones that
+    // do must not empty the payload for the rest — that would trade a narrow blind spot
+    // for a total one.
+    const rows = [
+      ourRank("r1", "lampe artisanale", 12, 300),
+      ourRank("r2", "lampe coquelicot", 20, 100),
+    ];
+    const selected = buildClusterEvidenceIds([cluster()], rows).get("lamps") ?? [];
+    expect(selected).toContain("r1");
+    expect(selected).toContain("r2");
+  });
+
+  it("reports what the competitor bound dropped instead of dropping it silently", () => {
+    const queries = Array.from({ length: 9 }, (_, index) => ({
+      query: `lampe modele ${index}`,
+      impressions: 10,
+      position: 20,
+      volume: 10,
+    }));
+    const rows = queries.flatMap((query, index) => [
+      ourRank(`r${index}`, query.query, 20, 10),
+      competitor(`c${index}`, query.query, `concurrent-${index}.fr`, 5),
+    ]);
+    const selection = selectClusterEvidence([cluster({ queries: queries as never })], rows);
+    expect(selection.truncations.join(" ")).toContain("were not sent");
+    expect(selection.truncations.join(" ")).toContain(String(9 - COMPETITOR_CONTEXT_BOUNDS.queriesPerCluster));
   });
 
   it("does not send the same domain three times for one query", () => {
@@ -144,6 +216,48 @@ describe("CMP-003 competitor rows reach the drafting payload", () => {
     const ids = buildClusterEvidenceIds([cluster()], rows);
     const catalogue = buildClusterEvidenceCatalogue([cluster()], rows, ids);
     expect((catalogue.get("lamps") ?? []).some((item) => item.kind === "competitor_rank")).toBe(false);
+  });
+});
+
+describe("CMP-003 queries are ordered by opportunity, not by impressions", () => {
+  const candidate = (
+    query: string,
+    impressions: number,
+    position: number | null
+  ) => ({ query, impressions, volume: null, position, clusterSlug: "lamps" });
+
+  it("puts a query we do not rank for first, whatever its impressions", () => {
+    // A gap earns no impressions by definition, so impressions cannot be the axis.
+    const ordered = orderByOpportunity(
+      [candidate("lampe artisanale", 4000, 6), candidate("tapisserie de siège", 0, null)],
+      (query) => (query === "tapisserie de siège" ? 1 : 4)
+    );
+    expect(ordered.map((row) => row.query)).toEqual(["tapisserie de siège", "lampe artisanale"]);
+  });
+
+  it("puts the nearest fight above the distant one", () => {
+    // We are 6th against 4th here; 45th against 1st is a different project.
+    const ordered = orderByOpportunity(
+      [candidate("luminaire artisanal", 900, 45), candidate("lampe artisanale", 132, 6)],
+      () => 1
+    );
+    expect(ordered.map((row) => row.query)).toEqual(["lampe artisanale", "luminaire artisanal"]);
+  });
+
+  it("uses demand only to break a tie", () => {
+    const ordered = orderByOpportunity(
+      [candidate("petit volume", 10, 6), candidate("gros volume", 500, 6)],
+      () => 4
+    );
+    expect(ordered.map((row) => row.query)).toEqual(["gros volume", "petit volume"]);
+  });
+
+  it("sorts a query with no sampled competitor by demand, last", () => {
+    const ordered = orderByOpportunity(
+      [candidate("sans concurrent", 800, 3), candidate("avec concurrent", 1, 6)],
+      (query) => (query === "avec concurrent" ? 4 : null)
+    );
+    expect(ordered.map((row) => row.query)).toEqual(["avec concurrent", "sans concurrent"]);
   });
 });
 
@@ -169,9 +283,15 @@ describe("CMP-003 the model is told who holds each query", () => {
     expect(summary.aboveUsCount).toBe(2);
     const entry = summary.queries.find((item) => item.query === "lampe artisanale");
     expect(entry?.ourPosition).toBe(12);
-    // Only the domains actually ahead of us, best first.
-    expect(entry?.aboveUs.map((row) => row.domain)).toEqual(["vintage-nancy.fr", "europages.fr"]);
-    expect(entry?.aboveUs[0].evidenceId).toBe("c1");
+    // Only the domains actually ahead of us, nearest to us first: the model is being
+    // told what to take, not who is famous.
+    expect(entry?.aboveUs.map((row) => row.domain)).toEqual(["europages.fr", "vintage-nancy.fr"]);
+    expect(entry?.aboveUs[0].evidenceId).toBe("c2");
+    // And the distance to the nearest fight is stated, because that decides the work.
+    expect(entry?.nearestAbove?.domain).toBe("europages.fr");
+    expect(entry?.nearestAbove?.places).toBe(5);
+    // The leader is context, not the target.
+    expect(entry?.leader?.domain).toBe("vintage-nancy.fr");
   });
 
   it("treats every sampled domain as ahead when we do not rank at all", () => {

@@ -29,19 +29,122 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/**
+ * How far above us a query's best competitor sits, in places.
+ *
+ * The decision-relevant measure is not "who is number one" but "is this a fight we can
+ * win soon". A competitor 2 places above us is a rewrite; one 40 places above us is a
+ * different project. Returns null when we have no recorded position — an unknown
+ * distance, not a zero.
+ */
+function placesAbove(ours: number | null | undefined, theirs: number): number | null {
+  if (ours == null || !Number.isFinite(ours) || !Number.isFinite(theirs)) return null;
+  // A smaller number is a better position, so a competitor above us has a lower one.
+  return theirs < ours ? ours - theirs : null;
+}
+
+/** A query as the selector needs it, whether it came from a cluster or from sampled SERPs. */
+export type CandidateQuery = {
+  query: string;
+  impressions: number;
+  volume: number | null;
+  /** Our best recorded position, or null when we do not rank. */
+  position: number | null;
+  clusterSlug: string | null;
+};
+
+/**
+ * Order the queries a cluster's competitor evidence should cover.
+ *
+ * **This ordering is the fix, not a detail.** A content gap is a query we do not rank
+ * for, which means it earns roughly no impressions. Sorting by impressions therefore
+ * prefers the queries we already own — the opposite of where the gaps are. Measured
+ * 2026-11-24 on atelier-harmonie: of the 5 queries with competitor rows where we rank
+ * nowhere at all, **0** survived a top-2-by-impressions cut, and 13 of the 22 queries
+ * carrying competitor data were ones we already ranked top 10 for.
+ *
+ * The order is:
+ *
+ *  1. **A gap first.** We do not rank, a competitor does. This is the largest gap there
+ *     is and it cannot be found by looking at our own numbers.
+ *  2. **Then the winnable fights**, nearest competitor above us first — a query where we
+ *     are 6th and they are 4th is a rewrite; 45th against 1st is a different project.
+ *  3. **Then everything else**, by demand, so the list is still ordered when nothing is
+ *     close.
+ *
+ * Demand is the tie-break inside each band, never the primary sort.
+ */
+export function orderByOpportunity(
+  candidates: CandidateQuery[],
+  bestCompetitorPosition: (query: string) => number | null
+): CandidateQuery[] {
+  const rank = (row: CandidateQuery): [number, number, number] => {
+    const theirs = bestCompetitorPosition(row.query);
+    // A query we do not rank for, where somebody does, is the first thing to look at.
+    if (row.position == null && theirs != null) return [0, 0, -row.impressions];
+    const gap = placesAbove(row.position, theirs ?? Number.POSITIVE_INFINITY);
+    // Nearest fight first; unknown distance sorts after any known one.
+    if (gap != null) return [1, gap, -row.impressions];
+    return [2, 0, -row.impressions];
+  };
+  return candidates
+    .slice()
+    .sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.query.localeCompare(b.query);
+    });
+}
+
+/**
+ * A stated payload bound. Exceeding it is reported in `truncations`, never silent.
+ *
+ * The old code used bare slices, which is how "we send the top 6 by impressions" became a
+ * policy nobody chose. These are the numbers, named, and the count of what they dropped
+ * travels with the run.
+ */
+export const COMPETITOR_CONTEXT_BOUNDS = {
+  /** Queries per cluster that carry competitor context. */
+  queriesPerCluster: 6,
+  /** Sampled domains per query: the ones directly above us, plus the leader. */
+  domainsPerQuery: 3,
+  /** Evidence rows per cluster in the drafting payload. */
+  evidencePerCluster: 20,
+} as const;
+
+export type ClusterEvidenceSelection = {
+  idsByCluster: Map<string, string[]>;
+  /** What the bounds dropped, named per cluster so the run report can state it. */
+  truncations: string[];
+};
+
 export function buildClusterEvidenceIds(
   clusters: TopicCluster[],
   rows: ClusterEvidenceRow[]
 ): Map<string, string[]> {
+  return selectClusterEvidence(clusters, rows).idsByCluster;
+}
+
+export function selectClusterEvidence(
+  clusters: TopicCluster[],
+  rows: ClusterEvidenceRow[]
+): ClusterEvidenceSelection {
   const ranks = new Map<string, Array<{ id: string; impressions: number; observedAt: Date }>>();
   const metrics = new Map<string, { id: string; observedAt: Date }>();
   const serps = new Map<string, { id: string; observedAt: Date }>();
   const memberships = new Map<string, string[]>();
-  /**
-   * Who ranks above us, per query. A `competitor_rank` row is one domain's position on
-   * one SERP, so a query has several; the top two are the ones the work has to beat.
-   */
+  /** Every sampled domain per query, deduped by domain on read. */
   const competitors = new Map<string, Array<{ id: string; domain: string; position: number; observedAt: Date }>>();
+  /** Our own best position per query, so a gap can be identified without the cluster. */
+  const ourPosition = new Map<string, number>();
+  /**
+   * The cluster a sampled SERP row itself declares.
+   *
+   * 21 of 130 competitor rows on atelier-harmonie carry none, and those queries are the
+   * ones missing from the keyword universe. Keeping the declared value apart from the
+   * membership map is what lets a cluster claim a query it never had a membership for.
+   */
+  const competitorCluster = new Map<string, string>();
 
   for (const row of rows) {
     const dimensions = asRecord(row.dimensions);
@@ -51,6 +154,16 @@ export function buildClusterEvidenceIds(
       const metric = asRecord(asRecord(row.metrics)["first_party:impressions"]);
       const impressions = typeof metric.value === "number" ? metric.value : 0;
       ranks.set(query, [...(ranks.get(query) ?? []), { id: row.id, impressions, observedAt: row.observedAt }]);
+      const position =
+        typeof asRecord(asRecord(row.metrics)["first_party:position"]).value === "number"
+          ? (asRecord(asRecord(row.metrics)["first_party:position"]).value as number)
+          : typeof asRecord(asRecord(row.metrics)["provider:position"]).value === "number"
+            ? (asRecord(asRecord(row.metrics)["provider:position"]).value as number)
+            : null;
+      if (position != null && position > 0) {
+        const held = ourPosition.get(query);
+        if (held == null || position < held) ourPosition.set(query, position);
+      }
     } else if (row.kind === "keyword_metrics" && query) {
       const current = metrics.get(query);
       if (!current || row.observedAt > current.observedAt) metrics.set(query, { id: row.id, observedAt: row.observedAt });
@@ -66,6 +179,9 @@ export function buildClusterEvidenceIds(
           : typeof asRecord(asRecord(row.metrics)["provider:position"]).value === "number"
             ? (asRecord(asRecord(row.metrics)["provider:position"]).value as number)
             : null;
+      if (typeof dimensions.cluster === "string" && !competitorCluster.has(query)) {
+        competitorCluster.set(query, dimensions.cluster);
+      }
       if (domain && position != null) {
         competitors.set(query, [
           ...(competitors.get(query) ?? []),
@@ -78,61 +194,145 @@ export function buildClusterEvidenceIds(
     }
   }
 
+  /** Distinct domains for a query, newest row per domain, lowest position first. */
+  const domainsFor = (query: string) => {
+    const byDomain = new Map<string, { id: string; domain: string; position: number; observedAt: Date }>();
+    for (const row of competitors.get(normalize(query)) ?? []) {
+      const held = byDomain.get(row.domain);
+      if (!held || row.observedAt > held.observedAt) byDomain.set(row.domain, row);
+    }
+    return [...byDomain.values()].sort((a, b) => a.position - b.position);
+  };
+  const bestCompetitorPosition = (query: string): number | null => domainsFor(query)[0]?.position ?? null;
+
   const result = new Map<string, string[]>();
+  const truncations: string[] = [];
+  /**
+   * Queries a cluster actually covered. A sampled SERP row that no cluster claims is not
+   * a bound being hit — it is an observation falling on the floor, and the two must not
+   * look the same in the report.
+   */
+  const claimed = new Set<string>();
+
   for (const cluster of clusters) {
+    // Every query this cluster knows about, including ones only a sampled SERP names.
+    // A query with competitor rows but no membership is still a real gap: measured
+    // 2026-11-24, 21 of 130 competitor rows on atelier-harmonie had no cluster, and all
+    // four of their queries were absent from the keyword universe — the largest gaps on
+    // the site, invisible because nothing filed them.
+    const byName = new Map<string, CandidateQuery>();
+    for (const query of cluster.queries) {
+      byName.set(query.query, {
+        query: query.query,
+        impressions: query.impressions ?? 0,
+        volume: query.volume ?? null,
+        position: query.position ?? ourPosition.get(query.query) ?? null,
+        clusterSlug: cluster.slug,
+      });
+    }
+    for (const key of competitors.keys()) {
+      if (byName.has(key)) continue;
+      // A query a sampled SERP names, this cluster owns it by its own dimension, and we
+      // have no membership row for it. That is the shape of a real gap — measured
+      // 2026-11-24, all four such queries on atelier-harmonie were absent from the
+      // keyword universe — so it belongs here, not in a side table nobody reads.
+      if (competitorCluster.get(key) !== cluster.slug) continue;
+      const existing = cluster.queries.find((query) => normalize(query.query) === key);
+      byName.set(key, {
+        query: existing?.query ?? key,
+        impressions: existing?.impressions ?? 0,
+        volume: existing?.volume ?? null,
+        position: existing?.position ?? ourPosition.get(key) ?? null,
+        clusterSlug: cluster.slug,
+      });
+    }
+
+    for (const key of byName.keys()) claimed.add(normalize(key));
+    const ordered = orderByOpportunity([...byName.values()], bestCompetitorPosition);
+    const withCompetitors = ordered.filter((row) => bestCompetitorPosition(row.query) != null);
+    const bound = COMPETITOR_CONTEXT_BOUNDS.queriesPerCluster;
+    /**
+     * Opportunity first, then the plain top of the cluster.
+     *
+     * Most clusters have no sampled SERP at all, and they still need their own rank and
+     * keyword-metric evidence — a competitor ordering that returned nothing for them
+     * would trade one blind spot for a bigger one. So the fight-worthy queries take the
+     * bound first and the rest of the slots are filled by demand, which is the old
+     * behaviour and the right one when there is no fight to order.
+     */
+    const covered = [
+      ...withCompetitors.slice(0, bound),
+      ...ordered.filter((row) => bestCompetitorPosition(row.query) == null).slice(0, Math.max(0, bound - withCompetitors.length)),
+    ];
+    if (withCompetitors.length > Math.min(withCompetitors.length, bound)) {
+      truncations.push(
+        `${cluster.slug}: ${withCompetitors.length - Math.min(withCompetitors.length, bound)} of ${withCompetitors.length} queries with competitor data were not sent (bound: ${bound})`
+      );
+    }
+
     const ids: string[] = [];
-    const queries = [...cluster.queries]
-      .sort((a, b) => b.impressions - a.impressions || (b.volume ?? 0) - (a.volume ?? 0))
-      .slice(0, 6);
-    // A compact mix for the "how we win it" leg: GSC row, keyword metrics and
-    // SERP for the top two queries, then a second GSC row for two more queries.
     const rankFor = (query: string, index: number) =>
       (ranks.get(normalize(query)) ?? [])
         .sort((a, b) => b.impressions - a.impressions || b.observedAt.getTime() - a.observedAt.getTime())[index];
-    /**
-     * The best-placed sampled domains for a query, lowest position first.
-     *
-     * Deduped by domain: a query is sampled monthly, so the same domain holds the same
-     * position in several rows and sending three copies of it spends the evidence budget
-     * on one competitor. The newest row for a domain wins.
-     */
-    const bestCompetitors = (query: string, count: number) => {
-      const byDomain = new Map<string, { id: string; domain: string; position: number; observedAt: Date }>();
-      for (const row of competitors.get(normalize(query)) ?? []) {
-        const held = byDomain.get(row.domain);
-        if (!held || row.observedAt > held.observedAt) byDomain.set(row.domain, row);
-      }
-      return [...byDomain.values()].sort((a, b) => a.position - b.position).slice(0, count);
-    };
-    for (const query of queries.slice(0, 2)) {
-      const key = normalize(query.query);
-      const rank = rankFor(query.query, 0);
+
+    for (const candidate of covered) {
+      const key = normalize(candidate.query);
+      const rank = rankFor(candidate.query, 0);
       if (rank) ids.push(rank.id);
-      // The two best-placed competitors on this query come first in the remaining
-      // budget, so the proposal can say who it has to beat and cite the row that
-      // proves it. Without these the model writes a self-assessment ("we sit at
-      // 27") and calls it a content gap — measured 2026-11-24: 0 of 45 live
-      // content-gap rows named a competitor.
-      for (const competitor of bestCompetitors(query.query, 2)) ids.push(competitor.id);
+      // The domains immediately above us, plus the leader for context. "Who is number
+      // one" is not the fight; "who is one place above us" is — so the nearest gets the
+      // budget first and the leader is kept in whatever room is left.
+      const domains = domainsFor(candidate.query);
+      const ours = candidate.position;
+      const bound = COMPETITOR_CONTEXT_BOUNDS.domainsPerQuery;
+      // No recorded position means we are not on the page at all, so the whole sampled
+      // top is above us and the leader is the one to name.
+      const chosen =
+        ours == null
+          ? domains.slice(0, bound)
+          : [
+              ...new Set([
+                ...domains.filter((row) => row.position < ours).slice(-(bound - 1)).reverse(),
+                ...(domains.length > 0 ? [domains[0]] : []),
+              ]),
+            ];
+      for (const row of chosen) ids.push(row.id);
+      // The strongest competitor is worth saying explicitly when we do not rank at all.
       const metric = metrics.get(key);
       if (metric) ids.push(metric.id);
       const serp = serps.get(key);
       if (serp) ids.push(serp.id);
     }
-    for (const query of queries.slice(2, 4)) {
-      const rank = rankFor(query.query, 0);
+    for (const candidate of ordered.slice(0, 2)) {
+      const rank = rankFor(candidate.query, 0);
       if (rank) ids.push(rank.id);
     }
-    for (const query of queries.slice(0, 2)) {
-      const rank = rankFor(query.query, 1);
-      if (rank) ids.push(rank.id);
+
+    const unique = [...new Set(ids)].slice(0, COMPETITOR_CONTEXT_BOUNDS.evidencePerCluster);
+    if ([...new Set(ids)].length > COMPETITOR_CONTEXT_BOUNDS.evidencePerCluster) {
+      truncations.push(
+        `${cluster.slug}: ${[...new Set(ids)].length - COMPETITOR_CONTEXT_BOUNDS.evidencePerCluster} evidence rows were not sent (bound: ${COMPETITOR_CONTEXT_BOUNDS.evidencePerCluster})`
+      );
     }
-    // 8 → 14: two competitors per top query are now in this budget, and a cap that
-    // silently dropped them would defeat the purpose of adding them.
-    const unique = [...new Set(ids)].slice(0, 14);
     result.set(cluster.slug, unique.length > 0 ? unique : (memberships.get(cluster.slug) ?? []).slice(0, 6));
   }
-  return result;
+  /**
+   * Report the competitor observations no cluster could take.
+   *
+   * Measured 2026-11-24 on atelier-harmonie: 21 of 130 `competitor_rank` rows carried no
+   * cluster, and all four of their queries were absent from the keyword universe — real
+   * demand with a named incumbent and no page, which is exactly what a gap list should
+   * lead with. They are not lost, but they are also not attributable to a topic here, so
+   * the run says so instead of letting them disappear.
+   */
+  const unfiled = [...competitors.keys()].filter((query) => !claimed.has(query));
+  if (unfiled.length > 0) {
+    const named = unfiled.slice(0, 5).map((query) => `"${query}"`).join(", ");
+    truncations.push(
+      `${unfiled.length} quer${unfiled.length === 1 ? "y" : "ies"} had a sampled SERP but no topic to file it under, so no cluster received it: ${named}${unfiled.length > 5 ? ", …" : ""}`
+    );
+  }
+  return { idsByCluster: result, truncations };
 }
 
 /**

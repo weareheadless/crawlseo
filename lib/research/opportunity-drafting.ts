@@ -282,18 +282,44 @@ function competitorSummary(cluster: TopicCluster, evidence: DraftEvidence[]) {
     // "Above us" means a better (lower) number than our own recorded position. With no
     // recorded position, "we do not rank" and every sampled domain is ahead by definition.
     const aboveUs = ours == null ? sorted : sorted.filter((row) => row.position < ours);
+    const nearestAbove = aboveUs.length > 0 ? aboveUs[aboveUs.length - 1] : null;
     return {
       query,
       ourPosition: ours == null ? null : Number(ours.toFixed(1)),
-      aboveUs: aboveUs.slice(0, 3),
+      // How far the nearest competitor above us is, which is what decides whether this
+      // is a rewrite or a different project.
+      nearestAbove: nearestAbove
+        ? { domain: nearestAbove.domain, position: nearestAbove.position, places: ours == null ? null : Number((ours - nearestAbove.position).toFixed(1)) }
+        : null,
+      leader: sorted[0] ?? null,
+      aboveUs: (ours == null ? sorted.slice(0, 3) : aboveUs.slice(-3).reverse()).map((row) => ({
+        domain: row.domain,
+        position: row.position,
+        evidenceId: row.evidenceId,
+      })),
     };
   });
 
-  const total = entries.reduce((sum, entry) => sum + entry.aboveUs.length, 0);
+  /**
+   * Ordered the same way the evidence selector orders them: a query we do not rank for
+   * first, then the nearest fight. Sorting by impressions here would reintroduce the bug
+   * the selector just fixed, because a gap earns no impressions.
+   */
+  const ordered = entries.sort((a, b) => {
+    const bucket = (row: typeof a) =>
+      row.ourPosition == null ? 0 : row.nearestAbove?.places != null ? 1 : 2;
+    const ba = bucket(a);
+    const bb = bucket(b);
+    if (ba !== bb) return ba - bb;
+    if (ba === 1) return (a.nearestAbove?.places ?? 0) - (b.nearestAbove?.places ?? 0);
+    return a.query.localeCompare(b.query);
+  });
+
+  const total = ordered.reduce((sum, entry) => sum + entry.aboveUs.length, 0);
   return {
     /** Queries in this cluster where a sampled domain placed above us. */
     aboveUsCount: total,
-    queries: entries.filter((entry) => entry.aboveUs.length > 0).slice(0, 6),
+    queries: ordered.filter((entry) => entry.aboveUs.length > 0).slice(0, 6),
     /** Stated when sampled SERPs exist but none placed a domain above us. */
     ...(total === 0
       ? {
@@ -322,7 +348,8 @@ const SYSTEM = [
   "You receive the business, its market scope, its topic clusters with measured Search Console demand, the pages that cover each topic, who holds each query in sampled search results, and the evidence rows the map cites.",
   "Decide for each cluster whether there is work worth proposing. It is correct to propose nothing for a cluster: say why in the batch summary.",
   "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
-  "A cluster's competitors field states who holds its queries. When it names a domain above us, say which queries that domain holds and what the work does about it; that is the difference between a competitive gap and a note about our own ranking. Cite the competitor evidence id that proves the position. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
+  "A cluster's competitors field states who holds its queries. Each query gives ourPosition, nearestAbove (the domain one or a few places above us, with how many places) and leader (the domain at the top). Act on nearestAbove, not the leader: taking one place from the domain just above us is a rewrite, while beating a leader 40 places up is a different project. Say which domain the work is aimed at and cite that competitor's evidence id. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
+  "When ourPosition is null we do not rank for the query at all. That is the largest gap there is: say so plainly and name the sampled domains that hold it, rather than treating a missing position as position zero.",
   "Our own position and a competitor's position are different numbers. Never present a competitor's rank as ours, and never describe a query as a gap without saying who is ahead of us or that nobody was sampled.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
