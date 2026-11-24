@@ -100,9 +100,9 @@ Prefix `SOC-`. Each issue is self-contained; this document is the shared map.
 
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
-| SOC-011 | cicero | Render gate library with fixtures | [#1](https://github.com/weareheadless/cicero/issues/1) |
-| SOC-012 | cicero | One design call; delete the propose/verify/revise pipeline | [#2](https://github.com/weareheadless/cicero/issues/2) |
-| SOC-003 | crawlseo | An actioned opportunity may become one social post | [#191](https://github.com/weareheadless/crawlseo/issues/191) |
+| SOC-011 | cicero | Render gate library with fixtures | [#1](https://github.com/weareheadless/cicero/issues/1) — merged |
+| SOC-012 | cicero | One design call; delete the propose/verify/revise pipeline | [#2](https://github.com/weareheadless/cicero/issues/2) — merged |
+| SOC-003 | crawlseo | An actioned opportunity may become one social post | [#191](https://github.com/weareheadless/crawlseo/issues/191) — merged |
 | SOC-016 | crawlseo | Opportunity summaries must not assert specifics nobody verified | [#197](https://github.com/weareheadless/crawlseo/issues/197) |
 
 SOC-016 belongs in wave 1: the copy is now written from the opportunity summary,
@@ -112,10 +112,10 @@ so it is the check that the brief holds only verified specifics.
 
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
-| SOC-007 | crawlseo | SiteProfile: brand block and representation | [#195](https://github.com/weareheadless/crawlseo/issues/195) |
+| SOC-007 | crawlseo | SiteProfile: brand block and representation | [#195](https://github.com/weareheadless/crawlseo/issues/195) — merged |
 | SOC-013 | cicero | Read brand identity from SiteProfile, not brand.json | [#3](https://github.com/weareheadless/cicero/issues/3) |
-| SOC-009 | editorial | Social artifact type in the brief/artifact contract | [#1](https://github.com/weareheadless/editorial/issues/1) |
-| SOC-010 | editorial | Verify social artefacts | [#2](https://github.com/weareheadless/editorial/issues/2) |
+| SOC-009 | editorial | Social artifact type in the brief/artifact contract | [#1](https://github.com/weareheadless/editorial/issues/1) — merged |
+| SOC-010 | editorial | Verify social artefacts | [#2](https://github.com/weareheadless/editorial/issues/2) — merged |
 
 ### Wave 3 — the lane
 
