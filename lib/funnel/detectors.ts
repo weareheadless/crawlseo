@@ -1,7 +1,7 @@
 import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
 
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
-import { partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
+import { compareRankWindows, partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
@@ -119,8 +119,16 @@ export const DETECTOR_REQUIRES: Record<OpportunityType, EvidenceRecordKind[]> = 
 
 export type DisabledDetector = {
   type: OpportunityType;
-  /** The kinds it needs and does not have. */
+  /** The kinds it needs and does not have. Empty when the kind exists but cannot be used. */
   missing: EvidenceRecordKind[];
+  /**
+   * Why it is disabled, in words, when the reason is not a missing kind.
+   *
+   * CMP-010: O11 needs two non-overlapping windows, and a project with one projected window
+   * must say that rather than showing an empty board — "nothing declined" and "we cannot
+   * tell" are different claims.
+   */
+  reason?: string;
 };
 
 /**
@@ -414,6 +422,8 @@ type DetectContext = {
    * defect is not split into one row per page.
    */
   crawledPages?: number;
+  /** CMP-010: days the two compared rank windows share, so O11 can state it. */
+  comparisonOverlapDays?: number | null;
 };
 
 /**
@@ -489,6 +499,17 @@ export function selectCurrentEvidence(evidence: Evidence[]): Evidence[] {
 export function previousWindowEvidence(evidence: Evidence[]): Evidence[] {
   const { previous } = partitionByWindowRole(evidence.filter((row) => row.kind === "keyword_rank") as never);
   return previous as never;
+}
+
+/**
+ * CMP-010: the rank-window pair O11 is allowed to compare, with the reason when it is not.
+ *
+ * Kept next to the selector so a caller cannot take the rows without the explanation: the
+ * old signature returned `[]` for both "no history yet" and "the windows overlap", and a
+ * detector that returns nothing looks identical to a site with no declines.
+ */
+export function rankWindowComparison(evidence: Evidence[]) {
+  return compareRankWindows(evidence.filter((row) => row.kind === "keyword_rank") as never);
 }
 
 /** @deprecated use selectCurrentEvidence; kept for callers that only rank evidence. */
@@ -1104,9 +1125,38 @@ const DETECTORS: Detector[] = [
     detect: (evidence, ctx) => {
       const previous = ctx.previousRank ?? [];
       if (previous.length === 0) return [];
-      const previousByKey = new Map(previous.map((row) => [`${byQuery(row)}|${dim(row, "url") ?? ""}`, row]));
-      const candidates: DetectorCandidate[] = [];
+      const previousByKey = new Map<string, Evidence>();
+      // One previous row per query and URL. The evidence store can hold the same observation
+      // twice — measured 2026-11-24 on Susi: `akumal real estate` had a `segments: 6` row
+      // written twice with an identical position and impression count — and a Map keeps the
+      // last, which is why this is explicit rather than incidental.
+      for (const row of previous) previousByKey.set(`${byQuery(row)}|${dim(row, "url") ?? ""}`, row);
+
+      /**
+       * CMP-010: one candidate per (query, url, window) — the same identity its dedup key
+       * declares.
+       *
+       * A query projected under several segments is stored as several `keyword_rank` rows,
+       * all sharing one dedup key. Emitting one candidate per row made a single run report 45
+       * candidates for 43 distinct observations, and the extras only disappeared because the
+       * row write is idempotent. The row with the most impressions is kept: it carries the
+       * most signal about what actually happened, and the choice is arithmetic on a stored
+       * count rather than a judgement about which projection is "right".
+       */
+      const bestCurrent = new Map<string, Evidence>();
       for (const row of byKind(evidence, "keyword_rank")) {
+        const key = `${byQuery(row)}|${dim(row, "url") ?? ""}`;
+        const existing = bestCurrent.get(key);
+        if (!existing) {
+          bestCurrent.set(key, row);
+          continue;
+        }
+        const impressions = (candidate: Evidence) => num(candidate, "first_party:impressions") ?? 0;
+        if (impressions(row) > impressions(existing)) bestCurrent.set(key, row);
+      }
+
+      const candidates: DetectorCandidate[] = [];
+      for (const row of bestCurrent.values()) {
         const key = `${byQuery(row)}|${dim(row, "url") ?? ""}`;
         const before = previousByKey.get(key);
         if (!before) continue;
@@ -1120,11 +1170,28 @@ const DETECTORS: Detector[] = [
         const delta = currentPosition - previousPosition;
         if (delta < DETECTOR_THRESHOLDS.freshnessDecayDelta) continue;
         const windowDays = dimNum(row, "windowDays") ?? 28;
+        // CMP-010: state both periods so a person can check the claim, and say how much the
+        // two windows overlap — a movement between overlapping windows is the same average
+        // moving by less than its own noise.
+        const currentEnd = dim(row, "windowEnd") ?? null;
+        const previousEnd = dim(before, "windowEnd") ?? null;
+        const compared =
+          currentEnd && previousEnd
+            ? `the ${windowDays}-day window ending ${currentEnd.slice(0, 10)} and the one ending ${previousEnd.slice(0, 10)}`
+            : `the previous and current ${windowDays}-day windows`;
+        const overlap = ctx.comparisonOverlapDays;
         candidates.push({
           type: "O11_freshness_decay",
           title: `Position decline: "${byQuery(row)}" ${Math.round(previousPosition)} → ${Math.round(currentPosition)}`,
-          summary: `Average position moved from ${Math.round(previousPosition)} to ${Math.round(currentPosition)} between the previous and current ${windowDays}-day windows (${Math.round(previousImpressions)} → ${Math.round(currentImpressions)} impressions). The cause is not established: check the SERP, competitors and the page before refreshing it.`,
-          dedupKey: `O11:${byQuery(row)}:${dim(row, "url") ?? ""}`,
+          summary:
+            `Average position moved from ${Math.round(previousPosition)} to ${Math.round(currentPosition)} between ${compared}` +
+            ` (${Math.round(previousImpressions)} → ${Math.round(currentImpressions)} impressions)` +
+            (overlap != null ? `; the two windows share ${overlap} day${overlap === 1 ? "" : "s"}` : "") +
+            ". The cause is not established: check the SERP, competitors and the page before refreshing it.",
+          // The later window is part of the identity: a decline in November is not the same
+          // observation as a decline in October, and merging them hides that the site moved
+          // twice.
+          dedupKey: `O11:${byQuery(row)}:${dim(row, "url") ?? ""}:${(currentEnd ?? "").slice(0, 10)}`,
           clusterSlug: dim(row, "cluster"),
           whyEvidenceIds: [],
           howEvidenceIds: [before.id, row.id],
@@ -1269,7 +1336,8 @@ export async function runDetectors(
     where: { projectId, supersededById: null },
   })) as Evidence[];
   const evidence = selectCurrentEvidence(allEvidence);
-  const previousRank = previousWindowEvidence(allEvidence);
+  const comparison = rankWindowComparison(allEvidence);
+  const previousRank = comparison.previous as Evidence[];
   // One resolver, built once per run. Which cluster a query belongs to is a
   // stored fact (an accepted membership row), not an inference, so it is read
   // here and never guessed from the query's words.
@@ -1280,7 +1348,14 @@ export async function runDetectors(
   const available = new Set(evidence.map((row) => row.kind));
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
     const missing = (DETECTOR_REQUIRES[detector.type] ?? []).filter((kind) => !available.has(kind));
-    return missing.length > 0 ? [{ type: detector.type, missing }] : [];
+    if (missing.length > 0) return [{ type: detector.type, missing }];
+    // CMP-010: O11 needs two honest windows, not just the `keyword_rank` kind. A project with
+    // one projected window has the kind and no comparison, and reporting it as an empty board
+    // says "nothing declined" when the truth is "we cannot tell".
+    if (detector.type === "O11_freshness_decay" && comparison.reason != null) {
+      return [{ type: detector.type, missing: [], reason: comparison.reason }];
+    }
+    return [];
   });
   const disabledTypes = new Set(disabled.map((entry) => entry.type));
 
@@ -1369,7 +1444,13 @@ export async function runDetectors(
 
   for (const detector of DETECTORS) {
     if (disabledTypes.has(detector.type)) continue;
-    for (const rawCandidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms, crawledPages: opts.crawledPages })) {
+    for (const rawCandidate of detector.detect(evidence, {
+      now,
+      previousRank,
+      brandTerms: opts.brandTerms,
+      crawledPages: opts.crawledPages,
+      comparisonOverlapDays: comparison.overlapDays,
+    })) {
       const candidate = await withMeasuredWinnability(rawCandidate);
       remember(candidate);
       if (opts.dryRun) {
