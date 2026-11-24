@@ -403,6 +403,23 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
         <div className="shrink-0 text-right">
           <ScoreBadge score={row.score} />
           <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">score</p>
+          {/* CMP-011: a priority with unmeasured demand must say so. Showing a
+              score without this is handing an SEO a fake ranking. */}
+          {row.measurement === "unquantified" ? (
+            <p
+              className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--a-warning-700)]"
+              title="No first-party impressions and no provider volume: the demand behind this score is unmeasured"
+            >
+              unmeasured
+            </p>
+          ) : row.measurement === "observed_baseline" ? (
+            <p
+              className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+              title="Demand comes from impressions this site already earned, not from purchased volume"
+            >
+              reach
+            </p>
+          ) : null}
         </div>
       </div>
     </Link>
