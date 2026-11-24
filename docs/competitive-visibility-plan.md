@@ -75,6 +75,38 @@ looks empty of good work:
   `previous` window it fires **43** times out of 151 usable pairs. The evidence is
   written correctly with a `windowRole`; the selector ignores it.
 
+## Why the issues kept arriving one at a time
+
+Eleven issues came out of one reading of this layer, each found separately. That
+repetition is a design hole, not eleven bugs.
+
+`EVIDENCE_KINDS` declares nineteen kinds as a bare string array and nothing
+*about* them: no required dimensions, no metric labels, no producer, no consumer,
+no window semantics. A detector can therefore filter on a spelling nobody writes
+and the build stays green. Measured:
+
+| Kind | Writers | Readers | |
+|---|---|---|---|
+| `competitor_rank`, `vitals`, `analytics` | **0** | 1 each | consumer with no producer |
+| `internal_link_graph` | 1 | **0** | written, nobody consumes |
+| `share_of_voice`, `serp_features`, `intent_label`, `gsc_query` | 0 | 0 | declared, dead |
+
+The same hole one level below it: `provider:referringDomainGap` (O9),
+`first_party:lcpSeconds` (O12) and `provider:askCount` (O4) are filtered on by
+detectors and written by nothing. `DETECTOR_REQUIRES` guards the kind level and
+works; every detector then filters a level below it, where there is no gate.
+
+Second half: **"current" is not a concept the store has.** `selectCurrentEvidence`
+lives inside `detectors.ts`, so it is re-implemented 44 times (`supersededById:
+null` across 22 files), the rank precedence `provider:position ??
+first_party:position` is written 4 times, and a period is any of `windowDays`,
+`dateRange`, `recencyDays`, `since`, `startDate`, `bundleKey`, `weekKey`.
+CMP-010 is the proof it is not cosmetic: the writer stored a correct
+`windowRole`, the reader took "second-newest window", and nothing compared them.
+
+So CMP-011 is not a twelfth finding. It is the guard that makes a twelfth
+impossible, and CMP-009/CMP-010 are fixed by it rather than beside it.
+
 ## Design
 
 Five layers, each shippable and reversible. Nothing here adds a second data
@@ -117,6 +149,7 @@ configuration choice.
 
 | Work ID | Result an SEO can see | Depends on |
 |---|---|---|
+| [CMP-011](https://github.com/weareheadless/crawlseo/issues/176) | A reader with no writer fails the build; a board nobody can action fails the audit | CMP-001, CMP-002 |
 | [CMP-001](https://github.com/weareheadless/crawlseo/issues/166) | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
 | [CMP-002](https://github.com/weareheadless/crawlseo/issues/167) | Every opportunity on the board belongs to the topic it serves | — |
 | [CMP-003](https://github.com/weareheadless/crawlseo/issues/168) | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | CMP-001, CMP-002 |

@@ -201,10 +201,42 @@ and the movement between them, and you can check it in Search Console.
 
 ---
 
+## CMP-011 — Nothing on the board can be produced by nothing
+
+**Today.** The layer knows the *names* of nineteen things it can store and
+nothing about them — not what they must contain, not who writes them, not whether
+what they mean is a single moment or a rolling average. So a detector can be built
+against a number nobody produces and the build stays green. Eight of the nineteen
+are broken today: three are read and never written, one is written and never
+read, four are dead.
+
+**What that costs you.** Not "a technical debt item". It costs exactly what this
+conversation cost: every time somebody reads the board, they find one more number
+that is silently zero. O9 has never fired because the number it reads is never
+written. O12 has never fired while 87 vitals reports sit in a table nobody
+projects. O11 reports declines that are the same window compared with itself.
+
+**What the ticket makes true.** Two guarantees, both enforced:
+every number on the board is produced by something that declares it, and every
+opportunity can be checked line by line — does it name a page, does that page
+return 200, does it name the query, is the number measured or is it a
+hypothesis you should not trust yet.
+
+**How you'd see it.** A build that goes red the moment a reader loses its writer,
+and an audit that prints, per site, exactly which cards on the board you cannot
+act on and why. Today it would print: **0 of 75 live opportunities carry a
+measured or estimated impact — 71 are unmeasured hypotheses**; 2 point at pages
+the crawl never saw, 9 on one site alone.
+
+---
+
 ## The order that matters
 
 CMP-001 and CMP-002 first: without attributable snapshots and attached
-opportunities, everything after measures the wrong thing. CMP-010 sits with them
+opportunities, everything after measures the wrong thing. **CMP-011 lands with
+them**, because it is the guard that stops the next ten findings from being
+discovered one conversation at a time — and it is what fixes CMP-009 and CMP-010
+rather than sitting beside them. CMP-010 sits with them
 rather than at the end: it is one selector reading evidence that is already
 correct, it needs no data bought, and until it lands the board cannot report a
 decline at all. Then CMP-003 and CMP-004, which give the board its memory and its
