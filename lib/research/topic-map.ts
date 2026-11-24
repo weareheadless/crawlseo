@@ -1174,6 +1174,22 @@ export async function storeTopicMap(
   const existingBySlug = new Map(allRows.map((row) => [row.slug, row]));
   const activeBySlug = new Map(existing.map((row) => [row.slug, row]));
   const newSlugs = new Set(map.clusters.map((cluster) => cluster.slug));
+  // CMP-004: a person's tracked-grid declaration is carried forward. Rewriting a
+  // membership from the topic map must not silently untrack the queries somebody
+  // chose to watch, so the flag is read here and re-applied below.
+  const declaredGrid = new Set<string>();
+  {
+    const rows = await db.evidenceRecord.findMany({
+      where: { projectId: map.projectId, kind: "keyword_universe_membership", supersededById: null },
+      select: { dimensions: true },
+    });
+    for (const row of rows) {
+      const dims = asRecord(row.dimensions);
+      if (dims.grid !== "tracked") continue;
+      if (typeof dims.cluster !== "string" || typeof dims.query !== "string") continue;
+      declaredGrid.add(`${dims.cluster}::${dims.query.trim().toLowerCase()}`);
+    }
+  }
   let created = 0;
   let updated = 0;
   let memberships = 0;
@@ -1226,18 +1242,21 @@ export async function storeTopicMap(
       };
       if (query.position != null) metrics["derived:position"] = { value: query.position, unit: "rank", source: "derived" };
       if (query.volume != null) metrics["derived:volume"] = { value: query.volume, unit: "searches/month", source: "derived" };
+      const dimensions: Record<string, unknown> = {
+        cluster: cluster.slug,
+        query: query.query,
+        source: "topic-map-v1",
+        topic: cluster.name,
+      };
+      // CMP-004: keep the grid a person declared for this member.
+      if (declaredGrid.has(`${cluster.slug}::${query.query.trim().toLowerCase()}`)) dimensions.grid = "tracked";
       const stored = await storeEvidenceRecord(db, {
         projectId: map.projectId,
         siteId: map.siteId,
         kind: "keyword_universe_membership",
         observedAt: query.observedAt,
         producer: "topic-map-v1",
-        dimensions: {
-          cluster: cluster.slug,
-          query: query.query,
-          source: "topic-map-v1",
-          topic: cluster.name,
-        },
+        dimensions: dimensions as never,
         metrics,
       });
       await supersedeMembership(db, map.projectId, cluster.slug, query.query, stored.id);

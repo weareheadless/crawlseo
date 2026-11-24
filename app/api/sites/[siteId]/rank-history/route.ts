@@ -1,6 +1,6 @@
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { db } from "@/lib/db";
-import { buildRankHistory } from "@/lib/funnel/metric-semantics";
+import { buildRankChart, bucketWeekly, sampledRankSeries } from "@/lib/funnel/rank-series";
 
 export async function GET(
   req: Request,
@@ -15,7 +15,7 @@ export async function GET(
     const { siteId } = await params;
     const site = await db.site.findFirst({
       where: { id: siteId, userId },
-      select: { userId: true },
+      select: { userId: true, projectId: true },
     });
     if (!site) {
       return Response.json({ error: "Not found" }, { status: 404 });
@@ -23,7 +23,7 @@ export async function GET(
 
     const url = new URL(req.url);
     const query = url.searchParams.get("query");
-    const days = parseInt(url.searchParams.get("days") || "90", 10);
+    const days = parseInt(url.searchParams.get("days") || "182", 10);
 
     if (!query) {
       return Response.json(
@@ -32,61 +32,26 @@ export async function GET(
       );
     }
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
+    const weeks = Math.max(1, Math.round(days / 7));
+    const since = new Date(Date.now() - weeks * 7 * 86_400_000);
 
-    // Fetch from both Keyword table and RankSnapshot in parallel
-    const [keywordRows, snapshots] = await Promise.all([
-      db.keyword.findMany({
-        where: {
-          siteId,
-          query,
-          date: { gte: startDate },
-        },
-        select: {
-          date: true,
-          position: true,
-          clicks: true,
-          impressions: true,
-        },
-        orderBy: { date: "asc" },
-      }),
-      // Sampled SERP ranks now live in the evidence store (DS-05 keeps them as a
-      // separate series from the Search Console average position).
-      db.evidenceRecord
-        .findMany({
-          where: {
-            siteId,
-            kind: "keyword_rank",
-            supersededById: null,
-            observedAt: { gte: startDate },
-            dimensions: { path: ["query"], equals: query },
-          },
-          select: { observedAt: true, metrics: true },
-          orderBy: { observedAt: "asc" },
-        })
-        .then((rows) =>
-          rows.flatMap((row) => {
-            const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
-            const position = metrics["provider:position"]?.value;
-            if (position == null) return [];
-            return [{
-              date: row.observedAt,
-              position,
-              clicks: metrics["provider:clicks"]?.value ?? 0,
-              impressions: metrics["provider:impressions"]?.value ?? 0,
-            }];
-          })
-        ),
-    ]);
+    // CMP-004: one reader for the weekly series, shared with the cluster page, so
+    // the JSON and the rendered chart can never disagree. The weekly buckets are
+    // the trend; a sampled SERP is a separate labelled series.
+    const daily = await db.keyword.findMany({
+      where: { siteId, query, date: { gte: since } },
+      select: { date: true, position: true, clicks: true, impressions: true },
+      orderBy: { date: "asc" },
+    });
+    const bucketed = bucketWeekly(daily);
+    const sampled = site.projectId
+      ? await sampledRankSeries(db, { projectId: site.projectId, queries: [query], weeks })
+      : [];
 
     // DS-05: no unlabelled precedence overlay. Search Console average position
     // and a sampled SERP rank are different measurements, so both series are
-    // returned tagged rather than one silently overwriting the other.
-    const history = buildRankHistory({ gsc: keywordRows, sampled: snapshots });
-
-    return Response.json(history);
+    // tagged and the chart draws them separately.
+    return Response.json(buildRankChart({ weekly: bucketed.points, sampled, suppressed: bucketed.suppressed }));
   } catch (error) {
     console.error("Rank history error:", error);
     return Response.json(
