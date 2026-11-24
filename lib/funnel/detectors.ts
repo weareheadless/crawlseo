@@ -948,24 +948,77 @@ const DETECTORS: Detector[] = [
   },
   {
     type: "O9_backlink_gap",
+    // CMP-007: O9 fires on a measured set difference, and its summary names the
+    // domains. "Competitors have more links" is not a brief; a list of domains that
+    // link to the page above us and not to us is one a person can act on.
     detect: (evidence) =>
       byKind(evidence, "backlink_profile")
-        .filter((row) => (num(row, "provider:referringDomainGap") ?? 0) >= DETECTOR_THRESHOLDS.minReferringDomainGap)
-        .map((row) => ({
-          type: "O9_backlink_gap" as const,
-          title: `Authority gap vs ${dim(row, "competitor") ?? "competitor"}`,
-          summary: `${Math.round(num(row, "provider:referringDomainGap") ?? 0)} domains link to competitors but not to us.`,
-          dedupKey: `O9:${dim(row, "competitor") ?? ""}`,
-          clusterSlug: dim(row, "cluster"),
-          whyEvidenceIds: [],
-          howEvidenceIds: [row.id],
-          scoreInputs: scoreDefaults({
-            worth: { volume: null, ctrAtPosition: null, businessValue: 0.4 },
-            winProbability: { authorityGap: 0.3, playTypeFactor: 0.4 },
-            effort: { playTypeBase: 24, sizeFactor: 1 },
-            freshness: freshnessFactor(row.observedAt, new Date()),
-          }),
-        })),
+        .filter((row) => {
+          // A referring *set* is one side of the subtraction, so it never carries a
+          // gap of its own. Excluding it is what stops O9 reporting a competitor's
+          // link strength as our opportunity. Any row that does measure the gap is
+          // read, whatever scope it declares, so a legacy profile is not silenced.
+          const scope = dim(row, "scope") ?? "";
+          if (scope === "competitor_referring_domains" || scope === "own_referring_domains") return false;
+          return (num(row, "provider:referringDomainGap") ?? 0) >= DETECTOR_THRESHOLDS.minReferringDomainGap;
+        })
+        .map((row) => {
+          const gap = Math.round(num(row, "provider:referringDomainGap") ?? 0);
+          const targets = Array.isArray((row.dimensions as { domains?: unknown })?.domains)
+            ? ((row.dimensions as { domains: unknown[] }).domains.filter(
+                (value): value is string => typeof value === "string"
+              ))
+            : [];
+          const ranks = Array.isArray((row.dimensions as { domainRanks?: unknown })?.domainRanks)
+            ? ((row.dimensions as { domainRanks: unknown[] }).domainRanks.filter(
+                (value): value is number => typeof value === "number"
+              ))
+            : [];
+          const named = targets.slice(0, 3);
+          const rankOf = (domain: string): number | null => {
+            const index = targets.indexOf(domain);
+            const rank = index >= 0 ? ranks[index] : null;
+            return typeof rank === "number" && rank > 0 ? rank : null;
+          };
+          const withRank = named.map((domain) => {
+            const rank = rankOf(domain);
+            return rank != null ? `${domain} (authority ${rank})` : domain;
+          });
+          const suffix = targets.length > named.length ? `, and ${targets.length - named.length} more` : "";
+          // The competitor profiles the subtraction read, so the how leg cites both
+          // sides: this opportunity is not just "our profile says there is a gap".
+          const competitorEvidenceIds = Array.isArray(
+            (row.dimensions as { competitorEvidenceIds?: unknown })?.competitorEvidenceIds
+          )
+            ? ((row.dimensions as { competitorEvidenceIds: unknown[] }).competitorEvidenceIds.filter(
+                (value): value is string => typeof value === "string"
+              ))
+            : [];
+          return {
+            type: "O9_backlink_gap" as const,
+            title:
+              named.length > 0
+                ? `Link gap: ${gap} domains link to the pages above us, not to us`
+                : `Authority gap vs ${dim(row, "competitor") ?? "competitors"}`,
+            summary:
+              named.length > 0
+                ? `${gap} domains link to the pages ranking above us without linking to us: ${withRank.join(", ")}${suffix}. The target list is on this opportunity.`
+                : `${gap} domains link to competitors but not to us.`,
+            dedupKey: `O9:${dim(row, "competitor") ?? dim(row, "domain") ?? ""}`,
+            clusterSlug: dim(row, "cluster"),
+            whyEvidenceIds: [],
+            howEvidenceIds: [row.id, ...competitorEvidenceIds],
+            scoreInputs: scoreDefaults({
+              worth: { volume: null, ctrAtPosition: null, businessValue: 0.4 },
+              // A measured gap is a real path to authority, so the win probability is
+              // no longer the flat 0.3 the old detector guessed: the more targets
+              // there are, the more of them a campaign can reach.
+              winProbability: { authorityGap: Math.min(0.7, 0.2 + gap / 50), playTypeFactor: 0.4 },
+              effort: { playTypeBase: 24, sizeFactor: 1 },
+              freshness: freshnessFactor(row.observedAt, new Date()),
+            }),
+          };
+        }),
   },
   {
     type: "O10_cannibalization",

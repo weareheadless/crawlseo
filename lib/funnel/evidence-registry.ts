@@ -106,12 +106,25 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "sampled_point",
   },
   backlink_profile: {
-    producers: ["lib/dataforseo/collection"],
+    producers: ["lib/dataforseo/collection", "lib/funnel/link-gap-pass"],
     dimensions: {
       required: ["scope"],
       // O9 names the competitor whose referring domains are the gap, and the
       // cluster the query belongs to.
-      optional: ["domain", "crawlId", "competitor", "cluster"],
+      //
+      // CMP-007 adds three shapes under one kind, told apart by `scope`:
+      //  - `own_domain`           the site's own backlink summary (existing),
+      //  - `competitor`           one competitor's backlink summary,
+      //  - `competitor_referring_domains` one referring set for one target.
+      // `domains` is the set the gap is computed over and `domainRanks` its
+      // provider ranks, kept as parallel arrays so the dimensions stay scalars.
+      optional: [
+        "domain", "crawlId", "competitor", "cluster", "domains", "domainRanks",
+        "targetDomainCount",
+        // Which competitor profiles a gap row was computed against, so O9 cites both
+        // sides of the subtraction rather than only our own profile.
+        "competitorEvidenceIds",
+      ],
     },
     metrics: [
       "provider:totalBacklinks",
@@ -120,7 +133,10 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
       "provider:dofollow",
       "provider:nofollow",
       "provider:referringDomainGap",
+      "provider:targetDomainCount",
     ],
+    // A profile is one reading of a target at one moment; two months are two
+    // measurements, not a re-statement.
     window: "single_point",
   },
   share_of_voice: {
