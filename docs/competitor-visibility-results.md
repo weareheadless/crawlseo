@@ -268,20 +268,19 @@ the crawl never saw, 9 on one site alone.
 
 ## The order that matters
 
-CMP-001 and CMP-002 first: without attributable snapshots and attached
-opportunities, everything after measures the wrong thing. CMP-012 belongs with
-CMP-005, because buying volume for queries the board still ranks flat is spending
-money to sort a list badly. **CMP-011 lands with
-them**, because it is the guard that stops the next ten findings from being
-discovered one conversation at a time — and it is what fixes CMP-009 and CMP-010
-rather than sitting beside them. CMP-010 sits with them
-rather than at the end: it is one selector reading evidence that is already
-correct, it needs no data bought, and until it lands the board cannot report a
-decline at all. Then CMP-003 and CMP-004, which give the board its memory and its
-opponent. CMP-005 unblocks the
-parked work that is already real. CMP-006 and CMP-007 make each opportunity
-actionable. CMP-008 and CMP-009 close the loop so the next cycle starts from
-measured ground.
+This is fixed. Wave 1 is CMP-001 and CMP-002 together, because nothing downstream
+means anything until snapshots name real domains and opportunities sit under their
+topic. Then CMP-011, the guard. Then the free weekly trend. Then volume — and
+inside that, fix the broken target before buying anything. Then the leaderboard
+and the gap brief, then the winnability inputs, then links and share of voice, and
+proof last.
+
+**The list is closed.** Four things an SEO would also expect are not in it: the
+local pack, Core Web Vitals, internal linking and indexation. Each is measured in
+the plan and each waits, because none of them change what the board says about a
+query we already track. If one gets added, it is a new plan — not a fourteenth
+ticket. That distinction is the whole point of CMP-011: the product should stop
+discovering its own gaps in conversations.
 
 The end state per cluster is four numbers a client understands — coverage,
 measured share of voice, a detected decline, and a measured win — each traceable

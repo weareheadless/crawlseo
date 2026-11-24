@@ -256,6 +256,43 @@ SERP spend only answers "who is there", monthly, on the queries we act on.
 7. **Provenance holds.** Provider-sourced metrics keep their raw response and
    cost; no provider number is presented as first-party.
 
+## Build order
+
+This is the committed sequence. It replaces any per-issue negotiation about what
+runs next; a change here is a replan, not a preference.
+
+| Wave | Issues | Why here | Gate |
+|---|---|---|---|
+| 1 | CMP-001, CMP-002 | Unblocked, independent, and every later measurement depends on attributable snapshots and attached clusters | Reviews of both pass; the SERP backfill receipt is recorded |
+| 2 | CMP-011 | Lands the guard before the volume of new readers and writers arrives | Contract test red on the known defects, then green |
+| 3 | CMP-004, CMP-010 | The free weekly trend, and the window comparison that made the old one lie | O11 firing count rises from 1 to ≈43 on the reference site |
+| 4 | CMP-005 | Fix `targetPosition` first (free, ~103 rows), then buy volume for the grid | Park-reason mix shifts, with the two effects reported separately |
+| 5 | CMP-003, CMP-006 | The leaderboard and the page-level gap brief need attributable snapshots | A cluster page names who ranks and what our page lacks |
+| 6 | CMP-012 | Needs the competitor set, the volume and the backlink profiles it reads | Two equal-volume opportunities stop scoring identically |
+| 7 | CMP-007, CMP-008 | Link targets and share of voice, both reading named competitor rows | A cluster SoV series exists for one real cluster |
+| 8 | CMP-009 | Proof per delivered task, last, because it needs everything above | One delivered task has a before/after position |
+
+Wave 1 runs two tickets in parallel. Every later wave is strictly serial with the
+one above it, because each reads what the previous writes.
+
+### Explicitly out of scope
+
+These are real gaps, measured, and deliberately **not** in this plan. Adding one
+is a new plan, not a new ticket — which is the failure mode this section exists to
+prevent.
+
+| Gap | Measured today | Why it waits |
+|---|---|---|
+| Local pack, map results, GBP | 8 of 95 clusters are local intent; `localPack`, `peopleAlsoAsk`, `relatedSearches` are parsed in `normalizeOrganicSerp` and discarded; no local evidence kind | Needs its own collector and its own contract. CMP-001 at least stops the discarded SERP from being mistaken for one we can read |
+| Core Web Vitals | O12 has never fired; 87 `VitalsReport` rows with LCP in a table nothing projects | CMP-011 makes the dead producer a red build; projecting the rows is a later wiring job |
+| Internal linking | `internal_link_graph` is written by `onpage-adapter.ts`, read by nothing | An orphan kind, not a missing capability |
+| Indexation and coverage | URL inspection exists only behind an on-demand route; never evidence | On-demand answers the question today; making it evidence needs a cadence decision |
+| GA4 engagement | `analytics` kind has a consumer and no producer | Same class as CWV; the guard catches it |
+
+None of these change what the board *says* about a query we already track. They
+change which questions the product can answer at all, which is a larger piece of
+work than "make the opportunities real".
+
 ## Verification of the plan as a whole
 
 The plan is done when, for one cluster on one site, all of the following are
