@@ -113,7 +113,7 @@ so it is the check that the brief holds only verified specifics.
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
 | SOC-007 | crawlseo | SiteProfile: brand block and representation | [#195](https://github.com/weareheadless/crawlseo/issues/195) — merged |
-| SOC-013 | cicero | Read brand identity from SiteProfile, not brand.json | [#3](https://github.com/weareheadless/cicero/issues/3) |
+| SOC-013 | cicero | Read brand identity from SiteProfile, not brand.json | [#3](https://github.com/weareheadless/cicero/issues/3) — merged |
 | SOC-009 | editorial | Social artifact type in the brief/artifact contract | [#1](https://github.com/weareheadless/editorial/issues/1) — merged |
 | SOC-010 | editorial | Verify social artefacts | [#2](https://github.com/weareheadless/editorial/issues/2) — merged |
 
