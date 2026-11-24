@@ -45,6 +45,30 @@ export type BacklinksOverviewResult = {
   nofollow: number;
 };
 
+/**
+ * CMP-007: the domains that link to a target, with their own provider metrics.
+ *
+ * This is the shape the link-target list is built from: a domain, its rank, its
+ * backlink count and the page it links to. Nothing here is a judgement about the
+ * domain — the numbers are what the provider reports, and ordering by them is the
+ * caller's declared choice.
+ */
+export type ReferringDomainRow = {
+  domain: string;
+  /** Provider rank of the linking domain (higher = stronger). */
+  rank: number | null;
+  backlinks: number | null;
+  /** The competitor URL this domain links to, when the provider says. */
+  targetUrl: string | null;
+  /** `dofollow` or `nofollow` for the link to the target. */
+  linkType: string | null;
+};
+
+export type ReferringDomainsResult = {
+  target: string;
+  domains: ReferringDomainRow[];
+};
+
 export type DataForSeoOperation =
   | {
       kind: "DOMAIN_OVERVIEW";
@@ -57,15 +81,24 @@ export type DataForSeoOperation =
       domain: string;
     }
   | {
+      /** CMP-007: the domains linking to a competitor, for the link-target gap. */
+      kind: "REFERRING_DOMAINS";
+      domain: string;
+      limit?: number;
+    }
+  | {
       kind: "KEYWORD_SEED";
       seed: string;
       languageCode: string;
       locationCode: number;
     };
 
+/** How many referring domains one call asks for. Declared, so the cost is knowable. */
+export const REFERRING_DOMAINS_LIMIT = 200;
+
 export type DataForSeoOperationResult = {
   kind: DataForSeoOperation["kind"];
-  result: DomainOverviewResult | BacklinksOverviewResult | KeywordResult[];
+  result: DomainOverviewResult | BacklinksOverviewResult | ReferringDomainsResult | KeywordResult[];
   providerTaskId: string | null;
   costMicros: number | null;
 };
@@ -733,6 +766,48 @@ function normalizeDomainOverview(data: unknown): DomainOverviewResult | null {
   };
 }
 
+/**
+ * CMP-007: read the referring-domains response into the link-target shape.
+ *
+ * The provider returns one item per linking domain (or per link, depending on the
+ * mode); both are folded to one row per domain at its strongest link, because a
+ * domain that links from five pages is one outreach target, not five.
+ */
+function normalizeReferringDomains(data: unknown, target: string): ReferringDomainsResult | null {
+  const root = asObject(data);
+  const tasks = root && Array.isArray(root.tasks) ? root.tasks : [];
+  const task = asObject(tasks[0]);
+  const results = task && Array.isArray(task.result) ? task.result : [];
+  const first = asObject(results[0]);
+  const items = first && Array.isArray(first.items) ? (first.items as unknown[]) : [];
+
+  const byDomain = new Map<string, ReferringDomainRow>();
+  for (const raw of items) {
+    const item = asObject(raw);
+    if (!item) continue;
+    const domain =
+      typeof item.domain_from === "string" ? item.domain_from : typeof item.domain === "string" ? item.domain : "";
+    if (!domain) continue;
+    const rank = asNumber(item.rank);
+    const backlinks = asNumber(item.backlinks);
+    const targetUrl = typeof item.url_to === "string" ? item.url_to : null;
+    const linkType = typeof item.link_type === "string" ? item.link_type : null;
+    const existing = byDomain.get(domain);
+    if (existing) {
+      // Keep the strongest link from one domain: the highest rank, then the most
+      // backlinks. Ordering is by a declared number, not a judgement.
+      if ((rank ?? 0) > (existing.rank ?? 0)) existing.rank = rank;
+      if ((backlinks ?? 0) > (existing.backlinks ?? 0)) existing.backlinks = backlinks;
+      if (!existing.targetUrl && targetUrl) existing.targetUrl = targetUrl;
+      continue;
+    }
+    byDomain.set(domain, { domain, rank, backlinks, targetUrl, linkType });
+  }
+
+  if (byDomain.size === 0) return null;
+  return { target, domains: [...byDomain.values()] };
+}
+
 function normalizeBacklinksOverview(data: unknown): BacklinksOverviewResult | null {
   const root = asObject(data);
   const tasks = root && Array.isArray(root.tasks) ? root.tasks : [];
@@ -766,7 +841,7 @@ export async function performDataForSeoOperation(
   const credentials = await credentialsForProject(projectId);
   let endpoint: string;
   let body: Record<string, unknown>;
-  let normalize: (data: unknown) => DomainOverviewResult | BacklinksOverviewResult | KeywordResult[] | null;
+  let normalize: (data: unknown) => DomainOverviewResult | BacklinksOverviewResult | ReferringDomainsResult | KeywordResult[] | null;
 
   switch (operation.kind) {
     case "DOMAIN_OVERVIEW":
@@ -783,6 +858,22 @@ export async function performDataForSeoOperation(
       body = { target: operation.domain, internal_list_limit: 0, backlinks_filters: [] };
       normalize = normalizeBacklinksOverview;
       break;
+    case "REFERRING_DOMAINS": {
+      endpoint = "/backlinks/referring_domains/live";
+      // The limit is a declared constant: an unbounded referring-domains call is
+      // both slow and expensive, and the link-target list only needs the strongest
+      // domains, which the provider returns ranked.
+      const limit = Math.max(1, Math.min(operation.limit ?? REFERRING_DOMAINS_LIMIT, 1000));
+      body = {
+        target: operation.domain,
+        limit,
+        order_by: ["rank,desc"],
+        internal_list_limit: 0,
+        backlinks_status_type: "live",
+      };
+      normalize = (data: unknown) => normalizeReferringDomains(data, operation.domain);
+      break;
+    }
     case "KEYWORD_SEED":
       endpoint = "/dataforseo_labs/google/related_keywords/live";
       body = {

@@ -6,6 +6,7 @@ import {
   executeDataForSeoRelatedKeywords,
   executeDataForSeoOrganicSerp,
   performDataForSeoOperation,
+  REFERRING_DOMAINS_LIMIT,
 } from "@/lib/dataforseo/client";
 import { ingestAiVisibility, type AiVisibilityObservation } from "@/lib/dataforseo/ai-visibility-adapter";
 import { normalizeSiteDomain, resolveRankedResult, sameSite, type ResolvedResult } from "@/lib/dataforseo/serp-attribution";
@@ -456,6 +457,125 @@ export async function collectBacklinkProfile(
     metrics,
   });
   return { evidence: [{ id: stored.id, kind: "backlink_profile", observedAt: new Date(), dimensions, metrics }], spentMicros: spent };
+}
+
+/**
+ * CMP-007: the domains linking to a target, for the link-target gap.
+ *
+ * **Why one row per domain set, not one row per linking domain.** A referring set
+ * is a single observation of one target at one moment: 200 domains arrived from one
+ * paid call, with one receipt and one cost. Storing 200 `competitor_rank`-shaped
+ * rows would multiply the provenance chain with no reader that wants it — the gap
+ * is computed over the whole set. So the set is stored as `backlink_profile` with
+ * `scope: "competitor_referring_domains"`, the domain list in `dimensions.domains`
+ * and the count in `provider:referringDomains`. Every element still points at the
+ * same raw response, so the same domain cannot appear without a receipt.
+ *
+ * The provider's own per-domain facts travel in `dimensions.domains` as compact
+ * `domain:rank` pairs only when the caller needs them; the gap computation reads
+ * `provider:referringDomains` for the count and the domain list for the set.
+ */
+export async function collectReferringDomains(
+  db: CollectionDb,
+  input: {
+    projectId: string;
+    siteId: string | null;
+    domain: string;
+    /** How many domains to ask for; declared so the cost is knowable. */
+    limit?: number;
+    /** Which competitor this set belongs to, when it is one. */
+    competitor?: string | null;
+    cluster?: string | null;
+  }
+): Promise<CollectionOutput> {
+  const target = input.domain.replace(/^www\./, "");
+  const limit = Math.max(1, Math.min(input.limit ?? REFERRING_DOMAINS_LIMIT, 1000));
+  const { result, spentMicros: spent } = await withResearchBudget(input.projectId, {
+    operation: "dataforseo:referring_domains",
+    detail: { target, limit, competitor: input.competitor ?? null },
+    // Measured 2026-11-24: this call is quoted above the backlinks summary, so the
+    // reservation must not understate it or the bundle passes its own check and
+    // then overspends.
+    expectedMicros: 40_000,
+    run: () =>
+      performDataForSeoOperation(input.projectId, {
+        kind: "REFERRING_DOMAINS",
+        domain: target,
+        limit,
+      }),
+    costOf: (value) => microsOf(value.costMicros),
+  });
+
+  // `performDataForSeoOperation` returns the whole operation; the normalised
+  // referring set is `result.result`. Storing the envelope instead was a real bug in
+  // the first version of this collector: four paid calls landed with a payload whose
+  // `domains` sat one level too deep, and the gap read zero for a site that has 63
+  // referring domains.
+  const referringSet = result.result as { target?: string; domains?: unknown };
+  const domains = Array.isArray(referringSet.domains)
+    ? referringSet.domains.filter(
+        (row): row is { domain: string; rank: number | null; backlinks: number | null; targetUrl: string | null; linkType: string | null } =>
+          row != null && typeof row === "object" && typeof (row as { domain?: unknown }).domain === "string"
+      )
+    : [];
+  const raw = await db.rawProviderResponse.create({
+    data: {
+      provider: "dataforseo",
+      product: "backlinks",
+      endpoint: "referring_domains/live",
+      providerTaskId: result.providerTaskId,
+      locale: null,
+      requestedAt: new Date(),
+      deliveredAt: new Date(),
+      costMicros: BigInt(spent),
+      status: "succeeded",
+      payload: referringSet as never,
+    },
+    select: { id: true },
+  });
+
+  // A call that returned nothing is still a measurement: "this target had no
+  // referring domains in the window" is different from "we did not look". The row
+  // is written with a zero count rather than skipped, so a competitor whose set is
+  // genuinely empty is not confused with one that was never measured.
+  const domainList = domains.map((row) => row.domain).filter((value): value is string => Boolean(value));
+  const dimensions: EvidenceDimensions = {
+    scope: input.competitor ? "competitor_referring_domains" : "own_referring_domains",
+    domain: target,
+    domains: domainList,
+    // The provider's per-domain rank, so an outreach list can show authority
+    // without a second call. Kept as parallel arrays so the dimensions stay
+    // JSON scalars, per the evidence contract.
+    domainRanks: domains.map((row) => (typeof row.rank === "number" ? row.rank : 0)),
+  };
+  if (input.competitor) dimensions.competitor = input.competitor;
+  if (input.cluster) dimensions.cluster = input.cluster;
+
+  const stored = await storeEvidenceRecord(db, {
+    projectId: input.projectId,
+    siteId: input.siteId,
+    kind: "backlink_profile",
+    observedAt: new Date(),
+    producer: "dataforseo",
+    rawResponseId: raw.id,
+    dimensions,
+    metrics: {
+      "provider:referringDomains": { value: domainList.length, unit: "count", source: "provider" },
+    },
+  });
+
+  return {
+    evidence: [
+      {
+        id: stored.id,
+        kind: "backlink_profile",
+        observedAt: new Date(),
+        dimensions,
+        metrics: { "provider:referringDomains": { value: domainList.length, unit: "count", source: "provider" } },
+      },
+    ],
+    spentMicros: spent,
+  };
 }
 
 /**

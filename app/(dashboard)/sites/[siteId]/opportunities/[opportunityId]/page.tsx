@@ -4,9 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getUserIdFromCookies } from "@/lib/session-helper";
 import { getOpportunityDetail, type EvidenceLine } from "@/lib/funnel/views";
+import { linkTargetsForOpportunity } from "@/lib/funnel/link-gap-pass";
 import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
 import { ImpactPanel } from "@/components/funnel/impact-panel";
+import { LinkTargetPanel } from "@/components/funnel/link-target-panel";
 import { PageGapPanel } from "@/components/funnel/page-gap-panel";
 import { storedPageGap } from "@/lib/funnel/competitor-page-gap";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
@@ -74,6 +76,17 @@ export default async function OpportunityDetailPage({ params }: Props) {
     ? await storedPageGap(db, { projectId: site.projectId, query: impactContext.query })
     : null;
 
+  // CMP-007: a link-gap opportunity shows its target list. Read from the own-domain
+  // profile row the gap was written on — the names, not only the count, because
+  // "306 domains" without the list is not a brief.
+  const linkTargets =
+    detail.type === "O9_backlink_gap" && site.projectId
+      ? await linkTargetsForOpportunity(db, {
+          projectId: site.projectId,
+          howEvidenceIds: detail.howEvidence.map((line) => line.id),
+        })
+      : null;
+
   const label = OPPORTUNITY_LABELS[detail.type];
   const decided = detail.status !== "detected";
 
@@ -133,6 +146,16 @@ export default async function OpportunityDetailPage({ params }: Props) {
       />
 
       {pageGapResult && <PageGapPanel gap={pageGapResult} />}
+
+      {linkTargets && (
+        <LinkTargetPanel
+          targets={linkTargets.targets}
+          sharedCount={linkTargets.sharedCount}
+          competitorCount={linkTargets.competitorCount}
+          missing={linkTargets.missing}
+          ourDomainCount={linkTargets.ourDomainCount}
+        />
+      )}
 
       <Stage number={1} title="Why this exists" subtitle="The evidence that produced this opportunity. Both legs, always shown.">
         <div className="grid gap-4 sm:grid-cols-2">

@@ -220,6 +220,8 @@ function taskInputForOperation(operation: DataForSeoOperation): Record<string, u
       };
     case "BACKLINKS_OVERVIEW":
       return { domain: operation.domain };
+    case "REFERRING_DOMAINS":
+      return { domain: operation.domain, limit: operation.limit ?? null };
     case "KEYWORD_SEED":
       return {
         seed: operation.seed,
