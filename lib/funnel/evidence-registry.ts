@@ -140,11 +140,21 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "single_point",
   },
   share_of_voice: {
-    producers: [],
-    reason: "Declared for CMP-008's measured visibility score; computed from competitor_rank and serp_snapshot, not collected directly.",
-    dimensions: { required: ["cluster"], optional: ["locale", "windowStart", "windowEnd"] },
-    metrics: [],
-    window: "rolling_window",
+    producers: ["lib/funnel/share-of-voice"],
+    dimensions: {
+      required: ["cluster"],
+      // One row per cluster, week and domain: the series is stored so a scoreboard
+      // reading and a recomputation are the same numbers.
+      optional: [
+        "locale", "windowStart", "windowEnd", "week", "domain", "us",
+        "queries", "queriesObserved", "sampledAt",
+      ],
+    },
+    // A share is computed from stored samples, not collected from a provider, so the
+    // label stays first-party: nobody sold us this number.
+    metrics: ["first_party:share", "first_party:credit"],
+    // Each row is one week's reading, so a trend needs the weeks side by side.
+    window: "single_point",
   },
   keyword_universe_membership: {
     producers: ["lib/research/topic-map", "lib/funnel/cluster-discovery", "lib/funnel/tracked-grid"],

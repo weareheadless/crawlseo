@@ -134,7 +134,11 @@ export async function recomputeDemandMap(db: DemandMapDb, projectId: string): Pr
       ourBestPosition: ourBest,
       competitorStrength,
       coverageRatio,
-      shareOfVoice: ourBest == null ? null : Math.max(0, 1 - (ourBest - 1) / 19),
+      // CMP-008: the position proxy that used to live here (`1 - (ourBest - 1) / 19`)
+      // is gone. It was our own best position wearing a share-of-voice label, with no
+      // competitor in it. The measured value is written by the cluster scoreboard from
+      // stored samples; `null` means unobserved, never 0%.
+      shareOfVoice: null,
       openOpportunities: countByCluster.get(cluster.id) ?? 0,
     };
   });
