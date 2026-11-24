@@ -30,7 +30,18 @@ describe("the opportunities board states its demand basis", () => {
   it("never renders a score without a basis beside it", () => {
     const scoreIndex = PAGE.indexOf("<ScoreBadge");
     expect(scoreIndex).toBeGreaterThan(-1);
-    const after = PAGE.slice(scoreIndex, scoreIndex + 1200);
+    // CMP-012 added a winnability label immediately after the score, so the demand basis
+    // sits further down than it used to. The assertion is about the same block, not about
+    // a character offset.
+    const after = PAGE.slice(scoreIndex, scoreIndex + 3000);
     expect(after).toContain("unmeasured");
+  });
+
+  it("states how much of the row's winnability was measured", () => {
+    // CMP-012: a score whose difficulty, authority, page strength and SERP competition
+    // were never looked at must not read as a fair fight.
+    expect(PAGE).toContain("row.winnability.lowConfidence");
+    expect(PAGE).toContain("row.winnability.measured");
+    expect(PAGE).toContain("winnability");
   });
 });

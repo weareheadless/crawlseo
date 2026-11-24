@@ -10,6 +10,8 @@ import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
 import { ImpactPanel } from "@/components/funnel/impact-panel";
 import { LinkTargetPanel } from "@/components/funnel/link-target-panel";
 import { TaskOutcomePanel } from "@/components/funnel/task-outcome-panel";
+import { WinProbabilityPanel } from "@/components/funnel/win-probability-panel";
+import { ASSUMED_WIN_PROBABILITY_CEILING } from "@/lib/funnel/scoring";
 import { PageGapPanel } from "@/components/funnel/page-gap-panel";
 import { storedPageGap } from "@/lib/funnel/competitor-page-gap";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
@@ -144,6 +146,17 @@ export default async function OpportunityDetailPage({ params }: Props) {
         scoreInputs={detail.scoreInputs}
         query={impactContext.query}
         observedAt={impactContext.observedAt}
+      />
+
+      {/* CMP-012: winnability with its source and date per input. Without this a typed-in
+          0.5 and a measured SERP look identical, which is the defect the ticket names. */}
+      <WinProbabilityPanel
+        winProbability={(detail.scoreInputs as { winProbability?: Record<string, number | null> } | null)?.winProbability}
+        source={(detail.scoreInputs as { winProbabilitySource?: Record<string, "measured" | "estimated" | "assumed"> } | null)?.winProbabilitySource}
+        observedAt={(detail.scoreInputs as { winProbabilityObservedAt?: Record<string, string> } | null)?.winProbabilityObservedAt}
+        missing={(detail.scoreInputs as { winProbabilityMissing?: string[] } | null)?.winProbabilityMissing}
+        score={detail.score}
+        lowConfidenceCeiling={ASSUMED_WIN_PROBABILITY_CEILING}
       />
 
       {pageGapResult && <PageGapPanel gap={pageGapResult} />}

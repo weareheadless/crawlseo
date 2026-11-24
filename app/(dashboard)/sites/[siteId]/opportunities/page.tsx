@@ -403,6 +403,25 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
         <div className="shrink-0 text-right">
           <ScoreBadge score={row.score} />
           <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">score</p>
+          {/* CMP-012: a score whose winnability was never looked at is not a fair fight.
+              Measured 2026-11-24: `pageStrength` and `serpCompetition` were the literal
+              0.5 on all 145 live rows, and the board gave no way to notice. */}
+          {row.winnability.lowConfidence && (
+            <p
+              className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--a-warning-700)]"
+              title="Nothing about this row's SERP has been measured: no difficulty, no referring-domain comparison and no crawled target page"
+            >
+              {`0/${row.winnability.measurable} winnability`}
+            </p>
+          )}
+          {!row.winnability.lowConfidence && row.winnability.measured < row.winnability.measurable && (
+            <p
+              className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+              title="Some winnability inputs are measured; the rest are not, and are never substituted with a default"
+            >
+              {`${row.winnability.measured}/${row.winnability.measurable} winnability`}
+            </p>
+          )}
           {/* CMP-011: a priority with unmeasured demand must say so. Showing a
               score without this is handing an SEO a fake ranking. */}
           {row.measurement === "unquantified" ? (

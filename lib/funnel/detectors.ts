@@ -10,6 +10,7 @@ import { clusterFindings } from "@/lib/research/finding-evidence";
 import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/cluster-resolver";
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
+import { resolveWinProbability } from "@/lib/funnel/win-probability";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -24,6 +25,14 @@ export type DetectorCandidate = {
   summary: string;
   dedupKey: string;
   clusterSlug?: string;
+  /**
+   * CMP-012: the page this work targets, when the candidate names one.
+   *
+   * Page strength compares our page against the strongest competitor page profiled for
+   * the same query, so the resolver needs the URL. Candidates that do not name one get
+   * `null` for page strength rather than a default.
+   */
+  targetUrl?: string | null;
   whyEvidenceIds: string[];
   howEvidenceIds: string[];
   scoreInputs: Omit<ScoreInputs, "evidenceCompleteness">;
@@ -366,14 +375,16 @@ function scoreDefaults(over: PartialScoreInputs): Omit<ScoreInputs, "evidenceCom
   return {
     worth: { volume: null, ctrAtPosition: null, businessValue: 0.5, ...(over.worth ?? {}) },
     winProbability: {
+      // CMP-012: every one of these is `null` until something measured it. The
+      // resolver in `lib/funnel/win-probability.ts` fills them from stored evidence at
+      // the place candidates become rows, so a literal here would be overwritten anyway —
+      // but keeping it null is what makes that contract visible. Measured 2026-11-24:
+      // `pageStrength` and `serpCompetition` were the literal 0.5 on all 145 live rows.
       rankDistance: null,
       authorityGap: null,
-      // CMP-006: page strength is a *measurement* — the share of compared
-      // dimensions where our page is at least as strong as the competitors' — so
-      // when nobody measured it the answer is null, not 0.5. A literal 0.5 here
-      // silently multiplied every non-technical score by a number nobody observed.
       pageStrength: null,
-      serpCompetition: 0.5,
+      serpCompetition: null,
+      // The one permitted constant: a declared property of the play, not a measurement.
       playTypeFactor: 0.6,
       ...(over.winProbability ?? {}),
     },
@@ -404,6 +415,24 @@ type DetectContext = {
    */
   crawledPages?: number;
 };
+
+/**
+ * CMP-012: the page a candidate is about, taken from the evidence it cites.
+ *
+ * This is reading a stored fact back, not inferring one: the crawl and the rank rows both
+ * carry the `url` they observed. Order is preserved so the first cited row wins, which is
+ * the one the detector treated as primary.
+ */
+function urlFromEvidence(evidence: Evidence[], ids: string[]): string | null {
+  for (const id of ids) {
+    const row = evidence.find((entry) => entry.id === id);
+    if (!row) continue;
+    const dims = (row.dimensions ?? {}) as { url?: unknown; scope?: unknown };
+    if (dims.scope === "competitor") continue;
+    if (typeof dims.url === "string" && dims.url.trim() !== "") return dims.url;
+  }
+  return null;
+}
 
 function byKind(evidence: Evidence[], kind: string): Evidence[] {
   return evidence.filter((row) => row.kind === kind);
@@ -1159,7 +1188,12 @@ const DETECTORS: Detector[] = [
   },
 ];
 
-export type DetectorDb = Pick<PrismaClient, "opportunity" | "evidenceRecord" | "demandMapCluster" | "evidenceEdge">;
+export type DetectorDb = Pick<
+  PrismaClient,
+  // `crawl` and `auditPage` are read by CMP-012's page-strength resolver: the crawl is
+  // where a page's own word count and schema state actually live.
+  "opportunity" | "evidenceRecord" | "demandMapCluster" | "evidenceEdge" | "crawl" | "auditPage" | "site"
+>;
 
 /** Cluster play: when a tracked cluster is under-covered but has enough
  * tracked queries, emit a topical-authority opportunity that one delivery
@@ -1272,9 +1306,71 @@ export async function runDetectors(
   const remember = (candidate: DetectorCandidate) => {
     produced.set(candidate.type, (produced.get(candidate.type) ?? new Set()).add(candidate.dedupKey));
   };
+  /**
+   * CMP-012: replace every literal winnability input with a stored fact, or null.
+   *
+   * This runs at the one place candidates become rows, so a detector cannot reintroduce a
+   * constant by accident: whatever it set is overridden by what is measured. The detector
+   * still supplies `rankDistance` (it knows the position it detected at) and
+   * `playTypeFactor` (a declared property of the play).
+   */
+  // One lookup per run: the crawl that holds our page facts belongs to the site. Read from
+  // `site` directly rather than through an opportunity, because a project with no rows yet
+  // still has a site and a crawl.
+  //
+  // The `typeof` guard is not defensive noise: a caller that passes a narrower client (a
+  // test double, a connector) simply cannot measure page strength, and that is reported as
+  // "not measured" downstream instead of throwing here and losing the whole detector run.
+  const siteId =
+    typeof db.site?.findFirst === "function"
+      ? ((await db.site.findFirst({ where: { projectId }, select: { id: true } }))?.id ?? null)
+      : null;
+
+  const withMeasuredWinnability = async (candidate: DetectorCandidate): Promise<DetectorCandidate> => {
+    const resolved = await resolveWinProbability(db, {
+      projectId,
+      siteId,
+      query: queryFromDedupKey(candidate.dedupKey),
+      rankDistance: candidate.scoreInputs.winProbability.rankDistance,
+      // The date the position behind it was observed, so the panel can date every input it
+      // calls measured. Rank distance is the one input computed upstream, not read here.
+      rankObservedAt: candidate.clusterSlug
+        ? null
+        : (evidence.find(
+            (row) =>
+              row.kind === "keyword_rank" &&
+              (row.dimensions as { query?: string } | null)?.query?.toLowerCase() ===
+                (queryFromDedupKey(candidate.dedupKey) ?? "").toLowerCase()
+          )?.observedAt ?? null),
+      playTypeFactor: candidate.scoreInputs.winProbability.playTypeFactor,
+      // The page this work targets, read from the evidence the candidate already cites.
+      // A detector that names the page itself wins; otherwise the first cited row carrying
+      // a `url` dimension is the page the opportunity is about. Never derived from the
+      // dedup key, which does not always carry one.
+      targetUrl: candidate.targetUrl ?? urlFromEvidence(evidence, candidate.howEvidenceIds) ?? urlFromEvidence(evidence, candidate.whyEvidenceIds) ?? null,
+      now,
+    });
+    return {
+      ...candidate,
+      scoreInputs: {
+        ...candidate.scoreInputs,
+        winProbability: resolved.winProbability,
+        winProbabilitySource: resolved.provenance.source,
+        winProbabilityObservedAt: Object.fromEntries(
+          Object.entries(resolved.provenance.observedAt).map(([key, value]) => [
+            key,
+            (value as Date).toISOString(),
+          ])
+        ),
+        winProbabilityMissing: resolved.provenance.missing,
+      },
+    };
+  };
+
   for (const detector of DETECTORS) {
     if (disabledTypes.has(detector.type)) continue;
-    for (const candidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms, crawledPages: opts.crawledPages })) {
+    for (const rawCandidate of detector.detect(evidence, { now, previousRank, brandTerms: opts.brandTerms, crawledPages: opts.crawledPages })) {
+      const candidate = await withMeasuredWinnability(rawCandidate);
       remember(candidate);
       if (opts.dryRun) {
         candidates.push(candidate);
@@ -1301,7 +1397,8 @@ export async function runDetectors(
       else updated += 1;
     }
   }
-  for (const candidate of await clusterPlayDetector(db, projectId, now)) {
+  for (const rawCandidate of await clusterPlayDetector(db, projectId, now)) {
+    const candidate = await withMeasuredWinnability(rawCandidate);
     remember(candidate);
     if (opts.dryRun) {
       candidates.push(candidate);
