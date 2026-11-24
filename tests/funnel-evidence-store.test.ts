@@ -67,10 +67,18 @@ describe("evidence store (plan §4 invariants)", () => {
   });
 
   it("allows first-party kinds without a raw response reference", async () => {
-    for (const kind of ["gsc_query", "vitals", "knowledge_fact", "research_finding"] as const) {
+    // Each kind is written with the shape its registry entry declares; the shared
+    // `base()` fixture is a keyword_rank row and would be rejected as a gsc_query.
+    const firstParty: Partial<EvidenceRecordPayload>[] = [
+      { kind: "gsc_query", dimensions: { query: "local seo" }, metrics: {} },
+      { kind: "vitals", dimensions: { url: "https://example.com/services" }, metrics: {} },
+      { kind: "knowledge_fact", dimensions: { field: "brand_name" }, metrics: {} },
+      { kind: "research_finding", dimensions: { findingId: "f1" }, metrics: {} },
+    ];
+    for (const override of firstParty) {
       const client = db();
       await expect(
-        storeEvidenceRecord(client as never, base({ kind, rawResponseId: null }))
+        storeEvidenceRecord(client as never, base({ ...override, rawResponseId: null }))
       ).resolves.toBeTruthy();
     }
   });

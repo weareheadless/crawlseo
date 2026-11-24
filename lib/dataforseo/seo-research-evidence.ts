@@ -69,11 +69,22 @@ export function taskToEvidence(task: StoredTask): {
     const rows = Array.isArray(result) ? result : [];
     const metrics: Record<string, MetricValue> = {};
     // A keyword seed task yields many rows; the first is summarised here and the
-    // per-keyword rows are written by the caller.
+    // per-keyword rows are written by the caller. The summary is a roll-up of the
+    // whole task, so it carries its row count rather than pretending to be the
+    // evidence for one query: `keyword_metrics` requires a query, and a summary
+    // that passed itself off as one would be attached to nothing.
     if (rows.length === 0) return { kind: null, dimensions: {}, metrics: {}, reason: "empty keyword list" };
     const first = rows[0] as Record<string, unknown>;
     if (typeof first.volume === "number") metrics["provider:topVolume"] = { value: first.volume, unit: "searches/month", source: "provider" };
-    return { kind: "keyword_metrics", dimensions: { rowCount: rows.length }, metrics };
+    const keywords = rows.map((row) => (row as { keyword?: unknown }).keyword).filter((value): value is string => typeof value === "string" && value !== "");
+    if (keywords.length === 0) return { kind: null, dimensions: {}, metrics: {}, reason: "no keyword rows" };
+    return {
+      kind: "keyword_metrics",
+      // The summary is written once per query row's cluster: attribute it to the
+      // first keyword so it has an owner, and keep the real count.
+      dimensions: { query: keywords[0], rowCount: rows.length },
+      metrics,
+    };
   }
 
   if (task.kind === "DOMAIN_OVERVIEW") {

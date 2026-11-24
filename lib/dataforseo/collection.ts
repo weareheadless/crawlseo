@@ -8,7 +8,8 @@ import {
   performDataForSeoOperation,
 } from "@/lib/dataforseo/client";
 import { ingestAiVisibility, type AiVisibilityObservation } from "@/lib/dataforseo/ai-visibility-adapter";
-import { storeEvidenceRecord } from "@/lib/funnel/evidence";
+import { normalizeSiteDomain, resolveRankedResult, sameSite, type ResolvedResult } from "@/lib/dataforseo/serp-attribution";
+import { storeEvidenceRecord, type EvidenceDimensions } from "@/lib/funnel/evidence";
 import { decryptCredential } from "@/lib/encryption";
 import { projectConnectorBudget, reserveProjectConnectorBudget, settleConnectorBudget, ConnectorError } from "@/lib/connectors/service";
 import type { ServicePrincipalContext } from "@/lib/auth/service-credentials";
@@ -313,22 +314,57 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
       },
       select: { id: true },
     });
-    const items = serp.result.organic ?? [];
-    const ourPosition = items.findIndex((item) => domain !== "" && (item.url ?? "").includes(domain)) + 1;
-    const covered = ourPosition === 0 || ourPosition > 10;
+    // Resolve first: on live output every organic `url` is an opaque
+    // `google.com/goto` wrapper, so a filter alone would discard the whole SERP.
+    // The resolver recovers the real host from the item's breadcrumb; the URL is
+    // kept only when the provider did not truncate it.
+    const ranked = (serp.result.organic ?? [])
+      .map((item) => ({ item, resolved: resolveRankedResult(item) }))
+      .filter((entry): entry is { item: typeof entry.item; resolved: ResolvedResult } => entry.resolved != null)
+      .map(({ item, resolved }) => ({ ...item, resolvedUrl: resolved.url, resolvedDomain: resolved.domain }));
+    const site = normalizeSiteDomain(domain);
+    const ours = ranked
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => sameSite(item.resolvedDomain, site));
+    // Position comes from the provider's own absolute rank. The list index is
+    // only a fallback, and it is the index in the attributable list, so dropping
+    // an unattributable item cannot shift everyone up a place.
+    const ourRank = ours[0] ?? null;
+    const ourPosition = ourRank == null
+      ? 0
+      : (ourRank.item.rankAbsolute ?? ourRank.item.rank ?? ourRank.index + 1);
+    const aboveUs = ourPosition > 0
+      ? ranked.filter((item) => {
+          const absolute = item.rankAbsolute ?? item.rank ?? null;
+          // An item with no rank at all cannot be proven to be below us, and
+          // dropping it would understate the competition above.
+          return absolute == null ? true : absolute < ourPosition;
+        })
+      : ranked.slice();
+    // An empty (or all-wrapper) result set is not evidence that competitors cover
+    // the query. It is evidence of nothing, which is what an absent dimension
+    // says. A board must never read that as a gap.
+    const observed = ranked.length > 0;
+    const covered = observed && aboveUs.length > 0;
+
     const metrics: Record<string, { value: number; unit: string; source: "provider" }> = {
-      "provider:organicResults": { value: items.length, unit: "count", source: "provider" },
+      "provider:organicResults": { value: ranked.length, unit: "count", source: "provider" },
     };
     if (ourPosition > 0) metrics["provider:position"] = { value: ourPosition, unit: "rank", source: "provider" };
-    const dimensions = {
+    // Ordered domains, so a competitor leaderboard reads this snapshot instead of
+    // buying a second SERP for the same query.
+    const topDomains = ranked.map((item) => item.resolvedDomain).filter((value, index, all) => all.indexOf(value) === index);
+    const firstUrl = ranked.find((item) => item.resolvedUrl != null)?.resolvedUrl ?? null;
+    const dimensions: EvidenceDimensions = {
       query,
       device: input.device ?? "desktop",
       // Locale is part of the observation's identity: a SERP is bought for one
       // market, and a later bundle may only reuse it for the same market.
       locale: `${input.languageCode}:${input.locationCode}`,
-      competitorCovered: covered ? "true" : "false",
-      topUrl: items[0]?.url ?? null,
+      topUrl: firstUrl,
+      topDomains,
     };
+    if (observed) dimensions.competitorCovered = covered ? "true" : "false";
     const stored = await storeEvidenceRecord(db, {
       projectId: input.projectId,
       siteId: input.siteId,

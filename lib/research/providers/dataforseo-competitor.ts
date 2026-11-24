@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { executeDataForSeoLabsSerpCompetitors, executeDataForSeoOrganicSerp } from "@/lib/dataforseo/client";
 import { withResearchBudget } from "@/lib/dataforseo/collection";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
+import { attributableHost, isAttributableResult } from "@/lib/dataforseo/serp-attribution";
 
 /**
  * Research provider: competitor and positioning evidence from DataForSEO.
@@ -37,23 +38,10 @@ export type CompetitorProviderInput = {
 };
 
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-const host = (url: string) => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-};
-
-/**
- * Google returns some results as redirect wrappers (`google.com/goto?url=…`,
- * `google.com/searchviewer/…`). They cannot be attributed to a competitor, so
- * they are not evidence of anyone's presence.
- */
-function attributable(url: string, domain: string): boolean {
-  const hostname = host(url) || domain.replace(/^www\./, "").toLowerCase();
-  return hostname !== "" && !/^(www\.)?google\./.test(hostname) && !hostname.includes("googleusercontent");
-}
+// One rule for "is this a real ranking result", shared with the snapshot
+// collector so a wrapper is rejected identically on both paths.
+const host = attributableHost;
+const attributable = isAttributableResult;
 
 export async function fetchDataForSeoCompetitorSources(input: CompetitorProviderInput): Promise<ResearchProviderSource[]> {
   const own = input.domain.replace(/^www\./, "").toLowerCase();

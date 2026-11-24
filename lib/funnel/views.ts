@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { rankOf } from "@/lib/funnel/evidence";
 
 import type {
   EvidenceRecordKind,
@@ -179,7 +180,7 @@ export function headlineFor(record: RawEvidence): string {
   switch (record.kind) {
     case "keyword_rank": {
       const query = str(record, "query") ?? "query";
-      const position = num("provider:position") ?? num("first_party:position");
+      const position = rankOf(m);
       const impressions = num("first_party:impressions") ?? num("provider:impressions");
       const parts = [position == null ? null : `position ${Math.round(position)}`, impressions == null ? null : `${impressions} impressions`].filter(Boolean);
       return parts.length ? `"${query}" — ${parts.join(", ")}` : `"${query}"`;

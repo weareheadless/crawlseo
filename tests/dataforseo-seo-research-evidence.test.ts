@@ -67,7 +67,9 @@ describe("stored SEO research → funnel evidence", () => {
   it("maps a keyword seed to keyword_metrics and reports the row count", () => {
     const mapped = taskToEvidence(task({ kind: "KEYWORD_SEED", result: [{ keyword: "a", volume: 10 }, { keyword: "b", volume: 5 }] }) as never);
     expect(mapped.kind).toBe("keyword_metrics");
-    expect(mapped.dimensions).toEqual({ rowCount: 2 });
+    // CMP-011: keyword_metrics requires a query, so the run-level summary is
+    // attributed to its first keyword and keeps the real row count beside it.
+    expect(mapped.dimensions).toEqual({ query: "a", rowCount: 2 });
   });
 
   it("refuses to map an empty or unmapped task, with a reason", () => {

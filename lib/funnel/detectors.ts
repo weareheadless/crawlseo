@@ -1,10 +1,12 @@
 import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
 
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
+import { partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
 import { clusterFindings } from "@/lib/research/finding-evidence";
+import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/cluster-resolver";
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
 
@@ -422,34 +424,37 @@ function latestValue(evidence: Evidence[], kind: string, key: string): string | 
 /**
  * Keep only the current observation set for kinds that accumulate by run.
  *
- * Two kinds do: `keyword_rank` (one projection per month) and `onpage_crawl` (one
- * set of issues per crawl). Detecting over every historical run counted the same
- * query once per month and kept defects that a later crawl had already fixed —
- * a page whose missing H1 was repaired stayed on the board forever.
+ * The decision itself lives in `currentEvidence` now (CMP-011). This wrapper keeps
+ * the detectors working on an already-loaded list, and it must not grow a second
+ * opinion about "current": that is how CMP-010 happened.
+ *
+ * Two kinds accumulate by run: `keyword_rank` (one projection per month) and
+ * `onpage_crawl` (one set of issues per crawl). Re-detecting over every historical
+ * run counted a query once per month and kept defects a later crawl had fixed.
  */
 export function selectCurrentEvidence(evidence: Evidence[]): Evidence[] {
-  const window = latestValue(evidence, "keyword_rank", "windowEnd");
+  const { current } = partitionByWindowRole(evidence.filter((row) => row.kind === "keyword_rank") as never);
+  const currentRankIds = new Set(current.map((row) => row.id));
   const crawl = latestValue(evidence, "onpage_crawl", "crawlId");
   return evidence.filter((row) => {
-    if (row.kind === "keyword_rank" && window) return dim(row, "windowEnd") === window;
+    if (row.kind === "keyword_rank") return currentRankIds.has(row.id);
     if (row.kind === "onpage_crawl" && crawl) return dim(row, "crawlId") === crawl;
     return true;
   });
 }
 
 /**
- * The comparison window's rank rows: the newest windowEnd that is older than the
- * current one. Empty when only one window has been projected.
+ * The comparison window's rank rows.
+ *
+ * CMP-010: this used to take the second-newest `windowEnd`, which for a daily
+ * rolling 28-day sync is yesterday's *current* window — the two spans shared 27 of
+ * 28 days, so 51 % of pairs differed by exactly 0 and O11 fired once. It now reads
+ * the window a writer labelled `previous`, through the same rule as
+ * `currentEvidence`.
  */
 export function previousWindowEvidence(evidence: Evidence[]): Evidence[] {
-  const windows = [...new Set(
-    byKind(evidence, "keyword_rank")
-      .map((row) => dim(row, "windowEnd"))
-      .filter((value): value is string => typeof value === "string" && value.length > 0)
-  )].sort();
-  if (windows.length < 2) return [];
-  const previous = windows[windows.length - 2];
-  return byKind(evidence, "keyword_rank").filter((row) => dim(row, "windowEnd") === previous);
+  const { previous } = partitionByWindowRole(evidence.filter((row) => row.kind === "keyword_rank") as never);
+  return previous as never;
 }
 
 /** @deprecated use selectCurrentEvidence; kept for callers that only rank evidence. */
@@ -565,7 +570,7 @@ const DETECTORS: Detector[] = [
       }
       const candidates: DetectorCandidate[] = [];
       for (const row of byKind(evidence, "keyword_rank")) {
-        const position = num(row, "provider:position") ?? num(row, "first_party:position");
+        const position = rankOf(row.metrics);
         if (position == null || position < 4 || position > 10) continue;
         const query = byQuery(row);
         if (isBrandQuery(query, ctx.brandTerms)) continue;
@@ -624,7 +629,7 @@ const DETECTORS: Detector[] = [
       byKind(evidence, "keyword_rank")
         .filter((row) => {
           if (isBrandQuery(byQuery(row), ctx.brandTerms)) return false;
-          const position = num(row, "provider:position") ?? num(row, "first_party:position");
+          const position = rankOf(row.metrics);
           const ctr = num(row, "first_party:ctr");
           const impressions = num(row, "first_party:impressions") ?? 0;
           if (position == null || ctr == null) return false;
@@ -635,7 +640,7 @@ const DETECTORS: Detector[] = [
           return striking || snippet;
         })
         .map((row) => {
-          const position = num(row, "provider:position") ?? num(row, "first_party:position")!;
+          const position = rankOf(row.metrics)!;
           const impressions = num(row, "first_party:impressions") ?? 0;
           const clicks = num(row, "first_party:clicks") ?? 0;
           const ctr = num(row, "first_party:ctr") ?? 0;
@@ -942,7 +947,7 @@ const DETECTORS: Detector[] = [
       for (const [query, rows] of urlsByQuery) {
         const competing = rows.filter((row) => {
           const impressions = num(row, "first_party:impressions") ?? 0;
-          const position = num(row, "provider:position") ?? num(row, "first_party:position");
+          const position = rankOf(row.metrics);
           return impressions >= DETECTOR_THRESHOLDS.minImpressions && position != null && position <= 30;
         });
         const urls = new Set(competing.map((row) => dim(row, "url") ?? "").filter(Boolean));
@@ -992,8 +997,8 @@ const DETECTORS: Detector[] = [
         const key = `${byQuery(row)}|${dim(row, "url") ?? ""}`;
         const before = previousByKey.get(key);
         if (!before) continue;
-        const currentPosition = num(row, "provider:position") ?? num(row, "first_party:position");
-        const previousPosition = num(before, "provider:position") ?? num(before, "first_party:position");
+        const currentPosition = rankOf(row.metrics);
+        const previousPosition = rankOf(before.metrics);
         const currentImpressions = num(row, "first_party:impressions") ?? 0;
         const previousImpressions = num(before, "first_party:impressions") ?? 0;
         if (currentPosition == null || previousPosition == null) continue;
@@ -1147,6 +1152,12 @@ export async function runDetectors(
   })) as Evidence[];
   const evidence = selectCurrentEvidence(allEvidence);
   const previousRank = previousWindowEvidence(allEvidence);
+  // One resolver, built once per run. Which cluster a query belongs to is a
+  // stored fact (an accepted membership row), not an inference, so it is read
+  // here and never guessed from the query's words.
+  const byQuery = await clusterByQuery(db, projectId);
+  const slugToId = new Map<string, string>();
+  for (const resolution of byQuery.values()) slugToId.set(resolution.slug, resolution.clusterId);
 
   const available = new Set(evidence.map((row) => row.kind));
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
@@ -1154,6 +1165,21 @@ export async function runDetectors(
     return missing.length > 0 ? [{ type: detector.type, missing }] : [];
   });
   const disabledTypes = new Set(disabled.map((entry) => entry.type));
+
+  /**
+   * The cluster an opportunity belongs to, or null when its query has no accepted
+   * membership row. Resolving from the dedup key's query is reading a stored fact
+   * back; a key whose segment matches no membership stays unclustered.
+   */
+  const clusterIdFor = (candidate: DetectorCandidate): string | null => {
+    const resolved = resolveCluster({
+      query: queryFromDedupKey(candidate.dedupKey),
+      slug: candidate.clusterSlug ?? null,
+      byQuery,
+      slugToId,
+    });
+    return resolved?.clusterId ?? null;
+  };
 
   let created = 0;
   let updated = 0;
@@ -1178,7 +1204,7 @@ export async function runDetectors(
         summary: candidate.summary,
         dedupKey: candidate.dedupKey,
         detectedBy,
-        clusterId: null,
+        clusterId: clusterIdFor(candidate),
         scoreInputs: candidate.scoreInputs,
         whyEvidenceIds: candidate.whyEvidenceIds,
         howEvidenceIds: candidate.howEvidenceIds,
@@ -1205,7 +1231,7 @@ export async function runDetectors(
       summary: candidate.summary,
       dedupKey: candidate.dedupKey,
       detectedBy,
-      clusterId: null,
+      clusterId: clusterIdFor(candidate),
       scoreInputs: candidate.scoreInputs,
       whyEvidenceIds: candidate.whyEvidenceIds,
       howEvidenceIds: candidate.howEvidenceIds,
