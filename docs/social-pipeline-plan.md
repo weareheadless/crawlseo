@@ -122,7 +122,12 @@ so it is the check that the brief holds only verified specifics.
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
 | SOC-014 | cicero | Social render + publish API for the delivery adapter | [#4](https://github.com/weareheadless/cicero/issues/4) — merged |
-| SOC-006 | crawlseo | meta_facebook delivery lane with receipts and idempotency | [#194](https://github.com/weareheadless/crawlseo/issues/194) |
+| SOC-006 | crawlseo | Publish an actioned opportunity through Cicero, once | [#194](https://github.com/weareheadless/crawlseo/issues/194) |
+
+SOC-006 is the whole lane: one function that asks `decideSocialPost`, calls
+Cicero's two endpoints and writes a `SocialPost` receipt. There is no adapter, no
+delivery state machine and no Meta code in CrawlSEO — Cicero owns the Page, the
+token and the draft flag, and a second publisher here would duplicate it.
 
 ### Cross-cutting
 
@@ -138,7 +143,7 @@ and is no longer on the social path.
 
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
-| SOC-008 | crawlseo | Cadence policy and decision telemetry | [#196](https://github.com/weareheadless/crawlseo/issues/196) |
+| SOC-008 | crawlseo | A weekly post cap, and a readout of the receipts | [#196](https://github.com/weareheadless/crawlseo/issues/196) |
 | SOC-015 | cicero | Retire Cicero's product surface and clean up the POC | [#5](https://github.com/weareheadless/cicero/issues/5) |
 
 ## Closed
