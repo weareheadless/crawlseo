@@ -1016,6 +1016,14 @@ model SiteProfile {
   /// task writes one native page per locale, not a translation.
   locales     Json?
   constraints Json?
+  /// Brand identity: name, logo reference, palette, fonts, voice sample. The one
+  /// record a renderer reads; Cicero's brands/<id>/brand.json is a cache at most.
+  /// `design` above is a scan of the site's stylesheets, kept to prefill this
+  /// block for a human — nothing renders from it.
+  brand           Json?
+  /// What the brand may promote: represented projects, developers and services,
+  /// plus the area it sells into. Read by the social eligibility gate.
+  representation  Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
