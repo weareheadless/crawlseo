@@ -9,6 +9,7 @@ import {
 } from "@/lib/dataforseo/client";
 import { ingestAiVisibility, type AiVisibilityObservation } from "@/lib/dataforseo/ai-visibility-adapter";
 import { normalizeSiteDomain, resolveRankedResult, sameSite, type ResolvedResult } from "@/lib/dataforseo/serp-attribution";
+import { extractSerpCompetitors } from "@/lib/dataforseo/serp-competitors";
 import { storeEvidenceRecord, type EvidenceDimensions } from "@/lib/funnel/evidence";
 import { decryptCredential } from "@/lib/encryption";
 import { projectConnectorBudget, reserveProjectConnectorBudget, settleConnectorBudget, ConnectorError } from "@/lib/connectors/service";
@@ -39,6 +40,15 @@ export type CollectionInput = {
    * the token is recorded in the reservation detail for audit.
    */
   attempt?: string;
+  /**
+   * The cluster each query belongs to, when the caller already resolved it.
+   *
+   * CMP-003 writes `competitor_rank` rows alongside a snapshot. Their cluster is a
+   * stored membership fact; rather than make this collector read the membership
+   * table on every SERP, the caller that knows it passes it. A query missing from
+   * this map is stored unclustered, never guessed.
+   */
+  clusterByQuery?: Map<string, string>;
 };
 
 export type CollectedEvidence = {
@@ -322,30 +332,15 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
       .map((item) => ({ item, resolved: resolveRankedResult(item) }))
       .filter((entry): entry is { item: typeof entry.item; resolved: ResolvedResult } => entry.resolved != null)
       .map(({ item, resolved }) => ({ ...item, resolvedUrl: resolved.url, resolvedDomain: resolved.domain }));
-    const site = normalizeSiteDomain(domain);
-    const ours = ranked
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => sameSite(item.resolvedDomain, site));
-    // Position comes from the provider's own absolute rank. The list index is
-    // only a fallback, and it is the index in the attributable list, so dropping
-    // an unattributable item cannot shift everyone up a place.
-    const ourRank = ours[0] ?? null;
-    const ourPosition = ourRank == null
-      ? 0
-      : (ourRank.item.rankAbsolute ?? ourRank.item.rank ?? ourRank.index + 1);
-    const aboveUs = ourPosition > 0
-      ? ranked.filter((item) => {
-          const absolute = item.rankAbsolute ?? item.rank ?? null;
-          // An item with no rank at all cannot be proven to be below us, and
-          // dropping it would understate the competition above.
-          return absolute == null ? true : absolute < ourPosition;
-        })
-      : ranked.slice();
+    // CMP-003: the competitor extraction lives in one place, shared with the
+    // backfill over SERPs that were paid for before these rows existed.
+    const extraction = extractSerpCompetitors({ organic: serp.result.organic, domain });
+    const ourPosition = extraction.ourPosition;
     // An empty (or all-wrapper) result set is not evidence that competitors cover
     // the query. It is evidence of nothing, which is what an absent dimension
     // says. A board must never read that as a gap.
-    const observed = ranked.length > 0;
-    const covered = observed && aboveUs.length > 0;
+    const observed = extraction.observed;
+    const covered = observed && extraction.competitors.length > 0;
 
     const metrics: Record<string, { value: number; unit: string; source: "provider" }> = {
       "provider:organicResults": { value: ranked.length, unit: "count", source: "provider" },
@@ -376,6 +371,39 @@ export async function collectSerpSnapshots(db: CollectionDb, input: CollectionIn
       metrics,
     });
     evidence.push({ id: stored.id, kind: "serp_snapshot", observedAt: new Date(), dimensions, metrics });
+
+    // CMP-003: the same snapshot already says who ranks where, so the competitor
+    // rows are written from this response rather than bought with a second call.
+    // Only domains above us are stored: for a query we lead, nobody is above us.
+    const competitorRows = extraction.competitors;
+
+    for (const competitor of competitorRows) {
+      // The cluster is a stored membership fact the caller resolved, not something
+      // to infer here: a query with no accepted membership stays unclustered.
+      const competitorDimensions: EvidenceDimensions = {
+        query,
+        domain: competitor.domain,
+        url: competitor.url,
+        rankAbsolute: competitor.position,
+        device: input.device ?? "desktop",
+        locale: `${input.languageCode}:${input.locationCode}`,
+        // The moment of the sample is part of the observation's identity: two
+        // monthly samples are two measurements, not one re-stated.
+        observedAt: new Date().toISOString().slice(0, 10),
+      };
+      const clusterSlug = input.clusterByQuery?.get(query);
+      if (clusterSlug) competitorDimensions.cluster = clusterSlug;
+      await storeEvidenceRecord(db, {
+        projectId: input.projectId,
+        siteId: input.siteId,
+        kind: "competitor_rank",
+        observedAt: new Date(),
+        producer: "dataforseo",
+        rawResponseId: raw.id,
+        dimensions: competitorDimensions,
+        metrics: { "provider:position": { value: competitor.position, unit: "rank", source: "provider" } },
+      });
+    }
   }
   return { evidence, spentMicros: spent };
 }

@@ -96,7 +96,10 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     producers: ["lib/dataforseo/collection"],
     dimensions: {
       required: ["query", "domain"],
-      optional: ["url", "rankAbsolute", "device", "locale", "observedAt"],
+      // `cluster` is attached when the query has an accepted membership, so the
+      // leaderboard can read one cluster without joining every membership. A query
+      // with no membership is stored unclustered, never guessed.
+      optional: ["url", "rankAbsolute", "device", "locale", "observedAt", "cluster"],
     },
     metrics: ["provider:position"],
     // Written per sampled SERP, not a rolling average.
