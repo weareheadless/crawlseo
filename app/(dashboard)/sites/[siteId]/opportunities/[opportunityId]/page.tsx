@@ -6,6 +6,7 @@ import { getUserIdFromCookies } from "@/lib/session-helper";
 import { getOpportunityDetail, type EvidenceLine } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
+import { ImpactPanel } from "@/components/funnel/impact-panel";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -43,6 +44,27 @@ export default async function OpportunityDetailPage({ params }: Props) {
 
   const detail = await getOpportunityDetail(db, opportunityId);
   if (!detail) notFound();
+
+  // CMP-005: the panel states the demand, its source and when it was observed. The
+  // observation date comes from the evidence the detector used, not from the row's
+  // creation time, so it describes the measurement rather than the record.
+  const supporting = await db.evidenceEdge.findFirst({
+    where: { toType: "opportunity", toId: opportunityId, relation: "supporting" },
+    select: { fromId: true },
+  });
+  const supportingRecord = supporting
+    ? await db.evidenceRecord.findUnique({
+        where: { id: supporting.fromId },
+        select: { observedAt: true, dimensions: true },
+      })
+    : null;
+  const impactContext = {
+    query:
+      typeof (supportingRecord?.dimensions as { query?: string } | null)?.query === "string"
+        ? ((supportingRecord?.dimensions as { query: string }).query)
+        : null,
+    observedAt: supportingRecord?.observedAt ?? null,
+  };
 
   const label = OPPORTUNITY_LABELS[detail.type];
   const decided = detail.status !== "detected";
@@ -95,6 +117,12 @@ export default async function OpportunityDetailPage({ params }: Props) {
       <ProposalPanel proposal={detail.proposal} />
 
       <DecisionSummaryPanel decision={detail.decision} />
+
+      <ImpactPanel
+        scoreInputs={detail.scoreInputs}
+        query={impactContext.query}
+        observedAt={impactContext.observedAt}
+      />
 
       <Stage number={1} title="Why this exists" subtitle="The evidence that produced this opportunity. Both legs, always shown.">
         <div className="grid gap-4 sm:grid-cols-2">
