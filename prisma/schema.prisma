@@ -233,6 +233,40 @@ enum EvidenceLeg {
 
 /// Decision-shaped object detected automatically from evidence. Scored with
 /// declared, recomputable inputs (plan §2.3); acceptance is a human call.
+/// One post produced from one opportunity, and what Cicero's receipt said.
+///
+/// This is a receipt, not a delivery pipeline: no queue states, no retries of
+/// its own, no Meta knowledge. A post exists only because a human actioned the
+/// opportunity, so the row is unique on it — one decision, one post, and a
+/// retry reads the row instead of posting again.
+model SocialPost {
+  id             String    @id @default(cuid())
+  opportunityId  String    @unique
+  projectId      String
+  channel        String    @default("facebook_page")
+  locale         String    @default("en")
+  /// published | draft | unknown — the receipt's own word, not a queue state.
+  /// `unknown` means a write may have reached Meta; it is never re-posted.
+  status         String
+  renderId       String?
+  providerPostId String?
+  caption        String    @default("")
+  contentHash    String    @default("")
+  gateAttempts   Int?
+  error          String    @default("")
+  /// When the human actioned the opportunity; the row keeps no second copy.
+  decidedAt      DateTime?
+  /// Null for `unknown`: nothing is known about when, or whether, it landed.
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, publishedAt])
+  @@index([projectId, status])
+}
+
 model Opportunity {
   id                 String              @id @default(cuid())
   projectId          String
@@ -275,6 +309,7 @@ model Opportunity {
   project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   cluster    DemandMapCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
   tasks      Task[]
+  socialPost SocialPost?
 
   @@unique([projectId, dedupKey])
   @@index([projectId, status])
