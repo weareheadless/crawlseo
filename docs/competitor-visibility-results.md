@@ -62,6 +62,13 @@ which queries they hold that we do not.
 **How you'd see it.** A cluster page that names the domains beating you and the
 specific queries they beat you on — not "competition: medium".
 
+One honest limit worth knowing: the provider's monthly bundle allows **10 sampled
+SERPs per site per month**, and the leaderboard is built from those samples. With
+more than 10 live opportunities on a site — which is most sites today — the
+leaderboard covers the top 10 and says which queries it did not sample. A
+leaderboard that quietly implied it covered everything would repeat the mistake
+this plan exists to fix.
+
 ---
 
 ## CMP-004 — Track a keyword grid weekly and chart its position history

@@ -163,8 +163,6 @@ configuration choice.
 
 | Work ID | Result an SEO can see | Depends on |
 |---|---|---|
-| [CMP-011](https://github.com/weareheadless/crawlseo/issues/176) | A reader with no writer fails the build; a board nobody can action fails the audit | CMP-001, CMP-002 |
-| [CMP-012](https://github.com/weareheadless/crawlseo/issues/177) | Priority reflects the fight we are in: difficulty, authority and page strength instead of three `0.5` literals | CMP-003, CMP-005, CMP-007 |
 | [CMP-001](https://github.com/weareheadless/crawlseo/issues/166) | A snapshot lists real ranking domains; our position is a real number or honestly absent | — |
 | [CMP-002](https://github.com/weareheadless/crawlseo/issues/167) | Every opportunity on the board belongs to the topic it serves | — |
 | [CMP-003](https://github.com/weareheadless/crawlseo/issues/168) | A competitor leaderboard per cluster: who ranks, where, for how many of our queries | CMP-001, CMP-002 |
@@ -175,6 +173,16 @@ configuration choice.
 | [CMP-008](https://github.com/weareheadless/crawlseo/issues/173) | A cluster scoreboard: our share of voice vs each competitor, and the queries we lose | CMP-003, CMP-004 |
 | [CMP-009](https://github.com/weareheadless/crawlseo/issues/174) | Proof per delivered task: did the position move, did we pass the competitor | CMP-004, CMP-008 |
 | [CMP-010](https://github.com/weareheadless/crawlseo/issues/175) | A "position declined" opportunity means the query declined, not that two days of one window differ | CMP-004 |
+| [CMP-011](https://github.com/weareheadless/crawlseo/issues/176) | A reader with no writer fails the build; a board nobody can action fails the audit | CMP-001, CMP-002 |
+| [CMP-012](https://github.com/weareheadless/crawlseo/issues/177) | Priority reflects the fight we are in: difficulty, authority and page strength instead of three `0.5` literals | CMP-003, CMP-005, CMP-007 |
+
+A caveat CMP-012 must carry: of 606 stored `provider:difficulty` values, **428 are
+`0`** and those rows have a median volume of **1,900**. A genuinely easy keyword
+does not search that much, so `0` is what the provider returns when it has nothing.
+Mapping `0` to a strong `serpCompetition` would promote the rows nobody measured,
+so `0` is treated as unmeasured. None of the 47 difficulty-bearing queries the
+current board cites are `0`, so this guards the grid work rather than today's
+board.
 
 ## Spend
 
@@ -186,7 +194,7 @@ cap reports the cap, it does not silently stop. Per site, per month:
 | Item | Volume | Cost |
 |---|---|---|
 | First-party weekly position history (Search Console rows we already store) | every tracked query, daily rows bucketed to weeks | **$0** |
-| Monthly competitor sample on the watch list | 24–28 queries (live opportunities + one head per cluster) | ~$0.06 |
+| Monthly competitor sample on the watch list | **≤10 queries**, the bundle's hard cap — live opportunities first, then one head per cluster, with the queries not sampled reported | ~$0.02 |
 | Monthly volume for the tracked grid | ~1,200 queries, re-bought only when the grid changes | ~$1.80 |
 | Backlink gap (one bulk call per competitor set) | ~5 domains | < $0.50 |
 | Competitor page fetches (cached 30 days, top 3 per opportunity) | ~60 URLs | $0 |
@@ -194,6 +202,13 @@ cap reports the cap, it does not silently stop. Per site, per month:
 
 Fleet total: about **$5/month** for all active sites, most of it the one-off grid
 volume; the SERP sampling itself is cents.
+
+One cost the table does not yet contain: **depth.** `executeDataForSeoOrganicSerp`
+requests `depth: 10` today and CMP-001 raises it to 100 to get the real organic
+block. Recorded provider cost is **$0.0036** per call at depth 10 (38 calls), and
+DataForSEO prices live SERP by depth, so this is not a like-for-like swap. The
+first depth-100 call must be measured and `BUNDLE_COST_ESTIMATES.serpPerQueryMicros`
+updated before the fleet runs, or `depth` chosen per query.
 
 ### Why not a weekly SERP sample
 
@@ -211,8 +226,12 @@ places. A weekly SERP would report a move smaller than the uncertainty of the da
 judging it. Bucketing the free daily rows into weeks does clear the noise: median
 weekly bucket-over-bucket movement is **3.00** on one site (957 queries with ≥4
 weeks) and **2.31** on another. The bundle also caps SERPs at 10 per site per
-month (`DEFAULT_BUNDLE_CAPS.serpQueries`), so a 300-query weekly grid is not
-reachable without a second collector buying the same fact.
+month (`DEFAULT_BUNDLE_CAPS.serpQueries`, enforced in `monthly-bundle.ts`), so a
+300-query weekly grid is not reachable without a second collector buying the same
+fact. **That cap also bounds the watch list**: an earlier version of this table
+budgeted 24–28 queries and the cap 25 lines below it said 10. The cap wins. When
+a site has more live opportunities than the cap allows, the surplus is counted
+and reported, never silently dropped.
 
 No new paid product is introduced. The trend comes from evidence we already hold;
 SERP spend only answers "who is there", monthly, on the queries we act on.
