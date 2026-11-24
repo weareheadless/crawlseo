@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 
 import type { PrismaClient, Prisma } from "@prisma/client";
 
-import type { EvidenceRecordKind } from "@prisma/client";
+import type { EvidenceRecord, EvidenceRecordKind } from "@prisma/client";
+
+import { EVIDENCE_KINDS, EVIDENCE_REGISTRY } from "@/lib/funnel/evidence-registry";
+
+export { EVIDENCE_KINDS, EVIDENCE_REGISTRY };
+export type { EvidenceKindSpec, EvidenceWindow } from "@/lib/funnel/evidence-registry";
 
 /**
  * Evidence store for the funnel spine (docs/seo-funnel-spine-plan.md §4).
@@ -71,27 +76,7 @@ export function requiresPaidProvenance(metrics: Record<string, MetricValue>): bo
   return Object.values(metrics).some((metric) => metric.source === "provider");
 }
 
-export const EVIDENCE_KINDS: readonly EvidenceRecordKind[] = [
-  "keyword_rank",
-  "keyword_metrics",
-  "serp_snapshot",
-  "serp_features",
-  "intent_label",
-  "competitor_rank",
-  "backlink_profile",
-  "share_of_voice",
-  "keyword_universe_membership",
-  "onpage_crawl",
-  "internal_link_graph",
-  "ai_visibility_observation",
-  "gsc_query",
-  "gsc_page",
-  "vitals",
-  "analytics",
-  "knowledge_fact",
-  "question_coverage",
-  "research_finding",
-];
+
 
 export function computeObservationHash(payload: EvidenceRecordPayload): string {
   const canonical = JSON.stringify({
@@ -123,9 +108,235 @@ function validateMetricLabel(label: string, metric: MetricValue): void {
   }
 }
 
-export type EvidenceDb = Pick<PrismaClient, "evidenceRecord" | "rawProviderResponse">;
+/**
+ * Reject a write whose shape its kind never declared.
+ *
+ * This is the whole point of the registry: before it, a writer could store a
+ * dimension or a metric label that no reader expects, or omit one a reader needs,
+ * and the build stayed green. The three rejections below each have a test.
+ */
+export function validateAgainstRegistry(input: EvidenceRecordPayload): void {
+  const spec = EVIDENCE_REGISTRY[input.kind];
+  if (!spec) {
+    throw new Error(`evidence kind "${String(input.kind)}" is not declared in EVIDENCE_REGISTRY`);
+  }
 
-export type StoredEvidenceRecord = {
+  // 1. Every dimension a reader needs must be present and non-empty.
+  for (const key of spec.dimensions.required) {
+    const value = input.dimensions[key];
+    const present = value != null && !(typeof value === "string" && value.trim() === "");
+    if (!present) {
+      throw new Error(
+        `evidence kind "${input.kind}" requires dimension "${key}" (declared in EVIDENCE_REGISTRY.dimensions.required)`
+      );
+    }
+  }
+
+  // 2. A dimension outside both lists is a typo nobody will ever read.
+  const declared = new Set([...spec.dimensions.required, ...spec.dimensions.optional]);
+  for (const key of Object.keys(input.dimensions)) {
+    if (!declared.has(key)) {
+      throw new Error(
+        `evidence kind "${input.kind}" stores undeclared dimension "${key}" (add it to EVIDENCE_REGISTRY if it is real)`
+      );
+    }
+  }
+
+  // 3. A metric label outside the list is a number no reader asked for.
+  const allowed = new Set(spec.metrics);
+  for (const label of Object.keys(input.metrics)) {
+    if (!allowed.has(label)) {
+      throw new Error(
+        `evidence kind "${input.kind}" stores undeclared metric label "${label}" (declared: ${spec.metrics.join(", ") || "none"})`
+      );
+    }
+  }
+}
+
+
+/** Every row at the newest observed instant. The one `sampled_point` rule. */
+export function latestSample<T extends { observedAt: Date }>(rows: T[]): T[] {
+  if (rows.length === 0) return [];
+  const latest = rows.reduce((max, row) => (row.observedAt > max ? row.observedAt : max), rows[0].observedAt);
+  return rows.filter((row) => row.observedAt.getTime() === latest.getTime());
+}
+
+/**
+ * The one place that decides which evidence row is "current".
+ *
+ * Before CMP-011 every reader re-implemented this: 44 `supersededById: null`
+ * filters across 22 files, and two different guesses at "the latest window" that
+ * disagreed. `detectors.ts` called `selectCurrentEvidence`, `previousWindowEvidence`
+ * took the second-newest `windowEnd` — which for a daily rolling 28-day sync is
+ * yesterday's *current* window, not the `previous`-role one — and the two spans
+ * shared 27 of 28 days. That is CMP-010: 291 pairs compared, 51 % identical, O11
+ * fired once; against the real `previous` window it fires 43 times.
+ *
+ * It honours the kind's declared window:
+ *  - `rolling_window` reads by `windowRole`. The current window is the one a
+ *    writer labelled `current`; the comparison window is the one labelled
+ *    `previous`. A kind with no role falls back to the newest `windowEnd`, because
+ *    un-migrated projects still only store one window.
+ *  - `single_point` keeps the latest row per identity.
+ *  - `sampled_point` keeps every row at the latest observed sample.
+ *
+ * `asOf` bounds the rows considered, so a replay reads the store as it was.
+ */
+export type CurrentEvidenceOptions = {
+  projectId: string;
+  kinds?: EvidenceRecordKind[];
+  siteId?: string | null;
+  /** Only rows observed at or before this instant. */
+  asOf?: Date;
+};
+
+type CurrentEvidenceRow = Pick<EvidenceRecord, "id" | "kind" | "observedAt" | "dimensions">;
+
+/** Identity of a single-point row: two observations of the same thing collide. */
+function identityOf(row: CurrentEvidenceRow): string {
+  const dimensions = (row.dimensions ?? {}) as Record<string, unknown>;
+  return `${row.kind}|${["url", "query", "question", "field", "findingId", "scope"]
+    .map((key) => (typeof dimensions[key] === "string" ? `${key}=${dimensions[key]}` : ""))
+    .filter(Boolean)
+    .join("|")}`;
+}
+
+/**
+ * Which rank wins when a row carries both a provider and a first-party position.
+ *
+ * One rule, declared, instead of the four identical
+ * `provider:position ?? first_party:position` expressions that were spread across
+ * the detectors. First-party wins: it is the site's own measured Search Console
+ * rank, while a provider rank is a single sample. The provider is the fallback,
+ * not the truth.
+ */
+export const RANK_PRECEDENCE: readonly string[] = ["first_party:position", "provider:position"];
+
+export function rankOf(metrics: unknown): number | null {
+  if (metrics == null || typeof metrics !== "object") return null;
+  const byLabel = metrics as Record<string, { value?: unknown } | undefined>;
+  for (const label of RANK_PRECEDENCE) {
+    const value = byLabel[label]?.value;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+export function partitionByWindowRole<T extends CurrentEvidenceRow>(
+  rows: T[]
+): { current: T[]; previous: T[]; pairs: Map<string, T> } {
+  const rankRows = rows.filter((row) => row.kind === "keyword_rank");
+  const roleOf = (row: T) => ((row.dimensions ?? {}) as { windowRole?: unknown }).windowRole;
+
+  // A new window pair is written on every sync, so "the current window" is the
+  // newest one, not every row ever labelled `current`. Measured on a daily sync:
+  // 18,424 rows labelled `current` spanning 30 days, and comparing all of them
+  // against all `previous` rows paired windows that do not follow one another.
+  //
+  // The window is identified by its `windowEnd`, not by `observedAt`: in
+  // production the two always agree (39,254 of 39,254 rank rows), but `windowEnd`
+  // is the field that says which period the number describes.
+  const windowEndOf = (row: T) => ((row.dimensions ?? {}) as { windowEnd?: unknown }).windowEnd;
+  const newestWindow = (list: T[]) => {
+    const ends = list.map(windowEndOf).filter((value): value is string => typeof value === "string").sort();
+    return ends.length > 0 ? ends[ends.length - 1] : null;
+  };
+
+  const declaredCurrent = rankRows.filter((row) => roleOf(row) === "current");
+  const declaredPrevious = rankRows.filter((row) => roleOf(row) === "previous");
+
+  if (declaredCurrent.length > 0 || declaredPrevious.length > 0) {
+    const currentAt = newestWindow(declaredCurrent);
+    const current = currentAt ? declaredCurrent.filter((row) => windowEndOf(row) === currentAt) : [];
+    // The comparison window is the newest one that does not overlap the current
+    // window. Overlap is what made CMP-010's two spans share 27 of 28 days.
+    const currentStarts = current
+      .map((row) => ((row.dimensions ?? {}) as { windowStart?: unknown }).windowStart)
+      .filter((value): value is string => typeof value === "string")
+      .sort();
+    const currentWindowStart = currentStarts[0] ?? null;
+    const eligible = declaredPrevious.filter((row) => {
+      if (!currentWindowStart) return true;
+      const end = windowEndOf(row);
+      return typeof end === "string" ? end < currentWindowStart : true;
+    });
+    const previousAt = newestWindow(eligible);
+    const previous = previousAt ? eligible.filter((row) => windowEndOf(row) === previousAt) : [];
+    return { current, previous, pairs: new Map() };
+  }
+
+  // A project whose writer never stored a role or a window: nothing says which
+  // period a row describes, so every row is kept. That is the documented legacy
+  // allowance — an un-migrated project still analyses — and it is the only case
+  // where "current" means "all of them".
+  const latest = newestWindow(rankRows);
+  if (!latest) return { current: rankRows, previous: [], pairs: new Map() };
+  const current = rankRows.filter((row) => windowEndOf(row) === latest);
+  return { current, previous: [], pairs: new Map() };
+}
+
+export async function currentEvidence(db: EvidenceDb, options: CurrentEvidenceOptions): Promise<EvidenceRecord[]> {
+  const rows = await db.evidenceRecord.findMany({
+    where: {
+      projectId: options.projectId,
+      siteId: options.siteId ?? undefined,
+      kind: options.kinds ? { in: options.kinds } : undefined,
+      supersededById: null,
+      observedAt: options.asOf ? { lte: options.asOf } : undefined,
+    },
+  });
+
+  const byKind = new Map<string, EvidenceRecord[]>();
+  for (const row of rows) {
+    const list = byKind.get(row.kind) ?? [];
+    list.push(row);
+    byKind.set(row.kind, list);
+  }
+
+  const out: EvidenceRecord[] = [];
+  for (const [kind, list] of byKind) {
+    const spec = EVIDENCE_REGISTRY[kind as EvidenceRecordKind];
+    if (spec?.window === "rolling_window") {
+      const { current } = partitionByWindowRole(list);
+      out.push(...current);
+      continue;
+    }
+    if (spec?.window === "sampled_point") {
+      out.push(...latestSample(list));
+      continue;
+    }
+    // single_point (and any undeclared shape): the latest row per identity.
+    const latest = new Map<string, EvidenceRecord>();
+    for (const row of list) {
+      const key = identityOf(row);
+      const held = latest.get(key);
+      if (!held || row.observedAt > held.observedAt) latest.set(key, row);
+    }
+    out.push(...latest.values());
+  }
+  return out;
+}
+
+/**
+ * The comparison window for rolling-window kinds, using the same rule as
+ * `currentEvidence`. Empty when the writer has only ever stored one window.
+ */
+export async function previousWindowEvidenceFromStore(
+  db: EvidenceDb,
+  options: { projectId: string; kinds?: EvidenceRecordKind[]; asOf?: Date }
+): Promise<EvidenceRecord[]> {
+  const rows = await db.evidenceRecord.findMany({
+    where: {
+      projectId: options.projectId,
+      kind: { in: (options.kinds ?? ["keyword_rank"]) as never },
+      supersededById: null,
+      observedAt: options.asOf ? { lte: options.asOf } : undefined,
+    },
+  });
+  return partitionByWindowRole(rows).previous;
+}
+
+export type EvidenceDb = Pick<PrismaClient, "evidenceRecord" | "rawProviderResponse">;export type StoredEvidenceRecord = {
   id: string;
   kind: EvidenceRecordKind;
   projectId: string;
@@ -171,6 +382,7 @@ export async function storeEvidenceRecord(
   for (const [label, metric] of Object.entries(input.metrics)) {
     validateMetricLabel(label, metric);
   }
+  validateAgainstRegistry(input);
 
   const observationHash = computeObservationHash(input);
   const record = await db.evidenceRecord.upsert({

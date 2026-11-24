@@ -52,10 +52,12 @@ describe("legacy claim derivation", () => {
 });
 
 describe("reassessment", () => {
+  // Every stored research_finding carries the finding it belongs to; a row without
+  // one cannot be re-verified against a claim and is not a valid record.
   const findingRow = (id: string, dimensions: Record<string, string | null>) => ({
     id,
     observedAt: new Date("2026-10-01T00:00:00.000Z"),
-    dimensions,
+    dimensions: { findingId: id, ...dimensions },
     metrics: {},
   });
 
