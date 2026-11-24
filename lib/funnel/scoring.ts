@@ -101,6 +101,18 @@ export type ScoreInputs = {
   assessment?: ImpactAssessment;
   /** Version of the assessment model, so an old index is identifiable. */
   assessmentVersion?: number;
+  /**
+   * CMP-012: where each winnability input came from, and when it was observed.
+   *
+   * Stored with the score so a board can show measured / estimated / assumed per input
+   * instead of presenting a typed-in 0.5 as a fair fight. Absent on rows scored before
+   * this existed, which is why every reader must tolerate `undefined` rather than assume
+   * provenance is known.
+   */
+  winProbabilitySource?: Partial<Record<keyof ScoreInputs["winProbability"], "measured" | "estimated" | "assumed">>;
+  winProbabilityObservedAt?: Partial<Record<keyof ScoreInputs["winProbability"], string>>;
+  /** One line per input that could not be measured, saying what is missing. */
+  winProbabilityMissing?: string[];
   /** separate multipliers, never folded into one number silently */
   evidenceCompleteness: EvidenceLeg; // which legs hold
   freshness: number; // 0–1, decays with evidence age
@@ -120,6 +132,20 @@ export const ASSESSMENT_VERSION = 2;
 
 /** Declared recovery for a technical or structured-data fix. */
 export const TECHNICAL_UPLIFT = 0.1;
+
+/**
+ * CMP-012: the winnability inputs that can be measured. `playTypeFactor` is not among them
+ * — it is a declared property of the play, so it is `assumed` by design and a row is not
+ * penalised for relying on it.
+ */
+export const MEASURABLE_WIN_INPUTS = ["rankDistance", "authorityGap", "pageStrength", "serpCompetition"] as const;
+
+/**
+ * The priority ceiling for a row whose winnability is entirely assumed.
+ *
+ * Not a drop and not a zero: the work is visible, and visibly low-confidence.
+ */
+export const ASSUMED_WIN_PROBABILITY_CEILING = 40;
 
 export const LEG_COMPLETENESS_MULTIPLIER: Record<EvidenceLeg, number> = {
   none: 0.25,
@@ -232,8 +258,21 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     Math.max(inputs.stability, 0);
   const value = scaled * multiplier;
 
+  /**
+   * CMP-012: a score whose winnability is entirely assumed must not reach the top band.
+   *
+   * Measured 2026-11-24: `pageStrength` and `serpCompetition` were the literal 0.5 on all
+   * 145 live opportunities, so the board ordered work by volume × rank distance ÷ effort
+   * and called the result a fair fight. The ceiling keeps such a row visible — the work is
+   * still real — while stopping a number nobody measured from topping the list.
+   */
+  const lowConfidence = MEASURABLE_WIN_INPUTS.every(
+    (key) => (inputs.winProbabilitySource?.[key] ?? "assumed") === "assumed"
+  );
+  const scoreValue = Math.max(0, Math.min(lowConfidence ? ASSUMED_WIN_PROBABILITY_CEILING : 100, Math.round(value * 100)));
+
   return {
-    scoreValue: Math.max(0, Math.min(100, Math.round(value * 100))),
+    scoreValue,
     inputs: withAssessment(inputs, assessment),
     impact: assessment,
   };

@@ -67,6 +67,12 @@ export type OpportunityRow = {
   /** Readiness from the decision contract, so the board can separate work from questions. */
   readiness: string | null;
   measurement: string | null;
+  /**
+   * CMP-012: how many of the four measurable winnability inputs were measured, and how
+   * many exist at all. A board row that says `0/4` is not a fair fight — it is a row whose
+   * difficulty, authority, page strength and SERP competition were never looked at.
+   */
+  winnability: { measured: number; measurable: number; lowConfidence: boolean };
   /** The Phase 3 lane, explicit when the row carries the proposal contract. */
   lane: OpportunityLane;
   /** The minimal Phase 3 proposal, when this row has one. */
@@ -253,6 +259,20 @@ export type OpportunityFilter = {
  * field: a hypothesis read as a recommendation is exactly the failure the contract
  * exists to prevent.
  */
+/**
+ * CMP-012: how much of this row's winnability is actually measured.
+ *
+ * Read from the declared source, never from "the value is not null": a legacy row holds the
+ * literal 0.5, and treating that as measured is precisely how the board came to present a
+ * typed-in fair fight as a measurement.
+ */
+export function winnabilityOf(inputs: unknown): { measured: number; measurable: number; lowConfidence: boolean } {
+  const measurable = ["rankDistance", "authorityGap", "pageStrength", "serpCompetition"] as const;
+  const source = (inputs as { winProbabilitySource?: Record<string, string> } | null)?.winProbabilitySource ?? {};
+  const measured = measurable.filter((key) => source[key] === "measured").length;
+  return { measured, measurable: measurable.length, lowConfidence: measured === 0 };
+}
+
 function decisionFromScoreInputs(inputs: unknown): OpportunityDetail["decision"] {
   const worth = (inputs as { worth?: Record<string, unknown> } | null)?.worth ?? {};
   const assessment = (inputs as { assessment?: { kind?: string; incrementalClicksPerMonth?: number | null } } | null)?.assessment;
@@ -468,6 +488,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       evidenceCount: rowEdges.length,
       readiness: canonical?.readiness ?? legacy.readiness,
       measurement: canonical ? canonical.benefits[0]?.measurement ?? "unquantified" : legacy.measurement,
+      winnability: winnabilityOf(row.scoreInputs),
       lane: proposal?.lane ?? fallbackLane(row.dimension),
       proposal,
     };
@@ -579,6 +600,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
     title: row.title,
     summary: row.summary,
     readiness: canonical?.readiness ?? decisionFromScoreInputs(row.scoreInputs).readiness,
+    winnability: winnabilityOf(row.scoreInputs),
     measurement: canonical
       ? canonical.benefits[0]?.measurement ?? "unquantified"
       : decisionFromScoreInputs(row.scoreInputs).measurement,

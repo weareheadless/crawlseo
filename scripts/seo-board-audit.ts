@@ -44,6 +44,15 @@ export type BoardAudit = {
   clustered: number;
   brandOnly: number;
   hasOutcome: number;
+  /**
+   * CMP-012: how many live rows carry a measured winnability input, and how many carry
+   * none. This is the number the ticket asks to report before and after: a board where
+   * every row is `0 of 4 measured` cannot tell a fair fight from a hopeless one.
+   */
+  winnabilityMeasured: number;
+  winnabilityAssumed: number;
+  /** Inputs measured across the live board, by name, so the gap is visible per input. */
+  winnabilityByInput: Record<string, number>;
   violations: string[];
 };
 
@@ -72,7 +81,7 @@ async function auditSite(db: PrismaClient, siteId: string): Promise<BoardAudit> 
     select: { domain: true, projectId: true },
   });
   if (!site?.projectId) {
-    return { site: site?.domain ?? siteId, live: 0, namesTarget: 0, newAsset: 0, targetAbsentFromCrawl: 0, targetNon200: 0, anchorsQuery: 0, queryInKey: 0, opaqueKey: 0, noQueryAnywhere: 0, demandMeasured: 0, demandUnmeasured: 0, clustered: 0, brandOnly: 0, hasOutcome: 0, violations: [] };
+    return { site: site?.domain ?? siteId, live: 0, namesTarget: 0, newAsset: 0, targetAbsentFromCrawl: 0, targetNon200: 0, anchorsQuery: 0, queryInKey: 0, opaqueKey: 0, noQueryAnywhere: 0, demandMeasured: 0, demandUnmeasured: 0, clustered: 0, brandOnly: 0, hasOutcome: 0, winnabilityMeasured: 0, winnabilityAssumed: 0, winnabilityByInput: {}, violations: [] };
   }
 
   const opportunities = await db.opportunity.findMany({
@@ -131,6 +140,9 @@ async function auditSite(db: PrismaClient, siteId: string): Promise<BoardAudit> 
     clustered: 0,
     brandOnly: 0,
     hasOutcome: 0,
+    winnabilityMeasured: 0,
+    winnabilityAssumed: 0,
+    winnabilityByInput: {},
     violations: [],
   };
 
@@ -171,6 +183,23 @@ async function auditSite(db: PrismaClient, siteId: string): Promise<BoardAudit> 
       }
     }
 
+    // CMP-012: count what was actually measured for this row's winnability.
+    const winnability = (opportunity.scoreInputs as {
+      winProbability?: Partial<Record<string, number | null>>;
+      winProbabilitySource?: Partial<Record<string, string>>;
+    } | null) ?? null;
+    const measurable = ["rankDistance", "authorityGap", "pageStrength", "serpCompetition"];
+    // `measured` comes from the declared source, never from "the value is not null". A
+    // legacy row holds the literal 0.5, so counting non-null values reported 142 of 144 as
+    // measured and would have declared the defect fixed while every row still carried the
+    // constant.
+    const measuredInputs = measurable.filter((key) => winnability?.winProbabilitySource?.[key] === "measured");
+    if (measuredInputs.length > 0) audit.winnabilityMeasured += 1;
+    else audit.winnabilityAssumed += 1;
+    for (const key of measuredInputs) {
+      audit.winnabilityByInput[key] = (audit.winnabilityByInput[key] ?? 0) + 1;
+    }
+
     const assessment = (opportunity.scoreInputs as { assessment?: { kind?: string } } | null)?.assessment;
     if (assessment?.kind === "measured" || assessment?.kind === "estimated") audit.demandMeasured += 1;
     else audit.demandUnmeasured += 1;
@@ -208,11 +237,11 @@ async function main() {
 
   const live = audits.filter((entry) => entry.live > 0);
   process.stdout.write(
-    `${"site".padEnd(26)}${"live".padStart(5)}${"page".padStart(6)}${"new".padStart(5)}${"gone".padStart(6)}${"non200".padStart(7)}${"query".padStart(6)}${"hash".padStart(6)}${"noQ".padStart(5)}${"meas".padStart(6)}${"hypo".padStart(6)}${"topic".padStart(6)}${"brand".padStart(6)}\n`
+    `${"site".padEnd(26)}${"live".padStart(5)}${"page".padStart(6)}${"new".padStart(5)}${"gone".padStart(6)}${"non200".padStart(7)}${"query".padStart(6)}${"hash".padStart(6)}${"noQ".padStart(5)}${"meas".padStart(6)}${"hypo".padStart(6)}${"topic".padStart(6)}${"brand".padStart(6)}${"win".padStart(5)}${"asm".padStart(5)}\n`
   );
   for (const entry of live) {
     process.stdout.write(
-      `${entry.site.padEnd(26)}${String(entry.live).padStart(5)}${String(entry.namesTarget).padStart(6)}${String(entry.newAsset).padStart(5)}${String(entry.targetAbsentFromCrawl).padStart(6)}${String(entry.targetNon200).padStart(7)}${String(entry.anchorsQuery).padStart(6)}${String(entry.opaqueKey).padStart(6)}${String(entry.noQueryAnywhere).padStart(5)}${String(entry.demandMeasured).padStart(6)}${String(entry.demandUnmeasured).padStart(6)}${String(entry.clustered).padStart(6)}${String(entry.brandOnly).padStart(6)}\n`
+      `${entry.site.padEnd(26)}${String(entry.live).padStart(5)}${String(entry.namesTarget).padStart(6)}${String(entry.newAsset).padStart(5)}${String(entry.targetAbsentFromCrawl).padStart(6)}${String(entry.targetNon200).padStart(7)}${String(entry.anchorsQuery).padStart(6)}${String(entry.opaqueKey).padStart(6)}${String(entry.noQueryAnywhere).padStart(5)}${String(entry.demandMeasured).padStart(6)}${String(entry.demandUnmeasured).padStart(6)}${String(entry.clustered).padStart(6)}${String(entry.brandOnly).padStart(6)}${String(entry.winnabilityMeasured).padStart(5)}${String(entry.winnabilityAssumed).padStart(5)}\n`
     );
   }
 
@@ -232,14 +261,26 @@ async function main() {
       clustered: sum.clustered + entry.clustered,
       brandOnly: sum.brandOnly + entry.brandOnly,
       hasOutcome: sum.hasOutcome + entry.hasOutcome,
+      winnabilityMeasured: sum.winnabilityMeasured + entry.winnabilityMeasured,
+      winnabilityAssumed: sum.winnabilityAssumed + entry.winnabilityAssumed,
     }),
-    { live: 0, namesTarget: 0, newAsset: 0, targetAbsentFromCrawl: 0, targetNon200: 0, anchorsQuery: 0, queryInKey: 0, opaqueKey: 0, noQueryAnywhere: 0, demandMeasured: 0, demandUnmeasured: 0, clustered: 0, brandOnly: 0, hasOutcome: 0 }
+    { live: 0, namesTarget: 0, newAsset: 0, targetAbsentFromCrawl: 0, targetNon200: 0, anchorsQuery: 0, queryInKey: 0, opaqueKey: 0, noQueryAnywhere: 0, demandMeasured: 0, demandUnmeasured: 0, clustered: 0, brandOnly: 0, hasOutcome: 0, winnabilityMeasured: 0, winnabilityAssumed: 0 }
   );
   process.stdout.write(
     `\n${total.live} live opportunities across ${live.length} sites ` +
       `(unmeasured impact: ${total.demandUnmeasured}; no page named: ${total.live - total.namesTarget - total.newAsset}; ` +
       `query in key: ${total.queryInKey}; query only in cited evidence: ${total.anchorsQuery - total.queryInKey}; ` +
-      `no query anywhere: ${total.noQueryAnywhere}; unclustered: ${total.live - total.clustered})\n`
+      `no query anywhere: ${total.noQueryAnywhere}; unclustered: ${total.live - total.clustered})\n` +
+      `winnability CMP-012: ${total.winnabilityMeasured} live row(s) with at least one measured input, ` +
+      `${total.winnabilityAssumed} with none\n` +
+      `  measured by input: ${Object.entries(
+        audits.reduce<Record<string, number>>((acc, entry) => {
+          for (const [key, count] of Object.entries(entry.winnabilityByInput)) acc[key] = (acc[key] ?? 0) + count;
+          return acc;
+        }, {})
+      )
+        .map(([key, count]) => `${key}=${count}`)
+        .join(" ") || "none"}\n`
   );
 
   const violations = live.flatMap((entry) => entry.violations.map((violation) => `${entry.site}: ${violation}`));

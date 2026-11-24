@@ -6,6 +6,8 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { ctrAtPosition } from "@/lib/funnel/scoring";
+import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
+import { resolveWinProbability } from "@/lib/funnel/win-probability";
 import {
   comparePriority,
   foundationsGate,
@@ -68,7 +70,47 @@ export type ProposalGenerationDb = OpportunityDb &
     | "demandMapCluster"
     | "evidenceRecord"
     | "opportunity"
+    // CMP-012: reading a page's own facts needs the crawl.
+    | "crawl"
+    | "auditPage"
   >;
+
+/**
+ * CMP-012: replace a proposal's winnability literals with stored facts, or null.
+ *
+ * The generator produces a score before anything is measured; that is fine for volume and
+ * effort, but "how likely are we to win" is a claim about a SERP. Measured 2026-11-24:
+ * `phase3:topic-map` rows carried `pageStrength: 0.5` and `serpCompetition: 0.5` on every
+ * one, and those are exactly the rows the board was sorting by.
+ */
+async function withMeasuredWinnability(
+  db: ProposalGenerationDb,
+  input: {
+    projectId: string;
+    siteId: string;
+    dedupKey: string;
+    targetUrl: string | null;
+    inputs: ReturnType<typeof proposalScoreInputs>;
+  }
+): Promise<ReturnType<typeof proposalScoreInputs>> {
+  const resolved = await resolveWinProbability(db as never, {
+    projectId: input.projectId,
+    siteId: input.siteId,
+    query: queryFromDedupKey(input.dedupKey),
+    rankDistance: (input.inputs.winProbability.rankDistance as number | null) ?? null,
+    playTypeFactor: (input.inputs.winProbability.playTypeFactor as number | null) ?? 0.6,
+    targetUrl: input.targetUrl,
+  });
+  return {
+    ...input.inputs,
+    winProbability: resolved.winProbability,
+    winProbabilitySource: resolved.provenance.source,
+    winProbabilityObservedAt: Object.fromEntries(
+      Object.entries(resolved.provenance.observedAt).map(([key, value]) => [key, (value as Date).toISOString()])
+    ),
+    winProbabilityMissing: resolved.provenance.missing,
+  } as never;
+}
 
 export type ProposalInputs = {
   site: { id: string; domain: string; projectId: string };
@@ -198,7 +240,8 @@ export function proposalScoreInputs(
   cluster: TopicCluster | null
 ): {
   worth: Record<string, unknown>;
-  winProbability: Record<string, number>;
+  // CMP-012: nullable, because an unmeasured input is `null` and not a neutral default.
+  winProbability: Record<string, number | null>;
   effort: { playTypeBase: number; sizeFactor: number };
   freshness: number;
   stability: number;
@@ -239,11 +282,15 @@ export function proposalScoreInputs(
       technical: false,
       unmeasured: !volume,
     },
+    // CMP-012: no literals here. A generated proposal has measured nothing yet, so every
+    // input is null and the row scores as low-confidence until the resolver reads a stored
+    // fact. `playTypeFactor` is the single permitted constant: a declared property of the
+    // play, not a claim about this SERP.
     winProbability: {
-      rankDistance: 0.5,
-      authorityGap: 0.5,
-      pageStrength: 0.5,
-      serpCompetition: 0.5,
+      rankDistance: null,
+      authorityGap: null,
+      pageStrength: null,
+      serpCompetition: null,
       playTypeFactor: 0.6,
     },
     effort: { playTypeBase: 8, sizeFactor },
@@ -493,7 +540,18 @@ export async function storeProposals(
         dedupKey: proposal.dedupKey,
         detectedBy: input.detectedBy ?? "phase3:topic-map",
         clusterId: proposal.topicSlug ? clusterIdBySlug.get(proposal.topicSlug) ?? null : null,
-        scoreInputs: proposalScoreInputs(proposal, cluster) as never,
+        // CMP-012: the generated inputs are a starting point; the winnability inputs are
+        // replaced by stored facts at this single place, so a proposal cannot carry a
+        // literal into a score. A proposal whose query has no stored difficulty, no
+        // referring-domain sets and no crawled target page gets nulls, and the row is
+        // visibly low-confidence rather than a fabricated fair fight.
+        scoreInputs: await withMeasuredWinnability(db, {
+          projectId: input.projectId,
+          siteId: input.siteId,
+          dedupKey: proposal.dedupKey,
+          targetUrl: proposal.target.url ?? null,
+          inputs: proposalScoreInputs(proposal, cluster),
+        }) as never,
         whyEvidenceIds,
         howEvidenceIds: howEvidenceIds.length > 0 ? howEvidenceIds : proposal.evidenceRefs.slice(0, 4),
         recommendationDecision: {
