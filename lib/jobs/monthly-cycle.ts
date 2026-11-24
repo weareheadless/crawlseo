@@ -4,6 +4,7 @@ import { enqueueJob } from "@/lib/jobs/queue";
 import { createResearchRun } from "@/lib/research/service";
 import { resolveSiteContext } from "@/lib/site/context";
 import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
+import { sweepDeliveredOutcomes } from "@/lib/funnel/outcome-measurement";
 
 /**
  * The monthly cycle, for every site.
@@ -22,7 +23,7 @@ import { ensureTenantAnalysis } from "@/lib/tenants/analysis";
  */
 
 export type MonthlyCycleStage = {
-  stage: "crawl" | "search-console" | "research";
+  stage: "crawl" | "search-console" | "research" | "outcome";
   status: "queued" | "skipped" | "failed";
   detail: string;
 };
@@ -150,6 +151,10 @@ export async function runMonthlyCycle(
     }
 
     // 3. Research: the market evidence that becomes the why leg.
+    //
+    // `researchEnabled` is what lets a site with research switched off skip only the
+    // research stage: the outcome sweep below still has to run.
+    let researchEnabled = true;
     const researchKey = key("research");
     const existingRun = await db.researchRun.findFirst({ where: { siteId: site.id, scheduleKey: researchKey }, select: { id: true } });
     if (existingRun) {
@@ -160,10 +165,17 @@ export async function runMonthlyCycle(
       if (site.researchPolicy && site.researchPolicy.enabled === false) {
         // The owner switched research off. Crawl and search-console still run, but
         // no run is created — and the skip is reported rather than silent.
+        //
+        // CMP-009: this must NOT skip the outcome sweep below. Whether the work we
+        // already shipped did anything is a different question from whether to research
+        // more, and `continue` here left a site that turned research off permanently
+        // unmeasured. The flag is carried out of the branch instead, so the rest of the
+        // cycle still runs.
         stages.push({ stage: "research", status: "skipped", detail: "research disabled by the owner" });
-        results.push({ siteId: site.id, domain: site.domain, month, stages });
-        continue;
+        researchEnabled = false;
       }
+    }
+    if (researchEnabled && !existingRun && !opts.dryRun) {
       // Re-read the profile: the bootstrap above may have derived topics in this
       // same pass, and the site row was loaded before it ran.
       const freshProfile = await db.siteProfile.findUnique({
@@ -204,6 +216,40 @@ export async function runMonthlyCycle(
         } catch (error) {
           stages.push({ stage: "research", status: "failed", detail: error instanceof Error ? error.message.slice(0, 120) : "failed" });
         }
+      }
+    }
+
+    // 4. Outcome: measure delivered work against the baseline captured at acceptance.
+    //
+    // This is a sweep, not a job: it reads evidence already stored, writes nothing that
+    // costs money, and runs even when research is switched off — whether the work we
+    // shipped did anything is a different question from whether to research more. A task
+    // measured before its window closes is reported as waiting, never as unchanged.
+    if (opts.dryRun) {
+      stages.push({ stage: "outcome", status: "queued", detail: "would sweep delivered tasks" });
+    } else {
+      try {
+        // The site query filters to `projectId: { not: null }`, so this is set; the
+        // guard keeps TypeScript honest rather than asserting it away.
+        if (!site.projectId) throw new Error("site has no project");
+        const sweep = await sweepDeliveredOutcomes(db, {
+          projectId: site.projectId,
+          now,
+        });
+        stages.push({
+          stage: "outcome",
+          status: sweep.measured > 0 || sweep.waiting > 0 || sweep.unmeasurable > 0 || sweep.unbaselined > 0 ? "queued" : "skipped",
+          detail:
+            `${sweep.measured} measured, ${sweep.waiting} waiting for the window, ` +
+            `${sweep.unmeasurable} unmeasurable, ${sweep.unbaselined} unbaselined, ` +
+            `${sweep.alreadyMeasured} already measured`,
+        });
+      } catch (error) {
+        stages.push({
+          stage: "outcome",
+          status: "failed",
+          detail: error instanceof Error ? error.message.slice(0, 120) : "failed",
+        });
       }
     }
 

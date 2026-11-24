@@ -120,7 +120,13 @@ export function StatusChip({ status }: { status: string }) {
 
 export function VerdictChip({ verdict }: { verdict: string }) {
   const tone: Tone =
-    verdict === "verified_win" ? "success" : verdict === "regression" ? "danger" : verdict === "no_effect" ? "warning" : "neutral";
+    verdict === "verified_win" || verdict === "improved"
+      ? "success"
+      : verdict === "declined" || verdict === "regression"
+        ? "danger"
+        : verdict === "no_effect" || verdict === "unchanged"
+          ? "warning"
+          : "neutral";
   return <Chip tone={tone}>{VERDICT_LABELS[verdict] ?? verdict}</Chip>;
 }
 

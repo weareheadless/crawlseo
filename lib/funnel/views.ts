@@ -788,6 +788,13 @@ export type TaskRow = {
   opportunityScore: number | null;
   hasOutcome: boolean;
   verdict: string | null;
+  /**
+   * The measured verdict (`improved` / `unchanged` / `declined`), which is finer than the
+   * schema enum. Null when nothing was measured, so a list never implies a result.
+   */
+  verdictDetail: string | null;
+  /** Signed places moved, when measured. Null is "not measured", never zero. */
+  positionDelta: number | null;
 };
 
 export async function listTasks(db: FunnelDb, projectId: string, statuses?: TaskStatus[]): Promise<TaskRow[]> {
@@ -807,7 +814,14 @@ export async function listTasks(db: FunnelDb, projectId: string, statuses?: Task
       humanConfirmedAt: true,
       createdAt: true,
       opportunity: { select: { id: true, title: true, type: true, scoreValue: true } },
-      outcomeObservations: { select: { verdict: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      // CMP-009: the schema enum cannot express `improved`, which collapses to
+      // `no_effect`. The measured verdict travels in `afterMetrics`, so a real
+      // improvement is shown as one instead of as "No effect".
+      outcomeObservations: {
+        select: { verdict: true, afterMetrics: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   });
   return tasks.map((task) => ({
@@ -825,6 +839,14 @@ export async function listTasks(db: FunnelDb, projectId: string, statuses?: Task
     opportunityScore: task.opportunity.scoreValue,
     hasOutcome: task.outcomeObservations.length > 0,
     verdict: task.outcomeObservations[0]?.verdict ?? null,
+    verdictDetail:
+      ((task.outcomeObservations[0]?.afterMetrics ?? null) as { verdict?: unknown } | null)?.verdict as
+        | string
+        | null
+        | undefined ?? null,
+    positionDelta:
+      ((task.outcomeObservations[0]?.afterMetrics ?? null) as { positionDelta?: unknown } | null)
+        ?.positionDelta as number | null | undefined ?? null,
   }));
 }
 
@@ -885,6 +907,26 @@ export type FunnelOverview = {
   topOpportunities: OpportunityRow[];
   tasks: TaskRow[];
   recentVerdicts: Array<{ verdict: string; count: number }>;
+  /**
+   * CMP-009: what the system delivered against what it actually checked.
+   *
+   * The product's definition of done requires accepted work to be measured, so the
+   * overview has to show the gap rather than a verdict count that reads like success.
+   * `measured` is the number of `OutcomeObservation` rows; it reconciles with the table
+   * by construction because it is counted from it.
+   */
+  outcomeCoverage: {
+    /** Tasks in `delivered`. */
+    delivered: number;
+    /** Delivered tasks that carry at least one measurement. */
+    measured: number;
+    /** Delivered with a baseline captured and the window still open. */
+    pending: number;
+    /** Delivered with no baseline, so it can never be measured. */
+    unbaselined: number;
+    /** OutcomeObservation rows, which must equal `measured`. */
+    observationRows: number;
+  };
   evidenceTotal: number;
   clusters: number;
 };
@@ -901,6 +943,32 @@ export async function getFunnelOverview(db: FunnelDb, projectId: string): Promis
       select: { verdict: true },
     }),
   ]);
+
+  // CMP-009's coverage, counted from the rows themselves rather than assembled from
+  // several queries that could drift: `measured` and `observationRows` are the same
+  // number by construction, and the delivered list is the denominator.
+  const deliveredTasks = await db.task.findMany({
+    where: { status: "delivered", opportunity: { projectId } },
+    select: {
+      id: true,
+      baselines: { select: { id: true, metrics: true }, orderBy: { observedAt: "desc" }, take: 1 },
+      _count: { select: { outcomeObservations: true } },
+    },
+  });
+  const observationRows = outcomes.length;
+  let measuredDelivered = 0;
+  let baselinedPending = 0;
+  let unbaselined = 0;
+  for (const task of deliveredTasks) {
+    if (task._count.outcomeObservations > 0) {
+      measuredDelivered += 1;
+      continue;
+    }
+    const stored = (task.baselines[0]?.metrics ?? null) as { unobserved?: boolean; position?: number | null } | null;
+    const hasBaseline = stored != null && stored.unobserved !== true && stored.position != null;
+    if (hasBaseline) baselinedPending += 1;
+    else unbaselined += 1;
+  }
   const verdictCounts = new Map<string, number>();
   for (const row of outcomes) verdictCounts.set(row.verdict, (verdictCounts.get(row.verdict) ?? 0) + 1);
   return {
@@ -908,6 +976,13 @@ export async function getFunnelOverview(db: FunnelDb, projectId: string): Promis
     topOpportunities: topOpportunities.slice(0, 5),
     tasks: tasks.slice(0, 5),
     recentVerdicts: [...verdictCounts.entries()].map(([verdict, count]) => ({ verdict, count })),
+    outcomeCoverage: {
+      delivered: deliveredTasks.length,
+      measured: measuredDelivered,
+      pending: baselinedPending,
+      unbaselined,
+      observationRows,
+    },
     evidenceTotal,
     clusters,
   };
