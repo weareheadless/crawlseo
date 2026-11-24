@@ -296,6 +296,8 @@ async function main(): Promise<void> {
       map,
       marketScope: map.marketScope,
       evidenceByCluster: evidenceCatalogue,
+      // Queries no topic could claim still reach the model, with who holds them.
+      unfiledCompetitors: evidenceSelection.unfiled,
       aeoQuestions: aeoEvidence.map((row) => ({
         id: row.id,
         question: row.question,

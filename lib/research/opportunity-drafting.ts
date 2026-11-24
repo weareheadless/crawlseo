@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import type { MarketScopeConfig } from "@/lib/site/market-scope";
+import type { UnfiledCompetitorQuery } from "@/lib/research/opportunity-evidence";
 import type { TopicCluster, TopicMap } from "@/lib/research/topic-map";
 import type {
   Proposal,
@@ -81,6 +82,15 @@ export type DraftInput = {
   knowledgeFacts?: DraftEvidence[];
   /** Site-level crawl defects the model can turn into technical proposals. */
   technicalEvidence?: DraftEvidence[];
+  /**
+   * Queries a paid SERP sampled that no topic could claim, with who holds them.
+   *
+   * These are the queries the site has no page *and* no topic for, so nothing else in the
+   * payload can carry them. Measured 2026-11-24 on atelier-harmonie: `tapisserie de siège`
+   * had 12 competitor rows naming `bucherie.com` at #1, no cluster, and no keyword-universe
+   * row at all — real demand with a named incumbent that the model never saw.
+   */
+  unfiledCompetitors?: UnfiledCompetitorQuery[];
   now: Date;
 };
 
@@ -350,6 +360,7 @@ const SYSTEM = [
   "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
   "A cluster's competitors field states who holds its queries. Each query gives ourPosition, nearestAbove (the domain one or a few places above us, with how many places) and leader (the domain at the top). Act on nearestAbove, not the leader: taking one place from the domain just above us is a rewrite, while beating a leader 40 places up is a different project. Say which domain the work is aimed at and cite that competitor's evidence id. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
   "When ourPosition is null we do not rank for the query at all. That is the largest gap there is: say so plainly and name the sampled domains that hold it, rather than treating a missing position as position zero.",
+  "unfiledCompetitors lists queries a sampled SERP found and no topic could claim, with who holds each one. They are demand the site has no page and no cluster for. Treat them as real opportunities: propose against them when the market scope fits the business, name the sampled domain holding the query and cite its evidenceId, and set topicSlug to null because they belong to no topic. Do not invent a topic for them and do not fold them into an unrelated cluster. If the business genuinely does not serve the query, say nothing about it rather than proposing it.",
   "Our own position and a competitor's position are different numbers. Never present a competitor's rank as ours, and never describe a query as a gap without saying who is ahead of us or that nobody was sampled.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
@@ -508,6 +519,26 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   for (const cluster of clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) allowedEvidence.set(row.id, row);
   }
+  /**
+   * An unfiled competitor row must be citable, or the proposal citing it fails validation
+   * and the whole observation is lost again — the exact failure this exists to fix.
+   */
+  for (const row of input.unfiledCompetitors ?? []) {
+    for (const competitor of row.competitors) {
+      if (allowedEvidence.has(competitor.evidenceId)) continue;
+      allowedEvidence.set(competitor.evidenceId, {
+        id: competitor.evidenceId,
+        kind: "competitor_rank",
+        query: row.query,
+        position: null,
+        impressions: null,
+        volume: null,
+        url: null,
+        domain: competitor.domain,
+        rank: competitor.position,
+      });
+    }
+  }
   for (const row of input.technicalEvidence ?? []) allowedEvidence.set(row.id, row);
   for (const row of input.knowledgeFacts ?? []) allowedEvidence.set(row.id, row);
 
@@ -535,6 +566,19 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       clusters: batch.map((cluster) =>
         clusterPayload(cluster, input.evidenceByCluster.get(cluster.slug) ?? [])
       ),
+      /**
+       * Queries nobody filed. Sent on every batch, not once: a batch is a transport unit
+       * and the model must be able to act on these whichever batch it is reading.
+       */
+      unfiledCompetitors: (input.unfiledCompetitors ?? []).map((row) => ({
+        query: row.query,
+        ourPosition: row.ourPosition == null ? null : Number(row.ourPosition.toFixed(1)),
+        competitors: row.competitors.slice(0, 4).map((competitor) => ({
+          domain: competitor.domain,
+          position: competitor.position,
+          evidenceId: competitor.evidenceId,
+        })),
+      })),
     };
     try {
       const parsed = await chatJson({

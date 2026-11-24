@@ -83,6 +83,31 @@ export type ProposalGenerationDb = OpportunityDb &
  * `phase3:topic-map` rows carried `pageStrength: 0.5` and `serpCompetition: 0.5` on every
  * one, and those are exactly the rows the board was sorting by.
  */
+/**
+ * The query a cluster's winnability should be measured on.
+ *
+ * A cluster is many queries and the score needs one, so it takes the one with the most
+ * observed impressions: that is the query the cluster is actually competing for, and it
+ * is arithmetic on a measured number rather than a guess about wording. Ties break on
+ * volume, then on the spelling, so the same cluster always yields the same query.
+ *
+ * Returns `null` for a cluster with no measured query, which leaves the inputs `null` and
+ * the row visibly low-confidence — the honest outcome, not a default.
+ */
+function leadQueryFor(cluster: TopicCluster | null): string | null {
+  if (!cluster || cluster.queries.length === 0) return null;
+  const ranked = cluster.queries
+    .filter((query) => typeof query.query === "string" && query.query.trim() !== "")
+    .slice()
+    .sort(
+      (a, b) =>
+        (b.impressions ?? 0) - (a.impressions ?? 0) ||
+        (b.volume ?? 0) - (a.volume ?? 0) ||
+        a.query.localeCompare(b.query)
+    );
+  return ranked[0]?.query ?? null;
+}
+
 async function withMeasuredWinnability(
   db: ProposalGenerationDb,
   input: {
@@ -90,13 +115,24 @@ async function withMeasuredWinnability(
     siteId: string;
     dedupKey: string;
     targetUrl: string | null;
+    /**
+     * The cluster's own lead query, when the proposal belongs to a topic.
+     *
+     * `queryFromDedupKey` reads the query out of a dedup key, but a `phase3:` key is
+     * `phase3:<lane>:<hash>` — it carries no query at all. Measured 2026-11-24: 1 of 23
+     * open opportunities resolved to a query, so `serpCompetition`, `authorityGap` and
+     * `pageStrength` were `assumed` on 22 of them and the board was ordered without ever
+     * looking at the SERP. The cluster knows its query; this passes it in rather than
+     * pretending the key has one.
+     */
+    query: string | null;
     inputs: ReturnType<typeof proposalScoreInputs>;
   }
 ): Promise<ReturnType<typeof proposalScoreInputs>> {
   const resolved = await resolveWinProbability(db as never, {
     projectId: input.projectId,
     siteId: input.siteId,
-    query: queryFromDedupKey(input.dedupKey),
+    query: queryFromDedupKey(input.dedupKey) ?? input.query,
     rankDistance: (input.inputs.winProbability.rankDistance as number | null) ?? null,
     playTypeFactor: (input.inputs.winProbability.playTypeFactor as number | null) ?? 0.6,
     targetUrl: input.targetUrl,
@@ -550,6 +586,7 @@ export async function storeProposals(
           siteId: input.siteId,
           dedupKey: proposal.dedupKey,
           targetUrl: proposal.target.url ?? null,
+          query: leadQueryFor(cluster),
           inputs: proposalScoreInputs(proposal, cluster),
         }) as never,
         whyEvidenceIds,

@@ -337,6 +337,58 @@ describe("CMP-003 the model is told who holds each query", () => {
   });
 });
 
+describe("CMP-003 an accented query and its unaccented spelling are one query", () => {
+  const unaccented = (id: string, query: string, domain: string, position: number) =>
+    row({
+      id,
+      kind: "competitor_rank",
+      // The sampled SERP wrote the query without the accent the topic map used.
+      dimensions: { query, domain, rankAbsolute: position, observedAt: "2026-11-24", cluster: "seats" },
+      metrics: { "provider:position": { value: position, unit: "rank", source: "provider" } },
+    });
+
+  it("files an unaccented sampled SERP under the accented topic query", () => {
+    // Measured 2026-11-24: the map held `tapisserie de siège`, the SERP wrote
+    // `tapisserie de siege`, the two never met, and 12 competitor rows plus the keyword
+    // were dropped as "no topic to file it under".
+    const accented = cluster({
+      slug: "seats",
+      queries: [
+        { query: "fauteuil restauration", impressions: 200, position: 12, volume: 90 },
+        { query: "tapisserie de siège", impressions: 40, position: 18, volume: 70 },
+      ] as never,
+    });
+    const rows = [ourRank("r1", "tapisserie de siège", 18, 40), unaccented("c1", "tapisserie de sieges", "bucherie.com", 1)];
+    // A plural is not an accent: ask for the same spelling minus the accent.
+    const same = [ourRank("r1", "tapisserie de siège", 18, 40), unaccented("c1", "tapisserie de siege", "bucherie.com", 1)];
+    const selection = selectClusterEvidence([accented], same);
+    const selected = selection.idsByCluster.get("seats") ?? [];
+    expect(selected).toContain("c1");
+    // And nothing is reported as unfiled, because a topic did claim it.
+    expect(selection.unfiled).toHaveLength(0);
+    void rows;
+  });
+
+  it("carries a truly unfiled query as data, not only as a sentence in the report", () => {
+    // `restauration de sièges` had 7 competitor rows naming bienassise.fr at #3, no
+    // cluster and no keyword-universe row, so only a data channel reaches the model.
+    const rows = [
+      ourRank("r1", "fauteuil restauration", 12, 200),
+      competitor("c1", "restauration de sièges", "bienassise.fr", 3),
+      competitor("c2", "restauration de sièges", "blog.artapisserie.fr", 4),
+    ];
+    const selection = selectClusterEvidence([cluster({ slug: "seats" })], rows);
+    const unfiled = selection.unfiled.find((entry) => entry.query === "restauration de sièges");
+    expect(unfiled).toBeTruthy();
+    expect(unfiled?.competitors.map((entry) => entry.domain)).toEqual(["bienassise.fr", "blog.artapisserie.fr"]);
+    expect(unfiled?.competitors[0].evidenceId).toBe("c1");
+    // No recorded position: we do not rank, which is the largest gap there is.
+    expect(unfiled?.ourPosition).toBeNull();
+    // It is still named in the report, so the count is never silent.
+    expect(selection.truncations.join(" ")).toContain("no topic to file it under");
+  });
+});
+
 describe("CMP-003 a cited competitor row reads as a domain and a position", () => {
   it("names the domain, the query and the position on the evidence line", async () => {
     // The fallback printed only the query, which made a competitor row look like our own
