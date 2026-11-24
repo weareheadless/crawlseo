@@ -103,10 +103,6 @@ Prefix `SOC-`. Each issue is self-contained; this document is the shared map.
 | SOC-011 | cicero | Render gate library with fixtures | [#1](https://github.com/weareheadless/cicero/issues/1) — merged |
 | SOC-012 | cicero | One design call; delete the propose/verify/revise pipeline | [#2](https://github.com/weareheadless/cicero/issues/2) — merged |
 | SOC-003 | crawlseo | An actioned opportunity may become one social post | [#191](https://github.com/weareheadless/crawlseo/issues/191) — merged |
-| SOC-016 | crawlseo | Opportunity summaries must not assert specifics nobody verified | [#197](https://github.com/weareheadless/crawlseo/issues/197) |
-
-SOC-016 belongs in wave 1: the copy is now written from the opportunity summary,
-so it is the check that the brief holds only verified specifics.
 
 ### Wave 2 — identity and contract
 
@@ -148,23 +144,23 @@ and is no longer on the social path.
 
 ## Closed
 
-Closed on 2026-11-24, superseded by SOC-003. The reasoning is in each closing
-comment; kept here so the first draft can be read against the second.
+Closed on 2026-11-24. The reasoning is in each closing comment; kept here so the
+first draft can be read against the second.
 
-| Issue | Repo | Title | Ticket |
-|---|---|---|---|
-| SOC-001 | crawlseo | Social eligibility: rules-first gates, decision rows, reason codes | [#189](https://github.com/weareheadless/crawlseo/issues/189) |
-| SOC-002 | crawlseo | Claim-level grounding from the crawl, verified live at post time | [#190](https://github.com/weareheadless/crawlseo/issues/190) |
-| SOC-004 | crawlseo | Commentary lane: news grounded in hashed sources, with quota | [#192](https://github.com/weareheadless/crawlseo/issues/192) |
+| Issue | Repo | Title | Ticket | Why |
+|---|---|---|---|---|
+| SOC-001 | crawlseo | Social eligibility: rules-first gates, decision rows, reason codes | [#189](https://github.com/weareheadless/crawlseo/issues/189) | Nine gates became one rule (SOC-003); the reason codes live on the receipt, not in a decision table |
+| SOC-002 | crawlseo | Claim-level grounding from the crawl, verified live at post time | [#190](https://github.com/weareheadless/crawlseo/issues/190) | A crawl is a cache, not an authority; a crawl outage must not read as an editorial refusal |
+| SOC-004 | crawlseo | Commentary lane: news grounded in hashed sources, with quota | [#192](https://github.com/weareheadless/crawlseo/issues/192) | A market comment is a manual post by a human, outside the pipeline |
+| SOC-016 | crawlseo | Opportunity summaries must not assert specifics nobody verified | [#197](https://github.com/weareheadless/crawlseo/issues/197) | The caption is read by a human on the draft before it is public; the Kanai price band is CrawlSEO's own summary-quality bug, not this initiative |
 
 ## Open decisions
 
 - **Draft-first or publish?** The proof posted an unpublished photo first. Keep
   that as the default until a human has approved a week of posts.
-- **Cadence.** Start at two posts a week per channel; tune from the decision
-  telemetry, not from taste. There is no commentary quota because there is no
-  commentary lane: a market comment is a manual post by a human, outside the
-  pipeline.
+- **Cadence.** Start at two posts a week per site; tune from the receipts, not
+  from taste. There is no commentary quota because there is no commentary lane: a
+  market comment is a manual post by a human, outside the pipeline.
 - **Locales.** The site is EN/ES. A post is written natively per locale, never
   machine-translated; a locale without an approved artifact does not ship.
 - **Meta production access.** The app is still in development mode; scheduled
