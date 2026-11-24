@@ -222,57 +222,194 @@ export function rankOf(metrics: unknown): number | null {
   return null;
 }
 
-export function partitionByWindowRole<T extends CurrentEvidenceRow>(
-  rows: T[]
-): { current: T[]; previous: T[]; pairs: Map<string, T> } {
-  const rankRows = rows.filter((row) => row.kind === "keyword_rank");
-  const roleOf = (row: T) => ((row.dimensions ?? {}) as { windowRole?: unknown }).windowRole;
+/**
+ * CMP-010: how many days two rank windows must differ by before comparing them.
+ *
+ * Two 28-day windows that share most of their data are not a comparison: a position that
+ * "fell 3 places" between two windows overlapping by 27 of 28 days is the same average
+ * moving by less than its own noise. The floor is a named constant so the rule is checkable
+ * rather than implied by which rows happened to be newest.
+ */
+export const MIN_COMPARISON_GAP_DAYS = 21;
 
-  // A new window pair is written on every sync, so "the current window" is the
-  // newest one, not every row ever labelled `current`. Measured on a daily sync:
-  // 18,424 rows labelled `current` spanning 30 days, and comparing all of them
-  // against all `previous` rows paired windows that do not follow one another.
-  //
-  // The window is identified by its `windowEnd`, not by `observedAt`: in
-  // production the two always agree (39,254 of 39,254 rank rows), but `windowEnd`
-  // is the field that says which period the number describes.
-  const windowEndOf = (row: T) => ((row.dimensions ?? {}) as { windowEnd?: unknown }).windowEnd;
-  const newestWindow = (list: T[]) => {
-    const ends = list.map(windowEndOf).filter((value): value is string => typeof value === "string").sort();
-    return ends.length > 0 ? ends[ends.length - 1] : null;
-  };
+/**
+ * The two rank windows to compare, and everything a reader needs to check the claim.
+ *
+ * `previousWindowEvidence` answers "which rows are the previous window"; this answers "which
+ * two periods, how much do they overlap, and if there is no honest comparison, why not". The
+ * detectors need the second: a project with one projected window must report O11 as disabled
+ * with a reason, not as an empty board.
+ */
+export type RankWindowComparison<T extends CurrentEvidenceRow> = {
+  current: T[];
+  previous: T[];
+  /** The ISO date each window ends on, so the summary can print both. */
+  currentWindowEnd: string | null;
+  previousWindowEnd: string | null;
+  /** The declared window length, from the rows themselves. */
+  windowDays: number | null;
+  /**
+   * Days the two windows share. `0` is a clean comparison; `null` means it could not be
+   * determined, which is treated as not comparable rather than as zero.
+   */
+  overlapDays: number | null;
+  /** Days between the previous window's end and the current window's start. */
+  gapDays: number | null;
+  /**
+   * Rows with no `windowRole`. They describe a period nobody labelled, so they are counted
+   * and excluded, never used as a comparison.
+   */
+  legacyRows: number;
+  /** Why there is no comparison, or null when there is one. */
+  reason: string | null;
+};
+
+const windowEndOf = (row: CurrentEvidenceRow): string | null => {
+  const value = ((row.dimensions ?? {}) as { windowEnd?: unknown }).windowEnd;
+  return typeof value === "string" ? value : null;
+};
+
+const windowDaysOf = (row: CurrentEvidenceRow): number | null => {
+  const value = ((row.dimensions ?? {}) as { windowDays?: unknown }).windowDays;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+};
+
+const newestWindow = (list: CurrentEvidenceRow[]): string | null => {
+  const ends = list.map(windowEndOf).filter((value): value is string => value !== null).sort();
+  return ends.length > 0 ? ends[ends.length - 1] : null;
+};
+
+const dayDifference = (later: string, earlier: string): number | null => {
+  const a = Date.parse(later);
+  const b = Date.parse(earlier);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((a - b) / 86_400_000);
+};
+
+/**
+ * Select the pair of rank windows a movement detector may compare.
+ *
+ * The rule, in order:
+ *
+ *  1. **A window is identified by its `windowEnd`, not by array position.** A daily sync
+ *     re-projects a rolling window every day, so the second-newest `windowEnd` is
+ *     yesterday's `current` window, not the `previous` one. Measured on Susi: 51% of pairs
+ *     differed by exactly 0 and O11 fired once.
+ *  2. **A row without a `windowRole` is not a comparison.** 281 such rows exist on Susi;
+ *     they are counted and excluded.
+ *  3. **The pair must be far enough apart.** The gap between the previous window's end and
+ *     the current window's start must be at least `MIN_COMPARISON_GAP_DAYS`; otherwise there
+ *     is no honest comparison and the reason says so.
+ */
+export function compareRankWindows<T extends CurrentEvidenceRow>(rows: T[]): RankWindowComparison<T> {
+  const rankRows = rows.filter((row) => row.kind === "keyword_rank") as T[];
+  const roleOf = (row: T) => ((row.dimensions ?? {}) as { windowRole?: unknown }).windowRole;
 
   const declaredCurrent = rankRows.filter((row) => roleOf(row) === "current");
   const declaredPrevious = rankRows.filter((row) => roleOf(row) === "previous");
+  const legacyRows = rankRows.filter((row) => roleOf(row) == null).length;
 
-  if (declaredCurrent.length > 0 || declaredPrevious.length > 0) {
-    const currentAt = newestWindow(declaredCurrent);
-    const current = currentAt ? declaredCurrent.filter((row) => windowEndOf(row) === currentAt) : [];
-    // The comparison window is the newest one that does not overlap the current
-    // window. Overlap is what made CMP-010's two spans share 27 of 28 days.
-    const currentStarts = current
-      .map((row) => ((row.dimensions ?? {}) as { windowStart?: unknown }).windowStart)
-      .filter((value): value is string => typeof value === "string")
-      .sort();
-    const currentWindowStart = currentStarts[0] ?? null;
-    const eligible = declaredPrevious.filter((row) => {
-      if (!currentWindowStart) return true;
-      const end = windowEndOf(row);
-      return typeof end === "string" ? end < currentWindowStart : true;
-    });
-    const previousAt = newestWindow(eligible);
-    const previous = previousAt ? eligible.filter((row) => windowEndOf(row) === previousAt) : [];
-    return { current, previous, pairs: new Map() };
+  const empty = (reason: string): RankWindowComparison<T> => ({
+    current: [],
+    previous: [],
+    currentWindowEnd: null,
+    previousWindowEnd: null,
+    windowDays: null,
+    overlapDays: null,
+    gapDays: null,
+    legacyRows,
+    reason,
+  });
+
+  if (declaredCurrent.length === 0 || declaredPrevious.length === 0) {
+    // No comparison is possible, but the CURRENT window must still be selectable: current
+    // evidence selection calls this, and returning nothing here would blank a site whose
+    // first projection has just landed. The reason distinguishes the two cases because the
+    // fix differs — "no history yet" clears itself next month, "no current rows" does not.
+    const pool = declaredCurrent.length > 0 ? declaredCurrent : rankRows;
+    const latest = newestWindow(pool);
+    // No `windowEnd` anywhere is the documented legacy shape: nothing says which period a row
+    // describes, so every row is kept. An un-migrated project still analyses.
+    const current = latest ? pool.filter((row) => windowEndOf(row) === latest) : pool;
+    return {
+      current,
+      previous: [],
+      currentWindowEnd: latest,
+      previousWindowEnd: null,
+      windowDays: rankRows.length > 0 ? windowDaysOf(rankRows[0]) : null,
+      overlapDays: null,
+      gapDays: null,
+      legacyRows,
+      reason:
+        declaredPrevious.length === 0
+          ? "Only one rank window has been projected, so there is nothing to compare it against yet."
+          : "No current rank window has been projected, so there is nothing to compare against.",
+    };
   }
 
-  // A project whose writer never stored a role or a window: nothing says which
-  // period a row describes, so every row is kept. That is the documented legacy
-  // allowance — an un-migrated project still analyses — and it is the only case
-  // where "current" means "all of them".
-  const latest = newestWindow(rankRows);
-  if (!latest) return { current: rankRows, previous: [], pairs: new Map() };
-  const current = rankRows.filter((row) => windowEndOf(row) === latest);
-  return { current, previous: [], pairs: new Map() };
+  const currentAt = newestWindow(declaredCurrent);
+  const current = currentAt ? declaredCurrent.filter((row) => windowEndOf(row) === currentAt) : [];
+  if (current.length === 0 || !currentAt) {
+    return empty("The current window has no `windowEnd`, so its period is unknown and it cannot be compared.");
+  }
+
+  const windowDays = windowDaysOf(current[0]);
+
+  // The previous window must END before the current window STARTS. The start is derived from
+  // the end and the declared length, because production rows carry no `windowStart`: measured
+  // 2026-11-24, `keyword_rank` dimension keys are url/query/scope/segments/windowEnd/
+  // windowDays/windowRole/observations, with no start. Deriving it is arithmetic on two
+  // stored facts, not a guess.
+  const eligible = declaredPrevious.filter((row) => {
+    const end = windowEndOf(row);
+    if (end == null) return false;
+    if (windowDays == null) return true;
+    const gap = dayDifference(currentAt, end);
+    // The previous window's last day must be at least a full window plus the floor earlier:
+    // a 28-day window ending 28 days before this one starts has a gap of 28.
+    return gap != null && gap >= windowDays;
+  });
+  const previousAt = newestWindow(eligible);
+  const previous = previousAt ? eligible.filter((row) => windowEndOf(row) === previousAt) : [];
+
+  if (!previousAt || previous.length === 0) {
+    const newestPrevious = newestWindow(declaredPrevious);
+    const gap = newestPrevious ? dayDifference(currentAt, newestPrevious) : null;
+    return {
+      current,
+      previous: [],
+      currentWindowEnd: currentAt,
+      previousWindowEnd: newestPrevious,
+      windowDays,
+      overlapDays: gap != null && windowDays != null ? Math.max(0, windowDays - gap) : null,
+      gapDays: gap,
+      legacyRows,
+      reason:
+        gap != null && windowDays != null
+          ? `The only previous window (ending ${newestPrevious!.slice(0, 10)}) is ${gap} days before this one, so the two overlap by ${Math.max(0, windowDays - gap)} days — under the ${MIN_COMPARISON_GAP_DAYS}-day floor. Rank movement is not measured.`
+          : "No previous window ends before this one starts, so the two would overlap and rank movement is not measured.",
+    };
+  }
+
+  const gapDays = dayDifference(currentAt, previousAt);
+  return {
+    current,
+    previous,
+    currentWindowEnd: currentAt,
+    previousWindowEnd: previousAt,
+    windowDays,
+    overlapDays: gapDays != null && windowDays != null ? Math.max(0, windowDays - gapDays) : null,
+    gapDays,
+    legacyRows,
+    reason: null,
+  };
+}
+
+export function partitionByWindowRole<T extends CurrentEvidenceRow>(
+  rows: T[]
+): { current: T[]; previous: T[]; pairs: Map<string, T> } {
+  const { current, previous } = compareRankWindows(rows);
+  return { current, previous, pairs: new Map() };
 }
 
 export async function currentEvidence(db: EvidenceDb, options: CurrentEvidenceOptions): Promise<EvidenceRecord[]> {

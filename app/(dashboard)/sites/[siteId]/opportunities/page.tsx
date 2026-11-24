@@ -7,7 +7,7 @@ import { listOpportunities, getFunnelCounts, type OpportunityRow } from "@/lib/f
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
 import { OPPORTUNITY_LANES, laneLabel } from "@/lib/funnel/proposal";
 import { READINESS_LABELS } from "@/lib/funnel/decision";
-import { DETECTOR_REQUIRES } from "@/lib/funnel/detectors";
+import { DETECTOR_REQUIRES, rankWindowComparison } from "@/lib/funnel/detectors";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -84,10 +84,23 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     _count: { _all: true },
   });
   const present = new Set(kindsPresent.map((row) => row.kind));
-  const disabledDetectors: Array<{ type: string; missing: string[] }> = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
+  const disabledDetectors: Array<{ type: string; missing: string[]; reason?: string }> = Object.entries(DETECTOR_REQUIRES).flatMap(([type, needs]) => {
     const missing = needs.filter((kind) => !present.has(kind));
     return missing.length > 0 ? [{ type, missing: missing as string[] }] : [];
   });
+  // CMP-010: O11 needs the `keyword_rank` kind AND two non-overlapping windows. A project
+  // whose rank rows only describe one period has the kind and no comparison, and listing it
+  // as enabled-but-empty says "nothing declined" when the truth is "we cannot tell".
+  if (present.has("keyword_rank")) {
+    const rankRows = await db.evidenceRecord.findMany({
+      where: { projectId: site.projectId, kind: "keyword_rank", supersededById: null },
+      select: { id: true, kind: true, observedAt: true, dimensions: true },
+    });
+    const comparison = rankWindowComparison(rankRows as never);
+    if (comparison.reason) {
+      disabledDetectors.push({ type: "O11_freshness_decay", missing: [], reason: comparison.reason });
+    }
+  }
   // O13/O14 need a finding that states a gap, not just any finding. Research that
   // returned themes only leaves them enabled-but-empty, which reads as "nothing
   // found" when the truth is "no gap was stated".
@@ -300,9 +313,16 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
 
       {disabledDetectors.length > 0 && (
         <p className="mb-4 text-xs text-muted-foreground">
-          {disabledDetectors.length} detectors are disabled because their evidence is missing:{" "}
+          {disabledDetectors.some((entry) => entry.reason)
+            ? `${disabledDetectors.length} detectors are disabled — some for missing evidence, some because the evidence they have cannot be compared: `
+            : `${disabledDetectors.length} detectors are disabled because their evidence is missing: `}
           {disabledDetectors
-            .map((entry) => `${OPPORTUNITY_LABELS[entry.type as keyof typeof OPPORTUNITY_LABELS]?.code ?? entry.type} needs ${entry.missing.join(" + ")}`)
+            .map((entry) => {
+              const code = OPPORTUNITY_LABELS[entry.type as keyof typeof OPPORTUNITY_LABELS]?.code ?? entry.type;
+              // A reason means the evidence exists and cannot be used — a different fix from
+              // "not collected yet", so it is stated rather than folded into a missing list.
+              return entry.missing.length > 0 ? `${code} needs ${entry.missing.join(" + ")}` : `${code}: ${entry.reason}`;
+            })
             .join(" · ")}
           . An empty type above means “not collected yet”, not “nothing found”.
         </p>
