@@ -178,14 +178,41 @@ delivered work.
 
 ---
 
+## CMP-010 — A "position declined" opportunity means the query declined
+
+**Today.** The detector that reports a ranking decline compares two nearly
+identical windows. Ranks are stored as rolling 28-day windows re-projected every
+day, and the selector picks "the second-newest window" — which is yesterday's
+window, not last month's. The two spans share **27 of 28 days**. On the
+best-populated site, 51 % of the compared pairs differ by exactly zero and the
+detector fires **once**; against the real previous window it fires **43 times**.
+
+**What that costs you.** Real declines — the ones you would want to act on
+before a quarter ends — are invisible, because a genuine 28-day fall is averaged
+away inside a window that is 96 % the same data.
+
+**What the ticket makes true.** The detector compares the two windows the
+evidence was written with (`current` vs `previous`), refuses a comparison whose
+windows overlap, states both dates on the opportunity, and corroborates with the
+free weekly series. A decline you see on the board is a decline.
+
+**How you'd see it.** A "position decline" card names two dates four weeks apart
+and the movement between them, and you can check it in Search Console.
+
+---
+
 ## The order that matters
 
 CMP-001 and CMP-002 first: without attributable snapshots and attached
-opportunities, everything after measures the wrong thing. Then CMP-003 and
-CMP-004, which give the board its memory and its opponent. CMP-005 unblocks the
+opportunities, everything after measures the wrong thing. CMP-010 sits with them
+rather than at the end: it is one selector reading evidence that is already
+correct, it needs no data bought, and until it lands the board cannot report a
+decline at all. Then CMP-003 and CMP-004, which give the board its memory and its
+opponent. CMP-005 unblocks the
 parked work that is already real. CMP-006 and CMP-007 make each opportunity
 actionable. CMP-008 and CMP-009 close the loop so the next cycle starts from
 measured ground.
 
-The end state per cluster is three numbers a client understands — coverage,
-measured share of voice, and a measured win — each traceable to a stored sample.
+The end state per cluster is four numbers a client understands — coverage,
+measured share of voice, a detected decline, and a measured win — each traceable
+to a stored sample.

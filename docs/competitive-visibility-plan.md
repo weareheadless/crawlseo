@@ -67,6 +67,13 @@ looks empty of good work:
   score of 1.0, because the query has impressions but no volume, so impact is
   `hypothesis` and the score is capped at 15 — under the 3-point park threshold
   once freshness and completeness multiply in.
+- **The rank comparison O11 uses is two days of one window.**
+  `previousWindowEvidence` picks the second-newest `windowEnd`, which for a daily
+  rolling 28-day sync is yesterday's *current* window, not the `previous`-role
+  one: the two spans share 27 of 28 days. On the best-populated site 291 pairs are
+  compared, 51 % differ by exactly 0, and O11 fires **once**; against the real
+  `previous` window it fires **43** times out of 151 usable pairs. The evidence is
+  written correctly with a `windowRole`; the selector ignores it.
 
 ## Design
 
@@ -119,6 +126,7 @@ configuration choice.
 | [CMP-007](https://github.com/weareheadless/crawlseo/issues/172) | A link play with actual targets: domains linking to the pages above us, not to us | CMP-003 |
 | [CMP-008](https://github.com/weareheadless/crawlseo/issues/173) | A cluster scoreboard: our share of voice vs each competitor, and the queries we lose | CMP-003, CMP-004 |
 | [CMP-009](https://github.com/weareheadless/crawlseo/issues/174) | Proof per delivered task: did the position move, did we pass the competitor | CMP-004, CMP-008 |
+| [CMP-010](https://github.com/weareheadless/crawlseo/issues/175) | A "position declined" opportunity means the query declined, not that two days of one window differ | CMP-004 |
 
 ## Spend
 
