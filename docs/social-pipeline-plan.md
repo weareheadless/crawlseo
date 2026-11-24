@@ -93,6 +93,16 @@ Prefix `SOC-`. Each issue is self-contained; this document is the shared map.
 | SOC-014 | cicero | Social render + publish API for the delivery adapter | [#4](https://github.com/weareheadless/cicero/issues/4) |
 | SOC-006 | crawlseo | meta_facebook delivery lane with receipts and idempotency | [#194](https://github.com/weareheadless/crawlseo/issues/194) |
 
+### Cross-cutting
+
+| Issue | Repo | Title | Ticket |
+|---|---|---|---|
+| SOC-016 | crawlseo | Opportunity summaries must not assert specifics nobody verified | [#197](https://github.com/weareheadless/crawlseo/issues/197) |
+| SOC-017 | cicero | Meta production access, token custody and the Page connection runbook | [#6](https://github.com/weareheadless/cicero/issues/6) |
+
+SOC-016 runs beside wave 1: it stops the generated summary from being the source
+of a claim. SOC-017 blocks any use beyond this one Page.
+
 ### Wave 4 — steering
 
 | Issue | Repo | Title | Ticket |
