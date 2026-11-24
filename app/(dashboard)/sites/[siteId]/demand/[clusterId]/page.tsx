@@ -7,6 +7,9 @@ import { listOpportunities } from "@/lib/funnel/views";
 import { OPPORTUNITY_LABELS } from "@/lib/funnel/labels";
 import { PageHeader } from "@/components/ui/page-header";
 import { Chip, CompletenessChip, ScoreBadge, StatusChip, relativeTime } from "@/components/funnel/badges";
+import { RankTrendChart } from "@/components/funnel/rank-trend-chart";
+import { DeclareGridButton } from "@/components/funnel/declare-grid-button";
+import { buildRankChart, combineWeeklySeries, sampledRankSeries, weeklyRankSeries } from "@/lib/funnel/rank-series";
 
 interface Props {
   params: Promise<{ siteId: string; clusterId: string }>;
@@ -61,12 +64,31 @@ export default async function ClusterPage({ params }: Props) {
 
   const memberships = await db.evidenceRecord.findMany({
     where: { projectId: site.projectId, kind: "keyword_universe_membership", supersededById: null },
-    select: { dimensions: true, observedAt: true },
+    select: { dimensions: true, metrics: true },
   });
-  const members = memberships
-    .map((row) => (row.dimensions ?? {}) as { cluster?: string; query?: string })
-    .filter((dims) => dims.cluster === cluster.slug && dims.query)
-    .map((dims) => dims.query as string);
+  const memberDims = memberships
+    .map((row) => ({
+      dims: (row.dimensions ?? {}) as { cluster?: string; query?: string; grid?: string },
+      metrics: (row.metrics ?? {}) as Record<string, { value: number | null }>,
+    }))
+    .filter((row) => row.dims.cluster === cluster.slug && row.dims.query);
+  const members = memberDims.map((row) => row.dims.query as string);
+  // CMP-004: the grid somebody declared, read from the membership itself.
+  const gridQueries = memberDims.filter((row) => row.dims.grid === "tracked").map((row) => row.dims.query as string);
+  // The cluster's trend is watched on its grid. Before a grid is declared, chart
+  // the members that actually have first-party history — ordered by the measured
+  // impressions already stored on the membership, which is a fact, not a guess.
+  const trendQueries =
+    gridQueries.length > 0
+      ? gridQueries.slice(0, 5)
+      : [...memberDims]
+          .sort(
+            (a, b) =>
+              Number(b.metrics["derived:impressions"]?.value ?? 0) -
+              Number(a.metrics["derived:impressions"]?.value ?? 0)
+          )
+          .map((row) => row.dims.query as string)
+          .slice(0, 5);
 
   // Our best recorded position per member query, from stored rank evidence.
   const ranks = await db.evidenceRecord.findMany({
@@ -94,6 +116,19 @@ export default async function ClusterPage({ params }: Props) {
   const covered = members.filter((query) => positionByQuery.has(query)).length;
   const coverage = members.length === 0 ? 0 : covered / members.length;
   const relevance = (cluster.businessRelevance ?? {}) as { relevance?: string; decidedBy?: string };
+
+  // CMP-004: the trend, read from the daily rows we already store. No purchase,
+  // no write — and the sampled SERPs are a separate series, never merged.
+  const weeklySeries = await Promise.all(
+    trendQueries.map((query) => weeklyRankSeries(db, { siteId, query, weeks: 26 }))
+  );
+  const combined = combineWeeklySeries(weeklySeries);
+  const sampled = await sampledRankSeries(db, {
+    projectId: site.projectId,
+    queries: trendQueries,
+    weeks: 26,
+  });
+  const chart = buildRankChart({ weekly: combined.points, sampled, suppressed: combined.suppressed });
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -129,6 +164,14 @@ export default async function ClusterPage({ params }: Props) {
             Not endorsed yet. Discovery proposes; a person decides whether this need is core or adjacent to the offer.
           </p>
         )}
+        <div className="mt-3 border-t border-border pt-3">
+          <DeclareGridButton siteId={siteId} clusterSlug={cluster.slug} tracked={gridQueries} />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {gridQueries.length > 0
+              ? `Tracking ${gridQueries.length} ${gridQueries.length === 1 ? "query" : "queries"} in this cluster.`
+              : "No grid declared yet: this cluster is not being watched week to week."}
+          </p>
+        </div>
       </section>
 
       <section className="mb-5" aria-label="Members">
@@ -139,9 +182,18 @@ export default async function ClusterPage({ params }: Props) {
           <ul className="panel divide-y divide-border">
             {members.map((query) => {
               const position = positionByQuery.get(query);
+              const tracked = gridQueries.includes(query);
               return (
                 <li key={query} className="flex items-center gap-3 px-4 py-2">
                   <span className="min-w-0 flex-1 truncate text-sm text-foreground">{query}</span>
+                  {tracked && (
+                    <span
+                      className="text-[10px] uppercase tracking-[0.12em] text-[var(--a-success-700,#34D399)]"
+                      title="Part of this cluster's tracked grid"
+                    >
+                      tracked
+                    </span>
+                  )}
                   <span className="font-mono text-xs text-muted-foreground">
                     {position == null ? "not ranking" : `#${Math.round(position)}`}
                   </span>
@@ -150,6 +202,14 @@ export default async function ClusterPage({ params }: Props) {
             })}
           </ul>
         )}
+      </section>
+
+      <section className="mb-5" aria-label="Position history">
+        <h2 className="mb-2 font-heading text-sm font-semibold">Position history</h2>
+        <RankTrendChart
+          chart={chart}
+          title={gridQueries.length > 0 ? "Tracked queries, week by week" : "Position over time"}
+        />
       </section>
 
       <section aria-label="Opportunities in this cluster">

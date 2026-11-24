@@ -128,10 +128,13 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "rolling_window",
   },
   keyword_universe_membership: {
-    producers: ["lib/research/topic-map", "lib/funnel/cluster-discovery"],
+    producers: ["lib/research/topic-map", "lib/funnel/cluster-discovery", "lib/funnel/tracked-grid"],
     dimensions: {
       required: ["query", "cluster"],
-      optional: ["source", "topic"],
+      // `grid: "tracked"` is CMP-004's declaration that this membership is part of
+      // its cluster's tracked grid. It lives on the membership because the issue
+      // forbids a second membership table and a duplicate flag on the query row.
+      optional: ["source", "topic", "grid"],
     },
     // The topic map stores the membership's demand with the membership, derived
     // from first-party rows it read rather than collected for this record.

@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Chip } from "@/components/funnel/badges";
 import { RefreshFunnelButton } from "@/components/funnel/refresh-button";
+import { DeclareAllGridsButton } from "@/components/funnel/declare-grid-button";
 
 interface Props {
   params: Promise<{ siteId: string }>;
@@ -62,7 +63,12 @@ export default async function DemandMapPage({ params }: Props) {
         eyebrow={site.domain}
         title="Demand map"
         description="What customers need, how they search for it, and where we stand. Opportunities are slices of this map."
-        actions={<RefreshFunnelButton siteId={siteId} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <DeclareAllGridsButton siteId={siteId} />
+            <RefreshFunnelButton siteId={siteId} />
+          </div>
+        }
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -90,7 +90,11 @@ export const BUNDLE_COST_ESTIMATES = {
   keywordPerQueryMicros: 1_500,
   keywordBatchSize: 20,
   keywordMinBatchMicros: 12_000,
-  serpPerQueryMicros: 2_000,
+  // Measured 2026-11-24 from `RawProviderResponse`: a depth-20 organic SERP is
+  // 4,000 micros ($0.004), not the 2,000 a depth-10 call used to cost. The
+  // estimate is a budget guard and must not understate the real price, or a
+  // bundle passes its own check and then overspends.
+  serpPerQueryMicros: 4_000,
   aiOverviewPerQuestionMicros: 2_500,
   discoveryPerSeedMicros: 24_000,
 } as const;
