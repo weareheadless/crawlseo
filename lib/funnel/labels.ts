@@ -153,6 +153,12 @@ export const COMPLETENESS_LABELS: Record<string, { label: string; hint: string }
 
 export const VERDICT_LABELS: Record<string, string> = {
   verified_win: "Verified win",
+  // CMP-009's measured verdicts. `no_effect` is the schema's only "measured, not a win"
+  // value, so it cannot distinguish an improvement from a flat result — these three can,
+  // and they come from `afterMetrics.verdict`.
+  improved: "Improved",
+  unchanged: "Unchanged",
+  declined: "Declined",
   no_effect: "No effect",
   regression: "Regression",
   unmeasured: "Unmeasured",

@@ -76,3 +76,66 @@ describe("monthly cycle bootstrap", () => {
     expect(store.ensure).not.toHaveBeenCalled();
   });
 });
+
+describe("CMP-009 the outcome stage", () => {
+  function outcomeDb(over: { enableResearch?: boolean } = {}) {
+    const base = db() as never as Record<string, unknown> & {
+      site: { findMany: ReturnType<typeof vi.fn> };
+    };
+    base.site.findMany = vi.fn(async () => [
+      {
+        id: "s1",
+        domain: "new.example",
+        projectId: "p1",
+        userId: "u1",
+        siteProfile: { topics: ["Fitted wardrobes"], audience: null },
+        researchPolicy: { enabled: over.enableResearch ?? true },
+      },
+    ]);
+    // The sweep reads its own tables; a project with no delivered work reports zeros.
+    (base as Record<string, unknown>).task = { findMany: vi.fn(async () => []) };
+    (base as Record<string, unknown>).outcomeObservation = {
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      create: vi.fn(),
+    };
+    (base as Record<string, unknown>).evidenceRecord = { findMany: vi.fn(async () => []) };
+    return base;
+  }
+
+  it("reports the sweep as a stage, with its counts", async () => {
+    const results = await runMonthlyCycle(outcomeDb() as never, { now: new Date("2026-11-04T00:00:00.000Z") });
+    const stage = results[0].stages.find((entry) => entry.stage === "outcome");
+    expect(stage).toBeTruthy();
+    // No delivered work yet, so nothing to measure — and the stage says so rather than
+    // reporting a bare zero.
+    expect(stage?.detail).toContain("0 measured");
+    expect(stage?.detail).toContain("0 unbaselined");
+  });
+
+  it("runs even when research is switched off, because it asks a different question", async () => {
+    // Whether the work we shipped did anything is not the same decision as whether to
+    // research more. Gating the outcome sweep on the research switch would leave a site
+    // that turned research off permanently unmeasured.
+    const results = await runMonthlyCycle(outcomeDb({ enableResearch: false }) as never, {
+      now: new Date("2026-11-04T00:00:00.000Z"),
+    });
+    const research = results[0].stages.find((entry) => entry.stage === "research");
+    const outcome = results[0].stages.find((entry) => entry.stage === "outcome");
+    expect(research?.status).toBe("skipped");
+    expect(research?.detail).toContain("research disabled");
+    expect(outcome).toBeTruthy();
+    expect(outcome?.status).not.toBe("failed");
+    expect(outcome?.detail).toContain("measured");
+  });
+
+  it("does not sweep on a dry run", async () => {
+    const database = outcomeDb();
+    await runMonthlyCycle(database as never, { dryRun: true, now: new Date("2026-11-04T00:00:00.000Z") });
+    expect((database as Record<string, { findMany: ReturnType<typeof vi.fn> }>).task.findMany).not.toHaveBeenCalled();
+    const stage = (await runMonthlyCycle(database as never, { dryRun: true, now: new Date("2026-11-04T00:00:00.000Z") }))[0].stages.find(
+      (entry) => entry.stage === "outcome"
+    );
+    expect(stage?.detail).toContain("would sweep");
+  });
+});

@@ -9,6 +9,11 @@ import { readFileSync } from "node:fs";
  */
 describe("opportunity provenance rendering contract", () => {
   const page = readFileSync("app/(dashboard)/sites/[siteId]/opportunities/[opportunityId]/page.tsx", "utf8");
+  // CMP-009 moved the outcome wording into its own panel, because the page was showing
+  // the baseline's label without its numbers. The contract now spans both files: the
+  // page must still route the outcome stage to a panel, and the panel must state the
+  // lifecycle reason and never invent a verdict.
+  const outcomePanel = readFileSync("components/funnel/task-outcome-panel.tsx", "utf8");
 
   it("shows evidence from both legs with its producer", () => {
     expect(page).toContain("whyEvidence");
@@ -31,10 +36,13 @@ describe("opportunity provenance rendering contract", () => {
   it("states a lifecycle reason for every stage that has not happened", () => {
     expect(page).toContain("No research needed for this play");
     expect(page).toContain("Nothing delivered");
-    expect(page).toContain("No baseline recorded");
+    expect(page).toContain("TaskOutcomePanel");
+    expect(outcomePanel).toContain("No baseline was recorded");
   });
 
   it("never fabricates an outcome verdict", () => {
-    expect(page).toContain("reported as unmeasured, never as a win");
+    expect(outcomePanel).toContain("reported as unmeasured, never as a win");
+    // And it says why a baseline is not backfilled, so nobody waits for one.
+    expect(outcomePanel).toContain("not backfilled");
   });
 });

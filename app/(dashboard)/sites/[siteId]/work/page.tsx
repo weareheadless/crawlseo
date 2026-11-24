@@ -157,7 +157,16 @@ export default async function WorkPage({ params }: Props) {
                         </span>
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{task.title}</span>
                         <StatusChip status={task.status} />
-                        {task.verdict && <VerdictChip verdict={task.verdict} />}
+                        {/* CMP-009: prefer the measured verdict, because the schema enum
+                            cannot tell an improvement from a flat result. */}
+                        {(task.verdictDetail ?? task.verdict) && (
+                          <VerdictChip verdict={task.verdictDetail ?? task.verdict ?? ""} />
+                        )}
+                        {task.positionDelta != null && task.positionDelta !== 0 && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {`${task.positionDelta > 0 ? "up" : "down"} ${Math.abs(Math.round(task.positionDelta * 10) / 10)}`}
+                          </span>
+                        )}
                         <ScoreBadge score={task.opportunityScore} />
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">

@@ -168,6 +168,16 @@ export default async function SiteOverviewPage({ params, searchParams }: SitePag
                 Outcomes: {funnel.recentVerdicts.map((v) => `${v.count} ${v.verdict.replaceAll("_", " ")}`).join(" · ")}
               </p>
             )}
+            {/* CMP-009: delivered work is not measured work. The product's definition of
+                done requires a check, so the gap is stated here rather than left to a
+                verdict count that reads like a result. */}
+            {funnel.outcomeCoverage.delivered > 0 && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {`Measured ${funnel.outcomeCoverage.measured} of ${funnel.outcomeCoverage.delivered} delivered · ${
+                  funnel.outcomeCoverage.pending
+                } waiting for the 28-day window · ${funnel.outcomeCoverage.unbaselined} with no baseline to measure against`}
+              </p>
+            )}
           </section>
         </div>
       )}

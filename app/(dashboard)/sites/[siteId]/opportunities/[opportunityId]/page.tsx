@@ -9,6 +9,7 @@ import { OPPORTUNITY_LABELS, evidenceKindLabel } from "@/lib/funnel/labels";
 import { DecisionSummaryPanel } from "@/components/funnel/decision-summary";
 import { ImpactPanel } from "@/components/funnel/impact-panel";
 import { LinkTargetPanel } from "@/components/funnel/link-target-panel";
+import { TaskOutcomePanel } from "@/components/funnel/task-outcome-panel";
 import { PageGapPanel } from "@/components/funnel/page-gap-panel";
 import { storedPageGap } from "@/lib/funnel/competitor-page-gap";
 import { ProposalPanel } from "@/components/funnel/proposal-panel";
@@ -282,35 +283,10 @@ export default async function OpportunityDetailPage({ params }: Props) {
         title="Outcome"
         subtitle="Baseline before delivery versus after. A verdict is never estimated."
       >
-        {detail.task && detail.task.outcomes.length > 0 ? (
-          <ul className="space-y-3">
-            {detail.task.outcomes.map((outcome) => (
-              <li key={outcome.id} className="rounded-lg border border-border bg-background/40 px-3 py-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <VerdictChip verdict={outcome.verdict} />
-                  <span className="text-[11px] text-muted-foreground">
-                    measured by {outcome.measuredBy} · after {relativeTime(outcome.afterObservedAt)}
-                  </span>
-                </div>
-                <div className="mt-2 grid gap-3 text-xs sm:grid-cols-2">
-                  <div>
-                    <p className="mb-1 text-muted-foreground">Baseline ({outcome.baselineObservedAt.toISOString().slice(0, 10)})</p>
-                    <MetricList metrics={outcome.baselineMetrics} />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-muted-foreground">After ({outcome.afterObservedAt.toISOString().slice(0, 10)})</p>
-                    <MetricList metrics={outcome.afterMetrics} />
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {detail.task ? (
+          <TaskOutcomePanel baselines={detail.task.baselines} outcomes={detail.task.outcomes} />
         ) : (
-          <p className="text-sm text-muted-foreground">
-            {detail.task?.baselines.length
-              ? "Baseline recorded. The verdict appears after the re-check window."
-              : "No baseline recorded, so no verdict can be claimed. An outcome without a pre-delivery baseline is reported as unmeasured, never as a win."}
-          </p>
+          <p className="text-sm text-muted-foreground">Nothing delivered. This opportunity has no task yet.</p>
         )}
       </Stage>
 

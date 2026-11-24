@@ -5,6 +5,7 @@ import { completenessLeg } from "@/lib/funnel/opportunity";
 import { computeScore, freshnessFactor, type ScoreInputs } from "@/lib/funnel/scoring";
 import { parseOpportunityProposal } from "@/lib/funnel/proposal";
 import { parsePersistedDecision } from "@/lib/recommendation/contracts";
+import { readBaseline } from "@/lib/funnel/outcome-measurement";
 
 /**
  * Missing-leg join scheduler (docs/seo-funnel-spine-plan.md §2.3).
@@ -149,6 +150,17 @@ export type TaskDb = Pick<PrismaClient, "task" | "opportunity"> & {
   $transaction?: PrismaClient["$transaction"];
 };
 
+/**
+ * What accepting a task additionally needs: the evidence to read a baseline from, and
+ * the table to write it to.
+ *
+ * CMP-009 requires the baseline at acceptance, not at measurement: a number captured
+ * after the work shipped describes a position that already moved. Keeping it in the same
+ * transaction means a task cannot exist without either a baseline or a recorded reason
+ * it has none.
+ */
+export type AcceptDb = Pick<PrismaClient, "task" | "opportunity" | "baseline" | "evidenceRecord" | "site">;
+
 const MIGRATED_TYPES = new Set(["O13_user_pain_point", "O14_offer_positioning_gap"]);
 
 /**
@@ -251,7 +263,7 @@ export function taskPlanFromOpportunity(opportunity: {
  * together, with a version precondition that refuses a stale page.
  */
 export async function acceptOpportunityIntoTaskInTransaction(
-  db: Pick<PrismaClient, "task" | "opportunity">,
+  db: Pick<PrismaClient, "task" | "opportunity" | "baseline" | "evidenceRecord" | "site">,
   opportunityId: string,
   input: {
     title: string;
@@ -277,6 +289,8 @@ export async function acceptOpportunityIntoTaskInTransaction(
       scoreInputs: true,
       recommendationDecision: true,
       recommendationFingerprint: true,
+      // CMP-009: the baseline is read from the query this opportunity is about.
+      dedupKey: true,
     },
   });
   if (!opportunity) throw new Error("opportunity not found");
@@ -347,7 +361,7 @@ export async function acceptOpportunityIntoTaskInTransaction(
     : ((input.plan ?? undefined) as Record<string, unknown> | undefined);
   const expectedFingerprint = opportunity.recommendationFingerprint ?? null;
 
-  const write = async (tx: Pick<PrismaClient, "task" | "opportunity">) => {
+  const write = async (tx: Pick<PrismaClient, "task" | "opportunity" | "baseline" | "evidenceRecord" | "site">) => {
     const where = { id: opportunityId, status: opportunity.status, recommendationFingerprint: expectedFingerprint };
     const updated = await tx.opportunity.updateMany({
       where,
@@ -356,7 +370,7 @@ export async function acceptOpportunityIntoTaskInTransaction(
     if (updated.count === 0) {
       throw new Error("the recommendation changed while it was being accepted; reload and review it");
     }
-    return tx.task.create({
+    const created = await tx.task.create({
       data: {
         opportunityId,
         title: input.title,
@@ -367,6 +381,63 @@ export async function acceptOpportunityIntoTaskInTransaction(
       },
       select: { id: true },
     });
+
+    // CMP-009: snapshot what the work is measured against, in the same transaction. A
+    // task that shipped without a baseline could never be measured, and capturing it
+    // later would compare against a position the work may already have moved.
+    //
+    // A client that cannot read the evidence store cannot supply a baseline. That is
+    // recorded as `unobserved` with the reason, not skipped: a task with no baseline row
+    // at all is indistinguishable from one that was never measured on purpose.
+    let baseline: {
+      position: number | null;
+      competitorDomain: string | null;
+      competitorPosition: number | null;
+      url: string | null;
+      query: string | null;
+      observedAt: Date | null;
+      unobserved: boolean;
+      reason: string | null;
+    } = {
+      position: null,
+      competitorDomain: null as string | null,
+      competitorPosition: null as number | null,
+      url: null as string | null,
+      query: null as string | null,
+      observedAt: null as Date | null,
+      unobserved: true,
+      reason: "The acceptance did not have access to the evidence store, so no baseline was captured.",
+    };
+    if (typeof tx.evidenceRecord?.findMany === "function" && typeof tx.site?.findFirst === "function") {
+      const site = await tx.site.findFirst({
+        where: { projectId: opportunity.projectId },
+        select: { domain: true },
+      });
+      baseline = await readBaseline({ evidenceRecord: tx.evidenceRecord } as never, {
+        projectId: opportunity.projectId,
+        dedupKey: opportunity.dedupKey,
+        siteDomain: site?.domain ?? "",
+      });
+    }
+    if (typeof tx.baseline?.create === "function") {
+      await tx.baseline.create({
+        data: {
+          taskId: created.id,
+          observedAt: baseline.observedAt ?? new Date(),
+          metrics: {
+            unobserved: baseline.unobserved,
+            reason: baseline.reason,
+            query: baseline.query,
+            position: baseline.position,
+            competitorDomain: baseline.competitorDomain,
+            competitorPosition: baseline.competitorPosition,
+            url: baseline.url,
+          } as never,
+        },
+      });
+    }
+
+    return created;
   };
 
   const task = await write(db);
