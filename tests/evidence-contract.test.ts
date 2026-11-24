@@ -226,10 +226,14 @@ describe("every kind a reader asks for can be produced", () => {
  */
 describe("the recorded starting defects", () => {
   const STARTING_DEFECTS = {
-    "consumer with no producer": ["competitor_rank", "vitals", "analytics"],
+    // CMP-003 gave competitor_rank a writer; CMP-007 gave
+    // provider:referringDomainGap one; CMP-008 gave share_of_voice one. Each was
+    // moved out of this list in the commit that fixed it, which is the point of the
+    // record: it cannot drift silently in either direction.
+    "consumer with no producer": ["vitals", "analytics"],
     "written, nobody reads": ["internal_link_graph"],
-    "declared and dead": ["share_of_voice", "serp_features", "intent_label", "gsc_query"],
-    "metric label read, never written": ["provider:referringDomainGap", "first_party:lcpSeconds", "provider:askCount"],
+    "declared and dead": ["serp_features", "intent_label", "gsc_query"],
+    "metric label read, never written": ["first_party:lcpSeconds", "provider:askCount"],
   };
 
   it("matches what the registry says today, so the record cannot drift silently", () => {
