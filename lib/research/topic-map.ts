@@ -67,6 +67,18 @@ export type DemandQuery = {
    */
   windowDays?: number | null;
   /**
+   * True when this query came from Search Console, false when its demand is
+   * known only from provider volume.
+   *
+   * The distinction is a fact, and it was being lost: both cases reached the
+   * drafting model as `impressions: 0`, so a site with no Search Console data at
+   * all produced proposals reading "zero impressions, null position" — which
+   * reads as measured-and-failing rather than never-measured. Measured on
+   * astridrincon 2026-11-25: 0 rank rows, 160 queries, and every proposal
+   * described the site as invisible rather than unmeasured.
+   */
+  measured?: boolean;
+  /**
    * Set by the AI review when the query's geography is judged against the
    * business location and the cluster's market scope. Undefined means "not
    * judged", which is treated as in market.
@@ -124,6 +136,15 @@ export type TopicCluster = {
     position: number | null;
     aeoQuestions: number;
     aeoCited: number;
+    /**
+     * How many of the cluster's queries have a first-party Search Console row.
+     *
+     * Zero means the cluster's demand is known only from provider volume: the
+     * queries are real, but this site has never been measured for them. That is
+     * a different statement from "we rank and earn nothing", and the drafting
+     * model needs the difference to write an honest proposal.
+     */
+    measuredQueries?: number;
     /**
      * Days the Search Console window covered, or null when no row stated it.
      *
@@ -430,6 +451,7 @@ export function clusterMetrics(
     position: weightedPosition(queries),
     aeoQuestions: aeo.questions,
     aeoCited: aeo.cited,
+    measuredQueries: queries.filter((query) => query.measured !== false).length,
     // The window is a fact about the measurement, so it is read, not assumed: the longest
     // window any query in the cluster was measured over.
     windowDays: queries.reduce<number | null>(
@@ -622,6 +644,7 @@ export async function loadTopicMapData(
         difficulty: null,
         observedAt: row.observedAt,
         windowDays: numberValue(dims.windowDays),
+        measured: true,
       });
     }
   }
@@ -657,6 +680,10 @@ export async function loadTopicMapData(
       impressions: 0,
       clicks: 0,
       position: null,
+      // No first-party row: the demand is real but this site has not been
+      // measured for it. Saying so is what stops "0 impressions" being read as
+      // "we rank and nobody clicks".
+      measured: false,
       volume: metric.volume,
       difficulty: metric.difficulty,
       observedAt: metricOnlyObservedAt,
