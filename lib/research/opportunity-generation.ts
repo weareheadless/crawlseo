@@ -76,6 +76,70 @@ export type ProposalGenerationDb = OpportunityDb &
     | "auditPage"
   >;
 
+/**
+ * The Search Console window the stored rank rows were measured over.
+ *
+ * Read from the rows themselves rather than off the topic map: measured 2026-11-24, a map
+ * rebuilt before this change carried no window, so every generated opportunity still
+ * assessed as a `hypothesis` and no sampled SERP could move its priority. The row is the
+ * measurement, so the row is where the window is read. Null when no row states one.
+ */
+async function readSearchConsoleWindow(
+  db: ProposalGenerationDb,
+  input: { projectId: string; siteId: string }
+): Promise<number | null> {
+  // A client without the evidence table cannot state a window; absent stays absent rather
+  // than throwing and losing the whole run.
+  if (typeof db.evidenceRecord?.findMany !== "function") return null;
+  const rows = await db.evidenceRecord.findMany({
+    where: { projectId: input.projectId, siteId: input.siteId, supersededById: null, kind: "keyword_rank" as never },
+    select: { dimensions: true },
+  });
+  let windowDays: number | null = null;
+  for (const row of rows) {
+    const dimensions = (row.dimensions ?? {}) as { windowRole?: string; windowDays?: number };
+    // The previous window is a comparison, not the measurement being scored.
+    if (dimensions.windowRole === "previous") continue;
+    if (typeof dimensions.windowDays !== "number" || dimensions.windowDays <= 0) continue;
+    windowDays = windowDays == null ? dimensions.windowDays : Math.max(windowDays, dimensions.windowDays);
+  }
+  return windowDays;
+}
+
+/** Fold a query the way the evidence layer does: case, accents and whitespace. */
+function foldQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The queries this project has a sampled SERP for, folded.
+ *
+ * Read once per run so a cluster can be scored on a query whose competition was actually
+ * measured, instead of on its biggest query whether or not anyone looked at that SERP.
+ */
+async function readMeasurableQueries(
+  db: ProposalGenerationDb,
+  projectId: string
+): Promise<Set<string>> {
+  // Same rule: no evidence table means nothing is known to be sampled.
+  if (typeof db.evidenceRecord?.findMany !== "function") return new Set();
+  const rows = await db.evidenceRecord.findMany({
+    where: { projectId, supersededById: null, kind: "competitor_rank" as never },
+    select: { dimensions: true },
+  });
+  const queries = new Set<string>();
+  for (const row of rows) {
+    const query = (row.dimensions ?? {}) as { query?: unknown };
+    if (typeof query.query === "string") queries.add(foldQuery(query.query));
+  }
+  return queries;
+}
+
 /** The opportunity type a proposal maps to, from the same table the board stores. */
 function typeForProposal(
   lane: string,
@@ -95,7 +159,7 @@ function typeForProposal(
  * Returns `null` for a cluster with no measured query, which leaves the inputs `null` and
  * the row visibly low-confidence — the honest outcome, not a default.
  */
-function leadQueryFor(cluster: TopicCluster | null): string | null {
+function leadQueryFor(cluster: TopicCluster | null, measurable?: Set<string>): string | null {
   if (!cluster || cluster.queries.length === 0) return null;
   const ranked = cluster.queries
     .filter((query) => typeof query.query === "string" && query.query.trim() !== "")
@@ -106,6 +170,20 @@ function leadQueryFor(cluster: TopicCluster | null): string | null {
         (b.volume ?? 0) - (a.volume ?? 0) ||
         a.query.localeCompare(b.query)
     );
+  /**
+   * Prefer the strongest query we can actually measure a fight on.
+   *
+   * A cluster is many queries and only some of them were sampled. Measured 2026-11-24: 8
+   * of 13 clusters had no sampled SERP for their top-impression query, so their priority
+   * was scored blind while competitor rows for other queries in the same cluster sat
+   * unread. Choosing among the queries that do have a sample is arithmetic on what was
+   * measured, not a judgement about which query matters — the impression order still
+   * decides within each group.
+   */
+  if (measurable && measurable.size > 0) {
+    const withSample = ranked.find((query) => measurable.has(foldQuery(query.query)));
+    if (withSample) return withSample.query;
+  }
   return ranked[0]?.query ?? null;
 }
 
@@ -135,6 +213,8 @@ async function withMeasuredWinnability(
      * pretending the key has one.
      */
     query: string | null;
+    /** The Search Console window, read once for the whole run. */
+    windowDays?: number | null;
     inputs: ReturnType<typeof proposalScoreInputs>;
   }
 ): Promise<ReturnType<typeof proposalScoreInputs>> {
@@ -146,6 +226,8 @@ async function withMeasuredWinnability(
     playTypeFactor: (input.inputs.winProbability.playTypeFactor as number | null) ?? 0.6,
     targetUrl: input.targetUrl,
   });
+  const worth = input.inputs.worth as Record<string, unknown>;
+  if (worth.windowDays == null && input.windowDays != null) worth.windowDays = input.windowDays;
   return {
     ...input.inputs,
     winProbability: resolved.winProbability,
@@ -525,6 +607,13 @@ export async function storeProposals(
   const dropped: Array<{ title: string; reason: string }> = [];
   const reproposedClosed: string[] = [];
   const clusterIdBySlug = new Map(input.clusters.map((cluster) => [cluster.slug, cluster.id]));
+  // Read once for the whole run: the window is a property of the measurement period, not
+  // of one proposal.
+  const searchConsoleWindowDays = await readSearchConsoleWindow(db, {
+    projectId: input.projectId,
+    siteId: input.siteId,
+  });
+  const measurableQueries = await readMeasurableQueries(db, input.projectId);
 
   for (const proposal of input.proposals) {
     const invalid = validateProposal(proposal, {
@@ -607,7 +696,8 @@ export async function storeProposals(
           siteId: input.siteId,
           dedupKey: proposal.dedupKey,
           targetUrl: proposal.target.url ?? null,
-          query: leadQueryFor(cluster),
+          query: leadQueryFor(cluster, measurableQueries),
+          windowDays: searchConsoleWindowDays,
           inputs: proposalScoreInputs(proposal, cluster),
         }) as never,
         whyEvidenceIds,
