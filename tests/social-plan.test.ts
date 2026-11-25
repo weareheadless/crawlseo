@@ -41,6 +41,7 @@ const VALID = {
   post: true,
   reason: "A corridor changing use is worth a buyer's attention.",
   subject: "Playa del Carmen",
+  page_url: "https://www.susimacdonald.com/beachfront",
   angle: "Read the street, not the listing photo.",
   copy: {
     kicker: "Playa del Carmen",
@@ -64,7 +65,7 @@ describe("parsePlan", () => {
     if ("error" in result) throw new Error(result.error);
     expect(result.plan.post).toBe(true);
     if (!result.plan.post) return;
-    expect(result.plan.copy.headline).toBe(VALID.copy.headline);
+    expect(result.plan.copy?.headline).toBe(VALID.copy.headline);
     expect(result.plan.claims).toHaveLength(1);
     expect(result.droppedClaims).toHaveLength(0);
   });
@@ -102,6 +103,13 @@ describe("parsePlan", () => {
     if (!result.plan.post) return;
     expect(result.plan.claims).toHaveLength(0);
     expect(result.droppedClaims).toEqual(["Prices doubled."]);
+  });
+
+  it("refuses a post that promotes no page from the site", () => {
+    const outsider = parsePlan({ ...VALID, page_url: "https://elsewhere.example/x" }, INPUT);
+    expect(outsider).toHaveProperty("error");
+    const missing = parsePlan({ ...VALID, page_url: "" }, INPUT);
+    expect(missing).toHaveProperty("error");
   });
 
   it("refuses a subject the brand does not represent", () => {

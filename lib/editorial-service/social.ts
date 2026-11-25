@@ -14,14 +14,16 @@ export type SocialBriefInput = {
   locale: string;
   voice?: string;
   subject: string;
+  /** The page this post promotes: a cover line may only come from it. */
+  page_url: string;
   angle: string;
   copy: {
     kicker: string;
     headline: string;
     subline: string;
     caption: string;
-    /** Short statements the cover may set; every figure must be in a claim. */
-    facts?: string[];
+    /** Short statements the cover may set, each with the page it came from. */
+    facts?: Array<{ text: string; source_url: string }>;
   };
   /** One to three images, each a source the caller can credit. */
   images: Array<{ name: string; alt?: string; provenance?: "own_photo" | "generic_location" | "none" }>;
@@ -43,7 +45,7 @@ export type EditorialSocialArtifact = {
     headline: string;
     subline: string;
     caption: string;
-    facts: string[];
+    facts: Array<{ text: string; source_url: string }>;
     images: Array<{ asset_id: string; provenance: string; alt: string; credit: string }>;
     representation: string;
     subject: string;
@@ -73,7 +75,7 @@ export type SocialCopy = {
   headline: string;
   subline: string;
   caption: string;
-  facts: string[];
+  facts: Array<{ text: string; source_url: string }>;
 };
 
 export type SocialCopyOutcome =
@@ -154,6 +156,7 @@ export function socialBrief(input: SocialBriefInput): Record<string, unknown> {
       })),
       representation: input.representation ?? "represented",
       subject: input.subject,
+      page_url: input.page_url,
       // The planner has already dropped any claim whose source the bundle did
       // not contain, so what arrives here is what a source vouches for.
       claims: input.claims.map((claim) => ({

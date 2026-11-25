@@ -26,7 +26,13 @@ export type SocialArtifactPayload = {
   id: string;
   channel: "facebook_page";
   locale: string;
-  copy: { kicker: string; headline: string; subline: string; caption: string; facts?: string[] };
+  copy: {
+    kicker: string;
+    headline: string;
+    subline: string;
+    caption: string;
+    facts?: Array<{ text: string; source_url: string }>;
+  };
   assets: Array<{ path?: string; url?: string; alt: string; credit?: string }>;
   content_hash: string;
 };

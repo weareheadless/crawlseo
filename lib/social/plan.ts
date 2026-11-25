@@ -71,6 +71,8 @@ export type PlannedPost = {
   reason: string;
   subject: string;
   angle: string;
+  /** The page this post promotes; its own words are what the cover may state. */
+  pageUrl: string;
   /** A hint at most: editorial writes the copy the post carries. */
   copy?: { kicker: string; headline: string; subline: string; caption: string };
   claims: Array<{ text: string; source_url: string }>;
@@ -121,6 +123,7 @@ or
 {"post": true,
  "reason": "why this, why today",
  "subject": "the place or project this is about",
+ "page_url": "the page this post promotes, from the bundle",
  "angle": "the one idea the post carries",
  "claims": [{"text": "a specific the post asserts", "source_url": "URL from the bundle or from a page you read"}],
  "image_url": "https://... the photograph you chose, from read_page or search_photos",
@@ -129,6 +132,8 @@ or
 
 Rules checked in code:
 - subject must be one of "represented".
+- page_url must be a page from the bundle: the post promotes a page, and the
+  facts a cover may state have to come from that page.
 - image_url must be a URL a tool returned; image must be a catalogue file. One of them is required.
 - claims must cite a URL from the bundle or a page you read.
 - Do not repeat a subject or headline from "posts".
@@ -191,6 +196,11 @@ export function parsePlan(
   const copy = (value.copy ?? {}) as Record<string, unknown>;
   const headline = typeof copy.headline === "string" ? copy.headline.trim() : "";
 
+  const pageUrl = typeof value.page_url === "string" ? value.page_url.trim() : "";
+  if (!pageUrl || !input.crawl.some((page) => page.url === pageUrl)) {
+    return { error: "the post must promote a page from the site" };
+  }
+
   const subject = typeof value.subject === "string" ? value.subject.trim() : "";
   const represented = input.represented.map(normaliseName);
   if (subject && !represented.some((name) => name === normaliseName(subject))) {
@@ -229,6 +239,7 @@ export function parsePlan(
       post: true,
       reason: typeof value.reason === "string" ? value.reason.trim() : "",
       subject,
+      pageUrl,
       angle: typeof value.angle === "string" ? value.angle.trim() : "",
       ...(headline
         ? {

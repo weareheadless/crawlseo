@@ -26,8 +26,8 @@ export type SocialCopy = {
   headline: string;
   subline?: string;
   caption?: string;
-  /** Verified short statements the cover may set as cover lines. */
-  facts?: string[];
+  /** Verified short statements the cover may set as cover lines, with sources. */
+  facts?: Array<{ text: string; source_url: string }>;
 };
 
 export type SocialDecisionInput = {

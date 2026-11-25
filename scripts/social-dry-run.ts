@@ -205,6 +205,7 @@ async function main() {
     locale,
     voice,
     subject: plan.subject,
+    page_url: plan.pageUrl,
     angle: plan.angle,
     copy,
     images: [
