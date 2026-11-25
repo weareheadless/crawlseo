@@ -29,7 +29,10 @@ const INPUT: PlannerInput = {
       sourceUrl: "https://propertymex.com/resources",
     },
   ],
-  photos: ["susi-photo-1.jpg", "susi-photo-2.jpg"],
+  photos: [
+    { file: "susi-photo-1.jpg", description: "Rooftop pool, midday." },
+    { file: "susi-photo-2.jpg", description: "Aerial of the beach." },
+  ],
   locales: ["en"],
   today: "2026-11-24",
 };
@@ -52,6 +55,7 @@ const VALID = {
     },
   ],
   image: "susi-photo-1.jpg",
+  composition: "band2",
   art_direction: "Documentary, not postcard.",
 };
 
@@ -104,6 +108,13 @@ describe("parsePlan", () => {
   it("refuses a subject the brand does not represent", () => {
     const result = parsePlan({ ...VALID, subject: "Mérida" }, INPUT);
     expect(result).toHaveProperty("error");
+  });
+
+  it("falls back to the measured band when the composition is unknown", () => {
+    const result = parsePlan({ ...VALID, composition: "collage" }, INPUT);
+    if ("error" in result) throw new Error(result.error);
+    if (!result.plan.post) return;
+    expect(result.plan.composition).toBe("band2");
   });
 
   it("refuses a photo the brand does not have", () => {

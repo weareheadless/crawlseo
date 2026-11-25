@@ -51,8 +51,8 @@ export type PlannerInput = {
   opportunities: PlannerOpportunity[];
   crawl: PlannerPage[];
   research: PlannerFinding[];
-  /** Photos the brand owns, by file name. */
-  photos: string[];
+  /** Photos the brand owns, with what is in them. A name alone is not a choice. */
+  photos: Array<{ file: string; description: string }>;
   locales: string[];
   today: string;
 };
@@ -66,6 +66,7 @@ export type PlannedPost = {
   claims: Array<{ text: string; source_url: string }>;
   image: string;
   artDirection: string;
+  composition: "band" | "band2" | "scrim";
 };
 
 export type PlannedNone = { post: false; reason: string };
@@ -98,11 +99,14 @@ or
  "claims": [{"text": "a specific the caption or image asserts",
              "source_url": "the source it came from, copied from the bundle"}],
  "image": "one file name from photos",
+ "composition": "band | band2 | scrim — band2 is a cream band under a full-width photo, scrim is full-bleed type over a gradient",
  "art_direction": "one or two sentences for the designer"}
 
 Rules that are checked in code, not trusted:
 - subject must be one of "represented".
-- image must be one of "photos".
+- image must be one of "photos", chosen for what the description says is in the
+  picture. Do not pick a photo whose description does not fit the angle.
+- composition must be one of band, band2, scrim.
 - every claim's source_url must be a URL that appears in the bundle. A specific
   with no source is not allowed; leave it out rather than guessing.
 - Do not repeat a subject or headline from "posts".
@@ -161,9 +165,16 @@ export function parsePlan(raw: unknown, input: PlannerInput): PlanResult | { err
   }
 
   const image = typeof value.image === "string" ? value.image.trim() : "";
-  if (!input.photos.includes(image)) {
+  if (!input.photos.some((photo) => photo.file === image)) {
     return { error: `the planner chose a photo the brand does not have: ${image || "(none)"}` };
   }
+
+  const compositions = ["band", "band2", "scrim"] as const;
+  type Composition = (typeof compositions)[number];
+  const chosen = typeof value.composition === "string" ? value.composition.trim() : "";
+  const composition: Composition = (compositions as readonly string[]).includes(chosen)
+    ? (chosen as Composition)
+    : "band2";
 
   const sources = bundleSources(input);
   const droppedClaims: string[] = [];
@@ -197,6 +208,7 @@ export function parsePlan(raw: unknown, input: PlannerInput): PlanResult | { err
       },
       claims,
       image,
+      composition,
       artDirection:
         typeof value.art_direction === "string" ? value.art_direction.trim() : "",
     },
