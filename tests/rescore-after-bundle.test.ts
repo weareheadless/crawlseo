@@ -108,11 +108,14 @@ describe("when a bundle adds impressions, the stored score moves on its own", ()
     // The identity and the text are untouched: this is the same opportunity, re-priced.
     expect(updates[0].where.id).toBe("op-apnea");
     // The class and the model version are written with the score, never separately: a
-    // number whose class was stale would sort in the wrong band.
+    // number whose class was stale would sort in the wrong band. `scoreInputs` is written
+    // too, because the score is computed from *repaired* inputs (a missing window or target
+    // is filled from evidence) and a row must be able to reproduce its own number.
     expect(Object.keys(updates[0].data).sort()).toEqual([
       "assessmentVersion",
       "evidenceClass",
       "lastScoredAt",
+      "scoreInputs",
       "scoreValue",
     ]);
   });

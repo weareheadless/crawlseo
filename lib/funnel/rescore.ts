@@ -92,6 +92,26 @@ function hasWorth(inputs: unknown): inputs is ScoreInputs {
 }
 
 /**
+ * Whether two stored input blobs are the same facts.
+ *
+ * Compared by value, not identity: the repair helpers return a fresh object on every call,
+ * so a reference check would report "changed" forever and the sweep would rewrite every row
+ * on every run. `computeScore` also stamps `assessment` and `assessmentVersion` into the
+ * inputs it returns, so those two keys are deliberately ignored — they are a record of the
+ * scoring, not an input to it.
+ *
+ * Serialised comparison is adequate here because the shape is plain JSON that this module
+ * itself produced: no dates, no class instances, no key ordering worth preserving.
+ */
+function sameStoredInputs(stored: unknown, next: unknown): boolean {
+  const strip = (value: unknown): string => {
+    const { assessment: _a, assessmentVersion: _v, ...rest } = (value ?? {}) as Record<string, unknown>;
+    return JSON.stringify(rest);
+  };
+  return strip(stored) === strip(next);
+}
+
+/**
  * The longest Search Console window the project's keyword evidence was measured over.
  *
  * Null when no evidence states one, which stays null: a missing window is a missing
@@ -250,9 +270,19 @@ export async function rescoreProjectOpportunities(
     const inputs = withResolvedDemand(withMeasuredWindow(row.scoreInputs, windowDays), hasSerp);
     const scored = computeScore(inputs);
     const next = scored.scoreValue;
-    // The class is a function of the same inputs, so a change to either moves the row
-    // on the board. Comparing only the score would leave a row in the wrong band.
-    if (next === row.scoreValue && scored.evidenceClass === row.evidenceClass) {
+    /**
+     * "Unchanged" means the score, the class **and** the inputs all already agree.
+     *
+     * The inputs have to be part of the test, not just the number. A repair can fill a
+     * missing window or target that changes neither the score nor the class on this run but
+     * leaves the row unable to reproduce its own number — and comparing only the score and
+     * class would skip the write forever, so the repair would be recomputed and discarded on
+     * every sweep. Measured 2026-11-25: 26 open rows read `measured` while a raw
+     * `computeScore` on their stored inputs returned `hypothesis`, because the window the
+     * score used was never written back.
+     */
+    const inputsChanged = !sameStoredInputs(row.scoreInputs, scored.inputs);
+    if (next === row.scoreValue && scored.evidenceClass === row.evidenceClass && !inputsChanged) {
       result.unchanged += 1;
       continue;
     }
@@ -272,6 +302,21 @@ export async function rescoreProjectOpportunities(
       data: {
         scoreValue: next,
         evidenceClass: scored.evidenceClass,
+        /**
+         * Persist the inputs the score was actually computed from.
+         *
+         * `rescore` repairs two facts before scoring: a missing measurement window and a
+         * missing target position. Computing the score from the repaired inputs but storing
+         * only the number leaves the row in a state where its own stored `scoreInputs`
+         * cannot reproduce its stored score — verified 2026-11-25 on 26 open rows that read
+         * `measured` while a raw `computeScore` on their stored inputs returned
+         * `hypothesis`, because the window and target the score used were never written.
+         *
+         * A row must be able to explain its own number. That is the whole point of storing
+         * inputs, and without this a later reader could not tell a repaired row from a
+         * miscalculated one.
+         */
+        scoreInputs: scored.inputs as never,
         // The version of the model that produced this number. A row re-scored by a
         // newer model stops claiming to have been assessed by the old one, which is
         // what made the 23-vs-6 cohort impossible to find.

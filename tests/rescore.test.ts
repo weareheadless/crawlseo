@@ -14,6 +14,15 @@ import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
  * pins the entry point those two callers share.
  */
 
+/**
+ * The inputs a re-score writes for `inputs()`: the same facts plus the derived demand
+ * fields. Used where a test needs a row already at steady state.
+ */
+function steadyInputs(businessValue = 0.85): ScoreInputs {
+  const base = inputs(businessValue);
+  return { ...base, worth: { ...base.worth, hasSerp: false, demandResolution: "candidate" } };
+}
+
 function inputs(businessValue = 0.85): ScoreInputs {
   return {
     worth: {
@@ -118,7 +127,13 @@ describe("a stored score follows its inputs", () => {
     // The property the nightly sweep depends on. A job that rewrites rows every run
     // makes "did anything change?" unanswerable. The stored row has to carry the class
     // as well as the score, because both are compared.
-    const scored = computeScore(inputs());
+    //
+    // It also has to carry the demand fields the re-score derives (`hasSerp`,
+    // `demandResolution`). This fixture used to omit them, so the first run added them and
+    // the test read that as a legitimate change — which is exactly right for a row that has
+    // never been re-scored, and exactly wrong as a test of the steady state. A steady-state
+    // row is one already written by this version.
+    const scored = computeScore(steadyInputs());
     const { db, updates } = mockDb([
       {
         id: "op-1",
@@ -126,7 +141,7 @@ describe("a stored score follows its inputs", () => {
         status: "detected",
         scoreValue: scored.scoreValue,
         evidenceClass: scored.evidenceClass,
-        scoreInputs: inputs(),
+        scoreInputs: steadyInputs(),
       },
     ]);
     const first = await rescoreProjectOpportunities(db as never, { projectId: "p1" });
