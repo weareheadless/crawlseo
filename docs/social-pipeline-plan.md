@@ -41,7 +41,8 @@ Four mechanical guards sit behind it, none of them about eligibility:
    number, name or date that the brief does not hold.
 2. **Image** comes from the brand's own library, never a stand-in for a
    building or a project.
-3. **Render** must pass Cicero's deterministic gate (SOC-011).
+3. **Render** is one model call; the cover ships as designed, and a person
+   reads the draft before it is public.
 4. **Once** — a unique `opportunityId` on the social link.
 
 ## Why the gates were dropped
@@ -70,7 +71,7 @@ of the world, not an authority over what the brand may say.
 |---|---|
 | CrawlSEO | opportunity, evidence, the human decision, copy brief, delivery receipt, measurement |
 | Editorial | writes and verifies the copy into an artifact; never publishes |
-| Cicero | renders brand assets into media, runs the deterministic gate, publishes to Meta, returns a receipt |
+| Cicero | renders the brand's media in one design call, publishes to Meta, returns a receipt |
 
 Brand identity is one record — `SiteProfile` in CrawlSEO (palette, fonts, voice,
 locales, services, topics, logo reference, represented projects). Cicero keeps no
@@ -100,7 +101,7 @@ Prefix `SOC-`. Each issue is self-contained; this document is the shared map.
 
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
-| SOC-011 | cicero | Render gate library with fixtures | [#1](https://github.com/weareheadless/cicero/issues/1) — merged |
+| SOC-011 | cicero | Render gate library with fixtures | [#1](https://github.com/weareheadless/cicero/issues/1) — merged, then removed |
 | SOC-012 | cicero | One design call; delete the propose/verify/revise pipeline | [#2](https://github.com/weareheadless/cicero/issues/2) — merged |
 | SOC-003 | crawlseo | An actioned opportunity may become one social post | [#191](https://github.com/weareheadless/crawlseo/issues/191) — merged |
 
