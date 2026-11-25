@@ -119,7 +119,7 @@ Prefix `SOC-`. Each issue is self-contained; this document is the shared map.
 | Issue | Repo | Title | Ticket |
 |---|---|---|---|
 | SOC-014 | cicero | Social render + publish API for the delivery adapter | [#4](https://github.com/weareheadless/cicero/issues/4) — merged |
-| SOC-006 | crawlseo | Publish an actioned opportunity through Cicero, once | [#194](https://github.com/weareheadless/crawlseo/issues/194) |
+| SOC-006 | crawlseo | Publish an actioned opportunity through Cicero, once | [#194](https://github.com/weareheadless/crawlseo/issues/194) — merged |
 
 SOC-006 is the whole lane: one function that asks `decideSocialPost`, calls
 Cicero's two endpoints and writes a `SocialPost` receipt. There is no adapter, no
