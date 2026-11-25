@@ -14,7 +14,6 @@ CREATE TABLE "SocialPost" (
     "providerPostId" TEXT,
     "caption" TEXT NOT NULL DEFAULT '',
     "contentHash" TEXT NOT NULL DEFAULT '',
-    "gateAttempts" INTEGER,
     "error" TEXT NOT NULL DEFAULT '',
     "decidedAt" TIMESTAMP(3),
     "publishedAt" TIMESTAMP(3),

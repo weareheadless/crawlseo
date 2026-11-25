@@ -38,10 +38,8 @@ export type RenderOutcome =
       contentHash: string;
       caption: string;
       image: string;
-      attempts: number;
       brandRevision: string;
     }
-  | { outcome: "gate_failed"; codes: string[]; issues: Array<Record<string, unknown>> }
   | { outcome: "refused"; code: string; detail: string; retryable: boolean };
 
 export type PublishOutcome =
@@ -123,18 +121,10 @@ export function createCiceroClient(options: {
           contentHash: String(payload.content_hash ?? ""),
           caption: String(payload.caption ?? artifact.copy.caption ?? ""),
           image: String(payload.image ?? ""),
-          attempts: Number(payload.gate?.attempts ?? 0),
           brandRevision: String(payload.brand_revision ?? ""),
         };
       }
       const detail = payload?.detail;
-      if (status === 422 && detail && typeof detail === "object" && detail.code === "RENDER_GATE_FAILED") {
-        return {
-          outcome: "gate_failed",
-          codes: Array.isArray(detail.codes) ? detail.codes.map(String) : [],
-          issues: Array.isArray(detail.issues) ? detail.issues : [],
-        };
-      }
       const text = typeof detail === "string" ? detail : JSON.stringify(detail ?? `Cicero returned ${status}`);
       return { outcome: "refused", ...refusalFor(status, text) };
     },

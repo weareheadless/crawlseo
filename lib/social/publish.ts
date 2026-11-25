@@ -37,7 +37,6 @@ export type SocialReceipt = {
   providerPostId: string | null;
   caption: string;
   contentHash: string;
-  gateAttempts: number | null;
   error: string;
   decidedAt: Date | null;
   /** Null for `unknown`: nothing is known about when, or whether, it landed. */
@@ -56,13 +55,7 @@ export type SocialAsset = { path: string; alt?: string };
 
 export type PublishResult =
   | { outcome: "posted"; receipt: SocialReceipt; replay: boolean }
-  | {
-      outcome: "rejected";
-      reason: SocialRejection | "RENDER_GATE_FAILED";
-      detail: string;
-      /** Cicero's gate codes, when the render was refused for a visual reason. */
-      codes?: string[];
-    }
+  | { outcome: "rejected"; reason: SocialRejection; detail: string }
   | { outcome: "refused"; code: string; detail: string; retryable: boolean };
 
 export type PublishInput = {
@@ -146,16 +139,6 @@ export async function publishSocialPost(input: PublishInput): Promise<PublishRes
   });
 
   const rendered = await input.cicero.render({ artifact, artDirection: input.artDirection ?? "" });
-  if (rendered.outcome === "gate_failed") {
-    // Nothing is recorded: the model is stochastic, so a retry may pass, and a
-    // cached failure would block the only recovery path there is.
-    return {
-      outcome: "rejected",
-      reason: "RENDER_GATE_FAILED",
-      detail: `the render gate refused it (${rendered.codes.join(", ") || "no code"})`,
-      codes: rendered.codes,
-    };
-  }
   if (rendered.outcome === "refused") {
     return rendered;
   }
@@ -181,7 +164,6 @@ export async function publishSocialPost(input: PublishInput): Promise<PublishRes
     providerPostId: published.providerPostId,
     caption: rendered.caption,
     contentHash: rendered.contentHash,
-    gateAttempts: rendered.attempts,
     error: published.status === "unknown" ? "Meta's response was not received; it may have landed" : "",
     decidedAt: input.opportunity.decidedAt ?? null,
     publishedAt: published.status === "unknown" ? null : new Date(),
@@ -200,7 +182,6 @@ const RECEIPT_SELECT = {
   providerPostId: true,
   caption: true,
   contentHash: true,
-  gateAttempts: true,
   error: true,
   decidedAt: true,
   publishedAt: true,
@@ -220,7 +201,6 @@ function asReceipt(row: {
     providerPostId: (value.providerPostId as string | null) ?? null,
     caption: String(value.caption ?? ""),
     contentHash: String(value.contentHash ?? ""),
-    gateAttempts: (value.gateAttempts as number | null) ?? null,
     error: String(value.error ?? ""),
     decidedAt: (value.decidedAt as Date | null) ?? null,
     publishedAt: (value.publishedAt as Date | null) ?? null,

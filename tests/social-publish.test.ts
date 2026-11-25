@@ -40,7 +40,6 @@ function fakeCicero(overrides: Partial<CiceroClient> = {}) {
         contentHash: "sha256:image",
         caption: COPY.caption ?? "",
         image: "social/renders/render_1/post.png",
-        attempts: 1,
         brandRevision: "sha256:brand",
       };
     },
@@ -122,7 +121,6 @@ describe("publishSocialPost", () => {
       providerPostId: "page_1_post_1",
       caption: COPY.caption ?? "",
       contentHash: "sha256:image",
-      gateAttempts: 1,
       error: "",
       decidedAt: new Date("2026-11-24T09:00:00Z"),
       publishedAt: new Date("2026-11-24T10:00:00Z"),
@@ -135,27 +133,6 @@ describe("publishSocialPost", () => {
     expect(result.receipt).toBe(existing);
     expect(calls.render).toBe(0);
     expect(calls.publish).toBe(0);
-  });
-
-  it("surfaces the render gate's codes and records nothing", async () => {
-    const { client, calls } = fakeCicero({
-      async render() {
-        return {
-          outcome: "gate_failed",
-          codes: ["OCCLUDED", "COPY_EXTRA"],
-          issues: [{ code: "OCCLUDED", severity: "error", detail: "the type is covered" }],
-        };
-      },
-    });
-    const record = vi.fn();
-    const result = await publishSocialPost(base({ cicero: client, record }));
-
-    expect(result).toMatchObject({ outcome: "rejected", reason: "RENDER_GATE_FAILED" });
-    if (result.outcome !== "rejected") return;
-    expect(result.codes).toEqual(["OCCLUDED", "COPY_EXTRA"]);
-    expect(result.detail).toContain("OCCLUDED");
-    expect(calls.publish).toBe(0);
-    expect(record).not.toHaveBeenCalled();
   });
 
   it("records an unknown outcome and never posts it again", async () => {
@@ -217,7 +194,6 @@ describe("publishSocialPost", () => {
     const { client } = fakeCicero();
     const result = await publishSocialPost(base({ cicero: client }));
     if (result.outcome !== "posted") throw new Error("expected a post");
-    expect(result.receipt.gateAttempts).toBe(1);
     expect(result.receipt.contentHash).toBe("sha256:image");
     expect(result.receipt.channel).toBe("facebook_page");
     expect(result.receipt.locale).toBe("en");

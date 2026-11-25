@@ -252,7 +252,6 @@ model SocialPost {
   providerPostId String?
   caption        String    @default("")
   contentHash    String    @default("")
-  gateAttempts   Int?
   error          String    @default("")
   /// When the human actioned the opportunity; the row keeps no second copy.
   decidedAt      DateTime?

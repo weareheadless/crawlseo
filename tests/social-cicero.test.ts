@@ -48,7 +48,6 @@ describe("the render call", () => {
       caption: COPY.caption,
       image: "social/renders/render_1/post.png",
       brand_revision: "sha256:brand",
-      gate: { attempts: 2 },
     });
     await createCiceroClient({ siteId: "site_1", fetchImpl: fetchImpl as unknown as typeof fetch }).render({
       artifact: ARTIFACT,
@@ -71,7 +70,6 @@ describe("the render call", () => {
       caption: "caption from the render",
       image: "social/renders/render_1/post.png",
       brand_revision: "sha256:brand",
-      gate: { attempts: 2 },
     });
     const result = await createCiceroClient({ siteId: "site_1", fetchImpl: fetchImpl as unknown as typeof fetch }).render({
       artifact: ARTIFACT,
@@ -83,24 +81,8 @@ describe("the render call", () => {
       contentHash: "sha256:image",
       caption: "caption from the render",
       image: "social/renders/render_1/post.png",
-      attempts: 2,
       brandRevision: "sha256:brand",
     });
-  });
-
-  it("turns a gate failure into its codes, not a generic error", async () => {
-    const fetchImpl = respond(422, {
-      detail: {
-        code: "RENDER_GATE_FAILED",
-        codes: ["OCCLUDED"],
-        issues: [{ code: "OCCLUDED", severity: "error", detail: "type is covered" }],
-      },
-    });
-    const result = await createCiceroClient({ siteId: "site_1", fetchImpl: fetchImpl as unknown as typeof fetch }).render({
-      artifact: ARTIFACT,
-      artDirection: "",
-    });
-    expect(result).toMatchObject({ outcome: "gate_failed", codes: ["OCCLUDED"] });
   });
 
   it("reports a missing brand as a refusal, not a retry", async () => {
