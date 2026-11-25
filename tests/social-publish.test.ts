@@ -56,7 +56,7 @@ function fakeCicero(overrides: Partial<CiceroClient> = {}) {
 const base = (overrides: Partial<Parameters<typeof publishSocialPost>[0]> = {}) => ({
   opportunity: opportunity(),
   copy: COPY,
-  asset: { path: "content/susi-photo-6.jpg", alt: "Courtyard pool at dusk" },
+  assets: [{ path: "content/susi-photo-6.jpg", alt: "Courtyard pool at dusk" }],
   representation: REPRESENTATION,
   cicero: fakeCicero().client,
   ...overrides,
@@ -202,29 +202,29 @@ describe("publishSocialPost", () => {
 
 describe("socialArtifact", () => {
   it("is content-addressed: same copy, same hash", () => {
-    const one = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, asset: { path: "a.jpg" } });
-    const two = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, asset: { path: "a.jpg" } });
+    const one = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, assets: [{ path: "a.jpg" }] });
+    const two = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, assets: [{ path: "a.jpg" }] });
     expect(one.content_hash).toBe(two.content_hash);
   });
 
   it("changes when a word changes, and when the locale does", () => {
-    const one = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, asset: { path: "a.jpg" } });
+    const one = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "en", copy: COPY, assets: [{ path: "a.jpg" }] });
     const edited = socialArtifact({
       opportunityId: "opp_1",
       channel: "facebook_page",
       locale: "en",
       copy: { ...COPY, headline: "A different line." },
-      asset: { path: "a.jpg" },
+      assets: [{ path: "a.jpg" }],
     });
-    const spanish = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "es", copy: COPY, asset: { path: "a.jpg" } });
+    const spanish = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "es", copy: COPY, assets: [{ path: "a.jpg" }] });
     expect(edited.content_hash).not.toBe(one.content_hash);
     expect(spanish.content_hash).not.toBe(one.content_hash);
   });
 
   it("names the artifact after the opportunity and locale", () => {
-    const artifact = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "es", copy: COPY, asset: { path: "a.jpg" } });
+    const artifact = socialArtifact({ opportunityId: "opp_1", channel: "facebook_page", locale: "es", copy: COPY, assets: [{ path: "a.jpg" }] });
     expect(artifact.id).toBe("art_opp_1_es");
     expect(artifact.copy.headline).toBe(COPY.headline);
-    expect(artifact.asset).toEqual({ path: "a.jpg", alt: "" });
+    expect(artifact.assets).toEqual([{ path: "a.jpg", alt: "", credit: "" }]);
   });
 });

@@ -51,7 +51,7 @@ export type SocialOpportunity = {
   decidedAt: Date | null;
 };
 
-export type SocialAsset = { path: string; alt?: string };
+export type SocialAsset = { path: string; alt?: string; credit?: string };
 
 export type PublishResult =
   | { outcome: "posted"; receipt: SocialReceipt; replay: boolean }
@@ -61,7 +61,7 @@ export type PublishResult =
 export type PublishInput = {
   opportunity: SocialOpportunity;
   copy: SocialCopy | null;
-  asset: SocialAsset;
+  assets: SocialAsset[];
   locale?: string;
   channel?: SocialChannel;
   draft?: boolean;
@@ -90,7 +90,7 @@ export function socialArtifact(input: {
   channel: SocialChannel;
   locale: string;
   copy: SocialCopy;
-  asset: SocialAsset;
+  assets: SocialAsset[];
 }): SocialArtifactPayload {
   const body = {
     channel: input.channel,
@@ -100,8 +100,13 @@ export function socialArtifact(input: {
       headline: input.copy.headline,
       subline: input.copy.subline ?? "",
       caption: input.copy.caption ?? "",
+      facts: input.copy.facts ?? [],
     },
-    asset: { path: input.asset.path, alt: input.asset.alt ?? "" },
+    assets: input.assets.map((asset) => ({
+      path: asset.path,
+      alt: asset.alt ?? "",
+      credit: asset.credit ?? "",
+    })),
   };
   const contentHash = `sha256:${createHash("sha256").update(canonical(body)).digest("hex")}`;
   return {
@@ -135,7 +140,7 @@ export async function publishSocialPost(input: PublishInput): Promise<PublishRes
     channel,
     locale,
     copy: input.copy as SocialCopy,
-    asset: input.asset,
+    assets: input.assets,
   });
 
   const rendered = await input.cicero.render({ artifact, artDirection: input.artDirection ?? "" });
@@ -212,7 +217,7 @@ export type PublishOpportunityInput = {
   /** The CrawlSEO site whose brand renders this; Cicero resolves the brand from it. */
   siteId: string;
   copy: SocialCopy | null;
-  asset: SocialAsset;
+  assets: SocialAsset[];
   locale?: string;
   channel?: SocialChannel;
   draft?: boolean;
@@ -262,7 +267,7 @@ export async function publishOpportunity(input: PublishOpportunityInput): Promis
   return publishSocialPost({
     opportunity,
     copy: input.copy,
-    asset: input.asset,
+    assets: input.assets,
     locale: input.locale,
     channel: input.channel,
     draft: input.draft,

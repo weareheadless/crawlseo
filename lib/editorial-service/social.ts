@@ -15,8 +15,16 @@ export type SocialBriefInput = {
   voice?: string;
   subject: string;
   angle: string;
-  copy: { kicker: string; headline: string; subline: string; caption: string };
-  image: { name: string; alt?: string; provenance?: "own_photo" | "generic_location" | "none" };
+  copy: {
+    kicker: string;
+    headline: string;
+    subline: string;
+    caption: string;
+    /** Short statements the cover may set; every figure must be in a claim. */
+    facts?: string[];
+  };
+  /** One to three images, each a source the caller can credit. */
+  images: Array<{ name: string; alt?: string; provenance?: "own_photo" | "generic_location" | "none" }>;
   representation?: "represented" | "own_service" | "commentary" | "unrepresented";
   claims: Array<{ text: string; source_url: string }>;
   idempotencyKey: string;
@@ -35,7 +43,8 @@ export type EditorialSocialArtifact = {
     headline: string;
     subline: string;
     caption: string;
-    image: { asset_id: string; provenance: string; alt: string; credit: string };
+    facts: string[];
+    images: Array<{ asset_id: string; provenance: string; alt: string; credit: string }>;
     representation: string;
     subject: string;
   };
@@ -59,7 +68,13 @@ export type SocialCopyInput = {
   evidence?: Array<{ text: string; source_url: string }>;
 };
 
-export type SocialCopy = { kicker: string; headline: string; subline: string; caption: string };
+export type SocialCopy = {
+  kicker: string;
+  headline: string;
+  subline: string;
+  caption: string;
+  facts: string[];
+};
 
 export type SocialCopyOutcome =
   | { outcome: "written"; copy: SocialCopy; writer: string; model: string }
@@ -128,14 +143,15 @@ export function socialBrief(input: SocialBriefInput): Record<string, unknown> {
           headline: input.copy.headline,
           subline: input.copy.subline,
           caption: input.copy.caption,
+          facts: input.copy.facts ?? [],
         },
       },
-      image: {
-        asset_id: input.image.name,
-        provenance: input.image.provenance ?? "own_photo",
-        alt: input.image.alt ?? "",
+      images: input.images.map((image) => ({
+        asset_id: image.name,
+        provenance: image.provenance ?? "own_photo",
+        alt: image.alt ?? "",
         credit: "",
-      },
+      })),
       representation: input.representation ?? "represented",
       subject: input.subject,
       // The planner has already dropped any claim whose source the bundle did

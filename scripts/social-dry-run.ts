@@ -207,11 +207,13 @@ async function main() {
     subject: plan.subject,
     angle: plan.angle,
     copy,
-    image: {
-      name: plan.imageUrl || plan.image,
-      alt: asset.alt,
-      provenance: plan.imageUrl ? "own_photo" : "own_photo",
-    },
+    images: [
+      {
+        name: plan.imageUrl || plan.image,
+        alt: asset.alt,
+        provenance: "own_photo",
+      },
+    ],
     representation: "represented",
     claims: plan.claims,
     idempotencyKey: `plan:${siteId}:${input.today}:${plan.imageUrl || plan.image}:${copy.headline.slice(0, 40)}`,
@@ -231,10 +233,13 @@ async function main() {
         headline: artifact.social.headline,
         subline: artifact.social.subline,
         caption: artifact.social.caption,
+        facts: artifact.social.facts,
       },
-      asset: asset.path
-        ? { path: asset.path, alt: asset.alt, credit: asset.credit }
-        : { url: asset.url, alt: asset.alt, credit: asset.credit },
+      assets: [
+        asset.path
+          ? { path: asset.path, alt: asset.alt, credit: asset.credit }
+          : { url: asset.url, alt: asset.alt, credit: asset.credit },
+      ],
       content_hash: artifact.contentHash,
     },
     artDirection: plan.artDirection,
