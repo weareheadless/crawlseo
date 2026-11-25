@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
-import { ctrAtPosition } from "@/lib/funnel/scoring";
+import { ctrAtPosition, type ScoreInputs } from "@/lib/funnel/scoring";
 import { TARGET_POSITION } from "@/lib/funnel/impact";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
@@ -420,6 +420,20 @@ export function proposalScoreInputs(
 } {
   const volume = cluster?.metrics.volume || cluster?.metrics.impressions || null;
   const businessValue = cluster?.relevance === "high" ? 0.85 : cluster?.relevance === "medium" ? 0.55 : 0.25;
+  // Where that number came from. The model rated the topic's commercial relevance
+  // from the site's own knowledge facts and its pages, so the provenance is
+  // `cluster`; a proposal with no cluster behind it has no judgement at all and says
+  // `unknown` rather than borrowing the shape of one.
+  //
+  // This was absent, and absence is not neutral: `computeScore` damped every row
+  // without a source to 0.25, so a generated proposal's own relevance rating never
+  // reached the score. Measured 2026-11-25, all 102 open rows were in that state and
+  // the apnea article scored 7 instead of 22.
+  const businessValueSource: ScoreInputs["worth"]["businessValueSource"] = cluster
+    ? cluster.relevance === "high" || cluster.relevance === "medium" || cluster.relevance === "low"
+      ? "cluster"
+      : "unknown"
+    : "unknown";
   const sizeFactor = proposal.effort === "small" ? 0.5 : proposal.effort === "large" ? 2 : 1;
   return {
     worth: {
@@ -428,6 +442,7 @@ export function proposalScoreInputs(
       // 8 and a page at position 60 look like the same opportunity.
       ctrAtPosition: cluster?.metrics.position != null ? ctrAtPosition(cluster.metrics.position) : null,
       businessValue,
+      businessValueSource,
       intentFit: intentFitFor(cluster?.intent),
       volumeSource: cluster?.metrics.volume ? "provider" : volume ? "first_party" : "unknown",
       readiness: proposal.kind === "business" ? "needs_investigation" : "actionable",
