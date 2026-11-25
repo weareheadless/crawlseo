@@ -13,12 +13,13 @@ const rawClient =
         : ["error"],
   });
 
-// Legacy funnel tables are frozen read-only at CUTOVER, not before
-// (docs/seo-funnel-spine-plan.md §6): legacy scheduled producers (crawl issue
-// sync, research sync) still own writes to these tables until their funnel
-// replacements exist. The global freeze is therefore gated and must be
-// enabled only in the cutover release (CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict).
-// The mechanism itself is implemented and tested in lib/funnel/legacy-freeze.ts.
+// Legacy funnel tables are frozen read-only only once their producers are gone:
+// see `FROZEN_NOW` / `FROZEN_CREATES` in `lib/funnel/legacy-freeze.ts`, which are
+// both empty today because every table in that file still has a live writer.
+// `FROZEN_FUNNEL_MODELS` is the audit list, NOT the set of frozen tables — reading
+// it as the freeze set is what once made this comment claim a cutover was safe.
+// Enabling this flag while a producer still runs breaks that producer, so it is
+// gated and off everywhere.
 export const db =
   process.env.CRAWLSEO_LEGACY_FUNNEL_FREEZE === "strict"
     ? withFrozenLegacyFunnel(rawClient)
