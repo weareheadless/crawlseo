@@ -88,12 +88,36 @@ export type PipelineInput = {
    * bundle is reported `blocked` and nothing paid is attempted.
    */
   approval?: string | null;
-  /** Re-run stages that already have a completed run. */
+  /**
+   * Re-run the topic map and the proposals even when completed runs exist.
+   *
+   * This is the "the evidence changed, rebuild the map" case, and it costs a
+   * model call. It never re-buys the bundle: repairing a map that was built
+   * before its data must not spend provider money to prove a point.
+   */
   refresh?: boolean;
+  /**
+   * Re-buy the paid bundle even when a completed one exists. This is the only
+   * flag that spends, and it is separate from `refresh` on purpose: one flag
+   * that did both would make every map repair a purchase.
+   */
+  refreshBundle?: boolean;
   /** Continue past a `PARTIAL` bundle. Explicit, never implicit. */
   allowPartial?: boolean;
   /** Provider caps for the bundle, when a caller wants to bound it. */
   caps?: Parameters<typeof runMonthlyBundle>[1]["caps"];
+  /**
+   * The market to measure in, overriding the site's own context.
+   *
+   * A site whose business knowledge has no market cannot plan a bundle at all —
+   * inmersionfreediving is located in Playa del Carmen with a service area across
+   * the Riviera Maya, and none of that is a country. Code does not map a city to
+   * a country (that would be a hardcoded place list), so the missing market is
+   * reported as a site gap and the caller can supply the answer explicitly.
+   */
+  country?: string;
+  /** Same, for the language the buyers search in. */
+  language?: string;
   /** Progress lines, for a CLI. */
   onNote?: (message: string) => void;
   /** Tests only: replace a stage runner. Never set in production code. */
@@ -192,6 +216,8 @@ export async function runResearchPipeline(
         month,
         mode: "dry-run",
         caps: input.caps,
+        country: input.country,
+        language: input.language,
       });
       const mapped = bundleStatus(plan);
       stages.push({ stage: "bundle", status: mapped.status, runId: plan.runId, detail: mapped.detail });
@@ -204,7 +230,7 @@ export async function runResearchPipeline(
       });
       return finish("bundle");
     }
-  } else if (existingBundle?.status === "COMPLETED" && !input.refresh) {
+  } else if (existingBundle?.status === "COMPLETED" && !input.refreshBundle) {
     // The receipt is the gate. Reusing it is what stops paying twice for one
     // month, which is the whole reason the bundle records a key.
     stages.push({
@@ -232,8 +258,10 @@ export async function runResearchPipeline(
         month,
         mode: "execute",
         approval,
-        resume: Boolean(input.refresh && existingBundle),
+        resume: Boolean(input.refreshBundle && existingBundle),
         caps: input.caps,
+        country: input.country,
+        language: input.language,
       });
       const mapped = bundleStatus(bundle);
       stages.push({ stage: "bundle", status: mapped.status, runId: bundle.runId, detail: mapped.detail });

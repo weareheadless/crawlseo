@@ -355,6 +355,47 @@ describe("the research pipeline gate", () => {
     expect(result.blockedBy).toBe("bundle");
   });
 
+  it("rebuilds the map on refresh without re-buying a completed bundle", async () => {
+    // Repairing a map that was built before its data must not spend provider
+    // money to prove a point. `refresh` is the model-call rebuild; only
+    // `refreshBundle` re-buys.
+    const calls: string[] = [];
+    let bundleCalled = false;
+    const result = await runResearchPipeline(fakeDb([bundleRun()]), {
+      siteId: "site-1",
+      month: "2026-11",
+      mode: "execute",
+      approval: "owner-ref",
+      refresh: true,
+      deps: deps({
+        calls,
+        bundle: async () => {
+          bundleCalled = true;
+          calls.push("bundle");
+          return bundleResult("completed");
+        },
+      }),
+    });
+
+    expect(bundleCalled).toBe(false);
+    expect(calls).toEqual(["topic-map", "opportunities"]);
+    expect(result.stages[0].status).toBe("skipped");
+    expect(result.stages[1].status).toBe("completed");
+  });
+
+  it("re-buys the bundle only when refreshBundle is set", async () => {
+    const calls: string[] = [];
+    await runResearchPipeline(fakeDb([bundleRun()]), {
+      siteId: "site-1",
+      month: "2026-11",
+      mode: "execute",
+      approval: "owner-ref",
+      refreshBundle: true,
+      deps: deps({ calls }),
+    });
+    expect(calls).toEqual(["bundle", "topic-map", "opportunities"]);
+  });
+
   it("rejects a malformed month before touching anything", async () => {
     await expect(
       runResearchPipeline(fakeDb(), { siteId: "site-1", month: "November", mode: "dry-run", deps: deps() })

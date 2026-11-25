@@ -3,7 +3,12 @@
  *
  *   npx tsx scripts/research-pipeline.ts --site <siteId> --month 2026-11 --dry-run
  *   npx tsx scripts/research-pipeline.ts --site <siteId> --month 2026-11 \
- *     --execute --approval <owner-reference> [--refresh] [--allow-partial]
+ *     --execute --approval <owner-reference> [--refresh] [--refresh-bundle] [--allow-partial]
+ *
+ * `--refresh` rebuilds the topic map and the proposals, which costs a model
+ * call. `--refresh-bundle` re-buys the paid evidence, which costs money. They
+ * are separate on purpose: repairing a map that was built before its data must
+ * not buy the data again.
  *
  * The pipeline is three stages in the order the data requires: the paid bundle,
  * the topic map built from it, then the proposals drafted from the map. Until
@@ -29,6 +34,9 @@ type Args = {
   mode: "dry-run" | "execute";
   approval?: string;
   refresh: boolean;
+  refreshBundle: boolean;
+  country?: string;
+  language?: string;
   allowPartial: boolean;
   json: boolean;
 };
@@ -71,6 +79,9 @@ function parseArgs(argv: string[]): Args {
     mode: execute ? "execute" : "dry-run",
     approval: values.get("approval"),
     refresh: flags.has("refresh"),
+    refreshBundle: flags.has("refresh-bundle"),
+    country: values.get("country"),
+    language: values.get("language"),
     allowPartial: flags.has("allow-partial"),
     json: flags.has("json"),
   };
@@ -86,6 +97,9 @@ async function main(): Promise<void> {
       mode: args.mode,
       approval: args.approval,
       refresh: args.refresh,
+      refreshBundle: args.refreshBundle,
+      country: args.country,
+      language: args.language,
       allowPartial: args.allowPartial,
       onNote: (message) => process.stderr.write(`${message}\n`),
     });
