@@ -61,10 +61,15 @@ function inputs(source: ScoreInputs["worth"]["businessValueSource"]): ScoreInput
 }
 
 describe("a recorded business-value source is worth what it is worth", () => {
-  it("scores the stored apnea row 22 once its source is known", () => {
-    // The number this change is about. 7 was the penalty, not the judgement.
-    expect(computeScore(inputs(undefined)).scoreValue).toBe(7);
-    expect(computeScore(inputs("cluster")).scoreValue).toBe(22);
+  it("rates the stored apnea row higher once its source is known", () => {
+    // The defect this change is about, stated as a relationship rather than a pair of
+    // literals: 7-vs-22 was the penalty being visible in one particular formula, and the
+    // formula has since become a rate on the market (ASSESSMENT_VERSION 4). What must not
+    // change is the *sign* — a row with a recorded judgement from this business has to beat
+    // the same row with none, or the provenance is doing nothing.
+    const unknown = computeScore(inputs(undefined)).scoreValue;
+    const cluster = computeScore(inputs("cluster")).scoreValue;
+    expect(cluster).toBeGreaterThan(unknown);
   });
 
   it("treats a cluster rating and a knowledge fact as equally grounded", () => {

@@ -6,7 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { ctrAtPosition, type ScoreInputs } from "@/lib/funnel/scoring";
-import { TARGET_POSITION } from "@/lib/funnel/impact";
+import { resolveDemand, TARGET_POSITION } from "@/lib/funnel/impact";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
 import {
@@ -480,22 +480,27 @@ export function proposalScoreInputs(
       windowDays: cluster?.metrics.windowDays ?? null,
       observedImpressions,
       /**
-       * D3: whether this row's demand is measured here, or is still a candidate.
+       * D3: a bought SERP resolves the demand read even when the site has no impressions.
        *
-       * A `candidate` is a topic the site has never been observed for, targeting a page
-       * that does not exist, with no SERP bought for it. Its only demand number is
-       * provider volume — market size, not reach — and presenting that as expected clicks
-       * is how "a page that does not exist" scored 38 while a page ranking 29th scored 1.
+       * `metrics.difficulty` is only populated from a purchased snapshot (`topic-map.ts`
+       * reads `provider:difficulty`), so its presence means this cluster has a real
+       * competitive read. That is what lets a new site size a market it has never been
+       * shown for — the whole point of buying the $0.004 snapshot.
+       */
+      hasSerp: cluster?.metrics.difficulty != null,
+      /**
+       * Whether this row's demand is resolved, via the one shared rule.
        *
-       * `computeScore` turns this into `expectedClicksPerMonth: null`, so the row says
-       * "candidate" rather than claiming a return. One $0.004 SERP on the topic is what
-       * moves it to `observed`: after that the site has a real competitive read.
+       * Not restated here, so the producer, the scorer and the re-score cannot drift
+       * apart on what "resolved" means. `unresolved` is the D3 candidate: market size with
+       * no read behind it, so the row quotes no return.
        */
       demandResolution:
-        // A bought SERP is what turns a candidate into a measured topic: `difficulty` is
-        // only populated from a purchased snapshot, so a topic that has one has a real
-        // competitive read even when the site has no impressions yet.
-        !(cluster?.metrics.impressions ?? 0) && proposal.target.newAsset && cluster?.metrics.difficulty == null
+        resolveDemand({
+          observedImpressions,
+          hasSerp: cluster?.metrics.difficulty != null,
+          hasPage: !proposal.target.newAsset,
+        }) === "unresolved"
           ? "candidate"
           : "observed",
     },
