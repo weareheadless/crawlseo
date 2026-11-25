@@ -185,7 +185,10 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
-type ContextDb = Pick<PrismaClient, "site" | "siteProfile" | "businessKnowledgeDocument">;
+type ContextDb = Pick<PrismaClient, "site" | "siteProfile" | "businessKnowledgeDocument"> &
+  // `keyword` is optional so an existing caller that does not pass it still works: a
+  // profile-only context is a valid context, and the measured countries are additive.
+  Partial<Pick<PrismaClient, "keyword">>;
 
 /**
  * Read the owner's accepted business knowledge for a project, falling back to the
@@ -208,6 +211,35 @@ export async function businessKnowledgeFields(
   const wanted = document.acceptedRevision ?? document.revision;
   const revision = document.revisions.find((row) => row.revision === wanted) ?? document.revisions[0];
   return (revision?.fields ?? {}) as Record<string, unknown>;
+}
+
+/**
+ * The countries this site was measured in, as alpha-2 codes, strongest first.
+ *
+ * Reads rows the GSC sync already wrote. Returns nothing when the measurement does not
+ * support a market claim — a scattered audience names no country, which is the same rule
+ * the bundle applies. A failure returns nothing rather than throwing: measured countries
+ * are additive to a context that may already be complete.
+ */
+async function measuredAudienceCountries(
+  keyword: Pick<PrismaClient, "keyword">["keyword"],
+  siteId: string
+): Promise<string[]> {
+  try {
+    const rows = await keyword.findMany({
+      where: { siteId, country: { not: "" } },
+      select: { country: true, impressions: true },
+    });
+    // Both helpers live in the research layer; imported lazily here so the site-context
+    // reader does not pull the research bundle into every consumer.
+    const { countrySplit, measureMarket, alpha2ForGscCountry } = await import("@/lib/research/measured-market");
+    const market = measureMarket(countrySplit(rows));
+    return market.countries
+      .map((country) => alpha2ForGscCountry(country))
+      .filter((code): code is string => Boolean(code));
+  } catch {
+    return [];
+  }
 }
 
 export async function resolveSiteContext(db: ContextDb, siteId: string): Promise<SiteContext> {
@@ -294,7 +326,18 @@ export async function resolveSiteContext(db: ContextDb, siteId: string): Promise
   ]
     .map((entry) => countryFromText(entry))
     .filter((code): code is string => Boolean(code));
-  const audienceCountries = [...new Set([audienceCountry, ...declaredMarkets].filter((code): code is string => Boolean(code)))];
+  // T3: the countries the audience was *measured* in, not only the ones it was declared
+  // in. `audienceCountries` is what lets the topic map scope a cluster to a country
+  // instead of collapsing everything to `international`, so it has to carry the measured
+  // set — otherwise a site whose profile names no market still looks market-less to the
+  // map even when its Search Console data names two.
+  //
+  // Additive and best-effort: a stated country still leads, and a read failure leaves the
+  // declared set exactly as it was.
+  const measuredCountries = db.keyword ? await measuredAudienceCountries(db.keyword, site.id) : [];
+  const audienceCountries = [
+    ...new Set([audienceCountry, ...declaredMarkets, ...measuredCountries].filter((code): code is string => Boolean(code))),
+  ];
   const audienceLanguages = [
     ...stringList(factValue(fields, "audienceLanguages")),
     ...stringList(constraints.audienceLanguages),

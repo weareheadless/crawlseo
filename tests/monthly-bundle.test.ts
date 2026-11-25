@@ -352,6 +352,10 @@ describe("monthly bundle selection", () => {
   it("measures the audience market, not the business address", async () => {
     const locale = await resolveBundleLocale({
       mode: "dry-run",
+      // A stated audience market never reaches the measured path, so this db is never
+      // queried. Passing it makes the seam explicit without inventing a mock.
+      db: {} as never,
+      siteId: "site-1",
       projectId: "project-1",
       context: {
         siteId: "site-1",
