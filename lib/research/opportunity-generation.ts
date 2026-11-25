@@ -106,6 +106,32 @@ async function readSearchConsoleWindow(
   return windowDays;
 }
 
+/**
+ * The query a proposal is about, read from the evidence it cites.
+ *
+ * Only a `competitor_rank` (or `keyword_rank`) row carries a query per proposal, and only
+ * the first one that names a query is needed: the model cites the handful of rows the
+ * proposal rests on, and they describe the same query.
+ */
+async function queryFromCitedEvidence(
+  db: ProposalGenerationDb,
+  projectId: string,
+  evidenceRefs: string[]
+): Promise<string | null> {
+  if (evidenceRefs.length === 0) return null;
+  if (typeof db.evidenceRecord?.findMany !== "function") return null;
+  const rows = await db.evidenceRecord.findMany({
+    where: { id: { in: evidenceRefs }, projectId },
+    select: { kind: true, dimensions: true },
+  });
+  for (const row of rows) {
+    if (row.kind !== "competitor_rank" && row.kind !== "keyword_rank") continue;
+    const query = (row.dimensions ?? {}) as { query?: unknown };
+    if (typeof query.query === "string" && query.query.trim() !== "") return query.query;
+  }
+  return null;
+}
+
 /** Fold a query the way the evidence layer does: case, accents and whitespace. */
 function foldQuery(value: string): string {
   return value
@@ -213,15 +239,34 @@ async function withMeasuredWinnability(
      * pretending the key has one.
      */
     query: string | null;
+    /**
+     * The evidence the proposal cites. Used as a last resort to find the query: an unfiled
+     * proposal has no cluster, but the competitor row it cites names the query it is about.
+     */
+    evidenceRefs?: string[];
     /** The Search Console window, read once for the whole run. */
     windowDays?: number | null;
     inputs: ReturnType<typeof proposalScoreInputs>;
   }
 ): Promise<ReturnType<typeof proposalScoreInputs>> {
+  /**
+   * The query to measure, from the most specific source available.
+   *
+   * A `phase3:` dedup key is a hash, so it is usually no help. The cluster's lead query
+   * covers a proposal that belongs to a topic. An unfiled proposal has neither — but it
+   * cites the sampled competitor row that made it worth proposing, and that row names the
+   * query. Measured 2026-11-24: without this, the three unfiled proposals scored `null`
+   * on every winnability input and sat at 1/100 on the board, which is the opposite of
+   * what a gap with a named incumbent should rank.
+   */
+  const query =
+    queryFromDedupKey(input.dedupKey) ??
+    input.query ??
+    (await queryFromCitedEvidence(db, input.projectId, input.evidenceRefs ?? []));
   const resolved = await resolveWinProbability(db as never, {
     projectId: input.projectId,
     siteId: input.siteId,
-    query: queryFromDedupKey(input.dedupKey) ?? input.query,
+    query,
     rankDistance: (input.inputs.winProbability.rankDistance as number | null) ?? null,
     playTypeFactor: (input.inputs.winProbability.playTypeFactor as number | null) ?? 0.6,
     targetUrl: input.targetUrl,
@@ -697,6 +742,8 @@ export async function storeProposals(
           dedupKey: proposal.dedupKey,
           targetUrl: proposal.target.url ?? null,
           query: leadQueryFor(cluster, measurableQueries),
+          // A proposal with no topic still knows its query through what it cites.
+          evidenceRefs: proposal.evidenceRefs,
           windowDays: searchConsoleWindowDays,
           inputs: proposalScoreInputs(proposal, cluster),
         }) as never,
