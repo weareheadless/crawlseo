@@ -75,6 +75,40 @@ describe("brand record", () => {
   });
 });
 
+describe("the brand's persona", () => {
+  const PERSONA = {
+    positioning: "Property for people whose first job is to keep what they already have.",
+    audience: "Buyers moving savings into Mexico.",
+    promise: "Title, zoning and resale treated as one decision.",
+    avoids: ["postcard glamour", "get-rich-quick"],
+  };
+
+  it("keeps what the brand is for, who it serves and what it is not", () => {
+    const brand = parseSiteBrand({ ...BRAND, persona: PERSONA });
+    expect(brand?.persona).toEqual(PERSONA);
+  });
+
+  it("is empty rather than missing when the profile has none", () => {
+    const brand = parseSiteBrand(BRAND);
+    expect(brand?.persona).toEqual({ positioning: "", audience: "", promise: "", avoids: [] });
+  });
+
+  it("is trimmed and de-duplicated like the rest of the record", () => {
+    const brand = parseSiteBrand({
+      ...BRAND,
+      persona: { positioning: "  keep the capital  ", avoids: ["hype", " hype ", " ", 7] },
+    });
+    expect(brand?.persona.positioning).toBe("keep the capital");
+    expect(brand?.persona.avoids).toEqual(["hype"]);
+  });
+
+  it("changes the revision, so a rendered cover cannot outlive the persona", () => {
+    const before = siteBrandRevision(parseSiteBrand(BRAND), emptyRepresentation());
+    const after = siteBrandRevision(parseSiteBrand({ ...BRAND, persona: PERSONA }), emptyRepresentation());
+    expect(after).not.toBe(before);
+  });
+});
+
 describe("brand revision", () => {
   it("is stable across key order", () => {
     const first = parseSiteBrand(BRAND)!;

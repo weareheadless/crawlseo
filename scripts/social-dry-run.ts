@@ -115,6 +115,7 @@ async function bundle(): Promise<PlannerInput> {
       tone: brand?.voice?.tone ?? [],
       services: [],
       topics: [],
+      persona: brand?.persona,
     },
     represented: names(representation),
     posts: posts.map((post) => ({

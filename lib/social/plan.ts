@@ -24,6 +24,13 @@ export type PlannerBrand = {
   tone: string[];
   services: string[];
   topics: string[];
+  /** What the brand is for, who it serves, what it must not become. */
+  persona?: {
+    positioning: string;
+    audience: string;
+    promise: string;
+    avoids: string[];
+  };
 };
 
 export type PlannerPost = { subject: string; headline: string; publishedAt: string | null };
