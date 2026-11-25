@@ -154,6 +154,26 @@ export const LEG_COMPLETENESS_MULTIPLIER: Record<EvidenceLeg, number> = {
   both: 1.0,
 };
 
+/**
+ * How much to trust the business-value estimate behind a row.
+ *
+ * The source is a fact about where the judgement came from, and the multiplier is
+ * what it is worth. Only two of the four sources are a judgement about *this*
+ * business: `knowledge` (the owner's or the extractor's facts) and `cluster` (the
+ * model's relevance call on a topic it derived from those facts). `topic` and
+ * `unknown` are not judgements and must not be treated as one.
+ *
+ * Measured 2026-11-25: 1,654 of 1,965 rows carried no source at all, and every one
+ * of the 102 open rows was in that set, so nearly the whole board was multiplied by
+ * the old blanket 0.25. The same apnea row scored 7 with no source and 22 with one.
+ */
+export const RELEVANCE_BY_SOURCE: Record<NonNullable<ScoreInputs["worth"]["businessValueSource"]>, number> = {
+  knowledge: 1,
+  cluster: 1,
+  topic: 0.6,
+  unknown: 0.25,
+};
+
 export const PLAY_TYPE_EFFORT_BASE: Record<string, number> = {
   O1_winnable_rank: 6,
   O2_striking_distance: 2,
@@ -194,17 +214,26 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // Readiness comes from the decision contract, not from whether a demand number
   // happens to exist. A supported customer need with unquantified traffic is work a
   // person can accept; a research backlog item is not.
+  //
+  // A defect is not part of that scale. The band pays a fixed share of a ceiling and
+  // never reads severity, so a technical row that reached it scored by freshness and
+  // completeness alone: measured 2026-11-25, "missing structured data on 48 pages"
+  // scored 23 with unquantified demand while the same defect with measured demand
+  // took the technical branch below and scored 6. Work with no demand evidence was
+  // beating the same work with it. Defects fall through to their own branch, which
+  // orders by severity and reach and never invents a click count.
   const readiness = inputs.worth.readiness;
   if (readiness === "rejected") {
     return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment };
   }
-  const band = readiness === "research_backlog" ? 10
+  const band = inputs.worth.technical ? null
+    : readiness === "research_backlog" ? 10
     : readiness === "needs_investigation" ? 15
     : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 30
     // Legacy rows predate the contract: unknown demand is a question, not work.
     : readiness == null && assessment.kind === "hypothesis" ? 15
     : null;
-  if (band != null || inputs.worth.unmeasured) {
+  if ((band != null || inputs.worth.unmeasured) && !inputs.worth.technical) {
     const ceiling = inputs.worth.unmeasured ? 5 : (band ?? 10);
     const strength =
       Math.max(inputs.freshness, 0) *
@@ -248,7 +277,13 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // for "hospital near me" by accident; that traffic is real, but it is not the
   // business, and letting it top the board is how a real-estate agent is told to
   // optimise a hospital guide.
-  const relevance = inputs.worth.businessValueSource === "knowledge" ? 1 : 0.25;
+  //
+  // The multiplier comes from a declared table, not a binary test: `knowledge` and
+  // `cluster` are both judgements grounded in the business's own facts, `topic` is
+  // weaker, and a genuinely unknown source is still damped but as its own state
+  // rather than as a stand-in for every other source.
+  const relevance =
+    RELEVANCE_BY_SOURCE[inputs.worth.businessValueSource ?? "unknown"] ?? 0.25;
   const PRIORITY_SCALE_CLICKS = 5;
   const ratio = (clicks * winProb * inputs.worth.businessValue * relevance) / effort;
   const scaled = ratio / (ratio + PRIORITY_SCALE_CLICKS);
