@@ -1,0 +1,693 @@
+{
+  "version": 1,
+  "proposedBy": "ai",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "generatedAt": "2026-11-08T18:00:33.385Z",
+  "topics": [
+    {
+      "slug": "freediving-training-coaching",
+      "name": "Freediving training and coaching",
+      "jobSlug": "freediving-training-coaching",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Freediving training and coaching",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving training",
+          "training freediving",
+          "training for freediving",
+          "freediving training program"
+        ]
+      },
+      "rationale": "Queries seek freediving training/programs; services include private coaching and depth training; home sells coaching.",
+      "requireAny": [
+        "freediving training",
+        "training freediving",
+        "training for freediving",
+        "freediving training program"
+      ],
+      "terms": [
+        "freediving training",
+        "training freediving",
+        "training for freediving",
+        "freediving training program"
+      ],
+      "strongTerms": [
+        "freediving training",
+        "training freediving",
+        "training for freediving",
+        "freediving training program"
+      ],
+      "pageTerms": [
+        "freediving training",
+        "training freediving",
+        "training for freediving",
+        "freediving training program"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "actionHint": "Present private coaching and training programs for depth, skills and safety."
+    },
+    {
+      "slug": "freediving-course",
+      "name": "Freediving course",
+      "jobSlug": "freediving-course",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "mixed",
+      "offerKey": "Freediving course",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving course",
+          "freediving courses",
+          "freediving training course"
+        ]
+      },
+      "rationale": "Generic course queries; services include AIDA 3 and coaching; the guide helps choose a course in Playa.",
+      "requireAny": [
+        "freediving course",
+        "freediving courses",
+        "freediving training course"
+      ],
+      "terms": [
+        "freediving course",
+        "freediving courses",
+        "freediving training course"
+      ],
+      "strongTerms": [
+        "freediving course",
+        "freediving courses",
+        "freediving training course"
+      ],
+      "pageTerms": [
+        "freediving course",
+        "freediving courses",
+        "freediving training course"
+      ],
+      "preferredPages": [
+        "/blog/how-to-choose-a-freediving-course-in-playa-del-carmen-a-local-s-guide"
+      ],
+      "actionHint": "Guide course choice and point to AIDA or private course options."
+    },
+    {
+      "slug": "beginner-freediving-course",
+      "name": "Beginner freediving course",
+      "jobSlug": "beginner-freediving-course",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "mixed",
+      "offerKey": "Beginner freediving course",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving for beginners",
+          "freediving training for beginners",
+          "freediving course for beginners",
+          "level 1 freediving course"
+        ]
+      },
+      "rationale": "Beginner queries; the first-course blog addresses research, but an entry-level course is not explicitly listed, so fit is unknown.",
+      "requireAny": [
+        "freediving for beginners",
+        "freediving training for beginners",
+        "freediving course for beginners",
+        "level 1 freediving course"
+      ],
+      "terms": [
+        "freediving for beginners",
+        "freediving training for beginners",
+        "freediving course for beginners",
+        "level 1 freediving course"
+      ],
+      "strongTerms": [
+        "freediving for beginners",
+        "freediving training for beginners",
+        "freediving course for beginners",
+        "level 1 freediving course"
+      ],
+      "pageTerms": [
+        "freediving for beginners",
+        "freediving training for beginners",
+        "freediving course for beginners",
+        "level 1 freediving course"
+      ],
+      "preferredPages": [
+        "/blog/cenote-or-ocean-first-freediving-course"
+      ],
+      "actionHint": "Answer first-course questions and clarify whether entry-level training is offered."
+    },
+    {
+      "slug": "aida-freediving-course",
+      "name": "AIDA freediving course",
+      "jobSlug": "aida-freediving-course",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "AIDA freediving course",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "aida freediving course",
+          "AIDA course",
+          "AIDA certification"
+        ]
+      },
+      "rationale": "AIDA course query; services explicitly include AIDA 3; no dedicated AIDA page is supplied.",
+      "requireAny": [
+        "aida freediving course",
+        "AIDA course",
+        "AIDA certification"
+      ],
+      "terms": [
+        "aida freediving course",
+        "AIDA course",
+        "AIDA certification"
+      ],
+      "strongTerms": [
+        "aida freediving course",
+        "AIDA course",
+        "AIDA certification"
+      ],
+      "pageTerms": [
+        "aida freediving course",
+        "AIDA course",
+        "AIDA certification"
+      ],
+      "actionHint": "Make AIDA 3 availability and prerequisites clear for booking."
+    },
+    {
+      "slug": "line-training",
+      "name": "Line training",
+      "jobSlug": "line-training",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Line training",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "line training freediving",
+          "freediving line training"
+        ]
+      },
+      "rationale": "Query seeks line training; services list line training; no dedicated line-training page is supplied.",
+      "requireAny": [
+        "line training freediving",
+        "freediving line training"
+      ],
+      "terms": [
+        "line training freediving",
+        "freediving line training"
+      ],
+      "strongTerms": [
+        "line training freediving",
+        "freediving line training"
+      ],
+      "pageTerms": [
+        "line training freediving",
+        "freediving line training"
+      ],
+      "actionHint": "Describe coached line-training sessions and safety supervision."
+    },
+    {
+      "slug": "depth-training",
+      "name": "Depth training",
+      "jobSlug": "depth-training",
+      "kind": "market",
+      "intent": "commercial",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Depth training",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving deep",
+          "deep freediving training",
+          "depth training"
+        ]
+      },
+      "rationale": "Query expresses deep freediving demand; services include Depth Training and Advanced Depth; home promotes mastering depth.",
+      "requireAny": [
+        "freediving deep",
+        "deep freediving training",
+        "depth training"
+      ],
+      "terms": [
+        "freediving deep",
+        "deep freediving training",
+        "depth training"
+      ],
+      "strongTerms": [
+        "freediving deep",
+        "deep freediving training",
+        "depth training"
+      ],
+      "pageTerms": [
+        "freediving deep",
+        "deep freediving training",
+        "depth training"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "actionHint": "Show depth-training options, safety limits and coaching progression."
+    },
+    {
+      "slug": "breathwork-for-freediving",
+      "name": "Breathwork for freediving",
+      "jobSlug": "breathwork-for-freediving",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "service",
+      "offerKey": "Breathwork for freediving",
+      "market": {
+        "scope": "international",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "breath training for freediving",
+          "freediving breathing training",
+          "freediving breath training",
+          "freediving breath holding training",
+          "freediving breath hold training",
+          "breath hold training freediving",
+          "freediving apnea training"
+        ]
+      },
+      "rationale": "Queries seek breathing/breath-hold training; services include breathwork and CO2/O2 efficiency; blog covers land practice and CO2 tables.",
+      "requireAny": [
+        "breath training for freediving",
+        "freediving breathing training",
+        "freediving breath training",
+        "freediving breath holding training",
+        "freediving breath hold training",
+        "breath hold training freediving",
+        "freediving apnea training"
+      ],
+      "terms": [
+        "breath training for freediving",
+        "freediving breathing training",
+        "freediving breath training",
+        "freediving breath holding training",
+        "freediving breath hold training",
+        "breath hold training freediving",
+        "freediving apnea training"
+      ],
+      "strongTerms": [
+        "breath training for freediving",
+        "freediving breathing training",
+        "freediving breath training",
+        "freediving breath holding training",
+        "freediving breath hold training",
+        "breath hold training freediving",
+        "freediving apnea training"
+      ],
+      "pageTerms": [
+        "breath training for freediving",
+        "freediving breathing training",
+        "freediving breath training",
+        "freediving breath holding training",
+        "freediving breath hold training",
+        "breath hold training freediving",
+        "freediving apnea training"
+      ],
+      "preferredPages": [
+        "/blog/what-to-practise-on-land-before-a-freediving-course-in-playa-del-carmen-or-bacalar-and-whether-co2-t"
+      ],
+      "actionHint": "Explain breathwork, CO2/O2 and apnea training within coached sessions."
+    },
+    {
+      "slug": "freediving-playa-del-carmen",
+      "name": "Freediving in Playa del Carmen",
+      "jobSlug": "freediving-playa-del-carmen",
+      "kind": "market",
+      "intent": "local",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Freediving in Playa del Carmen",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Playa del Carmen"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby",
+          "local",
+          "in my area"
+        ]
+      },
+      "need": {
+        "terms": [
+          "freediving near me",
+          "freediving playa del carmen",
+          "playa del carmen freediving",
+          "freediving training near me",
+          "freediving course near me"
+        ]
+      },
+      "rationale": "Queries combine freediving with near-me or Playa del Carmen; business is located in Playa and home sells coaching.",
+      "requireAny": [
+        "freediving near me",
+        "freediving playa del carmen",
+        "playa del carmen freediving",
+        "freediving training near me",
+        "freediving course near me"
+      ],
+      "terms": [
+        "freediving near me",
+        "freediving playa del carmen",
+        "playa del carmen freediving",
+        "freediving training near me",
+        "freediving course near me"
+      ],
+      "strongTerms": [
+        "freediving near me",
+        "freediving playa del carmen",
+        "playa del carmen freediving",
+        "freediving training near me",
+        "freediving course near me"
+      ],
+      "pageTerms": [
+        "freediving near me",
+        "freediving playa del carmen",
+        "playa del carmen freediving",
+        "freediving training near me",
+        "freediving course near me"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "actionHint": "Show Playa del Carmen service details and clear local booking paths."
+    },
+    {
+      "slug": "freediving-tulum",
+      "name": "Freediving in Tulum",
+      "jobSlug": "freediving-tulum",
+      "kind": "market",
+      "intent": "local",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Freediving in Tulum",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Tulum"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby",
+          "local"
+        ]
+      },
+      "need": {
+        "terms": [
+          "tulum freediving",
+          "freediving tulum",
+          "cenote freediving tulum"
+        ]
+      },
+      "rationale": "Queries name Tulum; service area includes Tulum; no dedicated Tulum page is supplied.",
+      "requireAny": [
+        "tulum freediving",
+        "freediving tulum",
+        "cenote freediving tulum"
+      ],
+      "terms": [
+        "tulum freediving",
+        "freediving tulum",
+        "cenote freediving tulum"
+      ],
+      "strongTerms": [
+        "tulum freediving",
+        "freediving tulum",
+        "cenote freediving tulum"
+      ],
+      "pageTerms": [
+        "tulum freediving",
+        "freediving tulum",
+        "cenote freediving tulum"
+      ],
+      "actionHint": "Clarify Tulum service coverage and how cenote training is arranged."
+    },
+    {
+      "slug": "cenote-freediving",
+      "name": "Cenote freediving",
+      "jobSlug": "cenote-freediving",
+      "kind": "market",
+      "intent": "local",
+      "relevance": "high",
+      "coverageKind": "local",
+      "offerKey": "Cenote freediving",
+      "market": {
+        "scope": "local",
+        "places": [
+          "Yucatán",
+          "Cenote Azul"
+        ],
+        "localIntent": [
+          "near me",
+          "nearby",
+          "local"
+        ]
+      },
+      "need": {
+        "terms": [
+          "freediving cenotes",
+          "cenotes freediving",
+          "cenote freediving"
+        ]
+      },
+      "rationale": "Queries seek cenote freediving; service area includes Yucatán cenotes and Cenote Azul; blog compares cenote and ocean courses.",
+      "requireAny": [
+        "freediving cenotes",
+        "cenotes freediving",
+        "cenote freediving"
+      ],
+      "terms": [
+        "freediving cenotes",
+        "cenotes freediving",
+        "cenote freediving"
+      ],
+      "strongTerms": [
+        "freediving cenotes",
+        "cenotes freediving",
+        "cenote freediving"
+      ],
+      "pageTerms": [
+        "freediving cenotes",
+        "cenotes freediving",
+        "cenote freediving"
+      ],
+      "preferredPages": [
+        "/blog/cenote-or-ocean-first-freediving-course"
+      ],
+      "actionHint": "Explain cenote training and safety, then route to local coaching options."
+    },
+    {
+      "slug": "freediving-mexico",
+      "name": "Freediving in Mexico",
+      "jobSlug": "freediving-mexico",
+      "kind": "market",
+      "intent": "mixed",
+      "relevance": "high",
+      "coverageKind": "mixed",
+      "offerKey": "Freediving in Mexico",
+      "market": {
+        "scope": "national",
+        "places": [
+          "Mexico"
+        ],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving mexico",
+          "freediving in mexico",
+          "mexico freediving",
+          "freediving course mexico"
+        ]
+      },
+      "rationale": "Queries name Mexico; business serves Mexico; home sells coaching in the Yucatán.",
+      "requireAny": [
+        "freediving mexico",
+        "freediving in mexico",
+        "mexico freediving",
+        "freediving course mexico"
+      ],
+      "terms": [
+        "freediving mexico",
+        "freediving in mexico",
+        "mexico freediving",
+        "freediving course mexico"
+      ],
+      "strongTerms": [
+        "freediving mexico",
+        "freediving in mexico",
+        "mexico freediving",
+        "freediving course mexico"
+      ],
+      "pageTerms": [
+        "freediving mexico",
+        "freediving in mexico",
+        "mexico freediving",
+        "freediving course mexico"
+      ],
+      "preferredPages": [
+        "/"
+      ],
+      "actionHint": "Position Mexico and the Yucatán as the destination and link to course or coaching."
+    },
+    {
+      "slug": "freediving-certification-levels",
+      "name": "Freediving certification levels",
+      "jobSlug": "freediving-certification-levels",
+      "kind": "market",
+      "intent": "informational",
+      "relevance": "medium",
+      "coverageKind": "content",
+      "offerKey": "Freediving certification levels",
+      "market": {
+        "scope": "international",
+        "places": [],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "freediving certification levels"
+        ]
+      },
+      "rationale": "Research query about certification levels; no supplied service or page explains levels, so fit is unknown.",
+      "requireAny": [
+        "freediving certification levels"
+      ],
+      "terms": [
+        "freediving certification levels"
+      ],
+      "strongTerms": [
+        "freediving certification levels"
+      ],
+      "pageTerms": [
+        "freediving certification levels"
+      ],
+      "actionHint": "Answer certification-level questions if a page is added; no supplied page now."
+    },
+    {
+      "slug": "freediving-safety",
+      "name": "Freediving safety",
+      "jobSlug": "freediving-safety",
+      "kind": "market",
+      "intent": "informational",
+      "relevance": "medium",
+      "coverageKind": "content",
+      "offerKey": "Freediving safety",
+      "market": {
+        "scope": "international",
+        "places": [],
+        "localIntent": []
+      },
+      "need": {
+        "terms": [
+          "is freediving dangerous",
+          "freediving deaths"
+        ]
+      },
+      "rationale": "Safety research queries; services list safety protocols but no supplied page explains dangers or deaths.",
+      "requireAny": [
+        "is freediving dangerous",
+        "freediving deaths"
+      ],
+      "terms": [
+        "is freediving dangerous",
+        "freediving deaths"
+      ],
+      "strongTerms": [
+        "is freediving dangerous",
+        "freediving deaths"
+      ],
+      "pageTerms": [
+        "is freediving dangerous",
+        "freediving deaths"
+      ],
+      "actionHint": "Address safety concerns carefully; a dedicated safety page would be needed."
+    }
+  ],
+  "pageTypeRules": [],
+  "excludePaths": [
+    "/legal",
+    "/privacy",
+    "/terms",
+    "/cookie",
+    "/checkout",
+    "/cart",
+    "/account",
+    "/login",
+    "/register",
+    "/tags/",
+    "/tag/",
+    "/page/",
+    "/search",
+    "/feed",
+    "/wp-json",
+    "/xmlrpc.php"
+  ],
+  "newsQueries": [
+    "freediving safety regulations Mexico 2026",
+    "Quintana Roo cenote freediving regulations",
+    "AIDA freediving certification updates 2026",
+    "Playa del Carmen freediving news",
+    "freediving training standards Mexico",
+    "freediving depth record news 2026"
+  ],
+  "summary": "Revised job map: 13 demand jobs tied to tranche queries; brand, equipment, records, pool/app, other agencies and non-service locations are left out. Site config maps home, blog, service/category/product patterns and excludes utility paths."
+}
