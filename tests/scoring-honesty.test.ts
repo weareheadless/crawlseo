@@ -37,7 +37,7 @@ describe("impact assessment", () => {
     const assessment = assessImpact({ volume: 3_600, volumeSource: "provider", currentPosition: 7, targetPosition: 3 });
     expect(assessment.kind).toBe("estimated");
     expect(assessment.basis).toBe("provider_volume");
-    expect(assessment.limitations.join(" ")).toContain("whole volume");
+    expect(assessment.limitations.join(" ")).toContain("market");
   });
 
   it("returns a hypothesis when there is no demand evidence", () => {

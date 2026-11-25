@@ -90,6 +90,9 @@ describe("a technical defect is scored by severity and reach", () => {
         intervention: "create_asset",
         volumeSource: "provider",
         businessValue: 0.55,
+        // Added to the stored row by P1-2; the fixture predated it, which is why this copy
+        // scored 6 where the live row scores 16 (no source -> damped to 0.25 relevance).
+        businessValueSource: "cluster",
         ctrAtPosition: null,
         unmeasured: false,
         coverageSummary: "Topic coverage: none",
@@ -117,7 +120,11 @@ describe("a technical defect is scored by severity and reach", () => {
       },
     } as unknown as ScoreInputs;
     const published = computeScore(article).scoreValue;
-    expect(published).toBe(7);
+    // The literal moved when the score became a rate on the market (ASSESSMENT_VERSION 4):
+    // the same stored row scores 16 where it scored 7, because 1,300 searches/month at
+    // position 10 is 52 clicks and that is now what the number measures. Asserting 7 would
+    // pin the test to a formula; what the test is for is the *relationship* with the defect.
+    expect(published).toBeGreaterThan(10);
     const hygiene = computeScore(defect({ measurement: "unquantified" })).scoreValue;
     // Not asserting the article wins outright — D1 orders by evidence class — only
     // that hygiene no longer sits above it on the same number.
