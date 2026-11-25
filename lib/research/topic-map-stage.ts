@@ -18,6 +18,7 @@ import {
   type TopicMap,
 } from "@/lib/research/topic-map";
 import { projectTopicTaxonomy, saveTopicTaxonomy } from "@/lib/research/topic-taxonomy";
+import { mapStaleness, readTopicMapStaleness } from "@/lib/research/map-staleness";
 
 /**
  * The topic-map stage, as a function rather than a script.
@@ -100,15 +101,26 @@ export async function runTopicMapStage(
   // idempotency the CLI always had; the pipeline relies on it rather than
   // keeping a second record of "already done".
   //
+  // The reuse is stated with its staleness: a map older than the latest
+  // completed bundle is returned as `skipped (stale)` rather than as a plain
+  // reuse, because rebuilding it costs a model call and that is the caller's
+  // decision. What must not happen is the stale map looking current.
+  //
   // Only for `execute`: a dry run writes nothing, so reusing an existing run
   // would mean it never shows the map it is being asked to preview.
   if (input.mode === "execute" && existing?.status === "COMPLETED" && !input.refresh) {
     const stored = (existing.report as { map?: TopicMap } | null)?.map ?? null;
+    const staleness = await readTopicMapStaleness(db, { siteId: site.id, month });
+    const state =
+      staleness?.state ?? mapStaleness({ mapBundleRunId: stored?.inputs?.bundleRunId ?? null, latestBundleRunId: null });
     return {
       status: "skipped",
       runId: existing.id,
       map: stored,
-      detail: `existing topic map ${existing.id} returned without rebuilding (pass refresh to rebuild)`,
+      detail:
+        state === "current"
+          ? `existing topic map ${existing.id} is current against its bundle and returned without rebuilding (pass refresh to rebuild)`
+          : `existing topic map ${existing.id} is ${state}: ${staleness?.detail ?? "its inputs cannot be confirmed"}; pass refresh to rebuild`,
     };
   }
 

@@ -229,6 +229,19 @@ export type TopicMap = {
     clicks: number;
     examples: string[];
   };
+  /**
+   * Which bundle this map was built from.
+   *
+   * A map is a projection of the evidence that existed when it ran, and it used
+   * to say nothing about which evidence that was. When the bundle arrived late
+   * or was re-run, the map silently stayed as it was — and an empty cluster
+   * looked exactly like a cluster the site genuinely has no demand for. Measured
+   * 2026-11-25: astridrincon's map was built two hours before its bundle.
+   */
+  inputs: {
+    bundleRunId: string | null;
+    bundleCompletedAt: string | null;
+  };
   counts: {
     queries: number;
     /** Queries with a job-map verdict, carried or judged this cycle. */
@@ -248,6 +261,8 @@ export type TopicMap = {
 
 export type TopicMapData = {
   site: { id: string; domain: string; projectId: string };
+  /** The bundle this data was read from, recorded so staleness can be derived. */
+  bundle?: { runId: string; completedAt: Date | null } | null;
   taxonomy: TopicDefinition[];
   pageTypeRules: TopicPageTypeRule[];
   excludePaths: string[];
@@ -562,7 +577,9 @@ export async function loadTopicMapData(
     db.researchRun.findFirst({
       where: { siteId, idempotencyKey: `monthly:${siteId}:${month}:bundle` },
       orderBy: { createdAt: "desc" },
-      select: { id: true },
+      // `completedAt` is read, not just the id: staleness compares the bundle a
+      // map consumed against the latest completed one.
+      select: { id: true, completedAt: true },
     }),
     db.evidenceRecord.findMany({
       where: {
@@ -710,6 +727,7 @@ export async function loadTopicMapData(
 
   return {
     site: { id: site.id, domain: site.domain, projectId },
+    bundle: bundleRun ? { runId: bundleRun.id, completedAt: bundleRun.completedAt } : null,
     taxonomy: taxonomy?.topics ?? [],
     pageTypeRules: taxonomy?.pageTypeRules ?? [],
     excludePaths: taxonomy?.excludePaths ?? [],
@@ -920,6 +938,12 @@ export function buildTopicMap(
     domain: data.site.domain,
     month: data.month,
     generatedAt: now.toISOString(),
+    // Recorded from the data the map was built with, not from the run: a map
+    // that says which bundle it read can be told apart from one that read none.
+    inputs: {
+      bundleRunId: data.bundle?.runId ?? null,
+      bundleCompletedAt: data.bundle?.completedAt?.toISOString() ?? null,
+    },
     taxonomy: topics,
     locale: { language: data.context.language, country: providerCountry(data.context) },
     marketScope: data.marketScope,
@@ -1372,6 +1396,11 @@ export function renderTopicMapMarkdown(map: TopicMap): string {
   lines.push(`# Topic map — ${map.domain} — ${map.month}`);
   lines.push("");
   lines.push(`Generated ${map.generatedAt}. Locale ${map.locale.language}${map.locale.country ? `/${map.locale.country}` : ""}.`);
+  lines.push(
+    map.inputs?.bundleRunId
+      ? `Built from bundle \`${map.inputs.bundleRunId}\`${map.inputs.bundleCompletedAt ? ` completed ${map.inputs.bundleCompletedAt}` : ""}.`
+      : "Built with no completed bundle: this map describes only what Search Console and the crawl already knew."
+  );
   lines.push("");
   lines.push("## Business");
   lines.push("");

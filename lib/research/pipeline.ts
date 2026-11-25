@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { bundleKey, findBundleRun, runMonthlyBundle, type BundleResult } from "@/lib/research/monthly-bundle";
 import { runTopicMapStage } from "@/lib/research/topic-map-stage";
+import { readTopicMapStaleness } from "@/lib/research/map-staleness";
 import { runOpportunitiesStage } from "@/lib/research/opportunities-stage";
 
 /**
@@ -301,6 +302,19 @@ export async function runResearchPipeline(
     return finish("topic-map");
   }
 
+  // A reused map that predates its bundle still satisfies the gate — its
+  // clusters are real, just older than the evidence — but the staleness follows
+  // the result, so drafting over an out-of-date map is stated rather than left
+  // buried in a detail string a reader has to parse.
+  let mapIsStale = false;
+  if (input.mode === "execute" && mapStage.status === "skipped") {
+    const staleness = await readTopicMapStaleness(db, { siteId: site.id, month });
+    if (staleness && staleness.state !== "current") {
+      mapIsStale = true;
+      note(`topic map is ${staleness.state}: ${staleness.detail}`);
+    }
+  }
+
   // ---- 3. opportunities ----------------------------------------------------
   if (input.mode === "dry-run") {
     const opportunityRun = await db.researchRun.findFirst({
@@ -336,7 +350,9 @@ export async function runResearchPipeline(
           ? "skipped"
           : "failed",
     runId: opportunityStage.runId,
-    detail: opportunityStage.detail,
+    detail: mapIsStale
+      ? `${opportunityStage.detail}; drafted from a topic map that is older than its bundle`
+      : opportunityStage.detail,
   });
 
   return finish(satisfiesGate(stages[2].status) ? null : "opportunities");
