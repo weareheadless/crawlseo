@@ -34,6 +34,23 @@ export const WIN_PROBABILITY_FRESH_DAYS = 90;
  * A record of how sure each input is. `assumed` is the honest word for a
  * `playTypeFactor` — it is a declared property of the play, not a measurement.
  */
+/**
+ * Fold a query to the form two spellings of it are compared in.
+ *
+ * Accents are a spelling, not a second phrase. Measured 2026-11-24: the topic map held
+ * `tapisserie de siège` while the sampled SERP wrote `tapisserie de siege`, and a plain
+ * `toLowerCase()` compared them as different queries. Case, accents and whitespace are
+ * facts in every language, so folding them is arithmetic, not a judgement about meaning.
+ */
+function foldQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export type WinProbabilitySource = "measured" | "estimated" | "assumed";
 
 export type WinProbabilityProvenance = {
@@ -63,6 +80,40 @@ export function difficultyToSerpCompetition(difficulty: number | null | undefine
   // is deliberate: any curve here would be a guess dressed as a model, and a linear one is
   // the one a person can check by hand.
   return Math.round((1 - clamped / 100) * 1000) / 1000;
+}
+
+/**
+ * How hard the sampled SERP is, from the domains a paid SERP actually placed.
+ *
+ * Two facts, both measured, neither a guess:
+ *
+ *  - **How many distinct domains are in the way.** A result page filled to the bottom is
+ *    a harder field than one where five domains are the whole answer.
+ *  - **How good the best of them is.** A leader at #1 is a stronger incumbent than a
+ *    leader at #9 on a thin SERP.
+ *
+ * The curve is deliberately gentle and linear on domain count, because any sharper shape
+ * would be an opinion wearing a formula. Returns `null` with no sampled domains: the
+ * absence of a sample is not evidence of an easy SERP.
+ *
+ * Kept separate from `difficultyToSerpCompetition` because the two read different things —
+ * a provider's market score and our own one-page sample — and conflating them would hide
+ * which one a row used. The caller records the source either way.
+ */
+export function competitorToSerpCompetition(
+  sampled: Array<{ position: number; observedAt: Date }>
+): { value: number; bestPosition: number; observedAt: Date } | null {
+  const valid = sampled.filter((row) => Number.isFinite(row.position) && row.position > 0);
+  if (valid.length === 0) return null;
+  const bestPosition = Math.min(...valid.map((row) => row.position));
+  // 10 domains or more is the full field we ever sample; below that the page is thinner.
+  const fieldFactor = Math.min(1, valid.length / 10);
+  // A leader at #1 rather than #10 — climbing past #1 is the hardest single step.
+  const leaderFactor = bestPosition <= 1 ? 0.3 : bestPosition <= 3 ? 0.6 : bestPosition <= 10 ? 0.85 : 1;
+  const value = Math.round((1 - fieldFactor * leaderFactor) * 1000) / 1000;
+  // The newest sample is when this comparison became true.
+  const observedAt = valid.reduce((newest, row) => (row.observedAt > newest ? row.observedAt : newest), valid[0].observedAt);
+  return { value, bestPosition, observedAt };
 }
 
 /**
@@ -186,12 +237,17 @@ export async function resolveWinProbability(
   let pageStrengthValue: number | null = null;
 
   if (input.query) {
-    const query = input.query.toLowerCase();
+    const query = foldQuery(input.query);
     const evidence = await db.evidenceRecord.findMany({
       where: {
         projectId: input.projectId,
         supersededById: null,
-        kind: { in: ["keyword_metrics", "backlink_profile", "onpage_crawl"] as never },
+        // `competitor_rank` is here because it is the only measured answer to "who is in
+        // the way" for a query we hold no difficulty for. Measured 2026-11-24 on
+        // atelier-harmonie: 25 of the 27 queries with sampled SERPs had no
+        // `provider:difficulty` above zero, so `serpCompetition` was `assumed` on nearly
+        // every row while a paid SERP naming the competing domains sat unread.
+        kind: { in: ["keyword_metrics", "backlink_profile", "onpage_crawl", "competitor_rank"] as never },
       },
       select: { kind: true, dimensions: true, metrics: true, observedAt: true },
     });
@@ -201,7 +257,7 @@ export async function resolveWinProbability(
     for (const row of evidence) {
       if (row.kind !== "keyword_metrics") continue;
       const dims = (row.dimensions ?? {}) as { query?: string };
-      if (typeof dims.query !== "string" || dims.query.toLowerCase() !== query) continue;
+      if (typeof dims.query !== "string" || foldQuery(dims.query) !== query) continue;
       const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
       const value = metrics["provider:difficulty"]?.value ?? null;
       // A literal 0 is the provider's "no data", not "easy" — see the module note.
@@ -213,6 +269,44 @@ export async function resolveWinProbability(
       if (serpCompetition != null) {
         source.serpCompetition = "measured";
         observedAt.serpCompetition = difficulty.observedAt;
+      }
+    }
+    /**
+     * 1b. Competitor strength from the sampled SERP, when the provider had nothing to say.
+     *
+     * Two facts are measured here and neither is a guess: how many distinct domains the
+     * sample placed ahead of us, and how good their best position is. Thirty results
+     * filled to the bottom is a harder SERP than one where five domains are the whole
+     * answer, and a leader at #1 is a harder fight than a leader at #9.
+     *
+     * Deliberately not used when a real difficulty exists: the provider's number is a
+     * market measurement, while this only reads the one page of results we bought.
+     */
+    if (serpCompetition == null) {
+      const sampled = new Map<string, { position: number; observedAt: Date }>();
+      for (const row of evidence) {
+        if (row.kind !== "competitor_rank") continue;
+        const dims = (row.dimensions ?? {}) as { query?: string; domain?: string; rankAbsolute?: number };
+        if (typeof dims.query !== "string" || foldQuery(dims.query) !== query) continue;
+        const metrics = (row.metrics ?? {}) as Record<string, { value: number | null }>;
+        const position =
+          typeof dims.rankAbsolute === "number" ? dims.rankAbsolute : metrics["provider:position"]?.value ?? null;
+        if (typeof dims.domain !== "string" || position == null || position <= 0) continue;
+        const held = sampled.get(dims.domain);
+        // The newest sample of a domain wins; an older one is a stale position.
+        if (!held || row.observedAt > held.observedAt) {
+          sampled.set(dims.domain, { position, observedAt: row.observedAt });
+        }
+      }
+      const derived = competitorToSerpCompetition([...sampled.values()]);
+      if (derived != null) {
+        serpCompetition = derived.value;
+        source.serpCompetition = "measured";
+        // The sample is when the comparison became true.
+        observedAt.serpCompetition = derived.observedAt;
+        missing.push(
+          `SERP competition: no provider difficulty for this query, so it is read from ${sampled.size} sampled competitor domain${sampled.size === 1 ? "" : "s"} (best position ${derived.bestPosition})`
+        );
       }
     }
     if (serpCompetition == null) missing.push("SERP competition: the query has no stored difficulty above zero");
@@ -270,7 +364,7 @@ export async function resolveWinProbability(
         internalLinks?: number;
       };
       if (dims.scope !== "competitor") continue;
-      if (typeof dims.query !== "string" || dims.query.toLowerCase() !== query) continue;
+      if (typeof dims.query !== "string" || foldQuery(dims.query) !== query) continue;
       const facts: PageFacts = {
         wordCount: typeof dims.wordCount === "number" ? dims.wordCount : null,
         hasSchema: Array.isArray(dims.schemaTypes) ? dims.schemaTypes.length > 0 : null,

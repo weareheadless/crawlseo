@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import type { MarketScopeConfig } from "@/lib/site/market-scope";
+import type { UnfiledCompetitorQuery } from "@/lib/research/opportunity-evidence";
 import type { TopicCluster, TopicMap } from "@/lib/research/topic-map";
 import type {
   Proposal,
@@ -81,6 +82,15 @@ export type DraftInput = {
   knowledgeFacts?: DraftEvidence[];
   /** Site-level crawl defects the model can turn into technical proposals. */
   technicalEvidence?: DraftEvidence[];
+  /**
+   * Queries a paid SERP sampled that no topic could claim, with who holds them.
+   *
+   * These are the queries the site has no page *and* no topic for, so nothing else in the
+   * payload can carry them. Measured 2026-11-24 on atelier-harmonie: `tapisserie de siège`
+   * had 12 competitor rows naming `bucherie.com` at #1, no cluster, and no keyword-universe
+   * row at all — real demand with a named incumbent that the model never saw.
+   */
+  unfiledCompetitors?: UnfiledCompetitorQuery[];
   now: Date;
 };
 
@@ -113,7 +123,9 @@ function hash(value: string): string {
  * proposal that rewrites it are the same board row; the model may change the
  * title and action on every run without growing the board.
  */
-export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "topicSlug" | "kind">): string {
+export function proposalIdentity(
+  proposal: Pick<Proposal, "lane" | "target" | "topicSlug" | "kind"> & { title?: string | null }
+): string {
   // A page that already exists is identified by its URL. A page that does not
   // exist yet is identified by the topic and the kind of asset, because the
   // model invents its URL: the same article on two runs must not become two
@@ -125,7 +137,12 @@ export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "t
         ? proposal.target.url.replace(/\/+$/, "").toLowerCase()
         : proposal.topicSlug
           ? `topic:${proposal.topicSlug}`
-          : "site";
+          // A proposal with neither a page nor a topic is an unfiled-query proposal, and
+          // two of those are not one row. Falling back to the constant "site" made every
+          // one of them collide on a single dedup key, so the second replaced the first.
+          // The title is what distinguishes them, and it is stable enough to identify the
+          // same job across two runs.
+          : `unfiled:${proposal.kind}:${hash(String(proposal.title ?? "").trim().toLowerCase())}`;
   return `phase3:${proposal.lane}:${hash(asset)}`;
 }
 
@@ -350,6 +367,7 @@ const SYSTEM = [
   "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
   "A cluster's competitors field states who holds its queries. Each query gives ourPosition, nearestAbove (the domain one or a few places above us, with how many places) and leader (the domain at the top). Act on nearestAbove, not the leader: taking one place from the domain just above us is a rewrite, while beating a leader 40 places up is a different project. Say which domain the work is aimed at and cite that competitor's evidence id. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
   "When ourPosition is null we do not rank for the query at all. That is the largest gap there is: say so plainly and name the sampled domains that hold it, rather than treating a missing position as position zero.",
+  "unfiledCompetitors lists queries a sampled SERP found and no topic could claim, with who holds each one. They are demand the site has no page and no cluster for. Treat them as real opportunities: propose against them when the market scope fits the business, name the sampled domain holding the query and cite its evidenceId, and set topicSlug to null because they belong to no topic. Do not invent a topic for them and do not fold them into an unrelated cluster. If the business genuinely does not serve the query, say nothing about it rather than proposing it.",
   "Our own position and a competitor's position are different numbers. Never present a competitor's rank as ours, and never describe a query as a gap without saying who is ahead of us or that nobody was sampled.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",
   "Use only the supplied facts, page URLs and evidence ids. Never invent a metric, a page, a query or an evidence id.",
@@ -369,11 +387,37 @@ const SYSTEM = [
   "Cite a business fact from businessFacts as evidence when the proposal rests on what the business actually offers; do not cite one that does not apply. Every proposal needs at least one evidenceId from the supplied evidence for its cluster. Keep titles under 120 characters, summaries under 300, actions under 600, confidenceReason under 200.",
 ].join("\n");
 
+/**
+ * The prompt for the call that carries only the queries no topic could claim.
+ *
+ * A separate prompt, not the cluster one: the cluster prompt asks "is there work in this
+ * topic", and here there is no topic — there is a list of queries the site has no page
+ * for and somebody else holds. Reusing the cluster prompt made the model answer the
+ * question it was asked for the clusters and skip these entirely, which is exactly what
+ * happened when they rode along in the batch.
+ */
+const UNFILED_SYSTEM = [
+  "You are an SEO strategist deciding whether a small set of measured queries deserves a proposal.",
+  "Write in the business's language, given in locale.language.",
+  "There are NO topic clusters in this payload. clusters is empty by design. Every query you are being asked about is in unfiledCompetitors.",
+  "unfiledCompetitors are queries a paid SERP sample found, where the site has no page and the topic map could not place them. Each one gives ourPosition and the sampled domains holding it, with their positions and evidence ids.",
+  "Decide for each query whether it is a real opportunity for THIS business. Propose for the ones that are, and say nothing about the ones that are not. Returning nothing is a correct answer when none of them fits.",
+  "When ourPosition is null the site does not rank for that query at all. That is the largest kind of gap: say so plainly and name the domain holding it. Never present a competitor's position as ours.",
+  "Aim at the domain just above us when we rank, and at the best-placed sampled domain when we do not. Cite the evidence id of the domain you name.",
+  "Set topicSlug to null for every proposal: these queries belong to no topic and inventing a cluster id for one is not allowed.",
+  "Propose at most one item per query. Prefer an existing page when existingPaths shows one that could answer the query; otherwise newAsset true.",
+  "Respect the market scope. A query outside the business location and service area is not proposed, and neither is one whose product or service the business does not offer.",
+  "Cite at least one evidenceId from that query's competitors. Never invent a metric, a page, a query or an evidence id.",
+  "Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, topicSlug, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[], expiresAt }] }.",
+  "lane is one of timely, content_business, aeo_geo. kind is article, update, cluster_hub, business or aeo. effort is small, medium, large or unknown. confidence is high, medium or low.",
+].join("\n");
+
 function parseProposals(
   parsed: unknown,
   input: DraftInput,
   allowedEvidence: Map<string, DraftEvidence>,
-  batchClusters: TopicCluster[]
+  batchClusters: TopicCluster[],
+  unfiledEvidenceIds: Set<string> = new Set()
 ): { proposals: Proposal[]; rejected: Array<{ title: string; reason: string }>; truncations: string[] } {
   const record = asRecord(parsed);
   // Accept a list or a single object: a model that returns one proposal often
@@ -420,7 +464,19 @@ function parseProposals(
     if (!title || !summary || !action || !expectedOutcome) { reject(title, "missing required field"); continue; }
     const technical = lane === "technical";
     if (technical && topicSlug && !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
-    if (!technical && (!topicSlug || !slugs.has(topicSlug))) { reject(title, "unknown topic"); continue; }
+    /**
+     * A content proposal normally belongs to a topic, and an unknown slug is how a model
+     * invents one. But a proposal about an unfiled query has **no** topic by design, so a
+     * null slug is correct here — and only here: it must still cite an unfiled query's
+     * competitor row, or it is a proposal with nothing behind it.
+     */
+    const fromUnfiledQuery =
+      topicSlug == null &&
+      evidenceIds.some((id) => unfiledEvidenceIds.has(id));
+    if (!technical && !fromUnfiledQuery && (!topicSlug || !slugs.has(topicSlug))) {
+      reject(title, "unknown topic");
+      continue;
+    }
     const requestedUrl = text(target.url);
     const normalizedPath = requestedUrl
       ? (() => {
@@ -508,8 +564,36 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   for (const cluster of clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) allowedEvidence.set(row.id, row);
   }
+  /**
+   * An unfiled competitor row must be citable, or the proposal citing it fails validation
+   * and the whole observation is lost again — the exact failure this exists to fix.
+   */
+  for (const row of input.unfiledCompetitors ?? []) {
+    for (const competitor of row.competitors) {
+      if (allowedEvidence.has(competitor.evidenceId)) continue;
+      allowedEvidence.set(competitor.evidenceId, {
+        id: competitor.evidenceId,
+        kind: "competitor_rank",
+        query: row.query,
+        position: null,
+        impressions: null,
+        volume: null,
+        url: null,
+        domain: competitor.domain,
+        rank: competitor.position,
+      });
+    }
+  }
   for (const row of input.technicalEvidence ?? []) allowedEvidence.set(row.id, row);
   for (const row of input.knowledgeFacts ?? []) allowedEvidence.set(row.id, row);
+
+  /**
+   * The competitor rows that belong to no topic. A proposal may legitimately have no
+   * topicSlug only when it cites one of these, so the validator needs the set.
+   */
+  const unfiledEvidenceIds = new Set(
+    (input.unfiledCompetitors ?? []).flatMap((row) => row.competitors.map((competitor) => competitor.evidenceId))
+  );
 
   const proposals: Proposal[] = [];
   const errors: string[] = [];
@@ -547,7 +631,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
         timeoutMs: 240_000,
         jsonMode: false,
       });
-      const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch);
+      const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch, unfiledEvidenceIds);
       proposals.push(...parsedBatch.proposals);
       rejected.push(...parsedBatch.rejected);
       truncations.push(...parsedBatch.truncations);
@@ -561,6 +645,61 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       );
     }
   }
+  /**
+   * Queries no topic could claim get their own call.
+   *
+   * Riding along inside a four-cluster batch was not enough: measured 2026-11-24, the
+   * model returned 14-18 proposals and none of them was for an unfiled query, because a
+   * cluster payload is a large prompt about a *different* topic. Asked on their own, with
+   * nothing else in the payload, the four queries are the whole question.
+   *
+   * This is one extra call only when there is something unfiled to ask about, and it can
+   * legitimately return nothing: a query the business does not serve is not an
+   * opportunity, and the prompt says so.
+   */
+  const unfiled = input.unfiledCompetitors ?? [];
+  if (unfiled.length > 0) {
+    const payload = {
+      ...businessPayload(input),
+      businessFacts: (input.knowledgeFacts ?? []).map((row) => ({ evidenceId: row.id, fact: row.text })),
+      existingPaths: input.existingPaths ?? [],
+      clusters: [],
+      unfiledCompetitors: unfiled.map((row) => ({
+        query: row.query,
+        ourPosition: row.ourPosition == null ? null : Number(row.ourPosition.toFixed(1)),
+        competitors: row.competitors.slice(0, 4).map((competitor) => ({
+          domain: competitor.domain,
+          position: competitor.position,
+          evidenceId: competitor.evidenceId,
+        })),
+      })),
+    };
+    try {
+      const parsed = await chatJson({
+        config,
+        system: UNFILED_SYSTEM,
+        user: JSON.stringify(payload),
+        maxTokens: 8_000,
+        temperature: 0.2,
+        attempts: 2,
+        timeoutMs: 180_000,
+        jsonMode: false,
+      });
+      const parsedBatch = parseProposals(parsed, input, allowedEvidence, [], unfiledEvidenceIds);
+      proposals.push(...parsedBatch.proposals);
+      rejected.push(...parsedBatch.rejected);
+      truncations.push(...parsedBatch.truncations);
+      const note = text(asRecord(parsed).summary);
+      if (note) summaries.push(note.slice(0, 300));
+    } catch (error) {
+      errors.push(
+        `unfiled queries (${unfiled.map((row) => row.query).join(", ")}): ${
+          error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)
+        }`
+      );
+    }
+  }
+
   return {
     proposals,
     errors,

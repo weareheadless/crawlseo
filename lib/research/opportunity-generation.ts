@@ -6,6 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { ctrAtPosition } from "@/lib/funnel/scoring";
+import { TARGET_POSITION } from "@/lib/funnel/impact";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
 import {
@@ -76,6 +77,117 @@ export type ProposalGenerationDb = OpportunityDb &
   >;
 
 /**
+ * The Search Console window the stored rank rows were measured over.
+ *
+ * Read from the rows themselves rather than off the topic map: measured 2026-11-24, a map
+ * rebuilt before this change carried no window, so every generated opportunity still
+ * assessed as a `hypothesis` and no sampled SERP could move its priority. The row is the
+ * measurement, so the row is where the window is read. Null when no row states one.
+ */
+async function readSearchConsoleWindow(
+  db: ProposalGenerationDb,
+  input: { projectId: string; siteId: string }
+): Promise<number | null> {
+  // A client without the evidence table cannot state a window; absent stays absent rather
+  // than throwing and losing the whole run.
+  if (typeof db.evidenceRecord?.findMany !== "function") return null;
+  const rows = await db.evidenceRecord.findMany({
+    where: { projectId: input.projectId, siteId: input.siteId, supersededById: null, kind: "keyword_rank" as never },
+    select: { dimensions: true },
+  });
+  let windowDays: number | null = null;
+  for (const row of rows) {
+    const dimensions = (row.dimensions ?? {}) as { windowRole?: string; windowDays?: number };
+    // The previous window is a comparison, not the measurement being scored.
+    if (dimensions.windowRole === "previous") continue;
+    if (typeof dimensions.windowDays !== "number" || dimensions.windowDays <= 0) continue;
+    windowDays = windowDays == null ? dimensions.windowDays : Math.max(windowDays, dimensions.windowDays);
+  }
+  return windowDays;
+}
+
+/** Fold a query the way the evidence layer does: case, accents and whitespace. */
+function foldQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The queries this project has a sampled SERP for, folded.
+ *
+ * Read once per run so a cluster can be scored on a query whose competition was actually
+ * measured, instead of on its biggest query whether or not anyone looked at that SERP.
+ */
+async function readMeasurableQueries(
+  db: ProposalGenerationDb,
+  projectId: string
+): Promise<Set<string>> {
+  // Same rule: no evidence table means nothing is known to be sampled.
+  if (typeof db.evidenceRecord?.findMany !== "function") return new Set();
+  const rows = await db.evidenceRecord.findMany({
+    where: { projectId, supersededById: null, kind: "competitor_rank" as never },
+    select: { dimensions: true },
+  });
+  const queries = new Set<string>();
+  for (const row of rows) {
+    const query = (row.dimensions ?? {}) as { query?: unknown };
+    if (typeof query.query === "string") queries.add(foldQuery(query.query));
+  }
+  return queries;
+}
+
+/** The opportunity type a proposal maps to, from the same table the board stores. */
+function typeForProposal(
+  lane: string,
+  kind: string
+): keyof typeof TARGET_POSITION {
+  return TYPE_FOR_PROPOSAL[`${lane}:${kind}`] ?? "O3_content_gap";
+}
+
+/**
+ * The query a cluster's winnability should be measured on.
+ *
+ * A cluster is many queries and the score needs one, so it takes the one with the most
+ * observed impressions: that is the query the cluster is actually competing for, and it
+ * is arithmetic on a measured number rather than a guess about wording. Ties break on
+ * volume, then on the spelling, so the same cluster always yields the same query.
+ *
+ * Returns `null` for a cluster with no measured query, which leaves the inputs `null` and
+ * the row visibly low-confidence — the honest outcome, not a default.
+ */
+function leadQueryFor(cluster: TopicCluster | null, measurable?: Set<string>): string | null {
+  if (!cluster || cluster.queries.length === 0) return null;
+  const ranked = cluster.queries
+    .filter((query) => typeof query.query === "string" && query.query.trim() !== "")
+    .slice()
+    .sort(
+      (a, b) =>
+        (b.impressions ?? 0) - (a.impressions ?? 0) ||
+        (b.volume ?? 0) - (a.volume ?? 0) ||
+        a.query.localeCompare(b.query)
+    );
+  /**
+   * Prefer the strongest query we can actually measure a fight on.
+   *
+   * A cluster is many queries and only some of them were sampled. Measured 2026-11-24: 8
+   * of 13 clusters had no sampled SERP for their top-impression query, so their priority
+   * was scored blind while competitor rows for other queries in the same cluster sat
+   * unread. Choosing among the queries that do have a sample is arithmetic on what was
+   * measured, not a judgement about which query matters — the impression order still
+   * decides within each group.
+   */
+  if (measurable && measurable.size > 0) {
+    const withSample = ranked.find((query) => measurable.has(foldQuery(query.query)));
+    if (withSample) return withSample.query;
+  }
+  return ranked[0]?.query ?? null;
+}
+
+/**
  * CMP-012: replace a proposal's winnability literals with stored facts, or null.
  *
  * The generator produces a score before anything is measured; that is fine for volume and
@@ -90,17 +202,32 @@ async function withMeasuredWinnability(
     siteId: string;
     dedupKey: string;
     targetUrl: string | null;
+    /**
+     * The cluster's own lead query, when the proposal belongs to a topic.
+     *
+     * `queryFromDedupKey` reads the query out of a dedup key, but a `phase3:` key is
+     * `phase3:<lane>:<hash>` — it carries no query at all. Measured 2026-11-24: 1 of 23
+     * open opportunities resolved to a query, so `serpCompetition`, `authorityGap` and
+     * `pageStrength` were `assumed` on 22 of them and the board was ordered without ever
+     * looking at the SERP. The cluster knows its query; this passes it in rather than
+     * pretending the key has one.
+     */
+    query: string | null;
+    /** The Search Console window, read once for the whole run. */
+    windowDays?: number | null;
     inputs: ReturnType<typeof proposalScoreInputs>;
   }
 ): Promise<ReturnType<typeof proposalScoreInputs>> {
   const resolved = await resolveWinProbability(db as never, {
     projectId: input.projectId,
     siteId: input.siteId,
-    query: queryFromDedupKey(input.dedupKey),
+    query: queryFromDedupKey(input.dedupKey) ?? input.query,
     rankDistance: (input.inputs.winProbability.rankDistance as number | null) ?? null,
     playTypeFactor: (input.inputs.winProbability.playTypeFactor as number | null) ?? 0.6,
     targetUrl: input.targetUrl,
   });
+  const worth = input.inputs.worth as Record<string, unknown>;
+  if (worth.windowDays == null && input.windowDays != null) worth.windowDays = input.windowDays;
   return {
     ...input.inputs,
     winProbability: resolved.winProbability,
@@ -275,9 +402,21 @@ export function proposalScoreInputs(
       coverageSummary: cluster ? `Topic coverage: ${cluster.coverage}` : null,
       needRationale: proposal.summary,
       offerFitRationale: cluster?.rationale ?? null,
-      targetPosition: null,
+      /**
+       * The position this play is bidding for, from the shared declared table.
+       *
+       * This was `null`, and a null target is not a missing detail: `assessImpact` reads
+       * it to compute the upside, so every generated row assessed as a `hypothesis` and
+       * `computeScore` returned from the low-confidence band before it ever looked at the
+       * winnability inputs. Measured 2026-11-24: the score was identical (20) whether a
+       * sampled SERP was easy or hard, because the competitor evidence was never reached.
+       * A declared target is what lets the fight the competitor data describes become a
+       * priority.
+       */
+      targetPosition: TARGET_POSITION[typeForProposal(proposal.lane, proposal.kind)] ?? null,
       currentPosition: cluster?.metrics.position ?? null,
-      windowDays: null,
+      // The window the impressions were measured over, so they can be read per month.
+      windowDays: cluster?.metrics.windowDays ?? null,
       observedImpressions: cluster?.metrics.impressions ?? null,
       technical: false,
       unmeasured: !volume,
@@ -468,6 +607,13 @@ export async function storeProposals(
   const dropped: Array<{ title: string; reason: string }> = [];
   const reproposedClosed: string[] = [];
   const clusterIdBySlug = new Map(input.clusters.map((cluster) => [cluster.slug, cluster.id]));
+  // Read once for the whole run: the window is a property of the measurement period, not
+  // of one proposal.
+  const searchConsoleWindowDays = await readSearchConsoleWindow(db, {
+    projectId: input.projectId,
+    siteId: input.siteId,
+  });
+  const measurableQueries = await readMeasurableQueries(db, input.projectId);
 
   for (const proposal of input.proposals) {
     const invalid = validateProposal(proposal, {
@@ -550,6 +696,8 @@ export async function storeProposals(
           siteId: input.siteId,
           dedupKey: proposal.dedupKey,
           targetUrl: proposal.target.url ?? null,
+          query: leadQueryFor(cluster, measurableQueries),
+          windowDays: searchConsoleWindowDays,
           inputs: proposalScoreInputs(proposal, cluster),
         }) as never,
         whyEvidenceIds,

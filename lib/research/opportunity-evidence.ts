@@ -19,8 +19,27 @@ export type ClusterEvidenceRow = {
   observedAt: Date;
 };
 
+/**
+ * Fold a query to the form the same query is compared in.
+ *
+ * **Accents are folded, because they are a spelling of one phrase, not two phrases.**
+ * Measured 2026-11-24 on atelier-harmonie: `tapisserie de siège` sat in the topic map
+ * with an accent, the sampled SERP wrote `tapisserie de siege` without one, and the two
+ * never met — so 12 `competitor_rank` rows and the keyword they describe were dropped as
+ * "no topic to file it under". NFKC normalises the encoding but keeps the accent
+ * (`siège` stays `siège`), which is why this needs the diacritic strip as well.
+ *
+ * This is the one kind of normalisation `AGENTS.md` allows code to do: case, accents and
+ * whitespace are facts in every language. Plural agreement, word order and synonyms are
+ * not, and stay the model's job.
+ */
 function normalize(value: string): string {
-  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -112,10 +131,28 @@ export const COMPETITOR_CONTEXT_BOUNDS = {
   evidencePerCluster: 20,
 } as const;
 
+/**
+ * A query a paid SERP sampled, with nobody to file it under.
+ *
+ * The largest gaps are exactly the queries a site has no page for, and a query with no
+ * page has no cluster either — so the topic map never sees it and the filing step has
+ * nothing to attach it to. Returning them as data (not only as a sentence in the report)
+ * is what lets them reach the model.
+ */
+export type UnfiledCompetitorQuery = {
+  query: string;
+  /** Sampled domains, best position first, with the evidence ids that prove them. */
+  competitors: Array<{ domain: string; position: number; evidenceId: string }>;
+  /** Our own position, or null when we do not rank at all. */
+  ourPosition: number | null;
+};
+
 export type ClusterEvidenceSelection = {
   idsByCluster: Map<string, string[]>;
   /** What the bounds dropped, named per cluster so the run report can state it. */
   truncations: string[];
+  /** Sampled queries no cluster could claim. Carried, not dropped. */
+  unfiled: UnfiledCompetitorQuery[];
 };
 
 export function buildClusterEvidenceIds(
@@ -127,14 +164,29 @@ export function buildClusterEvidenceIds(
 
 export function selectClusterEvidence(
   clusters: TopicCluster[],
-  rows: ClusterEvidenceRow[]
+  rows: ClusterEvidenceRow[],
+  /**
+   * Queries the topic map's review already ruled out, folded, with the reason.
+   *
+   * A sampled SERP says a query exists; it does not say the business serves it. Measured
+   * 2026-11-24 on atelier-harmonie: three of the seven unfiled queries had been judged
+   * out of market or plain noise by a human — `restauration fauteuil
+   * saint-germain-en-laye` (outside Normandy), `lustre artisanal` (not sold) and
+   * `art et tapisserie` (a different trade). Carrying those to the model would overrule
+   * a decision a person already made, so they are excluded here and reported as excluded
+   * rather than as opportunities.
+   */
+  excludedByReview: Map<string, string> = new Map()
 ): ClusterEvidenceSelection {
   const ranks = new Map<string, Array<{ id: string; impressions: number; observedAt: Date }>>();
   const metrics = new Map<string, { id: string; observedAt: Date }>();
   const serps = new Map<string, { id: string; observedAt: Date }>();
   const memberships = new Map<string, string[]>();
   /** Every sampled domain per query, deduped by domain on read. */
-  const competitors = new Map<string, Array<{ id: string; domain: string; position: number; observedAt: Date }>>();
+  const competitors = new Map<
+    string,
+    Array<{ id: string; domain: string; position: number; observedAt: Date; query: string }>
+  >();
   /** Our own best position per query, so a gap can be identified without the cluster. */
   const ourPosition = new Map<string, number>();
   /**
@@ -185,7 +237,15 @@ export function selectClusterEvidence(
       if (domain && position != null) {
         competitors.set(query, [
           ...(competitors.get(query) ?? []),
-          { id: row.id, domain, position, observedAt: row.observedAt },
+          {
+            id: row.id,
+            domain,
+            position,
+            observedAt: row.observedAt,
+            // The row's own spelling, kept so an unfiled query can be shown the way the
+            // SERP wrote it rather than in the folded form used for comparison.
+            query: typeof dimensions.query === "string" ? dimensions.query : query,
+          },
         ]);
       }
     } else if (row.kind === "keyword_universe_membership") {
@@ -196,7 +256,7 @@ export function selectClusterEvidence(
 
   /** Distinct domains for a query, newest row per domain, lowest position first. */
   const domainsFor = (query: string) => {
-    const byDomain = new Map<string, { id: string; domain: string; position: number; observedAt: Date }>();
+    const byDomain = new Map<string, { id: string; domain: string; position: number; observedAt: Date; query: string }>();
     for (const row of competitors.get(normalize(query)) ?? []) {
       const held = byDomain.get(row.domain);
       if (!held || row.observedAt > held.observedAt) byDomain.set(row.domain, row);
@@ -220,22 +280,28 @@ export function selectClusterEvidence(
     // 2026-11-24, 21 of 130 competitor rows on atelier-harmonie had no cluster, and all
     // four of their queries were absent from the keyword universe — the largest gaps on
     // the site, invisible because nothing filed them.
+    /**
+     * Keyed on the folded spelling, so a query the map writes with an accent and a SERP
+     * writes without one are the same query. `query` keeps the map's own spelling for
+     * display; every lookup uses the folded key.
+     */
     const byName = new Map<string, CandidateQuery>();
     for (const query of cluster.queries) {
-      byName.set(query.query, {
+      const key = normalize(query.query);
+      byName.set(key, {
         query: query.query,
         impressions: query.impressions ?? 0,
         volume: query.volume ?? null,
-        position: query.position ?? ourPosition.get(query.query) ?? null,
+        position: query.position ?? ourPosition.get(key) ?? null,
         clusterSlug: cluster.slug,
       });
     }
     for (const key of competitors.keys()) {
       if (byName.has(key)) continue;
-      // A query a sampled SERP names, this cluster owns it by its own dimension, and we
-      // have no membership row for it. That is the shape of a real gap — measured
-      // 2026-11-24, all four such queries on atelier-harmonie were absent from the
-      // keyword universe — so it belongs here, not in a side table nobody reads.
+      // A query a sampled SERP names, and this cluster owns it by its own dimension. That
+      // is the shape of a real gap — measured 2026-11-24, all four such queries on
+      // atelier-harmonie were absent from the keyword universe — so it belongs here, not
+      // in a side table nobody reads.
       if (competitorCluster.get(key) !== cluster.slug) continue;
       const existing = cluster.queries.find((query) => normalize(query.query) === key);
       byName.set(key, {
@@ -325,14 +391,29 @@ export function selectClusterEvidence(
    * lead with. They are not lost, but they are also not attributable to a topic here, so
    * the run says so instead of letting them disappear.
    */
-  const unfiled = [...competitors.keys()].filter((query) => !claimed.has(query));
-  if (unfiled.length > 0) {
-    const named = unfiled.slice(0, 5).map((query) => `"${query}"`).join(", ");
+  const allUnfiled = [...competitors.keys()].filter((query) => !claimed.has(query));
+  const overruled = allUnfiled.filter((query) => excludedByReview.has(query));
+  const unfiledQueries = allUnfiled.filter((query) => !excludedByReview.has(query));
+  if (overruled.length > 0) {
+    // Stated, not silently dropped: the SERP did find demand the review then declined.
+    const named = overruled.slice(0, 5).map((query) => `"${competitors.get(query)?.[0]?.query ?? query}"`).join(", ");
     truncations.push(
-      `${unfiled.length} quer${unfiled.length === 1 ? "y" : "ies"} had a sampled SERP but no topic to file it under, so no cluster received it: ${named}${unfiled.length > 5 ? ", …" : ""}`
+      `${overruled.length} sampled quer${overruled.length === 1 ? "y" : "ies"} had competitor data but the topic review already excluded ${overruled.length === 1 ? "it" : "them"}, so ${overruled.length === 1 ? "it was" : "they were"} not proposed: ${named}${overruled.length > 5 ? ", …" : ""}`
     );
   }
-  return { idsByCluster: result, truncations };
+  if (unfiledQueries.length > 0) {
+    const named = unfiledQueries.slice(0, 5).map((query) => `"${query}"`).join(", ");
+    truncations.push(
+      `${unfiledQueries.length} quer${unfiledQueries.length === 1 ? "y" : "ies"} had a sampled SERP but no topic to file it under: ${named}${unfiledQueries.length > 5 ? ", …" : ""}. They are sent to the drafting call as unfiled observations, listed under no topic.`
+    );
+  }
+  const unfiled: UnfiledCompetitorQuery[] = unfiledQueries.map((query) => ({
+    // The folded key is not a spelling anyone wrote; the sampled row's own spelling is.
+    query: competitors.get(query)?.[0]?.query ?? query,
+    competitors: domainsFor(query).map((row) => ({ domain: row.domain, position: row.position, evidenceId: row.id })),
+    ourPosition: ourPosition.get(query) ?? null,
+  }));
+  return { idsByCluster: result, truncations, unfiled };
 }
 
 /**

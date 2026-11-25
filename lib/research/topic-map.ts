@@ -58,6 +58,15 @@ export type DemandQuery = {
   difficulty: number | null;
   observedAt: Date;
   /**
+   * Days the Search Console window covers, as stored on the row.
+   *
+   * The measurement is a rolling window, not a month, so an impression count cannot be
+   * turned into a monthly estimate without it. It was read and discarded, which made
+   * `assessImpact` return "hypothesis" for every generated proposal — see the note in
+   * `clusterMetrics`.
+   */
+  windowDays?: number | null;
+  /**
    * Set by the AI review when the query's geography is judged against the
    * business location and the cluster's market scope. Undefined means "not
    * judged", which is treated as in market.
@@ -115,6 +124,13 @@ export type TopicCluster = {
     position: number | null;
     aeoQuestions: number;
     aeoCited: number;
+    /**
+     * Days the Search Console window covered, or null when no row stated it.
+     *
+     * Carried so a proposal can convert observed impressions into a monthly estimate. A
+     * null here is what made every generated opportunity assess as a hypothesis.
+     */
+    windowDays?: number | null;
   };
   queries: DemandQuery[];
   /** Queries the review placed outside the configured market, kept for audit. */
@@ -399,6 +415,13 @@ export function clusterMetrics(
     position: weightedPosition(queries),
     aeoQuestions: aeo.questions,
     aeoCited: aeo.cited,
+    // The window is a fact about the measurement, so it is read, not assumed: the longest
+    // window any query in the cluster was measured over.
+    windowDays: queries.reduce<number | null>(
+      (longest, query) =>
+        query.windowDays == null ? longest : longest == null ? query.windowDays : Math.max(longest, query.windowDays),
+      null
+    ),
   };
 }
 
@@ -581,6 +604,7 @@ export async function loadTopicMapData(
         volume: null,
         difficulty: null,
         observedAt: row.observedAt,
+        windowDays: numberValue(dims.windowDays),
       });
     }
   }

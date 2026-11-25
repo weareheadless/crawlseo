@@ -364,6 +364,24 @@ describe("distinct demand", () => {
     observedAt: new Date("2026-11-01T00:00:00Z"),
   });
 
+  it("carries the window the impressions were measured over", () => {
+    // The window is a fact about the measurement. Dropping it made `assessImpact` return
+    // "hypothesis" for every generated proposal, so the score never reached the
+    // winnability inputs and competitor data could not move a priority.
+    const withWindow = (query: string, windowDays: number | null): DemandQuery => ({
+      ...q(query, 100),
+      impressions: 200,
+      windowDays,
+    });
+    const metrics = clusterMetrics([withWindow("a", 28), withWindow("b", 90), withWindow("c", null)]);
+    // The longest stated window, because that is the one the impressions span.
+    expect(metrics.windowDays).toBe(90);
+  });
+
+  it("leaves the window null when no query stated one", () => {
+    expect(clusterMetrics([q("a", 100)]).windowDays).toBeNull();
+  });
+
   it("treats plural and spacing variants as one query", () => {
     expect(canonicalKeyword("freediving course")).toBe(canonicalKeyword("freediving courses"));
     expect(canonicalKeyword("ocean vibes")).toBe(canonicalKeyword("oceanvibes"));

@@ -7,7 +7,7 @@ import {
   orderByOpportunity,
   selectClusterEvidence,
 } from "@/lib/research/opportunity-evidence";
-import { competitorSummaryForTest } from "@/lib/research/opportunity-drafting";
+import { competitorSummaryForTest, proposalIdentity } from "@/lib/research/opportunity-drafting";
 import type { TopicCluster } from "@/lib/research/topic-map";
 
 /**
@@ -334,6 +334,112 @@ describe("CMP-003 the model is told who holds each query", () => {
     const entry = summary.queries.find((item) => item.query === "lampe artisanale");
     expect(entry?.aboveUs).toHaveLength(1);
     expect(entry?.aboveUs[0].position).toBe(3);
+  });
+});
+
+describe("CMP-003 an accented query and its unaccented spelling are one query", () => {
+  const unaccented = (id: string, query: string, domain: string, position: number) =>
+    row({
+      id,
+      kind: "competitor_rank",
+      // The sampled SERP wrote the query without the accent the topic map used.
+      dimensions: { query, domain, rankAbsolute: position, observedAt: "2026-11-24", cluster: "seats" },
+      metrics: { "provider:position": { value: position, unit: "rank", source: "provider" } },
+    });
+
+  it("files an unaccented sampled SERP under the accented topic query", () => {
+    // Measured 2026-11-24: the map held `tapisserie de siège`, the SERP wrote
+    // `tapisserie de siege`, the two never met, and 12 competitor rows plus the keyword
+    // were dropped as "no topic to file it under".
+    const accented = cluster({
+      slug: "seats",
+      queries: [
+        { query: "fauteuil restauration", impressions: 200, position: 12, volume: 90 },
+        { query: "tapisserie de siège", impressions: 40, position: 18, volume: 70 },
+      ] as never,
+    });
+    const rows = [ourRank("r1", "tapisserie de siège", 18, 40), unaccented("c1", "tapisserie de sieges", "bucherie.com", 1)];
+    // A plural is not an accent: ask for the same spelling minus the accent.
+    const same = [ourRank("r1", "tapisserie de siège", 18, 40), unaccented("c1", "tapisserie de siege", "bucherie.com", 1)];
+    const selection = selectClusterEvidence([accented], same);
+    const selected = selection.idsByCluster.get("seats") ?? [];
+    expect(selected).toContain("c1");
+    // And nothing is reported as unfiled, because a topic did claim it.
+    expect(selection.unfiled).toHaveLength(0);
+    void rows;
+  });
+
+  it("does not re-propose a query the topic review already excluded", () => {
+    // A paid SERP says the query exists; it does not say the business serves it. Measured
+    // 2026-11-24: `lustre artisanal` had competitor data and had already been judged
+    // "not sold" by a person, and `restauration fauteuil saint-germain-en-laye` was out of
+    // market. Carrying those to the model would overrule a human decision.
+    const rows = [
+      ourRank("r1", "fauteuil restauration", 12, 200),
+      competitor("c1", "lustre artisanal", "atelier-loupiote.fr", 1),
+      competitor("c2", "restauration de sièges", "bienassise.fr", 3),
+    ];
+    const selection = selectClusterEvidence(
+      [cluster({ slug: "seats" })],
+      rows,
+      new Map([["lustre artisanal", "noise: not sold"]])
+    );
+    expect(selection.unfiled.map((entry) => entry.query)).toEqual(["restauration de sièges"]);
+    // And the exclusion is stated, so it does not look like the SERP found nothing.
+    expect(selection.truncations.join(" ")).toContain("topic review already excluded");
+  });
+
+  it("carries a truly unfiled query as data, not only as a sentence in the report", () => {
+    // `restauration de sièges` had 7 competitor rows naming bienassise.fr at #3, no
+    // cluster and no keyword-universe row, so only a data channel reaches the model.
+    const rows = [
+      ourRank("r1", "fauteuil restauration", 12, 200),
+      competitor("c1", "restauration de sièges", "bienassise.fr", 3),
+      competitor("c2", "restauration de sièges", "blog.artapisserie.fr", 4),
+    ];
+    const selection = selectClusterEvidence([cluster({ slug: "seats" })], rows);
+    const unfiled = selection.unfiled.find((entry) => entry.query === "restauration de sièges");
+    expect(unfiled).toBeTruthy();
+    expect(unfiled?.competitors.map((entry) => entry.domain)).toEqual(["bienassise.fr", "blog.artapisserie.fr"]);
+    expect(unfiled?.competitors[0].evidenceId).toBe("c1");
+    // No recorded position: we do not rank, which is the largest gap there is.
+    expect(unfiled?.ourPosition).toBeNull();
+    // It is still named in the report, so the count is never silent.
+    expect(selection.truncations.join(" ")).toContain("no topic to file it under");
+  });
+});
+
+describe("CMP-003 an unfiled-query proposal is its own board row", () => {
+  it("does not collapse two unfiled proposals onto one dedup key", () => {
+    // An unfiled proposal has no page and no topic by design, so the identity fell back to
+    // the constant "site" and two of them hashed to the same key — the second silently
+    // replaced the first on the board.
+    const one = proposalIdentity({
+      lane: "content_business",
+      kind: "update",
+      topicSlug: null,
+      title: "Restauration de sièges : viser bienassise.fr",
+      target: { url: null, newAsset: false, section: null },
+    });
+    const two = proposalIdentity({
+      lane: "content_business",
+      kind: "update",
+      topicSlug: null,
+      title: "Abat-jour ancien : viser defilenbobine.com",
+      target: { url: null, newAsset: false, section: null },
+    });
+    expect(one).not.toBe(two);
+  });
+
+  it("keeps the same unfiled job on one row across runs", () => {
+    const proposal = {
+      lane: "content_business" as const,
+      kind: "update" as const,
+      topicSlug: null,
+      title: "Restauration de sièges : viser bienassise.fr",
+      target: { url: null, newAsset: false, section: null },
+    };
+    expect(proposalIdentity(proposal)).toBe(proposalIdentity({ ...proposal }));
   });
 });
 

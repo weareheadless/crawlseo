@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ASSUMED_WIN_PROBABILITY_CEILING,
   authorityGapFromSets,
+  competitorToSerpCompetition,
   difficultyToSerpCompetition,
   isLowConfidence,
   pageStrength,
@@ -322,5 +323,160 @@ describe("CMP-012 an unmeasured fight cannot score like a measured one", () => {
     // measured — that is the whole defect, in one line.
     const legacy = computeScore({ ...base, evidenceCompleteness: "both" });
     expect(legacy.scoreValue).toBeLessThanOrEqual(ASSUMED_WIN_PROBABILITY_CEILING);
+  });
+});
+
+describe("CMP-003 a sampled SERP is a measurement, not an assumption", () => {
+  const sample = (position: number, observedAt = "2026-11-24") => ({ position, observedAt: new Date(observedAt) });
+
+  it("reads the sampled field so serpCompetition stops being assumed", () => {
+    // Measured 2026-11-24: 25 of the 27 queries with competitor rows had no
+    // provider difficulty above zero, so serpCompetition was assumed on nearly every row
+    // while a paid SERP naming the competing domains sat unread.
+    const easy = competitorToSerpCompetition([sample(9), sample(11)]);
+    expect(easy).not.toBeNull();
+    // A thin field with a weak leader is easier than a full field with the leader at #1.
+    const hard = competitorToSerpCompetition([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((p) => sample(p)) ?? []);
+    expect(hard).not.toBeNull();
+    expect(easy!.value).toBeGreaterThan(hard!.value);
+  });
+
+  it("returns null for no sample, because an absent sample is not an easy SERP", () => {
+    expect(competitorToSerpCompetition([])).toBeNull();
+    // A position of 0 is the provider's "no data", never a win.
+    expect(competitorToSerpCompetition([sample(0)])).toBeNull();
+  });
+
+  it("dates the measurement to the newest sample it read", () => {
+    const value = competitorToSerpCompetition([sample(5, "2026-09-01"), sample(4, "2026-11-24")]);
+    expect(value?.observedAt.toISOString().slice(0, 10)).toBe("2026-11-24");
+    expect(value?.bestPosition).toBe(4);
+  });
+
+  it("falls back to the sample when the provider has no difficulty for the query", async () => {
+    // The actual case on 25 of 27 queries: a difficulty of 0 (the provider's "no data")
+    // and a paid SERP that named the domains. Before this, the row stayed `assumed`.
+    const db = {
+      evidenceRecord: {
+        findMany: async () => [
+          { kind: "keyword_metrics", dimensions: { query: "tapisserie de siège" }, metrics: { "provider:difficulty": { value: 0 } }, observedAt: new Date("2026-11-24") },
+          // Both sampled rows are unaccented; the query below is accented. Without accent
+          // folding neither would be found and the input would stay assumed.
+          { kind: "competitor_rank", dimensions: { query: "tapisserie de siege", domain: "bucherie.com", rankAbsolute: 1 }, metrics: {}, observedAt: new Date("2026-11-24") },
+          { kind: "competitor_rank", dimensions: { query: "tapisserie de siege", domain: "ecoute-bergere.fr", rankAbsolute: 26 }, metrics: {}, observedAt: new Date("2026-11-24") },
+        ],
+      },
+    };
+    const resolved = await resolveWinProbability(db as never, {
+      projectId: "p",
+      // The accent the topic map uses; the sampled rows use it unaccented.
+      query: "tapisserie de siège",
+      rankDistance: null,
+      playTypeFactor: 0.6,
+    });
+    expect(resolved.winProbability.serpCompetition).not.toBeNull();
+    expect(resolved.provenance.source.serpCompetition).toBe("measured");
+    // And the note says it came from the sample, not from a provider score.
+    expect(resolved.provenance.missing.join(" ")).toContain("sampled competitor domain");
+  });
+
+  it("prefers a measured difficulty over the one-page sample", async () => {
+    // The provider's score is a market measurement; the sample is one page of results.
+    // Having both, the provider wins — the sample is only the fallback.
+    const db = {
+      evidenceRecord: {
+        findMany: async () => [
+          { kind: "keyword_metrics", dimensions: { query: "lampe artisanale" }, metrics: { "provider:difficulty": { value: 20 } }, observedAt: new Date("2026-11-24") },
+          { kind: "competitor_rank", dimensions: { query: "lampe artisanale", domain: "pinterest.com", rankAbsolute: 1 }, metrics: {}, observedAt: new Date("2026-11-24") },
+        ],
+      },
+    };
+    const resolved = await resolveWinProbability(db as never, {
+      projectId: "p",
+      query: "lampe artisanale",
+      rankDistance: 0.3,
+      playTypeFactor: 0.6,
+    });
+    expect(resolved.winProbability.serpCompetition).toBe(0.8);
+    expect(resolved.provenance.source.serpCompetition).toBe("measured");
+  });
+});
+
+describe("CMP-003 competitor data reaches the priority, not only the payload", () => {
+  /**
+   * The whole chain, in one test: a sampled SERP changes `serpCompetition`, which changes
+   * the score that orders the board. Before this, the score was identical (20) whether the
+   * field was easy or hard, because `targetPosition` and `windowDays` were null and
+   * `assessImpact` returned "hypothesis" before winnability was ever read.
+   */
+  const scored = (serp: number | null, source: "measured" | "assumed") =>
+    computeScore({
+      worth: {
+        volume: 470,
+        volumeSource: "provider",
+        ctrAtPosition: 0.005,
+        businessValue: 0.85,
+        intentFit: 1,
+        readiness: "actionable",
+        measurement: "observed_baseline",
+        targetPosition: 10,
+        currentPosition: 40.5,
+        windowDays: 28,
+        observedImpressions: 1350,
+        technical: false,
+      },
+      winProbability: { rankDistance: 0.05, authorityGap: null, pageStrength: null, serpCompetition: serp, playTypeFactor: 0.6 },
+      winProbabilitySource: {
+        rankDistance: "measured",
+        authorityGap: "assumed",
+        pageStrength: "assumed",
+        serpCompetition: source,
+        playTypeFactor: "assumed",
+      },
+      effort: { playTypeBase: 8, sizeFactor: 1 },
+      freshness: 0.9,
+      stability: 0.8,
+      evidenceCompleteness: "both",
+    } as never);
+
+  it("scores an easy sampled field above a hard one", () => {
+    const easy = scored(0.88, "measured");
+    const hard = scored(0.3, "measured");
+    expect(easy.impact.kind).toBe("measured");
+    expect(easy.scoreValue).toBeGreaterThan(hard.scoreValue);
+  });
+
+  it("does not reach the winnability inputs without a target and a window", () => {
+    // The defect this guards: null there meant every row assessed as a hypothesis and
+    // the sampled SERP could not change the order at all.
+    const withoutTarget = computeScore({
+      worth: {
+        volume: 470,
+        volumeSource: "provider",
+        ctrAtPosition: 0.005,
+        businessValue: 0.85,
+        intentFit: 1,
+        readiness: "actionable",
+        measurement: "observed_baseline",
+        targetPosition: null,
+        currentPosition: 40.5,
+        windowDays: null,
+        observedImpressions: 1350,
+        technical: false,
+      },
+      winProbability: { rankDistance: 0.05, authorityGap: null, pageStrength: null, serpCompetition: 0.88, playTypeFactor: 0.6 },
+      winProbabilitySource: {
+        rankDistance: "measured",
+        authorityGap: "assumed",
+        pageStrength: "assumed",
+        serpCompetition: "measured",
+        playTypeFactor: "assumed",
+      },
+      effort: { playTypeBase: 8, sizeFactor: 1 },
+      freshness: 0.9,
+      stability: 0.8,
+      evidenceCompleteness: "both",
+    } as never);
+    expect(withoutTarget.impact.kind).toBe("hypothesis");
   });
 });
