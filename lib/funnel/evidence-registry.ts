@@ -214,8 +214,15 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "rolling_window",
   },
   gsc_page: {
-    producers: ["lib/google/gsc-client"],
-    dimensions: { required: ["url"], optional: ["windowDays", "query"] },
+    producers: ["lib/google/gsc-client", "lib/funnel/backfill"],
+    // `windowEnd` and `scope` were written by `lib/funnel/backfill` for the page
+    // rows and declared for `keyword_rank` but not here, so every crawl and
+    // Search Console section of a bundle failed its write with "stores undeclared
+    // dimension windowEnd". Measured 2026-11-25: that made every fresh bundle
+    // PARTIAL, which the pipeline gate then (correctly) refused to build a map
+    // from — so a registry typo stopped the whole month for any site whose
+    // Search Console section ran.
+    dimensions: { required: ["url"], optional: ["windowDays", "query", "windowEnd", "windowStart", "scope"] },
     metrics: ["first_party:position", "first_party:impressions", "first_party:clicks", "first_party:ctr"],
     window: "rolling_window",
   },
