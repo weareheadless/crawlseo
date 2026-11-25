@@ -25,7 +25,7 @@ import {
 import { readSiteBrand, type SiteRepresentation } from "@/lib/site/brand";
 
 export type SocialChannel = "facebook_page";
-export type SocialStatus = "published" | "draft" | "unknown";
+export type SocialStatus = "published" | "draft" | "scheduled" | "unknown";
 
 export type SocialReceipt = {
   opportunityId: string;
@@ -171,7 +171,9 @@ export async function publishSocialPost(input: PublishInput): Promise<PublishRes
     contentHash: rendered.contentHash,
     error: published.status === "unknown" ? "Meta's response was not received; it may have landed" : "",
     decidedAt: input.opportunity.decidedAt ?? null,
-    publishedAt: published.status === "unknown" ? null : new Date(),
+    // A scheduled post is held by the Page until its time; it is not published yet.
+    publishedAt:
+      published.status === "unknown" || published.status === "scheduled" ? null : new Date(),
   };
   await input.record?.(receipt);
   return { outcome: "posted", receipt, replay: false };

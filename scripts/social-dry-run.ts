@@ -31,8 +31,15 @@ const voice = arg("voice", "default");
 // none: stop at the image. draft: upload it unpublished, the human publishes on
 // the Page. live: publish now, which is the one step that is public.
 const publishMode = arg("publish", "none");
-if (!["none", "draft", "live"].includes(publishMode)) {
-  console.error("--publish must be none, draft or live");
+if (!["none", "draft", "live", "schedule"].includes(publishMode)) {
+  console.error("--publish must be none, draft, live or schedule");
+  process.exit(2);
+}
+// A scheduled post is visible in the Page's Publishing Tools and publishes at
+// its time; it needs a wall-clock, with an offset.
+const scheduledAt = arg("at", "");
+if (publishMode === "schedule" && !scheduledAt) {
+  console.error("--publish schedule needs --at <ISO 8601 with offset>");
   process.exit(2);
 }
 
@@ -297,6 +304,7 @@ async function main() {
       idempotencyKey: `plan:${siteId}:${rendered.renderId}`,
       draft: publishMode === "draft",
       caption: rendered.caption,
+      ...(publishMode === "schedule" ? { scheduledAt } : {}),
     });
     console.log(JSON.stringify({ stage: "publish", mode: publishMode, published }, null, 2));
   }

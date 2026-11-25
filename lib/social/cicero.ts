@@ -53,9 +53,11 @@ export type RenderOutcome =
 export type PublishOutcome =
   | {
       outcome: "accepted";
-      status: "published" | "draft" | "unknown";
+      status: "published" | "draft" | "scheduled" | "unknown";
       providerPostId: string | null;
       draft: boolean;
+      /** Set when the Page holds the post for a time rather than showing it now. */
+      scheduledFor?: string;
     }
   | { outcome: "refused"; code: string; detail: string; retryable: boolean };
 
@@ -80,6 +82,8 @@ export type CiceroClient = {
     idempotencyKey: string;
     draft?: boolean;
     caption?: string;
+    /** ISO 8601 with an offset: schedule instead of publishing now. */
+    scheduledAt?: string;
   }): Promise<PublishOutcome>;
   /** Recent renders, newest first: the pages and photographs already used. */
   history(limit?: number): Promise<SocialHistoryItem[]>;
@@ -153,21 +157,30 @@ export function createCiceroClient(options: {
       return { outcome: "refused", ...refusalFor(status, text) };
     },
 
-    async publish({ renderId, idempotencyKey, draft, caption }) {
+    async publish({ renderId, idempotencyKey, draft, caption, scheduledAt }) {
       const { status, payload } = await request("/v1/social/publications", {
         render_id: renderId,
         idempotency_key: idempotencyKey,
         draft,
         caption,
+        ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
       });
       if (status === 200) {
         const reported = String(payload.status ?? "");
-        const outcome = reported === "unknown" ? "unknown" : reported === "draft" ? "draft" : "published";
+        const outcome =
+          reported === "unknown"
+            ? "unknown"
+            : reported === "scheduled"
+              ? "scheduled"
+              : reported === "draft"
+                ? "draft"
+                : "published";
         return {
           outcome: "accepted",
           status: outcome,
           providerPostId: payload.provider_post_id ? String(payload.provider_post_id) : null,
           draft: Boolean(payload.draft),
+          ...(payload.scheduled_for ? { scheduledFor: String(payload.scheduled_for) } : {}),
         };
       }
       const detail = payload?.detail;
