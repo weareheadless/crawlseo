@@ -20,6 +20,62 @@ Measured 2026-11-25. Use these specific rows as the acceptance fixtures.
 
 ---
 
+## Progress, as implemented
+
+Every phase below is implemented, verified against the boards, and open as a stacked PR.
+The stack must merge in order: **#244 → #248 → #249 → #250 → #251 → #252 → #255 → #256**
+(#246 is independent of #244). The ordering is not about conflicts: #251 re-scores every
+row from its stored inputs, so on `main` without #248 it would replay the provenance
+defect — recomputing the apnea article 22 → 7.
+
+| step | issue | PR | verified on a board |
+|---|---|---|---|
+| P0-1 freeze trap | #235 | #244 | new test fails if a frozen table has a live writer |
+| P0-2 dead modules | #236 | #245 | suite 1939 → 1901; two kept, with reasons |
+| P1-1 band guard | #241 | #246 | inmersion: schema 23 → 6, apnea stays 7 |
+| P1-2 provenance | #240 | #248 | apnea 7 → 22; 1,577 rows backfilled |
+| P1-3 hygiene gate | #238 | #249 | 0 detected rows move: both gated rows are `in_progress` |
+| P2-1 one comparator | #242 | #250 | five boards identical order before and after |
+| P2-2 re-score | #243 | #251 | 23 changed, then **0** on a second run |
+| D1 evidence class | #237 | #252 | alaguillotine: rank-29 page **first** |
+| T1/T2/T4/T5 (#232) | #232 | #255 | alaguillotine refused a market at 35% coverage |
+| D3 candidate lane | #239 | #256 | four cases verified; live rows `unrecorded` by design |
+
+### What measuring the boards changed about the plan
+
+**The freeze trap was one entry, not ten.** `FROZEN_FUNNEL_MODELS` is the audit list; the
+actual freeze was `FROZEN_CREATES` holding `researchAction`, which nine modules write. Two
+existing tests asserted the bug.
+
+**P1-3 moves nothing today.** The gate is preventive: both gated rows are `in_progress`.
+Testing it live also bypassed the topic-map ownership guard and created 33 legacy rows on
+a board the topic map owns — restored with `retireLegacyOpportunitiesForTopicMap`.
+
+**D1 needed a stored column.** Prisma cannot order by a JSON field, so `assessment.kind`
+could not be a sort key. `Opportunity.evidenceClass` is written wherever `scoreValue` is.
+The migration also found 19 rows scored by a model that no longer exists — the band guard
+changed what a score means without bumping `ASSESSMENT_VERSION`.
+
+**The market floor needed coverage, not just share.** Alaguillotine clears a 25% share
+floor (35% of 136 impressions) and would have bought US SERPs off a 31-country audience.
+A share floor cannot separate it from susimacdonald; coverage can.
+
+### Three defects found and deliberately not fixed
+
+Each is filed with its measurement rather than half-fixed:
+
+- **#253** — the AEO generator wraps any subject in a price template, so alaguillotine buys
+  "How much does hemedti cost?" (Hemedti is a Sudanese military leader). The fix is a
+  judgement about what a query is about; a person-name regex is banned and would fail on
+  "adnoc owner".
+- **#254** — 1–9 observed impressions are classed `hypothesis`. Relabelling them `measured`
+  fixed casamigo and regressed alaguillotine and inmersion; the class and the scorer must
+  change together.
+- **#254** — `windowDays: 0` made real reach unsizable, and assuming 30 days scored a
+  12-impression row at 1 and put it first on casamigo. The missing fact belongs upstream.
+
+---
+
 ## Phase 0 — Safety. No behaviour change. Nothing reorders.
 
 ### P0-1 · The freeze trap (#235)
