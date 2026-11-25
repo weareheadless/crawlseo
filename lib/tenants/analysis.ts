@@ -238,8 +238,18 @@ export async function inspectTenant(db: PrismaClient, siteId: string): Promise<T
         })
       : step({
           step: "site-context",
-          status: "missing",
-          detail: "neither an audience market nor a business market is set",
+          // Not merely "missing": this is the one gap that stops the whole
+          // pipeline. With no country the bundle cannot plan, so no paid evidence
+          // is ever bought and the tenant gets no competitor data, no demand
+          // outside Search Console and no content opportunities — which reads on
+          // the board as "this site has nothing to do". Measured 2026-11-25: the
+          // three tenants without a country had 0, 0 and 4 open opportunities
+          // against 11-22 for the ones with one.
+          status: "blocked",
+          detail:
+            "no country for this site, so the paid bundle cannot plan and nothing downstream is measured: " +
+            "set the business market on the site profile, or re-extract business knowledge from the crawl " +
+            "(the extractor now reads the about/contact pages where the country is usually stated)",
         }));
   } else {
     steps.push(step({

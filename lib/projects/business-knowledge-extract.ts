@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 import { writeBusinessKnowledge } from "@/lib/projects/business-knowledge";
+import {
+  PAGE_SELECTION_BOUNDS,
+  readCrawledPages,
+  selectPagesForExtraction,
+} from "@/lib/projects/knowledge-page-selection";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { chatJson } from "@/lib/ai/chat";
 
@@ -22,9 +27,6 @@ import { chatJson } from "@/lib/ai/chat";
  * Acceptance stays the owner's call.
  */
 
-const MAX_PAGES = 10;
-const MAX_CHARS_PER_PAGE = 6_000;
-
 export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -35,22 +37,6 @@ export function htmlToText(html: string): string {
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, " ")
     .trim();
-}
-
-async function fetchPage(url: string): Promise<{ url: string; text: string; title: string } | null> {
-  try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      headers: { "User-Agent": "CrawlSEO business knowledge extractor (+https://crawlseo.app)" },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? "";
-    return { url: res.url || url, text: htmlToText(html).slice(0, MAX_CHARS_PER_PAGE), title };
-  } catch {
-    return null;
-  }
 }
 
 type Extracted = {
@@ -64,6 +50,24 @@ type Extracted = {
   concerns?: string[];
   conversionGoals?: string[];
   voice?: string;
+  /**
+   * Who the business sells to, and in what language.
+   *
+   * These were missing entirely, and they are the fields the site-context
+   * resolver reads to decide which market to measure in. Without them a document
+   * could be extracted perfectly and still leave the pipeline unable to plan a
+   * bundle — measured 2026-11-25: atelier and susimacdonald only had an audience
+   * market because somebody typed it into the site profile, and the three
+   * tenants without one could never buy any paid evidence at all.
+   *
+   * `market` is where the business is (already implied by `location`, stated
+   * explicitly when the site does); `audienceMarket` is where its buyers are,
+   * which is a different question and often a different country.
+   */
+  market?: string;
+  audienceMarket?: string;
+  audienceMarkets?: string[];
+  audienceLanguages?: string[];
 };
 
 export type ExtractedKnowledge = {
@@ -81,10 +85,16 @@ const SYSTEM = `You extract business knowledge from a website for a company docu
 Answer with JSON only, keys: contentLanguage (ISO 639-1 code of the pages' language),
 businessName (text), services (list), location (text),
 serviceArea (list), differentiators (list), audienceMotivations (list), concerns (list),
-conversionGoals (list), voice (text).
+conversionGoals (list), voice (text), market (text), audienceMarket (text),
+audienceMarkets (list), audienceLanguages (list).
 Rules: invent nothing. If a fact does not appear explicitly on the pages, omit the key.
 Values must be short, factual, in the language of the site content, and quoted verbatim when they are a name.
-Always return a JSON object. Return {} when the pages contain no extractable business fact.`;
+Always return a JSON object. Return {} when the pages contain no extractable business fact.
+
+market is the country or region the business operates in, named as the site names it. location is the town or city.
+audienceMarket is where the business's customers are, when the site says so and it differs from market: a school in Mexico teaching students who fly in from the United States has market Mexico and audienceMarket United States. Only state a country the pages name, or the country a named town unambiguously sits in when the pages also name it elsewhere.
+audienceMarkets is that as a list when several are named. audienceLanguages is the ISO 639-1 codes the site publishes in, only when it publishes in more than one.
+The country matters more than any other field: without it nothing downstream can be measured. Look for it in about, contact, legal, shipping and footer text as well as the homepage.`;
 
 export type ExtractBusinessKnowledgeResult = {
   /**
@@ -98,6 +108,13 @@ export type ExtractBusinessKnowledgeResult = {
   fields: Extracted;
   /** Pages the extractor read, with their retrieved text. */
   pageUrls: string[];
+  /**
+   * Crawled pages that were not sent, and why.
+   *
+   * A selection is not a truncation, but a selection nobody counts is: the
+   * extractor used to read 10 of 483 pages with no record of the other 473.
+   */
+  skipped: { pages: number; reason: string };
   documentId: string;
   revision: number;
   state: string;
@@ -182,43 +199,23 @@ export async function extractBusinessKnowledgeFromSite(
   const site = project.sites[0];
   if (!site) throw new Error(opts.siteId ? `project has no site ${opts.siteId}` : "project has no site");
 
-  const crawlEvidence = await db.evidenceRecord.findMany({
-    where: { projectId: project.id, kind: "gsc_page", supersededById: null },
-    select: { dimensions: true, metrics: true },
-  });
-  const ranked = crawlEvidence
-    .map((row) => ({
-      url: (row.dimensions as { url?: string } | null)?.url ?? "",
-      impressions: Number((row.metrics as Record<string, { value?: number }> | null)?.["first_party:impressions"]?.value ?? 0),
-    }))
-    .filter((row) => row.url)
-    .sort((a, b) => b.impressions - a.impressions)
-    .map((row) => row.url);
-
-  const origin = `https://${site.domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
-  const sitemapSections: string[] = [];
-  try {
-    const xml = await (await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(15_000) })).text();
-    const locs = [...xml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((match) => match[1].trim());
-    const seen = new Set<string>();
-    for (const loc of locs) {
-      const path = new URL(loc).pathname.replace(/^\/+/, "");
-      const section = path.split("/")[0] || "/";
-      if (seen.has(section)) continue;
-      seen.add(section);
-      sitemapSections.push(loc);
-    }
-  } catch {
-    // No sitemap: traffic pages and the root are still enough to start.
+  // Read what the crawl already stored, not ten URLs re-fetched over HTTP.
+  //
+  // The HTTP path had three faults that composed into one: it read at most ten
+  // pages of a 483-page site, two of the three country-less tenants return 404 on
+  // /sitemap.xml so the section list was empty and the selection collapsed to the
+  // homepage, and the word that would have named the country sat unread on /about.
+  // The crawl has the text of every page; this reads it.
+  const crawled = await readCrawledPages(db, site.id);
+  if (!crawled || crawled.pages.length === 0) {
+    throw new Error("no completed crawl with stored page text: run a crawl before extracting business knowledge");
   }
-  const urls = [...new Set([`${origin}/`, ...ranked, ...sitemapSections])].slice(0, MAX_PAGES);
-
-  const pages: Array<{ url: string; text: string; title: string }> = [];
-  for (const url of urls) {
-    const page = await fetchPage(url);
-    if (page) pages.push(page);
+  const selection = selectPagesForExtraction(crawled.pages, PAGE_SELECTION_BOUNDS);
+  if (selection.selected.length === 0) {
+    throw new Error(`the crawl stored no usable page text (${selection.skipped.reason})`);
   }
-  if (pages.length === 0) throw new Error("no page could be fetched");
+  const pages = selection.selected.map((page) => ({ url: page.url, text: page.text, title: page.title ?? page.path }));
+  const skipped = selection.skipped;
 
   const knowledge = await extractBusinessKnowledgeFromPages(pages);
   const parsed = knowledge.fields;
@@ -276,6 +273,12 @@ export async function extractBusinessKnowledgeFromSite(
       concerns: fact(parsed.concerns),
       conversionGoals: fact(parsed.conversionGoals),
       voice: fact(parsed.voice),
+      // The fields the site-context resolver reads to choose a market. Without
+      // them the document can be complete and the bundle still cannot plan.
+      market: fact(parsed.market),
+      audienceMarket: fact(parsed.audienceMarket),
+      audienceMarkets: fact(parsed.audienceMarkets),
+      audienceLanguages: fact(parsed.audienceLanguages),
     }).filter(([, value]) => value !== undefined)
   );
 
@@ -287,6 +290,7 @@ export async function extractBusinessKnowledgeFromSite(
       extracted: Object.keys(changes),
       fields: parsed,
       pageUrls: pages.map((page) => page.url),
+      skipped,
       documentId: "",
       revision: 0,
       state: "dry-run",
@@ -323,6 +327,7 @@ export async function extractBusinessKnowledgeFromSite(
     extracted: Object.keys(changes),
     fields: parsed,
     pageUrls: pages.map((page) => page.url),
+    skipped,
     documentId: result.documentId,
     revision: result.revision,
     state: result.state,

@@ -13,7 +13,15 @@ const provenance = z.object({
   originRevision: z.union([z.number().int().positive(), z.string().min(1).max(200), z.null()]),
   actor: z.object({ type: z.enum(["owner", "workspace_admin", "service", "researcher", "model", "unknown"]), id: identifier }).strict(),
   status: z.enum(["owner_confirmed", "admin_confirmed", "advised", "assumed", "verified", "disputed", "deferred", "not_applicable", "unknown"]),
-  recordedAt: rfc3339DateTime, observedAt: rfc3339DateTime, evidenceUri: absoluteUri, quote: z.string().max(2000).optional(),
+  recordedAt: rfc3339DateTime, observedAt: rfc3339DateTime,
+  // Nullable because an extracted value is only attributed to a page that
+  // contains it verbatim, and many real facts are paraphrased across several
+  // pages. The writer was already emitting `null` in exactly that case, and this
+  // schema rejected it — so a whole extraction failed at the write with
+  // "expected string, received null" instead of storing the fields it had.
+  // Measured 2026-11-25: the first re-extraction of inmersionfreediving failed
+  // for this reason and stored nothing.
+  evidenceUri: absoluteUri.nullable(), quote: z.string().max(2000).optional(),
 }).strict();
 const textFact = z.object({ value: z.string().max(2000), provenance, publicationUse: z.enum(["approved", "internal_only", "prohibited", "unknown"]), locale: z.string().min(2).max(35).optional(), validFrom: rfc3339DateTime.nullable().optional(), validUntil: rfc3339DateTime.nullable().optional() }).strict();
 const listFact = z.object({ value: z.array(z.string().min(1).max(500)).min(1).max(30), provenance, publicationUse: z.enum(["approved", "internal_only", "prohibited", "unknown"]), locale: z.string().min(2).max(35).optional(), validFrom: rfc3339DateTime.nullable().optional(), validUntil: rfc3339DateTime.nullable().optional() }).strict();
@@ -21,6 +29,13 @@ export const businessKnowledgeFieldsSchema = z.object({
   businessName: textFact.optional(), services: listFact.optional(), location: textFact.optional(), serviceArea: listFact.optional(),
   differentiators: listFact.optional(), verifiedTrustEvidence: listFact.optional(), audienceMotivations: listFact.optional(),
   concerns: listFact.optional(), conversionGoals: listFact.optional(), voice: textFact.optional(), prohibitedClaims: listFact.optional(),
+  // The market fields the site-context resolver reads. They were absent from this
+  // strict schema, so `market` and `audienceMarket` could not be stored at all:
+  // a document could be extracted perfectly and still leave the pipeline unable
+  // to plan a measured bundle. `location` is a place to name; `market` is where
+  // the business operates; `audienceMarket` is where its buyers are.
+  market: textFact.optional(), audienceMarket: textFact.optional(),
+  audienceMarkets: listFact.optional(), audienceLanguages: listFact.optional(),
 }).strict().refine((fields) => Object.keys(fields).length > 0, "At least one business field is required");
 
 export type BusinessKnowledgeFields = z.infer<typeof businessKnowledgeFieldsSchema>;
