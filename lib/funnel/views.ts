@@ -58,6 +58,12 @@ export type OpportunityRow = {
   title: string;
   summary: string;
   score: number | null;
+  /**
+   * D1: which kind of evidence the score rests on. The board is ordered by this before
+   * the score, so the row has to carry it — an order the reader cannot see the reason
+   * for is worse than the order it replaced.
+   */
+  evidenceClass: string;
   completeness: string;
   detectedBy: string;
   firstDetectedAt: Date;
@@ -451,6 +457,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       title: true,
       summary: true,
       scoreValue: true,
+      evidenceClass: true,
       evidenceCompleteness: true,
       detectedBy: true,
       firstDetectedAt: true,
@@ -493,6 +500,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       title: row.title,
       summary: row.summary,
       score: row.scoreValue,
+      evidenceClass: row.evidenceClass,
       completeness: row.evidenceCompleteness,
       detectedBy: row.detectedBy,
       firstDetectedAt: row.firstDetectedAt,
@@ -522,6 +530,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       summary: true,
       scoreValue: true,
       scoreInputs: true,
+      evidenceClass: true,
       evidenceCompleteness: true,
       detectedBy: true,
       firstDetectedAt: true,
@@ -618,6 +627,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       ? canonical.benefits[0]?.measurement ?? "unquantified"
       : decisionFromScoreInputs(row.scoreInputs).measurement,
     score: row.scoreValue,
+    evidenceClass: row.evidenceClass,
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
     lane: parseOpportunityProposal(row.recommendationDecision)?.lane ?? fallbackLane(row.dimension),

@@ -37,7 +37,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 
-import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
+import { ASSESSMENT_VERSION, computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
 
 /** Statuses whose score a person owns, so the sweep leaves them alone. */
 const HUMAN_OWNED = ["accepted", "in_progress", "delivered"] as const;
@@ -57,7 +57,7 @@ export type RescoreScope = {
 };
 
 export type RescoreResult = {
-  /** Rows whose stored score differs from the score their inputs now produce. */
+  /** Rows whose stored score or evidence class differs from what their inputs produce. */
   changed: number;
   /** Rows already correct. On a second run, this is all of them. */
   unchanged: number;
@@ -111,7 +111,7 @@ export async function rescoreProjectOpportunities(
 
   const rows = await db.opportunity.findMany({
     where: { projectId: scope.projectId },
-    select: { id: true, title: true, status: true, scoreValue: true, scoreInputs: true },
+    select: { id: true, title: true, status: true, scoreValue: true, scoreInputs: true, evidenceClass: true },
   });
 
   for (const row of rows) {
@@ -124,8 +124,11 @@ export async function rescoreProjectOpportunities(
       continue;
     }
 
-    const next = computeScore(row.scoreInputs).scoreValue;
-    if (next === row.scoreValue) {
+    const scored = computeScore(row.scoreInputs);
+    const next = scored.scoreValue;
+    // The class is a function of the same inputs, so a change to either moves the row
+    // on the board. Comparing only the score would leave a row in the wrong band.
+    if (next === row.scoreValue && scored.evidenceClass === row.evidenceClass) {
       result.unchanged += 1;
       continue;
     }
@@ -144,6 +147,11 @@ export async function rescoreProjectOpportunities(
       where: { id: row.id },
       data: {
         scoreValue: next,
+        evidenceClass: scored.evidenceClass,
+        // The version of the model that produced this number. A row re-scored by a
+        // newer model stops claiming to have been assessed by the old one, which is
+        // what made the 23-vs-6 cohort impossible to find.
+        assessmentVersion: ASSESSMENT_VERSION,
         // Finally read by something. A board can now answer "when was this number
         // last derived from its inputs", which is what makes staleness a fact instead
         // of a suspicion.

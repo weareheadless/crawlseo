@@ -77,6 +77,53 @@ export function ScoreBadge({ score, inputs }: { score: number | null; inputs?: u
   );
 }
 
+/**
+ * Which kind of evidence a row's priority rests on.
+ *
+ * The board is ordered by this before the score (D1), so it has to be visible: an order
+ * a reader cannot see the reason for is worse than the order it replaced. A `measured`
+ * row is this site's own data; `estimated` is a projection from provider volume and a
+ * position curve; `technical` is a defect ranked by severity and reach; `hypothesis`
+ * has no demand evidence yet.
+ *
+ * Rendered as a word, not a colour alone, so the class survives a colour-blind reader
+ * and a screenshot.
+ */
+const EVIDENCE_CLASS_LABELS: Record<string, { label: string; title: string; tone: keyof typeof TONES }> = {
+  measured: {
+    label: "measured",
+    title: "Priority rests on this site's own observed impressions and positions",
+    tone: "success",
+  },
+  estimated: {
+    label: "projected",
+    title: "Priority is a projection from provider volume and a position curve, not from observed traffic here",
+    tone: "info",
+  },
+  technical: {
+    label: "defect",
+    title: "A page or site defect, ordered by severity and reach, not by a click estimate",
+    tone: "warning",
+  },
+  hypothesis: {
+    label: "hypothesis",
+    title: "No demand evidence yet: this is a question to test, not a reachable number",
+    tone: "neutral",
+  },
+};
+
+export function EvidenceClassBadge({ evidenceClass }: { evidenceClass: string | null | undefined }) {
+  const entry = EVIDENCE_CLASS_LABELS[evidenceClass ?? "hypothesis"] ?? EVIDENCE_CLASS_LABELS.hypothesis;
+  return (
+    <span
+      title={entry.title}
+      className={cn("inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium", TONES[entry.tone])}
+    >
+      {entry.label}
+    </span>
+  );
+}
+
 export function scoreHint(inputs: unknown): string | undefined {
   const value = inputs as
     | {

@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   CompletenessChip,
   DimensionChip,
+  EvidenceClassBadge,
   ScoreBadge,
   StatusChip,
   relativeTime,
@@ -433,7 +434,11 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
 
         <div className="shrink-0 text-right">
           <ScoreBadge score={row.score} />
-          <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">score</p>
+          {/* D1: the board is ordered by evidence class before score, so the class sits
+              beside the number. Without it the order looks arbitrary. */}
+          <div className="mt-1">
+            <EvidenceClassBadge evidenceClass={row.evidenceClass} />
+          </div>
           {/* CMP-012: a score whose winnability was never looked at is not a fair fight.
               Measured 2026-11-24: `pageStrength` and `serpCompetition` were the literal
               0.5 on all 145 live rows, and the board gave no way to notice. */}

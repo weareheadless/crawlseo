@@ -62,6 +62,7 @@ type Row = {
   status: string;
   scoreValue: number | null;
   scoreInputs: unknown;
+  evidenceClass?: string;
 };
 
 /** A client that records updates, like the mocks the rest of the funnel tests use. */
@@ -115,10 +116,18 @@ describe("a stored score follows its inputs", () => {
 
   it("is idempotent: a second run changes nothing", async () => {
     // The property the nightly sweep depends on. A job that rewrites rows every run
-    // makes "did anything change?" unanswerable.
-    const correct = computeScore(inputs()).scoreValue;
+    // makes "did anything change?" unanswerable. The stored row has to carry the class
+    // as well as the score, because both are compared.
+    const scored = computeScore(inputs());
     const { db, updates } = mockDb([
-      { id: "op-1", title: "t", status: "detected", scoreValue: correct, scoreInputs: inputs() },
+      {
+        id: "op-1",
+        title: "t",
+        status: "detected",
+        scoreValue: scored.scoreValue,
+        evidenceClass: scored.evidenceClass,
+        scoreInputs: inputs(),
+      },
     ]);
     const first = await rescoreProjectOpportunities(db as never, { projectId: "p1" });
     expect(first.changed).toBe(0);

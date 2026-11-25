@@ -125,10 +125,24 @@ export type ScoreResult = {
   inputs: ScoreInputs;
   /** What the play is expected to change, and what that estimate rests on. */
   impact: ImpactAssessment;
+  /**
+   * Which kind of evidence the score rests on, as stored in `Opportunity.evidenceClass`.
+   * The board is ordered by this before the score, so it is returned with the score
+   * rather than re-derived by each writer.
+   */
+  evidenceClass: ImpactAssessment["kind"];
 };
 
-/** Bumped when the assessment or index changes meaning. */
-export const ASSESSMENT_VERSION = 2;
+/**
+ * Bumped when the assessment or index changes meaning.
+ *
+ * 3 — the readiness band stopped claiming technical rows, so the same defect with the
+ * same inputs scores 6 where it used to score 23. A row carrying 2 was scored by a model
+ * that no longer exists: the number is not a priority anyone chose, it is a stale
+ * computation, and the board must not present it beside a class badge as if it were
+ * current.
+ */
+export const ASSESSMENT_VERSION = 3;
 
 /** Declared recovery for a technical or structured-data fix. */
 export const TECHNICAL_UPLIFT = 0.1;
@@ -224,7 +238,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // orders by severity and reach and never invents a click count.
   const readiness = inputs.worth.readiness;
   if (readiness === "rejected") {
-    return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment };
+    return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment, evidenceClass: assessment.kind };
   }
   const band = inputs.worth.technical ? null
     : readiness === "research_backlog" ? 10
@@ -244,6 +258,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       scoreValue: Math.max(0, Math.min(ceiling, Math.round(strength * ceiling))),
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
+      evidenceClass: assessment.kind,
     };
   }
 
@@ -256,6 +271,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       scoreValue: Math.max(0, Math.min(14, Math.round(index))),
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
+      evidenceClass: assessment.kind,
     };
   }
 
@@ -310,6 +326,10 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     scoreValue,
     inputs: withAssessment(inputs, assessment),
     impact: assessment,
+    // The stored ordering key. Returned here so the two places that write a score
+    // cannot disagree about which class it belongs to: they read the same value the
+    // score was computed with, rather than re-deriving it from `scoreInputs`.
+    evidenceClass: assessment.kind,
   };
 }
 
