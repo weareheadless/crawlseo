@@ -50,6 +50,19 @@ export type EvidenceLine = {
   metrics: Array<{ label: string; value: number | null; unit: string; source: string }>;
 };
 
+/**
+ * How a row's demand was resolved, read from its stored inputs.
+ *
+ * A missing marker reads as `unrecorded`, never as `observed`: rows written before D3
+ * existed have no marker, and assuming they were measured would present a legacy
+ * projection as a measurement.
+ */
+function demandResolutionOf(scoreInputs: unknown): "observed" | "candidate" | "unrecorded" {
+  const worth = (scoreInputs as { worth?: { demandResolution?: unknown } } | null)?.worth;
+  const value = worth?.demandResolution;
+  return value === "observed" || value === "candidate" ? value : "unrecorded";
+}
+
 export type OpportunityRow = {
   id: string;
   type: OpportunityType;
@@ -64,6 +77,12 @@ export type OpportunityRow = {
    * for is worse than the order it replaced.
    */
   evidenceClass: string;
+  /**
+   * D3: `candidate` when this row's demand is market size rather than measured reach —
+   * a discovered topic with no present page and no bought SERP. Its expected clicks are
+   * null, and the board must say so rather than show a number.
+   */
+  demandResolution: "observed" | "candidate" | "unrecorded";
   completeness: string;
   detectedBy: string;
   firstDetectedAt: Date;
@@ -501,6 +520,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       summary: row.summary,
       score: row.scoreValue,
       evidenceClass: row.evidenceClass,
+      demandResolution: demandResolutionOf(row.scoreInputs),
       completeness: row.evidenceCompleteness,
       detectedBy: row.detectedBy,
       firstDetectedAt: row.firstDetectedAt,
@@ -628,6 +648,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       : decisionFromScoreInputs(row.scoreInputs).measurement,
     score: row.scoreValue,
     evidenceClass: row.evidenceClass,
+    demandResolution: demandResolutionOf(row.scoreInputs),
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
     lane: parseOpportunityProposal(row.recommendationDecision)?.lane ?? fallbackLane(row.dimension),

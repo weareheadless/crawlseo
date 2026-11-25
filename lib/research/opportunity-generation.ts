@@ -419,6 +419,7 @@ export function proposalScoreInputs(
   stability: number;
 } {
   const volume = cluster?.metrics.volume || cluster?.metrics.impressions || null;
+  const observedImpressions = cluster?.metrics.impressions ?? null;
   const businessValue = cluster?.relevance === "high" ? 0.85 : cluster?.relevance === "medium" ? 0.55 : 0.25;
   // Where that number came from. The model rated the topic's commercial relevance
   // from the site's own knowledge facts and its pages, so the provenance is
@@ -477,9 +478,26 @@ export function proposalScoreInputs(
       currentPosition: cluster?.metrics.position ?? null,
       // The window the impressions were measured over, so they can be read per month.
       windowDays: cluster?.metrics.windowDays ?? null,
-      observedImpressions: cluster?.metrics.impressions ?? null,
-      technical: false,
-      unmeasured: !volume,
+      observedImpressions,
+      /**
+       * D3: whether this row's demand is measured here, or is still a candidate.
+       *
+       * A `candidate` is a topic the site has never been observed for, targeting a page
+       * that does not exist, with no SERP bought for it. Its only demand number is
+       * provider volume — market size, not reach — and presenting that as expected clicks
+       * is how "a page that does not exist" scored 38 while a page ranking 29th scored 1.
+       *
+       * `computeScore` turns this into `expectedClicksPerMonth: null`, so the row says
+       * "candidate" rather than claiming a return. One $0.004 SERP on the topic is what
+       * moves it to `observed`: after that the site has a real competitive read.
+       */
+      demandResolution:
+        // A bought SERP is what turns a candidate into a measured topic: `difficulty` is
+        // only populated from a purchased snapshot, so a topic that has one has a real
+        // competitive read even when the site has no impressions yet.
+        !(cluster?.metrics.impressions ?? 0) && proposal.target.newAsset && cluster?.metrics.difficulty == null
+          ? "candidate"
+          : "observed",
     },
     // CMP-012: no literals here. A generated proposal has measured nothing yet, so every
     // input is null and the row scores as low-confidence until the resolver reads a stored

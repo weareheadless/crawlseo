@@ -24,6 +24,19 @@ export type ScoreInputs = {
      */
     volumeSource?: "first_party" | "provider" | "impact_proxy" | "unknown";
     /**
+     * D3: how this row's demand was resolved.
+     *
+     * - `observed` — the site's own impressions for the query, so any estimate is grounded.
+     * - `candidate` — a discovered topic with provider volume and no present page or SERP.
+     *   Its `expectedClicks` is `null` on purpose: nothing about this site's reach for the
+     *   query has been measured, so a click estimate would be a projection presented as a
+     *   measurement. One $0.004 SERP turns it into `observed`.
+     *
+     * Absent on legacy rows, which is not the same as `observed` — a reader must not
+     * assume a missing marker means the demand was measured.
+     */
+    demandResolution?: "observed" | "candidate";
+    /**
      * The demand itself is invented, not measured: a question generated from
      * business knowledge that nobody has been shown to search. Scoring it on the
      * same curve as a measured query put 30–42 points on questions with no evidence
@@ -131,6 +144,15 @@ export type ScoreResult = {
    * rather than re-derived by each writer.
    */
   evidenceClass: ImpactAssessment["kind"];
+  /**
+   * D3: `null` for a candidate — a topic whose demand has not been measured for this site.
+   *
+   * The number a candidate has is market size, not reach. Surfacing it as a click estimate
+   * is how a page that does not exist scored 38 while a page ranking 29th scored 1.
+   */
+  expectedClicksPerMonth: number | null;
+  /** Whether this row's demand is measured here or is still a candidate. */
+  demandResolution: "observed" | "candidate" | "unrecorded";
 };
 
 /**
@@ -212,6 +234,24 @@ function geometricMean(values: Array<number | null>): number | null {
   return Math.pow(product, 1 / present.length);
 }
 
+/**
+ * The D3 fields every return carries.
+ *
+ * Written as a helper so a new early return cannot forget them: a row that omits
+ * `demandResolution` reads as "unrecorded", and a candidate that omits it would be
+ * presented with a click estimate it does not have.
+ */
+function demandFields(
+  worth: ScoreInputs["worth"],
+  assessment: ImpactAssessment
+): { expectedClicksPerMonth: number | null; demandResolution: "observed" | "candidate" | "unrecorded" } {
+  const demandResolution = worth.demandResolution ?? "unrecorded";
+  return {
+    expectedClicksPerMonth: demandResolution === "candidate" ? null : assessment.incrementalClicksPerMonth,
+    demandResolution,
+  };
+}
+
 export function computeScore(inputs: ScoreInputs): ScoreResult {
   const assessment = assessImpact({
     volume: inputs.worth.volume,
@@ -238,7 +278,13 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // orders by severity and reach and never invents a click count.
   const readiness = inputs.worth.readiness;
   if (readiness === "rejected") {
-    return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment, evidenceClass: assessment.kind };
+    return {
+      scoreValue: 0,
+      inputs: withAssessment(inputs, assessment),
+      impact: assessment,
+      evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
+    };
   }
   const band = inputs.worth.technical ? null
     : readiness === "research_backlog" ? 10
@@ -259,6 +305,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
       evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
     };
   }
 
@@ -272,6 +319,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
       evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
     };
   }
 
@@ -330,6 +378,7 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     // cannot disagree about which class it belongs to: they read the same value the
     // score was computed with, rather than re-deriving it from `scoreInputs`.
     evidenceClass: assessment.kind,
+    ...demandFields(inputs.worth, assessment),
   };
 }
 
