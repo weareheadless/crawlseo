@@ -28,6 +28,13 @@ const tenant = arg("tenant");
 const photoDir = arg("photos");
 const locale = arg("locale", "en");
 const voice = arg("voice", "default");
+// none: stop at the image. draft: upload it unpublished, the human publishes on
+// the Page. live: publish now, which is the one step that is public.
+const publishMode = arg("publish", "none");
+if (!["none", "draft", "live"].includes(publishMode)) {
+  console.error("--publish must be none, draft or live");
+  process.exit(2);
+}
 
 function names(representation: ReturnType<typeof parseSiteRepresentation>): string[] {
   const places = representation.serviceArea.places;
@@ -281,6 +288,18 @@ async function main() {
     artDirection: plan.artDirection,
   });
   console.log(JSON.stringify({ stage: "render", rendered }, null, 2));
+
+  if (publishMode !== "none" && rendered.outcome === "rendered") {
+    const published = await cicero.publish({
+      renderId: rendered.renderId,
+      // One rendered artifact, one publication: a retry of this script returns
+      // the first receipt instead of posting the same cover twice.
+      idempotencyKey: `plan:${siteId}:${rendered.renderId}`,
+      draft: publishMode === "draft",
+      caption: rendered.caption,
+    });
+    console.log(JSON.stringify({ stage: "publish", mode: publishMode, published }, null, 2));
+  }
   await db.$disconnect();
 }
 
