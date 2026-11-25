@@ -61,7 +61,10 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     producers: ["lib/dataforseo/collection", "lib/dataforseo/seo-research-evidence", "lib/research/monthly-bundle"],
     dimensions: {
       required: ["query"],
-      optional: ["locale", "product", "seed", "derivedFrom", "sharedTokens", "specificity", "rowCount", "cluster"],
+      // `noData` marks a query the provider was asked about and had no metrics
+      // for. `lib/funnel/acquisition` writes it and reads it back to avoid paying
+      // for the same empty answer twice; it was undeclared, so that write failed.
+      optional: ["locale", "product", "seed", "derivedFrom", "sharedTokens", "specificity", "rowCount", "cluster", "noData"],
     },
     metrics: ["provider:volume", "provider:difficulty", "provider:cpc", "provider:competition", "provider:competitionLevel", "provider:topVolume"],
     window: "single_point",
@@ -193,7 +196,10 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
   },
   internal_link_graph: {
     producers: ["lib/dataforseo/onpage-adapter"],
-    dimensions: { required: ["url"], optional: ["target", "crawlId"] },
+    // `outboundInternal` and `anchors` are written by `lib/dataforseo/onpage-adapter`
+    // and were not declared, so the same class of write-time rejection that hit
+    // `gsc_page` and `ai_visibility_observation` applied here too.
+    dimensions: { required: ["url"], optional: ["target", "crawlId", "outboundInternal", "anchors"] },
     metrics: [],
     window: "single_point",
   },
@@ -201,7 +207,14 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     producers: ["lib/dataforseo/google-ai-overview-collection", "lib/dataforseo/ai-visibility-adapter"],
     dimensions: {
       required: ["question"],
-      optional: ["model", "locale", "dataset", "surface", "answered", "rawExportReference", "device"],
+      // `searchedKeyword` is written when the phrase actually sent to the
+      // provider differs from the question (a punctuated question is cleaned
+      // before the request). Without declaring it, every AEO section whose
+      // question needed cleaning failed its write and made the whole bundle
+      // PARTIAL. Measured 2026-11-25 on superincompetence: $0.1982 spent, all
+      // eight sections stored, and the run still read `partial` from this one
+      // undeclared key.
+      optional: ["model", "locale", "dataset", "surface", "answered", "rawExportReference", "device", "searchedKeyword"],
     },
     metrics: ["provider:samples", "provider:citedCount", "provider:denominator", "provider:competitorCitedCount", "provider:brandPresent", "provider:askCount"],
     window: "sampled_point",

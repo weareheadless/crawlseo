@@ -97,6 +97,19 @@ export type PipelineInput = {
    */
   refresh?: boolean;
   /**
+   * Re-judge the query tranche, even when a job map exists.
+   *
+   * `refresh` rebuilds the map from the verdicts it already has; this changes
+   * which queries have verdicts at all. Measured 2026-11-25 on superincompetence:
+   * the bundle bought 186 queries, the stored job map had judged 3, and the map
+   * therefore clustered 1 — with `refresh` alone, 183 stayed deferred forever and
+   * the board showed a single opportunity for a site with 186 queries of demand.
+   *
+   * It is separate from `refreshBundle` for the same reason `refresh` is: a
+   * repair must not buy data again.
+   */
+  refreshJobMap?: boolean;
+  /**
    * Re-buy the paid bundle even when a completed one exists. This is the only
    * flag that spends, and it is separate from `refresh` on purpose: one flag
    * that did both would make every map repair a purchase.
@@ -313,6 +326,7 @@ export async function runResearchPipeline(
       mode: "execute",
       approval: input.approval,
       refresh: input.refresh,
+      refreshJobMap: input.refreshJobMap,
       onNote: note,
     });
     stages.push({

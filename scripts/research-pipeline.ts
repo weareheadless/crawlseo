@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/research-pipeline.ts --site <siteId> --month 2026-11 --dry-run
  *   npx tsx scripts/research-pipeline.ts --site <siteId> --month 2026-11 \
- *     --execute --approval <owner-reference> [--refresh] [--refresh-bundle] [--allow-partial]
+ *     --execute --approval <owner-reference> [--refresh] [--refresh-bundle] [--refresh-job-map] [--allow-partial]
  *
  * `--refresh` rebuilds the topic map and the proposals, which costs a model
  * call. `--refresh-bundle` re-buys the paid evidence, which costs money. They
@@ -35,6 +35,7 @@ type Args = {
   approval?: string;
   refresh: boolean;
   refreshBundle: boolean;
+  refreshJobMap: boolean;
   country?: string;
   language?: string;
   allowPartial: boolean;
@@ -80,6 +81,7 @@ function parseArgs(argv: string[]): Args {
     approval: values.get("approval"),
     refresh: flags.has("refresh"),
     refreshBundle: flags.has("refresh-bundle"),
+    refreshJobMap: flags.has("refresh-job-map"),
     country: values.get("country"),
     language: values.get("language"),
     allowPartial: flags.has("allow-partial"),
@@ -98,6 +100,7 @@ async function main(): Promise<void> {
       approval: args.approval,
       refresh: args.refresh,
       refreshBundle: args.refreshBundle,
+      refreshJobMap: args.refreshJobMap,
       country: args.country,
       language: args.language,
       allowPartial: args.allowPartial,
