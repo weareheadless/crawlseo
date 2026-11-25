@@ -71,7 +71,8 @@ export type PlannedPost = {
   reason: string;
   subject: string;
   angle: string;
-  copy: { kicker: string; headline: string; subline: string; caption: string };
+  /** A hint at most: editorial writes the copy the post carries. */
+  copy?: { kicker: string; headline: string; subline: string; caption: string };
   claims: Array<{ text: string; source_url: string }>;
   /** A URL the tools returned, or a catalogue file name. */
   imageUrl: string;
@@ -89,7 +90,10 @@ export type PlanResult = {
 };
 
 const SYSTEM = `You are the social editor for a real-estate brand. You decide what, if
-anything, the brand posts today, you write the copy, and you choose the photograph.
+anything, the brand posts today, and you choose the photograph. The copy is written
+by the desk that owns the brand's voice, from your decision and its evidence, so
+your job is to make the decision stand up: a subject the brand may promote, one
+angle, and the sources that support it.
 
 You have tools. Use them, in this order:
 1. find_page — search the site's own pages. Use the place name from your subject,
@@ -118,7 +122,6 @@ or
  "reason": "why this, why today",
  "subject": "the place or project this is about",
  "angle": "the one idea the post carries",
- "copy": {"kicker": "2-5 words", "headline": "short, concrete", "subline": "one line", "caption": "2-4 sentences in the brand voice"},
  "claims": [{"text": "a specific the post asserts", "source_url": "URL from the bundle or from a page you read"}],
  "image_url": "https://... the photograph you chose, from read_page or search_photos",
  "image": "or a file name from list_brand_photos, if that is the better picture",
@@ -187,7 +190,6 @@ export function parsePlan(
 
   const copy = (value.copy ?? {}) as Record<string, unknown>;
   const headline = typeof copy.headline === "string" ? copy.headline.trim() : "";
-  if (!headline) return { error: "the planned post has no headline" };
 
   const subject = typeof value.subject === "string" ? value.subject.trim() : "";
   const represented = input.represented.map(normaliseName);
@@ -228,12 +230,16 @@ export function parsePlan(
       reason: typeof value.reason === "string" ? value.reason.trim() : "",
       subject,
       angle: typeof value.angle === "string" ? value.angle.trim() : "",
-      copy: {
-        kicker: string("kicker"),
-        headline,
-        subline: string("subline"),
-        caption: string("caption"),
-      },
+      ...(headline
+        ? {
+            copy: {
+              kicker: string("kicker"),
+              headline,
+              subline: string("subline"),
+              caption: string("caption"),
+            },
+          }
+        : {}),
       claims,
       imageUrl,
       image,

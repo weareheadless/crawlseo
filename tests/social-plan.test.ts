@@ -128,9 +128,13 @@ describe("parsePlan", () => {
     expect(refused).toHaveProperty("error");
   });
 
-  it("refuses a post with no headline", () => {
-    const result = parsePlan({ ...VALID, copy: { ...VALID.copy, headline: "  " } }, INPUT);
-    expect(result).toHaveProperty("error");
+  it("accepts a decision with no copy, because editorial writes the copy", () => {
+    const result = parsePlan({ ...VALID, copy: undefined }, INPUT);
+    if ("error" in result) throw new Error(result.error);
+    if (!result.plan.post) throw new Error("expected a post");
+    expect(result.plan.post).toBe(true);
+    expect(result.plan.subject).toBe(VALID.subject);
+    expect(result.plan.copy).toBeUndefined();
   });
 
   it("accepts a page from the crawl as a citable source", () => {

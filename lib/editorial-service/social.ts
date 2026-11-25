@@ -41,6 +41,69 @@ export type EditorialSocialArtifact = {
   };
 };
 
+export type SocialCopyInput = {
+  tenant: string;
+  locale: string;
+  subject: string;
+  angle: string;
+  voice?: { tone?: string[]; sample?: string; banned?: string[] };
+  brand?: {
+    name?: string;
+    persona?: {
+      positioning?: string;
+      audience?: string;
+      promise?: string;
+      avoids?: string[];
+    };
+  };
+  evidence?: Array<{ text: string; source_url: string }>;
+};
+
+export type SocialCopy = { kicker: string; headline: string; subline: string; caption: string };
+
+export type SocialCopyOutcome =
+  | { outcome: "written"; copy: SocialCopy; writer: string; model: string }
+  | { outcome: "failed"; detail: string };
+
+/**
+ * The words for one post, written by the desk that owns the voice.
+ *
+ * The planner decides what to post and which source vouches for each specific;
+ * it no longer writes the copy. This is a separate call so the copy can be
+ * refused on its own terms — a writer that returns nothing usable is not a
+ * reason to fall back to a model that was never asked to sound like the brand.
+ */
+export async function writeSocialCopy(input: SocialCopyInput): Promise<SocialCopyOutcome> {
+  const response = await request("/v1/social/copy", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant: input.tenant,
+      locale: input.locale,
+      subject: input.subject,
+      angle: input.angle,
+      voice: input.voice ?? {},
+      brand: input.brand ?? {},
+      evidence: input.evidence ?? [],
+    }),
+  });
+  if (response.status !== 200) {
+    return {
+      outcome: "failed",
+      detail: `Editorial could not write the copy (${response.status}): ${JSON.stringify(response.body).slice(0, 400)}`,
+    };
+  }
+  const copy = response.body?.copy as SocialCopy | undefined;
+  if (!copy?.headline || !copy?.caption) {
+    return { outcome: "failed", detail: "Editorial returned no usable copy" };
+  }
+  return {
+    outcome: "written",
+    copy,
+    writer: String(response.body?.writer ?? ""),
+    model: String(response.body?.model ?? ""),
+  };
+}
+
 export type SocialVerification =
   | { state: "verified"; postId: string; artifact: EditorialSocialArtifact }
   | { state: "held"; postId: string; issues: Array<{ code: string; detail: string }> }

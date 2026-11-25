@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
 import { createCiceroClient } from "@/lib/social/cicero";
 import { parseSiteBrand, parseSiteRepresentation, readSiteBrand } from "@/lib/site/brand";
 import { planPost, type PlannerInput } from "@/lib/social/plan";
-import { verifySocialPost } from "@/lib/editorial-service/social";
+import { verifySocialPost, writeSocialCopy } from "@/lib/editorial-service/social";
 import { findUnsplashCover } from "@/lib/delivery/unsplash";
 import { listSitePages, rankPages, readPage, type SocialTools } from "@/lib/social/tools";
 
@@ -177,9 +177,27 @@ async function main() {
   if (!planned.plan.post) return;
 
   const plan = planned.plan;
+
+  // The words come from the desk that owns the voice, from the decision and the
+  // evidence behind it. The planner no longer writes them.
+  const brandRecord = await readSiteBrand(db, siteId);
+  const brand = brandRecord?.brand;
+  const written = await writeSocialCopy({
+    tenant,
+    locale,
+    subject: plan.subject,
+    angle: plan.angle,
+    voice: { tone: brand?.voice.tone, sample: brand?.voice.sample },
+    brand: { name: brand?.name, persona: brand?.persona },
+    evidence: plan.claims,
+  });
+  console.log(JSON.stringify({ stage: "copy", ...written }, null, 2));
+  if (written.outcome !== "written") return;
+  const copy = written.copy;
+
   const asset = plan.imageUrl
-    ? { url: plan.imageUrl, alt: plan.copy.headline, credit: "" }
-    : { path: `content/${plan.image}`, alt: plan.copy.headline, credit: "" };
+    ? { url: plan.imageUrl, alt: copy.headline, credit: "" }
+    : { path: `content/${plan.image}`, alt: copy.headline, credit: "" };
   console.log(JSON.stringify({ stage: "image", chosen: plan.imageUrl || plan.image, note: plan.imageNote }, null, 2));
 
   const verification = await verifySocialPost({
@@ -188,7 +206,7 @@ async function main() {
     voice,
     subject: plan.subject,
     angle: plan.angle,
-    copy: plan.copy,
+    copy,
     image: {
       name: plan.imageUrl || plan.image,
       alt: asset.alt,
@@ -196,7 +214,7 @@ async function main() {
     },
     representation: "represented",
     claims: plan.claims,
-    idempotencyKey: `plan:${siteId}:${input.today}:${plan.image}:${plan.copy.headline.slice(0, 40)}`,
+    idempotencyKey: `plan:${siteId}:${input.today}:${plan.imageUrl || plan.image}:${copy.headline.slice(0, 40)}`,
   });
   console.log(JSON.stringify({ stage: "editorial", verification }, null, 2));
   if (verification.state !== "verified") return;
