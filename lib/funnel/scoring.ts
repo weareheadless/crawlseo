@@ -194,17 +194,26 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // Readiness comes from the decision contract, not from whether a demand number
   // happens to exist. A supported customer need with unquantified traffic is work a
   // person can accept; a research backlog item is not.
+  //
+  // A defect is not part of that scale. The band pays a fixed share of a ceiling and
+  // never reads severity, so a technical row that reached it scored by freshness and
+  // completeness alone: measured 2026-11-25, "missing structured data on 48 pages"
+  // scored 23 with unquantified demand while the same defect with measured demand
+  // took the technical branch below and scored 6. Work with no demand evidence was
+  // beating the same work with it. Defects fall through to their own branch, which
+  // orders by severity and reach and never invents a click count.
   const readiness = inputs.worth.readiness;
   if (readiness === "rejected") {
     return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment };
   }
-  const band = readiness === "research_backlog" ? 10
+  const band = inputs.worth.technical ? null
+    : readiness === "research_backlog" ? 10
     : readiness === "needs_investigation" ? 15
     : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 30
     // Legacy rows predate the contract: unknown demand is a question, not work.
     : readiness == null && assessment.kind === "hypothesis" ? 15
     : null;
-  if (band != null || inputs.worth.unmeasured) {
+  if ((band != null || inputs.worth.unmeasured) && !inputs.worth.technical) {
     const ceiling = inputs.worth.unmeasured ? 5 : (band ?? 10);
     const strength =
       Math.max(inputs.freshness, 0) *
