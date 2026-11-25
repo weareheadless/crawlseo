@@ -164,7 +164,19 @@ export function buildClusterEvidenceIds(
 
 export function selectClusterEvidence(
   clusters: TopicCluster[],
-  rows: ClusterEvidenceRow[]
+  rows: ClusterEvidenceRow[],
+  /**
+   * Queries the topic map's review already ruled out, folded, with the reason.
+   *
+   * A sampled SERP says a query exists; it does not say the business serves it. Measured
+   * 2026-11-24 on atelier-harmonie: three of the seven unfiled queries had been judged
+   * out of market or plain noise by a human — `restauration fauteuil
+   * saint-germain-en-laye` (outside Normandy), `lustre artisanal` (not sold) and
+   * `art et tapisserie` (a different trade). Carrying those to the model would overrule
+   * a decision a person already made, so they are excluded here and reported as excluded
+   * rather than as opportunities.
+   */
+  excludedByReview: Map<string, string> = new Map()
 ): ClusterEvidenceSelection {
   const ranks = new Map<string, Array<{ id: string; impressions: number; observedAt: Date }>>();
   const metrics = new Map<string, { id: string; observedAt: Date }>();
@@ -379,7 +391,16 @@ export function selectClusterEvidence(
    * lead with. They are not lost, but they are also not attributable to a topic here, so
    * the run says so instead of letting them disappear.
    */
-  const unfiledQueries = [...competitors.keys()].filter((query) => !claimed.has(query));
+  const allUnfiled = [...competitors.keys()].filter((query) => !claimed.has(query));
+  const overruled = allUnfiled.filter((query) => excludedByReview.has(query));
+  const unfiledQueries = allUnfiled.filter((query) => !excludedByReview.has(query));
+  if (overruled.length > 0) {
+    // Stated, not silently dropped: the SERP did find demand the review then declined.
+    const named = overruled.slice(0, 5).map((query) => `"${competitors.get(query)?.[0]?.query ?? query}"`).join(", ");
+    truncations.push(
+      `${overruled.length} sampled quer${overruled.length === 1 ? "y" : "ies"} had competitor data but the topic review already excluded ${overruled.length === 1 ? "it" : "them"}, so ${overruled.length === 1 ? "it was" : "they were"} not proposed: ${named}${overruled.length > 5 ? ", …" : ""}`
+    );
+  }
   if (unfiledQueries.length > 0) {
     const named = unfiledQueries.slice(0, 5).map((query) => `"${query}"`).join(", ");
     truncations.push(

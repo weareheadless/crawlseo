@@ -123,7 +123,9 @@ function hash(value: string): string {
  * proposal that rewrites it are the same board row; the model may change the
  * title and action on every run without growing the board.
  */
-export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "topicSlug" | "kind">): string {
+export function proposalIdentity(
+  proposal: Pick<Proposal, "lane" | "target" | "topicSlug" | "kind"> & { title?: string | null }
+): string {
   // A page that already exists is identified by its URL. A page that does not
   // exist yet is identified by the topic and the kind of asset, because the
   // model invents its URL: the same article on two runs must not become two
@@ -135,7 +137,12 @@ export function proposalIdentity(proposal: Pick<Proposal, "lane" | "target" | "t
         ? proposal.target.url.replace(/\/+$/, "").toLowerCase()
         : proposal.topicSlug
           ? `topic:${proposal.topicSlug}`
-          : "site";
+          // A proposal with neither a page nor a topic is an unfiled-query proposal, and
+          // two of those are not one row. Falling back to the constant "site" made every
+          // one of them collide on a single dedup key, so the second replaced the first.
+          // The title is what distinguishes them, and it is stable enough to identify the
+          // same job across two runs.
+          : `unfiled:${proposal.kind}:${hash(String(proposal.title ?? "").trim().toLowerCase())}`;
   return `phase3:${proposal.lane}:${hash(asset)}`;
 }
 
@@ -380,11 +387,37 @@ const SYSTEM = [
   "Cite a business fact from businessFacts as evidence when the proposal rests on what the business actually offers; do not cite one that does not apply. Every proposal needs at least one evidenceId from the supplied evidence for its cluster. Keep titles under 120 characters, summaries under 300, actions under 600, confidenceReason under 200.",
 ].join("\n");
 
+/**
+ * The prompt for the call that carries only the queries no topic could claim.
+ *
+ * A separate prompt, not the cluster one: the cluster prompt asks "is there work in this
+ * topic", and here there is no topic — there is a list of queries the site has no page
+ * for and somebody else holds. Reusing the cluster prompt made the model answer the
+ * question it was asked for the clusters and skip these entirely, which is exactly what
+ * happened when they rode along in the batch.
+ */
+const UNFILED_SYSTEM = [
+  "You are an SEO strategist deciding whether a small set of measured queries deserves a proposal.",
+  "Write in the business's language, given in locale.language.",
+  "There are NO topic clusters in this payload. clusters is empty by design. Every query you are being asked about is in unfiledCompetitors.",
+  "unfiledCompetitors are queries a paid SERP sample found, where the site has no page and the topic map could not place them. Each one gives ourPosition and the sampled domains holding it, with their positions and evidence ids.",
+  "Decide for each query whether it is a real opportunity for THIS business. Propose for the ones that are, and say nothing about the ones that are not. Returning nothing is a correct answer when none of them fits.",
+  "When ourPosition is null the site does not rank for that query at all. That is the largest kind of gap: say so plainly and name the domain holding it. Never present a competitor's position as ours.",
+  "Aim at the domain just above us when we rank, and at the best-placed sampled domain when we do not. Cite the evidence id of the domain you name.",
+  "Set topicSlug to null for every proposal: these queries belong to no topic and inventing a cluster id for one is not allowed.",
+  "Propose at most one item per query. Prefer an existing page when existingPaths shows one that could answer the query; otherwise newAsset true.",
+  "Respect the market scope. A query outside the business location and service area is not proposed, and neither is one whose product or service the business does not offer.",
+  "Cite at least one evidenceId from that query's competitors. Never invent a metric, a page, a query or an evidence id.",
+  "Return exactly one JSON object: { summary: string, proposals: [{ lane, kind, title, summary, whyNow, topicSlug, target: { url, newAsset, section }, action, expectedOutcome, effort, confidence, confidenceReason, evidenceIds: string[], expiresAt }] }.",
+  "lane is one of timely, content_business, aeo_geo. kind is article, update, cluster_hub, business or aeo. effort is small, medium, large or unknown. confidence is high, medium or low.",
+].join("\n");
+
 function parseProposals(
   parsed: unknown,
   input: DraftInput,
   allowedEvidence: Map<string, DraftEvidence>,
-  batchClusters: TopicCluster[]
+  batchClusters: TopicCluster[],
+  unfiledEvidenceIds: Set<string> = new Set()
 ): { proposals: Proposal[]; rejected: Array<{ title: string; reason: string }>; truncations: string[] } {
   const record = asRecord(parsed);
   // Accept a list or a single object: a model that returns one proposal often
@@ -431,7 +464,19 @@ function parseProposals(
     if (!title || !summary || !action || !expectedOutcome) { reject(title, "missing required field"); continue; }
     const technical = lane === "technical";
     if (technical && topicSlug && !slugs.has(topicSlug)) { reject(title, "unknown topic"); continue; }
-    if (!technical && (!topicSlug || !slugs.has(topicSlug))) { reject(title, "unknown topic"); continue; }
+    /**
+     * A content proposal normally belongs to a topic, and an unknown slug is how a model
+     * invents one. But a proposal about an unfiled query has **no** topic by design, so a
+     * null slug is correct here — and only here: it must still cite an unfiled query's
+     * competitor row, or it is a proposal with nothing behind it.
+     */
+    const fromUnfiledQuery =
+      topicSlug == null &&
+      evidenceIds.some((id) => unfiledEvidenceIds.has(id));
+    if (!technical && !fromUnfiledQuery && (!topicSlug || !slugs.has(topicSlug))) {
+      reject(title, "unknown topic");
+      continue;
+    }
     const requestedUrl = text(target.url);
     const normalizedPath = requestedUrl
       ? (() => {
@@ -542,6 +587,14 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
   for (const row of input.technicalEvidence ?? []) allowedEvidence.set(row.id, row);
   for (const row of input.knowledgeFacts ?? []) allowedEvidence.set(row.id, row);
 
+  /**
+   * The competitor rows that belong to no topic. A proposal may legitimately have no
+   * topicSlug only when it cites one of these, so the validator needs the set.
+   */
+  const unfiledEvidenceIds = new Set(
+    (input.unfiledCompetitors ?? []).flatMap((row) => row.competitors.map((competitor) => competitor.evidenceId))
+  );
+
   const proposals: Proposal[] = [];
   const errors: string[] = [];
   const rejected: Array<{ title: string; reason: string }> = [];
@@ -566,19 +619,6 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       clusters: batch.map((cluster) =>
         clusterPayload(cluster, input.evidenceByCluster.get(cluster.slug) ?? [])
       ),
-      /**
-       * Queries nobody filed. Sent on every batch, not once: a batch is a transport unit
-       * and the model must be able to act on these whichever batch it is reading.
-       */
-      unfiledCompetitors: (input.unfiledCompetitors ?? []).map((row) => ({
-        query: row.query,
-        ourPosition: row.ourPosition == null ? null : Number(row.ourPosition.toFixed(1)),
-        competitors: row.competitors.slice(0, 4).map((competitor) => ({
-          domain: competitor.domain,
-          position: competitor.position,
-          evidenceId: competitor.evidenceId,
-        })),
-      })),
     };
     try {
       const parsed = await chatJson({
@@ -591,7 +631,7 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
         timeoutMs: 240_000,
         jsonMode: false,
       });
-      const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch);
+      const parsedBatch = parseProposals(parsed, input, allowedEvidence, batch, unfiledEvidenceIds);
       proposals.push(...parsedBatch.proposals);
       rejected.push(...parsedBatch.rejected);
       truncations.push(...parsedBatch.truncations);
@@ -605,6 +645,61 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
       );
     }
   }
+  /**
+   * Queries no topic could claim get their own call.
+   *
+   * Riding along inside a four-cluster batch was not enough: measured 2026-11-24, the
+   * model returned 14-18 proposals and none of them was for an unfiled query, because a
+   * cluster payload is a large prompt about a *different* topic. Asked on their own, with
+   * nothing else in the payload, the four queries are the whole question.
+   *
+   * This is one extra call only when there is something unfiled to ask about, and it can
+   * legitimately return nothing: a query the business does not serve is not an
+   * opportunity, and the prompt says so.
+   */
+  const unfiled = input.unfiledCompetitors ?? [];
+  if (unfiled.length > 0) {
+    const payload = {
+      ...businessPayload(input),
+      businessFacts: (input.knowledgeFacts ?? []).map((row) => ({ evidenceId: row.id, fact: row.text })),
+      existingPaths: input.existingPaths ?? [],
+      clusters: [],
+      unfiledCompetitors: unfiled.map((row) => ({
+        query: row.query,
+        ourPosition: row.ourPosition == null ? null : Number(row.ourPosition.toFixed(1)),
+        competitors: row.competitors.slice(0, 4).map((competitor) => ({
+          domain: competitor.domain,
+          position: competitor.position,
+          evidenceId: competitor.evidenceId,
+        })),
+      })),
+    };
+    try {
+      const parsed = await chatJson({
+        config,
+        system: UNFILED_SYSTEM,
+        user: JSON.stringify(payload),
+        maxTokens: 8_000,
+        temperature: 0.2,
+        attempts: 2,
+        timeoutMs: 180_000,
+        jsonMode: false,
+      });
+      const parsedBatch = parseProposals(parsed, input, allowedEvidence, [], unfiledEvidenceIds);
+      proposals.push(...parsedBatch.proposals);
+      rejected.push(...parsedBatch.rejected);
+      truncations.push(...parsedBatch.truncations);
+      const note = text(asRecord(parsed).summary);
+      if (note) summaries.push(note.slice(0, 300));
+    } catch (error) {
+      errors.push(
+        `unfiled queries (${unfiled.map((row) => row.query).join(", ")}): ${
+          error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300)
+        }`
+      );
+    }
+  }
+
   return {
     proposals,
     errors,

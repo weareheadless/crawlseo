@@ -102,6 +102,19 @@ function printProposals(proposals: Proposal[]): void {
 }
 
 
+/**
+ * Fold a query the way the evidence selector does: case, accents and whitespace.
+ * Those are facts in every language; a plural or a word order is not.
+ */
+function foldQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const db = new PrismaClient();
@@ -171,7 +184,16 @@ async function main(): Promise<void> {
       }),
     ]);
 
-    const evidenceSelection = selectClusterEvidence(map.clusters, evidenceRows);
+    /**
+     * What the topic review already ruled out, so a paid SERP cannot quietly re-propose
+     * it. The map's own `unmapped` list carries the reviewer's reason for each.
+     */
+    const excludedByReview = new Map<string, string>();
+    for (const entry of map.unmapped ?? []) {
+      if (entry.kind !== "excluded") continue;
+      excludedByReview.set(foldQuery(entry.query), entry.reason ?? "excluded by review");
+    }
+    const evidenceSelection = selectClusterEvidence(map.clusters, evidenceRows, excludedByReview);
     const evidenceByCluster = evidenceSelection.idsByCluster;
     const aeoEvidence = aeoRows.flatMap((row) => {
       const dimensions = row.dimensions as { question?: string } | null;

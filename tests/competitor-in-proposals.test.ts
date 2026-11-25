@@ -7,7 +7,7 @@ import {
   orderByOpportunity,
   selectClusterEvidence,
 } from "@/lib/research/opportunity-evidence";
-import { competitorSummaryForTest } from "@/lib/research/opportunity-drafting";
+import { competitorSummaryForTest, proposalIdentity } from "@/lib/research/opportunity-drafting";
 import type { TopicCluster } from "@/lib/research/topic-map";
 
 /**
@@ -369,6 +369,26 @@ describe("CMP-003 an accented query and its unaccented spelling are one query", 
     void rows;
   });
 
+  it("does not re-propose a query the topic review already excluded", () => {
+    // A paid SERP says the query exists; it does not say the business serves it. Measured
+    // 2026-11-24: `lustre artisanal` had competitor data and had already been judged
+    // "not sold" by a person, and `restauration fauteuil saint-germain-en-laye` was out of
+    // market. Carrying those to the model would overrule a human decision.
+    const rows = [
+      ourRank("r1", "fauteuil restauration", 12, 200),
+      competitor("c1", "lustre artisanal", "atelier-loupiote.fr", 1),
+      competitor("c2", "restauration de sièges", "bienassise.fr", 3),
+    ];
+    const selection = selectClusterEvidence(
+      [cluster({ slug: "seats" })],
+      rows,
+      new Map([["lustre artisanal", "noise: not sold"]])
+    );
+    expect(selection.unfiled.map((entry) => entry.query)).toEqual(["restauration de sièges"]);
+    // And the exclusion is stated, so it does not look like the SERP found nothing.
+    expect(selection.truncations.join(" ")).toContain("topic review already excluded");
+  });
+
   it("carries a truly unfiled query as data, not only as a sentence in the report", () => {
     // `restauration de sièges` had 7 competitor rows naming bienassise.fr at #3, no
     // cluster and no keyword-universe row, so only a data channel reaches the model.
@@ -386,6 +406,40 @@ describe("CMP-003 an accented query and its unaccented spelling are one query", 
     expect(unfiled?.ourPosition).toBeNull();
     // It is still named in the report, so the count is never silent.
     expect(selection.truncations.join(" ")).toContain("no topic to file it under");
+  });
+});
+
+describe("CMP-003 an unfiled-query proposal is its own board row", () => {
+  it("does not collapse two unfiled proposals onto one dedup key", () => {
+    // An unfiled proposal has no page and no topic by design, so the identity fell back to
+    // the constant "site" and two of them hashed to the same key — the second silently
+    // replaced the first on the board.
+    const one = proposalIdentity({
+      lane: "content_business",
+      kind: "update",
+      topicSlug: null,
+      title: "Restauration de sièges : viser bienassise.fr",
+      target: { url: null, newAsset: false, section: null },
+    });
+    const two = proposalIdentity({
+      lane: "content_business",
+      kind: "update",
+      topicSlug: null,
+      title: "Abat-jour ancien : viser defilenbobine.com",
+      target: { url: null, newAsset: false, section: null },
+    });
+    expect(one).not.toBe(two);
+  });
+
+  it("keeps the same unfiled job on one row across runs", () => {
+    const proposal = {
+      lane: "content_business" as const,
+      kind: "update" as const,
+      topicSlug: null,
+      title: "Restauration de sièges : viser bienassise.fr",
+      target: { url: null, newAsset: false, section: null },
+    };
+    expect(proposalIdentity(proposal)).toBe(proposalIdentity({ ...proposal }));
   });
 });
 
