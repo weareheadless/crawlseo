@@ -43,7 +43,16 @@ export type ChatJsonInput = {
 };
 
 export class ChatError extends Error {
-  constructor(message: string, readonly status?: number, readonly retryAfterMs?: number) {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly retryAfterMs?: number,
+    /**
+     * The provider refused for billing, not for load. This is not retryable: no
+     * amount of backoff adds credit to the key.
+     */
+    readonly billing = false
+  ) {
     super(message);
     this.name = "ChatError";
   }
@@ -119,12 +128,26 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
 
         if (response.status === 429 || response.status >= 500) {
           const retryAfter = Number(response.headers.get("retry-after"));
-          const body = (await response.text().catch(() => "")).slice(0, 200);
-          record({ attempt: attempt + 1, status: "error", error: `HTTP ${response.status}`, responseText: body });
+          const body = (await response.text().catch(() => "")).slice(0, 500);
+          // A 429 is not always a rate limit. An exhausted balance arrives as 429
+          // with `code: "credit_balance_exhausted"`, and retrying it spends four
+          // minutes and then reports a failure the operator can do nothing about
+          // from this side. Measured 2026-11-25: the OpenRouter key returned
+          // exactly this, and it read as a model stall.
+          const billing = /credit_balance_exhausted|insufficient_quota|no credits remaining|exceeded your current quota/i.test(body);
+          record({
+            attempt: attempt + 1,
+            status: "error",
+            error: `HTTP ${response.status}${billing ? " (out of credit)" : ""}`,
+            responseText: body,
+          });
           throw new ChatError(
-            `The model is ${response.status === 429 ? "rate-limited" : "unavailable"} (HTTP ${response.status})${body ? `: ${body}` : ""}`,
+            billing
+              ? `The model provider has no credit for this key (HTTP ${response.status}): ${body}`
+              : `The model is ${response.status === 429 ? "rate-limited" : "unavailable"} (HTTP ${response.status})${body ? `: ${body}` : ""}`,
             response.status,
-            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1_000 : undefined
+            Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1_000 : undefined,
+            billing
           );
         }
         if (!response.ok) {
@@ -187,7 +210,7 @@ export async function chatJson(input: ChatJsonInput): Promise<unknown> {
       // completion, and a larger budget usually answers it.
       const empty = /empty response|truncated JSON/i.test(failure.message);
       if (empty) tokenBudget = Math.min(Math.ceil(tokenBudget * 2), 64_000);
-      const retryable = timedOut || malformed || empty || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500));
+      const retryable = !(failure instanceof ChatError && failure.billing) && (timedOut || malformed || empty || (failure instanceof ChatError && (failure.status === 429 || (failure.status ?? 0) >= 500)));
       if (!retryable) throw failure;
       const retryAfterMs = failure instanceof ChatError ? failure.retryAfterMs : undefined;
       if (attempt < attempts - 1) {
