@@ -93,7 +93,7 @@ export async function upsertOpportunity(
     Math.max(input.whyEvidenceIds.length, heldWhy),
     Math.max(input.howEvidenceIds.length, heldHow)
   );
-  const { scoreValue, inputs } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
+  const { scoreValue, inputs, evidenceClass } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
 
   const record = existing
     ? await db.opportunity.update({
@@ -103,6 +103,8 @@ export async function upsertOpportunity(
           summary: input.summary,
           clusterId: input.clusterId ?? undefined,
           scoreValue,
+          // The board's first sort key, written with the score it describes.
+          evidenceClass,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,
@@ -128,6 +130,8 @@ export async function upsertOpportunity(
           dedupKey: input.dedupKey,
           clusterId: input.clusterId ?? null,
           scoreValue,
+          // The board's first sort key, written with the score it describes.
+          evidenceClass,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,

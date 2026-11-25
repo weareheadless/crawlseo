@@ -13,21 +13,54 @@ import type { Prisma } from "@prisma/client";
  * surface means calling `opportunityOrder`; there is no second correct answer to reach
  * for.
  *
- * ## What the order is, and what it deliberately is not
+ * ## D1: the evidence class orders the board, the score orders within it
  *
- * Today it is `scoreValue` descending, then first detection. That is the *existing*
- * order, kept exactly, so this change moves nothing — it only makes one definition
- * stand where four were drifting apart. The reorder is D1/D5 (#237), and it lands as an
- * edit to this file rather than as a search for every `orderBy` in the codebase.
+ * One number cannot do both jobs. `scoreValue` answers "how much is this worth"; it
+ * cannot also answer "how sure are we that the worth is real". A projection with a big
+ * number beat a measurement with a small one, and this is the alaguillotine inversion:
  *
- * The tie-break is first-detected *ascending*: older work first. Two rows with the same
+ * ```
+ * 42  estimated   a hub behind a page that does not exist
+ *  3  measured    'alex karp height', ranking 29 with 76 real impressions
+ * ```
+ *
+ * A projection may never displace a measurement. So the order is
+ * `measured -> estimated -> technical -> hypothesis`, and score sorts within a class.
+ * An `estimated` row is not punished for lacking measurement — it keeps its number — it
+ * is placed where its confidence belongs. That is "missing evidence is not negative
+ * evidence" applied to ordering rather than to weighting.
+ *
+ * `technical` sits after `estimated` because a defect is ordered by severity and reach
+ * on a scale that is not comparable to clicks; its own branch already computes that.
+ *
+ * ## The tie-break
+ *
+ * First-detected *ascending*: older work first. Two rows in the same class with the same
  * score are equally worth doing, and the one that has waited longer is the one to show.
  * The board and the SERP list said newest-first and the cap said oldest-first; oldest is
  * the one that does not punish a row for being found early.
  */
 
 /** The columns an opportunity is ordered by. Exported so a test can walk them. */
-export const OPPORTUNITY_ORDER_KEYS = ["scoreValue", "firstDetectedAt"] as const;
+export const OPPORTUNITY_ORDER_KEYS = ["evidenceClass", "scoreValue", "firstDetectedAt"] as const;
+
+/**
+ * The evidence classes, best first.
+ *
+ * Exported because the board prints the class beside the number and the label has to
+ * agree with the sort. `technical` follows the two click-based classes on the strength
+ * of its placement, not as a claim that a defect is worse evidence — it is a different
+ * scale, and its own branch orders it by severity and reach.
+ */
+export const EVIDENCE_CLASS_ORDER = ["measured", "estimated", "technical", "hypothesis"] as const;
+
+export type EvidenceClassValue = (typeof EVIDENCE_CLASS_ORDER)[number];
+
+/** The rank of a class in the board's order. An unrecognised class sorts as a hypothesis. */
+export function evidenceClassRank(value: string | null | undefined): number {
+  const index = EVIDENCE_CLASS_ORDER.indexOf((value ?? "hypothesis") as EvidenceClassValue);
+  return index === -1 ? EVIDENCE_CLASS_ORDER.length - 1 : index;
+}
 
 /**
  * Prisma's own order-by type for this model, so the constant is checked against the
@@ -49,6 +82,9 @@ export function opportunityOrder(): OpportunityOrderBy[] {
   // A function, not a shared constant, because Prisma mutates the array it is given
   // and one caller's mutation would reorder another surface.
   return [
+    // D1: a projection never displaces a measurement. The enum is declared in this
+    // order, so the database's own sort agrees with `evidenceClassRank`.
+    { evidenceClass: "asc" },
     // Unscored rows last, stated in the order rather than left to what the database
     // does with NULL under DESC.
     { scoreValue: { sort: "desc", nulls: "last" } },
@@ -59,6 +95,7 @@ export function opportunityOrder(): OpportunityOrderBy[] {
 
 /** The row shape the comparator needs. Deliberately narrow: anything more is a lie. */
 export type OrderableOpportunity = {
+  evidenceClass?: string | null;
   scoreValue?: number | null;
   firstDetectedAt?: Date | string | null;
 };
@@ -79,6 +116,11 @@ function timeOf(row: OrderableOpportunity): number {
  * same rows.
  */
 export function compareOpportunities(a: OrderableOpportunity, b: OrderableOpportunity): number {
+  // D1 first: the class decides which band a row is in, and only then does the score
+  // decide its place inside that band.
+  const classDelta = evidenceClassRank(a.evidenceClass) - evidenceClassRank(b.evidenceClass);
+  if (classDelta !== 0) return classDelta;
+
   const as = a.scoreValue;
   const bs = b.scoreValue;
   // An unscored row is not a zero-scored row: it has no assessment yet, so it sorts

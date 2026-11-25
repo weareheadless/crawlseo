@@ -25,10 +25,10 @@ const at = (iso: string) => new Date(iso).toISOString();
 describe("the opportunity order is declared once", () => {
   it("orders by score, then by who has waited longer", () => {
     const rows = [
-      { id: "low", scoreValue: 5, firstDetectedAt: at("2026-01-01") },
-      { id: "high", scoreValue: 40, firstDetectedAt: at("2026-11-20") },
-      { id: "mid-new", scoreValue: 20, firstDetectedAt: at("2026-11-24") },
-      { id: "mid-old", scoreValue: 20, firstDetectedAt: at("2026-02-01") },
+      { id: "low", evidenceClass: "estimated", scoreValue: 5, firstDetectedAt: at("2026-01-01") },
+      { id: "high", evidenceClass: "estimated", scoreValue: 40, firstDetectedAt: at("2026-11-20") },
+      { id: "mid-new", evidenceClass: "estimated", scoreValue: 20, firstDetectedAt: at("2026-11-24") },
+      { id: "mid-old", evidenceClass: "estimated", scoreValue: 20, firstDetectedAt: at("2026-02-01") },
     ];
     expect(sortOpportunities(rows).map((row) => row.id)).toEqual(["high", "mid-old", "mid-new", "low"]);
   });
@@ -37,17 +37,17 @@ describe("the opportunity order is declared once", () => {
     // Postgres puts NULL first under DESC. A row with no assessment is not a row that
     // tops the board, so the order states this instead of relying on the database.
     const rows = [
-      { id: "unscored", scoreValue: null, firstDetectedAt: at("2026-01-01") },
-      { id: "zero", scoreValue: 0, firstDetectedAt: at("2026-01-02") },
-      { id: "high", scoreValue: 40, firstDetectedAt: at("2026-01-03") },
+      { id: "unscored", evidenceClass: "estimated", scoreValue: null, firstDetectedAt: at("2026-01-01") },
+      { id: "zero", evidenceClass: "estimated", scoreValue: 0, firstDetectedAt: at("2026-01-02") },
+      { id: "high", evidenceClass: "estimated", scoreValue: 40, firstDetectedAt: at("2026-01-03") },
     ];
     expect(sortOpportunities(rows).map((row) => row.id)).toEqual(["high", "zero", "unscored"]);
   });
 
   it("treats an undated row as waiting longest, not as newest", () => {
     const rows = [
-      { id: "dated", scoreValue: 10, firstDetectedAt: at("2026-05-01") },
-      { id: "undated", scoreValue: 10, firstDetectedAt: null },
+      { id: "dated", evidenceClass: "estimated", scoreValue: 10, firstDetectedAt: at("2026-05-01") },
+      { id: "undated", evidenceClass: "estimated", scoreValue: 10, firstDetectedAt: null },
     ];
     expect(sortOpportunities(rows).map((row) => row.id)).toEqual(["dated", "undated"]);
   });
@@ -57,14 +57,16 @@ describe("the opportunity order is declared once", () => {
     // hold an array. If they disagree, the board and its own eviction set disagree.
     const sql = opportunityOrder();
     expect(sql.map((clause) => Object.keys(clause)[0])).toEqual([...OPPORTUNITY_ORDER_KEYS]);
-    expect(sql[0]).toEqual({ scoreValue: { sort: "desc", nulls: "last" } });
-    expect(sql[1]).toEqual({ firstDetectedAt: "asc" });
+    // D1 first: the class decides the band, then the score decides the place in it.
+    expect(sql[0]).toEqual({ evidenceClass: "asc" });
+    expect(sql[1]).toEqual({ scoreValue: { sort: "desc", nulls: "last" } });
+    expect(sql[2]).toEqual({ firstDetectedAt: "asc" });
   });
 
   it("hands out a fresh array, so one caller cannot reorder another surface", () => {
     const first = opportunityOrder();
     first.reverse();
-    expect(opportunityOrder()[0]).toEqual({ scoreValue: { sort: "desc", nulls: "last" } });
+    expect(opportunityOrder()[0]).toEqual({ evidenceClass: "asc" });
   });
 });
 
@@ -74,14 +76,14 @@ describe("the board and its own overflow agree about what is best", () => {
     // and the eviction set. A cap of 5 over 8 rows must park exactly the tail of the
     // board order — no separate ranking, no second opinion.
     const rows = [
-      { id: "a", scoreValue: 31, firstDetectedAt: at("2026-03-01") },
-      { id: "b", scoreValue: 12, firstDetectedAt: at("2026-01-01") },
-      { id: "c", scoreValue: 44, firstDetectedAt: at("2026-06-01") },
-      { id: "d", scoreValue: 12, firstDetectedAt: at("2026-02-01") },
-      { id: "e", scoreValue: 7, firstDetectedAt: at("2026-05-01") },
-      { id: "f", scoreValue: 0, firstDetectedAt: at("2026-04-01") },
-      { id: "g", scoreValue: 22, firstDetectedAt: at("2026-07-01") },
-      { id: "h", scoreValue: 1, firstDetectedAt: at("2026-08-01") },
+      { id: "a", evidenceClass: "estimated", scoreValue: 31, firstDetectedAt: at("2026-03-01") },
+      { id: "b", evidenceClass: "estimated", scoreValue: 12, firstDetectedAt: at("2026-01-01") },
+      { id: "c", evidenceClass: "estimated", scoreValue: 44, firstDetectedAt: at("2026-06-01") },
+      { id: "d", evidenceClass: "estimated", scoreValue: 12, firstDetectedAt: at("2026-02-01") },
+      { id: "e", evidenceClass: "estimated", scoreValue: 7, firstDetectedAt: at("2026-05-01") },
+      { id: "f", evidenceClass: "estimated", scoreValue: 0, firstDetectedAt: at("2026-04-01") },
+      { id: "g", evidenceClass: "estimated", scoreValue: 22, firstDetectedAt: at("2026-07-01") },
+      { id: "h", evidenceClass: "estimated", scoreValue: 1, firstDetectedAt: at("2026-08-01") },
     ];
     const cap = 5;
 
@@ -104,13 +106,14 @@ describe("the board and its own overflow agree about what is best", () => {
     // row, not a different one because the cap sorted by another rule.
     const base = Array.from({ length: 5 }, (_, i) => ({
       id: `r${i}`,
+      evidenceClass: "estimated" as const,
       scoreValue: 10 + i,
       firstDetectedAt: at("2026-01-01"),
     }));
     const before = sortOpportunities(base).slice(5).map((row) => row.id);
     expect(before).toEqual([]); // exactly at the cap
 
-    const withNew = [...base, { id: "new", scoreValue: 50, firstDetectedAt: at("2026-11-01") }];
+    const withNew = [...base, { id: "new", evidenceClass: "estimated", scoreValue: 50, firstDetectedAt: at("2026-11-01") }];
     const overflow = sortOpportunities(withNew).slice(5).map((row) => row.id);
     expect(overflow).toEqual(["r0"]); // the weakest, not the newest
   });
@@ -130,8 +133,8 @@ describe("the comparator is total and stable enough to trust", () => {
 
   it("does not mutate the array it is given", () => {
     const rows = [
-      { id: "a", scoreValue: 1, firstDetectedAt: at("2026-01-01") },
-      { id: "b", scoreValue: 2, firstDetectedAt: at("2026-01-01") },
+      { id: "a", evidenceClass: "estimated", scoreValue: 1, firstDetectedAt: at("2026-01-01") },
+      { id: "b", evidenceClass: "estimated", scoreValue: 2, firstDetectedAt: at("2026-01-01") },
     ];
     const copy = [...rows];
     sortOpportunities(rows);
