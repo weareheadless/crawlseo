@@ -3,10 +3,17 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 /**
- * Legacy funnel tables are frozen read-only at cutover
- * (docs/seo-funnel-spine-plan.md §6). Writes are rejected here at the
- * application layer; the tables remain queryable for audits and spend
- * reconciliation. Nothing is deleted and no data is migrated.
+ * The **audit list**: every table the retired funnel spine owned.
+ *
+ * This is not the freeze set. The freeze set is `FROZEN_NOW` and
+ * `FROZEN_CREATES` below, both empty, because every table here still has a live
+ * writer. Keeping the two apart is the fix for a real error: this list was read as
+ * "the tables we freeze", which is how a cutover flag would have been enabled over
+ * ten tables that production still writes.
+ *
+ * `tests/legacy-freeze-writers.test.ts` asserts that no table in the freeze sets has
+ * a live writer, and reports which audit-list tables are still being written, so the
+ * next person to consider freezing a table sees the answer instead of the intent.
  */
 export const FROZEN_FUNNEL_MODELS = [
   "researchRun",
@@ -43,10 +50,21 @@ export const FROZEN_NOW: readonly FrozenFunnelModel[] = [] as const;
  * This is the honest middle state for a table that is no longer produced by the
  * funnel but may still have work in flight: nothing new may be added, and any
  * accidental (or forgotten) writer fails loudly with its stack, while lifecycle
- * transitions on existing rows can still complete. `prelaunchResearchRequest` is
- * excluded because its paid request endpoint is still a live feature.
+ * transitions on existing rows can still complete.
+ *
+ * **Empty, and it has to stay empty until the producers are gone.** It held
+ * `researchAction`, and that was wrong: `lib/research/runner.ts` (reached from
+ * `scripts/job-worker.ts`) and `lib/research/question-coverage.ts` both call
+ * `createResearchAction`, which writes the table. Enabling
+ * `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict` as `lib/db.ts` instructs would have made
+ * every one of those creates throw. Measured 2026-11-25: 9 live modules write
+ * `researchAction`.
+ *
+ * The lesson is in `FROZEN_FUNNEL_MODELS` below: a list of names is not a check.
+ * `tests/legacy-freeze-writers.test.ts` now fails when a frozen table has a live
+ * writer, so this cannot be got wrong quietly again.
  */
-export const FROZEN_CREATES: readonly string[] = ["researchAction"] as const;
+export const FROZEN_CREATES: readonly string[] = [] as const;
 
 /** Tables the strict freeze covers in full: proven-retired only. */
 export function frozenModelsFor(strict: boolean): readonly string[] {

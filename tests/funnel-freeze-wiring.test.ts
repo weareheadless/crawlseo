@@ -44,11 +44,17 @@ afterEach(() => {
 });
 
 describe("the shared db client applies the freeze when the flag is set", () => {
-  it("blocks legacy creates when CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict", async () => {
+  it("does not block a table that production still writes", async () => {
+    // This asserted the opposite until 2026-11-25, and it was asserting the bug.
+    // `researchAction` was on FROZEN_CREATES while nine live modules created rows
+    // in it — `lib/research/runner.ts` (reached from the job worker),
+    // `lib/agent-tasks/service.ts`, `lib/connectors/service.ts`. The test passed
+    // because it only proved the proxy blocked the write; it never asked whether
+    // anything needed to write. Enabling the flag would have broken those callers.
     process.env.CRAWLSEO_LEGACY_FUNNEL_FREEZE = "strict";
     const { db } = await import("@/lib/db");
-    expect(() => db.researchAction.create({ data: {} as never })).toThrow(/frozen read-only/);
-    expect(writes.researchAction.create).not.toHaveBeenCalled();
+    await expect(db.researchAction.create({ data: {} as never })).resolves.toEqual({ id: "new" });
+    expect(writes.researchAction.create).toHaveBeenCalled();
   });
 
   it("still allows lifecycle updates so in-flight work can close", async () => {
