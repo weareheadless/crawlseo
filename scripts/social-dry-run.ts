@@ -292,7 +292,9 @@ async function main() {
       ],
       content_hash: artifact.contentHash,
     },
-    artDirection: plan.artDirection,
+    // No art direction: the designer composes from the photograph it can see.
+    // A text-only planner has never seen the picture it was describing.
+    artDirection: "",
   });
   console.log(JSON.stringify({ stage: "render", rendered }, null, 2));
 

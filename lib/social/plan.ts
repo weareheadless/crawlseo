@@ -87,7 +87,6 @@ export type PlannedPost = {
   imageUrl: string;
   image: string;
   imageNote: string;
-  artDirection: string;
 };
 
 export type PlannedNone = { post: false; reason: string };
@@ -138,13 +137,15 @@ or
  "claims": [{"text": "something the promoted page itself states", "source_url": "the page_url"}],
  "image_url": "https://... the photograph you chose, from read_page or search_photos",
  "image": "or a file name from list_brand_photos, if that is the better picture",
- "image_note": "why this picture, and where it came from",
- "art_direction": "the one page this cover should be: what fills the frame, where the type sits, what the page does with the photograph"}
+ "image_note": "why this picture, and where it came from"}
 
 Rules checked in code:
 - subject must be one of "represented".
 - page_url must be a page from the bundle: the post promotes a page, and the
   facts a cover may state have to come from that page.
+- the cover's design is not yours: you choose what to post and which photograph,
+  and the art director composes the page from the picture. Do not describe a
+  layout.
 - every claim must come from page_url. The desk holds a cover line whose source is
   any other page, so a claim from a page you are not promoting is wasted: pick a
   page that states your angle, or pick an angle the page states.
@@ -233,11 +234,6 @@ export function parsePlan(
     return { error: `the brand does not represent ${subject}` };
   }
 
-  const artDirection = typeof value.art_direction === "string" ? value.art_direction.trim() : "";
-  if (!artDirection) {
-    return { error: "the planned post has no art direction: say what page this cover should be" };
-  }
-
   const imageUrl = typeof value.image_url === "string" ? value.image_url.trim() : "";
   const image = typeof value.image === "string" ? value.image.trim() : "";
   if (imageUrl && !allowed.urls.has(imageUrl)) {
@@ -306,7 +302,6 @@ export function parsePlan(
       imageUrl,
       image,
       imageNote: typeof value.image_note === "string" ? value.image_note.trim() : "",
-      artDirection,
     },
     droppedClaims,
   };
@@ -570,7 +565,7 @@ export async function planPost(
     role: "user",
     content:
       "You have read enough. Answer now with the JSON object from the brief and nothing else: " +
-      "post, reason, subject, page_url, angle, claims, image_url or image, image_note, art_direction.",
+      "post, reason, subject, page_url, angle, claims, image_url or image, image_note.",
   });
   const forced = await complete(call, apiKey, {
     model,
