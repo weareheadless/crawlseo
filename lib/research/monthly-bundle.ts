@@ -28,6 +28,7 @@ import { saveResearchSources } from "@/lib/research/service";
 import type { ResearchSourceInput } from "@/lib/research/types";
 import { effectiveMonthlyAllowance, usesDefaultAllowance } from "@/lib/billing/budget-defaults";
 import { businessKnowledgeFields, providerCountry, resolveSiteContext, type SiteContext } from "@/lib/site/context";
+import { alpha2ForGscCountry, countrySplit, measureMarket, type MeasuredMarket } from "@/lib/research/measured-market";
 import {
   proposeDiscoverySeeds,
   type DiscoverySeedInput,
@@ -104,8 +105,14 @@ export type BundleLocale = {
   languageCode: string;
   country: string;
   locationCode: number;
-  /** Which fact chose the market, so a wrong locale is visible in the report. */
-  marketSource: "override" | "audience" | "business";
+  /**
+   * Which fact chose the market, so a wrong locale is visible in the report.
+   *
+   * `measured` means no one stated a market and the audience's own recorded country
+   * split supplied it. It is deliberately distinguishable from `audience` and `business`:
+   * an inferred market must never read as a stated one.
+   */
+  marketSource: "override" | "audience" | "business" | "measured";
   fallback?: unknown;
 };
 
@@ -743,8 +750,32 @@ export async function readBundleBudget(
   };
 }
 
+/**
+ * Read the site's measured audience market, or say why it has none.
+ *
+ * Every query here is over rows that already exist: a `Keyword` row is written by the
+ * GSC sync and carries the country it came from. Nothing is bought, and the same read
+ * runs on a dry run.
+ *
+ * A failure to read is not a reason to refuse a bundle whose market was stated
+ * elsewhere; it is reported as "no measured market" so the stated path still decides.
+ */
+async function measureAudienceMarket(db: BundleDb, siteId: string): Promise<MeasuredMarket | null> {
+  try {
+    const rows = await db.keyword.findMany({
+      where: { siteId, country: { not: "" } },
+      select: { country: true, impressions: true },
+    });
+    return measureMarket(countrySplit(rows));
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveBundleLocale(input: {
   mode: "dry-run" | "execute";
+  db: BundleDb;
+  siteId: string;
   projectId: string;
   context: SiteContext;
   language?: string;
@@ -754,15 +785,43 @@ export async function resolveBundleLocale(input: {
   const language = (input.language ?? input.context.language).toLowerCase().slice(0, 2);
   // The audience's market, not the business address: a site selling into the US
   // from Mexico is measured in the US, where its buyers search.
-  const marketSource: BundleLocale["marketSource"] = input.country
+  let marketSource: BundleLocale["marketSource"] = input.country
     ? "override"
     : input.context.audienceCountry
       ? "audience"
       : "business";
-  const country = (input.country ?? providerCountry(input.context))?.toUpperCase() ?? null;
+  let country = (input.country ?? providerCountry(input.context))?.toUpperCase() ?? null;
+
+  // Nothing stated a market. Before refusing, ask whether the audience measured one:
+  // Search Console already recorded which countries the impressions came from, and a
+  // scattered international audience is a legitimate business that this system was
+  // simply unable to measure.
+  //
+  // Stated sources come first on purpose. An inferred market must never override the
+  // owner saying where they sell, and it must never be indistinguishable from it — hence
+  // `marketSource: "measured"`.
+  const measured: MeasuredMarket | null = country ? null : await measureAudienceMarket(input.db, input.siteId);
+  if (!country && measured && measured.countries.length > 0) {
+    // Search Console spells countries alpha-3 (`usa`); the location map is alpha-2.
+    // An unmapped country is not a market we can buy, so it stays unnamed rather than
+    // becoming a location code that does not exist.
+    const mapped = alpha2ForGscCountry(measured.countries[0]);
+    if (mapped) {
+      country = mapped;
+      marketSource = "measured";
+    }
+  }
+
   if (!country) {
+    // Two different refusals, because they need different actions. "Nothing was ever
+    // measured" means the site is new or unwired; "measured and scattered" means the
+    // audience exists and does not name one market. Collapsing them would tell an owner
+    // with no data that their audience is scattered.
+    const measuredButNoMarket = measured && measured.impressions > 0 ? measured.blockedReason : null;
     throw new BundleError(
-      "the site has no audience market or country in business knowledge, the site profile or its domain; pass --country",
+      measuredButNoMarket
+        ? `the site states no market and its audience cannot supply one: ${measuredButNoMarket}. State the market in the site profile or business knowledge, or pass --country`
+        : "the site has no audience market or country in business knowledge, the site profile or its domain; pass --country",
       2
     );
   }
@@ -1305,6 +1364,8 @@ export async function runMonthlyBundle(
   const context = await resolveSiteContext(db, site.id);
   const locale = await resolveBundleLocale({
     mode: input.mode,
+    db,
+    siteId: site.id,
     projectId: site.projectId,
     context,
     language: input.language,

@@ -4,6 +4,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import type { MarketScopeConfig } from "@/lib/site/market-scope";
 import type { UnfiledCompetitorQuery } from "@/lib/research/opportunity-evidence";
+import { selectTranche } from "@/lib/research/monthly-tranche";
 import type { TopicCluster, TopicMap } from "@/lib/research/topic-map";
 import type {
   Proposal,
@@ -556,15 +557,19 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
     return { proposals: [], errors: ["CONTENT_LLM_API_KEY is not configured"], rejected: [], truncations: [], summary: null, model: null };
   }
 
-  // Every cluster with demand or coverage is drafted. Batching is a transport
-  // detail; it must not decide which topics the owner gets to see. A topic with
-  // no need word is the exception: it is a taxonomy defect, not an opportunity,
-  // and the board lists it under Taxonomy review instead.
-  const clusters = input.map.clusters.filter(
+  // A topic with no need word is a taxonomy defect, not an opportunity: the board lists
+  // it under Taxonomy review instead.
+  const eligible = input.map.clusters.filter(
     (cluster) =>
       !cluster.reviewFlags.includes("no-need-word") &&
       (cluster.queries.length > 0 || cluster.coverage !== "none")
   );
+  // The monthly tranche. A month of work is a handful of pieces, not every cluster: a
+  // site with 24 clusters was six model calls of drafting whose output mostly parked at
+  // the open cap anyway. The selection is by measured evidence, and the deferred clusters
+  // are counted in `truncations` so nothing disappears quietly.
+  const tranche = selectTranche(eligible);
+  const clusters = tranche.selected;
   const allowedEvidence = new Map<string, DraftEvidence>();
   for (const cluster of clusters) {
     for (const row of input.evidenceByCluster.get(cluster.slug) ?? []) allowedEvidence.set(row.id, row);
@@ -709,7 +714,9 @@ export async function draftClusterProposals(input: DraftInput): Promise<DraftRes
     proposals,
     errors,
     rejected,
-    truncations,
+    // The tranche's deferral is a truncation like any other: it must be readable, not
+    // inferred from a shorter board.
+    truncations: tranche.truncation ? [tranche.truncation, ...truncations] : truncations,
     summary: summaries.length > 0 ? summaries.join(" ") : null,
     model: config.model,
   };
