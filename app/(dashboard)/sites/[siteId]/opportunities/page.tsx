@@ -436,8 +436,18 @@ function OpportunityCard({ siteId, row }: { siteId: string; row: OpportunityRow 
           <ScoreBadge score={row.score} />
           {/* D1: the board is ordered by evidence class before score, so the class sits
               beside the number. Without it the order looks arbitrary. */}
-          <div className="mt-1">
+          <div className="mt-1 flex flex-col items-end gap-1">
             <EvidenceClassBadge evidenceClass={row.evidenceClass} />
+            {/* D3: a candidate's demand is market size, not reach. Without this label the
+                number beside it reads as an expected return. */}
+            {row.demandResolution === "candidate" && (
+              <span
+                className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
+                title="Market size, not measured reach: no page exists and no SERP has been bought for this topic. One SERP resolves it."
+              >
+                candidate
+              </span>
+            )}
           </div>
           {/* CMP-012: a score whose winnability was never looked at is not a fair fight.
               Measured 2026-11-24: `pageStrength` and `serpCompetition` were the literal
