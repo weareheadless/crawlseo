@@ -67,6 +67,7 @@ export type SocialHistoryItem = {
   onImage: string[];
   assets: string[];
   facts: string[];
+  caption: string;
 };
 
 export type CiceroClient = {
@@ -198,6 +199,7 @@ export function createCiceroClient(options: {
         onImage: Array.isArray(item?.on_image) ? item.on_image.map(String) : [],
         assets: Array.isArray(item?.assets) ? item.assets.map(String) : [],
         facts: Array.isArray(item?.facts) ? item.facts.map(String) : [],
+        caption: String(item?.caption ?? ""),
       }));
     },
   };

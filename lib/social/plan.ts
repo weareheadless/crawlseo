@@ -150,10 +150,12 @@ Rules checked in code:
   page that states your angle, or pick an angle the page states.
 - image_url must be a URL a tool returned; image must be a catalogue file. One of them is required.
 - claims must cite a URL from the bundle or a page you read.
-- Do not repeat a subject or headline from "posts".
+- Do not repeat a headline from "posts".
 - Do not promote a page or use a photograph from "posts": those are the last
   covers this brand published, and a run of posts on one page with one picture
   is one post, not a feed. The page and the picture both have to be new.
+- The same place can carry a new story on a different page. The same story
+  cannot. That is why a subject may return and a page may not.
 - {"post": false} is a correct answer on a quiet day.`;
 
 function compact(input: PlannerInput) {

@@ -53,7 +53,7 @@ function photosCatalog(dir: string): Array<{ file: string; description: string }
     .map((entry) => ({ file: entry.file, description: entry.description }));
 }
 
-async function bundle(): Promise<PlannerInput> {
+async function bundle(): Promise<PlannerInput & { recentCaptions: string[] }> {
   const profile = await readSiteBrand(db, siteId);
   const brand = parseSiteBrand((await db.siteProfile.findUnique({ where: { siteId }, select: { brand: true } }))?.brand);
   const representation = profile?.representation ?? parseSiteRepresentation({ entries: [], serviceArea: {} });
@@ -116,6 +116,7 @@ async function bundle(): Promise<PlannerInput> {
     .catch(() => []);
 
   return {
+    recentCaptions: history.map((item) => item.caption).filter(Boolean),
     brand: {
       name: brand?.name ?? tenant,
       voiceSample: brand?.voice?.sample ?? "",
@@ -200,6 +201,9 @@ async function main() {
   // evidence behind it. The planner no longer writes them.
   const brandRecord = await readSiteBrand(db, siteId);
   const brand = brandRecord?.brand;
+  // The page is read again for its own words: the writer has to know what the
+  // post sends people to, or every caption is written from the angle alone.
+  const promoted = await readPage(plan.pageUrl).catch(() => null);
   const written = await writeSocialCopy({
     tenant,
     locale,
@@ -208,10 +212,21 @@ async function main() {
     voice: { tone: brand?.voice.tone, sample: brand?.voice.sample },
     brand: { name: brand?.name, persona: brand?.persona },
     evidence: plan.claims,
+    page: {
+      url: plan.pageUrl,
+      title: promoted?.title ?? "",
+      description: promoted?.description ?? "",
+    },
+    recentCaptions: input.recentCaptions,
   });
   console.log(JSON.stringify({ stage: "copy", ...written }, null, 2));
   if (written.outcome !== "written") return;
-  const copy = written.copy;
+  const copy = {
+    ...written.copy,
+    // The post exists to send a reader to the page. The link is added here, not
+    // written by the model, so it is always the page the post was verified against.
+    caption: `${written.copy.caption.trim()}\n\n${plan.pageUrl}`,
+  };
 
   const asset = plan.imageUrl
     ? { url: plan.imageUrl, alt: copy.headline, credit: "" }

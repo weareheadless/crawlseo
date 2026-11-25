@@ -68,6 +68,10 @@ export type SocialCopyInput = {
     };
   };
   evidence?: Array<{ text: string; source_url: string }>;
+  /** The page the post promotes: context for the caption, never a source. */
+  page?: { url: string; title?: string; description?: string };
+  /** The last captions this brand published, so the new one is not a clone. */
+  recentCaptions?: string[];
 };
 
 export type SocialCopy = {
@@ -101,6 +105,8 @@ export async function writeSocialCopy(input: SocialCopyInput): Promise<SocialCop
       voice: input.voice ?? {},
       brand: input.brand ?? {},
       evidence: input.evidence ?? [],
+      page: input.page ?? {},
+      recent_captions: input.recentCaptions ?? [],
     }),
   });
   if (response.status !== 200) {
