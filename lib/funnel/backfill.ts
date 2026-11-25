@@ -6,7 +6,6 @@ import { previousWindow } from "@/lib/funnel/performance-window";
 import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
 import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
 import { brandTermsFromDomain, runDetectors } from "@/lib/funnel/detectors";
-import { discoverClusters } from "@/lib/funnel/cluster-discovery";
 import { reassessLegacyFindings } from "@/lib/research/reassess-findings";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 
@@ -383,14 +382,19 @@ export async function refreshEvidenceForSite(
   } catch (error) {
     console.error("[funnel] legacy finding reassessment failed", error);
   }
+  // The demand map is owned by the topic map. `cluster-discovery` used to run
+  // here whenever a project had no modelled map yet, proposing clusters from
+  // lexical overlap and from business-knowledge *field names* — which is how
+  // clusters called `voice`, `services` and `location` reached customers. Measured
+  // 2026-11-25: every cluster it ever wrote is superseded, and all 103 live
+  // clusters come from `topic-map-v1`. It is retired rather than fixed, because
+  // proposing a taxonomy is the model's decision, not code's (AGENTS.md).
   const modelled = await retireLegacyClustersForTopicMap(db, projectId);
-  if (modelled.modelled > 0) {
-    backfill.skipped.push(
-      `demand map is owned by the topic map; lexical discovery skipped${modelled.retired > 0 ? `, ${modelled.retired} legacy clusters retired` : ""}`
-    );
-  } else {
-    await discoverClusters(db, projectId, { siteId });
-  }
+  backfill.skipped.push(
+    modelled.modelled > 0
+      ? `demand map is owned by the topic map${modelled.retired > 0 ? `, ${modelled.retired} legacy clusters retired` : ""}`
+      : "demand map is owned by the topic map; no map stored yet, so nothing is proposed until the pipeline runs"
+  );
   return { backfill, knowledgeFacts: knowledge.stored, questionCoverage: coverage.stored };
 }
 
