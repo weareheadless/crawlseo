@@ -98,22 +98,43 @@ Two refresh flags, and they are not interchangeable:
 > 183 of 186 queries were deferred on superincompetence because only `refresh`
 > existed. The board showed one opportunity for a site with 186 queries of demand.
 
-### 3.4 No deterministic fallback for a semantic field
+### 3.4 No deterministic fallback for a semantic field — with two standing exceptions
 
-The model decides what a topic is, its market, its need, which queries belong to
-it, and the owner page. Code decides contract shape, arithmetic and transport.
-There is no city→country table, no plural matcher, no page-type word list, no
-fuzzy offer key.
+**This contract is currently broken in `lib/site/context.ts` and the document must
+say so rather than assert the rule.**
 
-`LANGUAGE_COUNTRY` (`lib/site/context.ts`) deliberately omits `en`: English names
-no market. A tenant that says "US" gets US; a tenant that says nothing gets a
-reported blocker, never a guess.
+`COUNTRY_WORDS` is a 12-entry regex table mapping words to country codes
+(`/mexi|méxi|mexique/` → `MX`), and `LANGUAGE_COUNTRY` maps a language to a
+market (`fr` → `FR`). Both are deterministic decisions about a semantic field —
+exactly what §3.4 forbids — and both are live, because business knowledge does not
+yet emit `market` reliably for every tenant.
+
+They are tolerated as **documented debt, not as design**:
+
+| table | why it exists | what must replace it |
+|---|---|---|
+| `COUNTRY_WORDS` | the extractor's `market` field is new; older revisions have only free-text `location` | the extraction prompt, already done in #228 — the table can retire once every tenant has re-extracted |
+| `LANGUAGE_COUNTRY` | a site with no stated market at all | nothing, for `en` — that is why `en` is deliberately absent. For `fr`/`de`/`es` it is a reasonable signal about the language, kept until a stated market exists |
+
+Both were verified this week to behave correctly on real tenants
+(`countryFromText("United States") → US`, and `en` correctly resolves to nothing).
+That does not make them contracts. **The rule is: no new table of this kind may be
+added, and the two that exist are removed when their data source lands.** Anything
+added tomorrow needs a model decision instead.
+
+The one sanctioned exception remains the tenant-wired Wix delivery connector.
 
 ### 3.5 Universality
 
 No tenant names, domains, cities, page paths or service words in `lib/`. The one
-sanctioned exception is the Wix delivery connector, which speaks two tenants'
-packet formats on purpose.
+sanctioned exception is the tenant-wired Wix delivery connector, which speaks two
+tenants' packet formats on purpose (see §3.4 for the two temporary country tables,
+which are tenant-shaped data in code and are on their way out).
+
+Verified this week on 8 tenants: `resolveSiteContext` returns a language for all 8,
+a country for 6 from data, and 2 correctly report a blocker rather than a guess.
+
+
 
 ## 4. The architecture, as it stands
 
@@ -158,6 +179,13 @@ touches.
 | 2 | `proposalPriority` + `comparePriority` — `lib/research/priority.ts` | the markdown report only | no |
 | 3 | `opportunityPriority` — `lib/ai-seo/opportunity-priority.ts` | nothing (orphan) | no |
 | 4 | `reconcileScore` — `lib/research/score-reconciliation.ts` | nothing (orphan) | no |
+
+There is also a fifth, partial case that is not a scorer but behaves like one:
+`orderByOpportunity` (`lib/research/opportunity-evidence.ts`) decides **which
+queries carry competitor context into the drafting call** — by gap, then nearest
+competitor, then demand. It orders queries rather than opportunities, so it is not
+on the list above, but any change to "how do we rank" has to account for it or the
+model gets a differently-sorted brief than the board describes.
 
 Path 2 is, by inspection, **the design the board should have**. It already:
 
@@ -290,12 +318,41 @@ is `needs_investigation`, not a 0.25 multiplier — unknown and known-low are
 different states, and damping an unknown is the same error the review names for
 competitiveness.
 
-### D5. One stored score, and the board reads it
+### D5. One stored score, one ordering, and it is refreshed when its inputs change
 
-`proposalPriority` becomes the source of `scoreValue`, and `comparePriority`
-becomes the board's `orderBy`. Paths 3 and 4 are deleted. Stored scores are
-recomputed in a migration-style backfill, and the reordering is expected and
-accepted — it is the point.
+Three separate things have to hold, and today none of them does.
+
+**(a) One writer.** `proposalPriority` becomes the source of `scoreValue`.
+Paths 3 and 4 are deleted. Stored scores are recomputed in a backfill; the
+reordering is expected and accepted.
+
+**(b) One ordering.** `scoreValue: "desc"` is currently written in **four** places
+that can disagree:
+
+| location | what it orders |
+|---|---|
+| `lib/funnel/views.ts:443` | the board — the product |
+| `lib/research/opportunities-stage.ts:191` | "top 5" in the run report |
+| `lib/funnel/serp-watch-list.ts:125` | the watch list |
+| `lib/funnel/detectors.ts:1595` | `applyOpenCap`'s overflow |
+
+The board is only one of four surfaces that assume the same meaning. Change
+`computeScore` and three of them silently keep the old semantics. `comparePriority`
+must be exposed as a single ordering function that all four call, and the four call
+sites must be tested together — otherwise D1/D5 reorders the board and leaves the
+cap parking the wrong rows.
+
+**(c) Recompute when the inputs change.** `scoreValue` is computed once, inside
+`writeOpportunity` (`lib/funnel/opportunity.ts:96`), and never again. `lastScoredAt`
+is written but nothing re-scores. So a row's score is frozen at the evidence it had
+when it was first written: when a later bundle supplies impressions, a competitor
+position or a measured reach, **the stored score does not move**.
+
+This is the fourth structural defect and it was not in the first version of this
+document. It is why "re-run the month and the board reorders" does not happen
+today; the pipeline rewrites proposals, but a row that is not re-proposed keeps its
+old number. The backfill in (a) is a one-off that would decay the same way without
+this.
 
 This is PIPE-7 and #233 as one change, because they are one change.
 
@@ -383,7 +440,22 @@ These have real app callers, so removal needs a trace, not a grep:
 | `parked` rows with `score_below_threshold` | 1,734 in total parked | re-score under D5, not delete |
 | stored `scoreValue` on all rows | 1,965 | recompute under D5 |
 
-### 7.5 Documentation to retire
+### 7.5 A second pipeline contract describes a different pipeline
+
+`docs/pipeline-stage-contract.md` describes **Business → Research → Findings → Work
+→ Results**, driven by `lib/pipeline/stages.ts` and rendered by
+`components/pipeline/pipeline-navigation.tsx`. That is a *navigation* contract: it
+orders the UI's tabs and it is live (3 callers).
+
+`runResearchPipeline` (`lib/research/pipeline.ts`) is a *job* contract: bundle →
+topic-map → opportunities, gated on state.
+
+They are not in conflict — one is where a person clicks, the other is what runs —
+but neither document says so, and a reader who opens the stage contract looking for
+the monthly order will not find it. §3.3 of this document is the job contract. The
+stage contract should gain one sentence pointing here.
+
+### 7.6 Documentation to retire
 
 `docs/README.md` lists as active: `seo-funnel-spine-plan.md`,
 `demand-map-cluster-discovery.md`, `ds-02-run-unification.md`,
@@ -415,6 +487,9 @@ D5 into a cleanup PR — it reorders every board.
 5. **D3, the candidate lane** — hypotheses are labelled and unbought until the
    tranche pays $0.004 to resolve them.
 6. **D5, one scorer** — the big one, last, with its own board reorder accepted.
+   Contains three sub-steps that must not be split: one writer (the backfill), one
+   ordering function called by all four surfaces (§D5b), and recompute-on-change
+   (§D5c). Shipping only the backfill produces a board that is correct for one day.
 
 ## 9. What must not be built
 
@@ -437,3 +512,10 @@ D5 into a cleanup PR — it reorders every board.
 - **`marketScope` for a site selling across borders.** inmersion's 10 clusters are
   all `international`; plausible for a trilingual school, unverified. Needs an SEO
   read on one tenant before it is trusted.
+- **What triggers a re-score, and how often.** §D5c says a stored score must follow
+  its inputs, but not who calls it: every bundle? every evidence write? a nightly
+  job? Recomputing 1,965 rows is cheap, but the trigger decides whether the board is
+  current by the time a person reads it. Decide with D5, not after.
+- **Whether `applyOpenCap`'s overflow should be ordered by the same class-aware
+  ranking.** It parks beyond 100, so a class-aware order changes *which* rows park,
+  not just which are shown. That is a real behaviour change inside D5.
