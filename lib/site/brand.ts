@@ -37,6 +37,33 @@ export type BrandLogo = {
   height: number | null;
 };
 
+/**
+ * Who the brand is for, and what it is trusted with.
+ *
+ * The identity block says what the brand looks like. This says what it is
+ * *about*: the reader it serves, the thing that reader is protecting, and the
+ * traps the brand must not fall into. A designer that has this can make a cover
+ * that argues something; without it, every cover is a photograph with the
+ * headline underneath.
+ */
+export type BrandPersona = {
+  /** What the brand is for, in one sentence. */
+  positioning: string;
+  /** Who it serves, and what that person is protecting. */
+  audience: string;
+  /** What it is trusted with. */
+  promise: string;
+  /** What this brand is not. Copy and design both have to avoid these. */
+  avoids: string[];
+};
+
+export const EMPTY_PERSONA: BrandPersona = {
+  positioning: "",
+  audience: "",
+  promise: "",
+  avoids: [],
+};
+
 export type SiteBrand = {
   schemaVersion: "brand/1";
   name: string;
@@ -45,6 +72,8 @@ export type SiteBrand = {
   colors: Record<string, string>;
   fonts: { display: string; body: string; mono: string };
   voice: { sample: string; tone: string[] };
+  /** Optional: a brand without one renders, it just has less to say. */
+  persona: BrandPersona;
   notes: string;
 };
 
@@ -78,7 +107,7 @@ export type BrandReadDb = Pick<PrismaClient, "siteProfile">;
 export type BrandWriteDb = Pick<PrismaClient, "site" | "siteProfile">;
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const COLOR_NAME = /^[a-z][a-z0-9-]{0,30}$/i;
+export const COLOR_NAME = /^[a-z][a-z0-9-]{0,30}$/i;
 const FONT_BAD = /[()[\]{}<>/\\|?*+=^$]/;
 const COUNTRY = /^[A-Za-z]{2}$/;
 const ENTRY_KINDS = new Set(["project", "developer", "service", "place"]);
@@ -169,6 +198,17 @@ function normalizeColors(value: unknown): Record<string, string> {
   return colors;
 }
 
+function normalizePersona(value: unknown): BrandPersona {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ...EMPTY_PERSONA };
+  const row = value as Record<string, unknown>;
+  return {
+    positioning: text(row.positioning, 600),
+    audience: text(row.audience, 600),
+    promise: text(row.promise, 600),
+    avoids: unique(strings(row.avoids)).slice(0, 12),
+  };
+}
+
 export function parseSiteBrand(value: unknown): SiteBrand | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
@@ -189,6 +229,7 @@ export function parseSiteBrand(value: unknown): SiteBrand | null {
       mono: normalizeFont(fonts.mono),
     },
     voice: { sample: text(voice.sample, 4000), tone: strings(voice.tone) },
+    persona: normalizePersona(row.persona),
     notes: text(row.notes, 2000),
   };
 }
