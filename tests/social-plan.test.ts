@@ -105,6 +105,11 @@ describe("parsePlan", () => {
     expect(result.droppedClaims).toEqual(["Prices doubled."]);
   });
 
+  it("refuses a decision with no art direction", () => {
+    const bare = parsePlan({ ...VALID, art_direction: "" }, INPUT);
+    expect(bare).toHaveProperty("error");
+  });
+
   it("refuses a post that promotes no page from the site", () => {
     const outsider = parsePlan({ ...VALID, page_url: "https://elsewhere.example/x" }, INPUT);
     expect(outsider).toHaveProperty("error");

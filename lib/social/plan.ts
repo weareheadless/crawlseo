@@ -128,7 +128,8 @@ or
  "claims": [{"text": "a specific the post asserts", "source_url": "URL from the bundle or from a page you read"}],
  "image_url": "https://... the photograph you chose, from read_page or search_photos",
  "image": "or a file name from list_brand_photos, if that is the better picture",
- "image_note": "why this picture, and where it came from"}
+ "image_note": "why this picture, and where it came from",
+ "art_direction": "the one page this cover should be: what fills the frame, where the type sits, what the page does with the photograph"}
 
 Rules checked in code:
 - subject must be one of "represented".
@@ -171,6 +172,12 @@ function bundleSources(input: PlannerInput): Set<string> {
  */
 export type AllowedImages = { urls: Set<string>; files: Set<string> };
 
+export function siteUrls(input: PlannerInput, discovered: Iterable<string> = []): Set<string> {
+  const urls = bundleSources(input);
+  for (const url of discovered) urls.add(url.trim());
+  return urls;
+}
+
 export function allowedImages(input: PlannerInput, discovered?: Iterable<string>): AllowedImages {
   return {
     urls: new Set(discovered ?? []),
@@ -182,6 +189,7 @@ export function parsePlan(
   raw: unknown,
   input: PlannerInput,
   allowed: AllowedImages = allowedImages(input),
+  pages: Set<string> = siteUrls(input),
 ): PlanResult | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "the planner returned no object" };
   const value = raw as Record<string, unknown>;
@@ -197,7 +205,7 @@ export function parsePlan(
   const headline = typeof copy.headline === "string" ? copy.headline.trim() : "";
 
   const pageUrl = typeof value.page_url === "string" ? value.page_url.trim() : "";
-  if (!pageUrl || !input.crawl.some((page) => page.url === pageUrl)) {
+  if (!pageUrl || !pages.has(pageUrl)) {
     return { error: "the post must promote a page from the site" };
   }
 
@@ -205,6 +213,11 @@ export function parsePlan(
   const represented = input.represented.map(normaliseName);
   if (subject && !represented.some((name) => name === normaliseName(subject))) {
     return { error: `the brand does not represent ${subject}` };
+  }
+
+  const artDirection = typeof value.art_direction === "string" ? value.art_direction.trim() : "";
+  if (!artDirection) {
+    return { error: "the planned post has no art direction: say what page this cover should be" };
   }
 
   const imageUrl = typeof value.image_url === "string" ? value.image_url.trim() : "";
@@ -255,8 +268,7 @@ export function parsePlan(
       imageUrl,
       image,
       imageNote: typeof value.image_note === "string" ? value.image_note.trim() : "",
-      artDirection:
-        typeof value.art_direction === "string" ? value.art_direction.trim() : "",
+      artDirection,
     },
     droppedClaims,
   };
@@ -357,6 +369,14 @@ function safeParse(text: string): unknown {
   }
 }
 
+/** Page URLs a tool returned, so the promoted page can be checked. */
+export function pagesIn(result: unknown, into: Set<string>): void {
+  if (!result || typeof result !== "object") return;
+  const seen = result as { url?: string; pages?: Array<{ url?: string }> };
+  if (typeof seen.url === "string") into.add(seen.url);
+  for (const page of seen.pages ?? []) if (page?.url) into.add(String(page.url));
+}
+
 /** URLs an image-bearing tool returned, so a choice can be checked. */
 export function imagesIn(result: unknown, into: Set<string>): void {
   if (!result || typeof result !== "object") return;
@@ -396,6 +416,7 @@ export async function planPost(
     { role: "user", content: JSON.stringify(compact(input)) },
   ];
   const discovered = new Set<string>();
+  const discoveredPages = new Set<string>();
 
   for (let step = 0; step < (options.maxSteps ?? 8); step += 1) {
     const { message, error } = await complete(call, apiKey, {
@@ -423,6 +444,7 @@ export async function planPost(
         }
         const result = await runTool(call_.function.name, args, tools);
         imagesIn(result, discovered);
+        pagesIn(result, discoveredPages);
         const summary = result as { count?: number; images?: unknown[]; photos?: unknown[]; error?: string };
         console.error(
           `[editor] ${call_.function.name}(${JSON.stringify(args).slice(0, 80)}) -> ` +
@@ -452,6 +474,7 @@ export async function planPost(
       for (const call of embedded) {
         const result = await runTool(call.name, call.args, tools);
         imagesIn(result, discovered);
+        pagesIn(result, discoveredPages);
         messages.push({
           role: "user",
           content: `TOOL RESULT ${call.name}: ${JSON.stringify(result).slice(0, 60_000)}`,
@@ -468,7 +491,7 @@ export async function planPost(
     }
     const checked = parsed === null
       ? { error: `that was not JSON: ${content.slice(0, 200)}` }
-      : parsePlan(parsed, input, allowedImages(input, discovered));
+      : parsePlan(parsed, input, allowedImages(input, discovered), siteUrls(input, discoveredPages));
     if ("error" in checked) {
       // One correction, naming what was wrong. An editor that answers in prose
       // after its tools is a formatting miss, not a refusal to decide.
