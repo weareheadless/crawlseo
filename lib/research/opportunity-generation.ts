@@ -6,6 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { ctrAtPosition } from "@/lib/funnel/scoring";
+import { TARGET_POSITION } from "@/lib/funnel/impact";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
 import {
@@ -75,14 +76,14 @@ export type ProposalGenerationDb = OpportunityDb &
     | "auditPage"
   >;
 
-/**
- * CMP-012: replace a proposal's winnability literals with stored facts, or null.
- *
- * The generator produces a score before anything is measured; that is fine for volume and
- * effort, but "how likely are we to win" is a claim about a SERP. Measured 2026-11-24:
- * `phase3:topic-map` rows carried `pageStrength: 0.5` and `serpCompetition: 0.5` on every
- * one, and those are exactly the rows the board was sorting by.
- */
+/** The opportunity type a proposal maps to, from the same table the board stores. */
+function typeForProposal(
+  lane: string,
+  kind: string
+): keyof typeof TARGET_POSITION {
+  return TYPE_FOR_PROPOSAL[`${lane}:${kind}`] ?? "O3_content_gap";
+}
+
 /**
  * The query a cluster's winnability should be measured on.
  *
@@ -108,6 +109,14 @@ function leadQueryFor(cluster: TopicCluster | null): string | null {
   return ranked[0]?.query ?? null;
 }
 
+/**
+ * CMP-012: replace a proposal's winnability literals with stored facts, or null.
+ *
+ * The generator produces a score before anything is measured; that is fine for volume and
+ * effort, but "how likely are we to win" is a claim about a SERP. Measured 2026-11-24:
+ * `phase3:topic-map` rows carried `pageStrength: 0.5` and `serpCompetition: 0.5` on every
+ * one, and those are exactly the rows the board was sorting by.
+ */
 async function withMeasuredWinnability(
   db: ProposalGenerationDb,
   input: {
@@ -311,9 +320,21 @@ export function proposalScoreInputs(
       coverageSummary: cluster ? `Topic coverage: ${cluster.coverage}` : null,
       needRationale: proposal.summary,
       offerFitRationale: cluster?.rationale ?? null,
-      targetPosition: null,
+      /**
+       * The position this play is bidding for, from the shared declared table.
+       *
+       * This was `null`, and a null target is not a missing detail: `assessImpact` reads
+       * it to compute the upside, so every generated row assessed as a `hypothesis` and
+       * `computeScore` returned from the low-confidence band before it ever looked at the
+       * winnability inputs. Measured 2026-11-24: the score was identical (20) whether a
+       * sampled SERP was easy or hard, because the competitor evidence was never reached.
+       * A declared target is what lets the fight the competitor data describes become a
+       * priority.
+       */
+      targetPosition: TARGET_POSITION[typeForProposal(proposal.lane, proposal.kind)] ?? null,
       currentPosition: cluster?.metrics.position ?? null,
-      windowDays: null,
+      // The window the impressions were measured over, so they can be read per month.
+      windowDays: cluster?.metrics.windowDays ?? null,
       observedImpressions: cluster?.metrics.impressions ?? null,
       technical: false,
       unmeasured: !volume,

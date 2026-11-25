@@ -401,3 +401,82 @@ describe("CMP-003 a sampled SERP is a measurement, not an assumption", () => {
     expect(resolved.provenance.source.serpCompetition).toBe("measured");
   });
 });
+
+describe("CMP-003 competitor data reaches the priority, not only the payload", () => {
+  /**
+   * The whole chain, in one test: a sampled SERP changes `serpCompetition`, which changes
+   * the score that orders the board. Before this, the score was identical (20) whether the
+   * field was easy or hard, because `targetPosition` and `windowDays` were null and
+   * `assessImpact` returned "hypothesis" before winnability was ever read.
+   */
+  const scored = (serp: number | null, source: "measured" | "assumed") =>
+    computeScore({
+      worth: {
+        volume: 470,
+        volumeSource: "provider",
+        ctrAtPosition: 0.005,
+        businessValue: 0.85,
+        intentFit: 1,
+        readiness: "actionable",
+        measurement: "observed_baseline",
+        targetPosition: 10,
+        currentPosition: 40.5,
+        windowDays: 28,
+        observedImpressions: 1350,
+        technical: false,
+      },
+      winProbability: { rankDistance: 0.05, authorityGap: null, pageStrength: null, serpCompetition: serp, playTypeFactor: 0.6 },
+      winProbabilitySource: {
+        rankDistance: "measured",
+        authorityGap: "assumed",
+        pageStrength: "assumed",
+        serpCompetition: source,
+        playTypeFactor: "assumed",
+      },
+      effort: { playTypeBase: 8, sizeFactor: 1 },
+      freshness: 0.9,
+      stability: 0.8,
+      evidenceCompleteness: "both",
+    } as never);
+
+  it("scores an easy sampled field above a hard one", () => {
+    const easy = scored(0.88, "measured");
+    const hard = scored(0.3, "measured");
+    expect(easy.impact.kind).toBe("measured");
+    expect(easy.scoreValue).toBeGreaterThan(hard.scoreValue);
+  });
+
+  it("does not reach the winnability inputs without a target and a window", () => {
+    // The defect this guards: null there meant every row assessed as a hypothesis and
+    // the sampled SERP could not change the order at all.
+    const withoutTarget = computeScore({
+      worth: {
+        volume: 470,
+        volumeSource: "provider",
+        ctrAtPosition: 0.005,
+        businessValue: 0.85,
+        intentFit: 1,
+        readiness: "actionable",
+        measurement: "observed_baseline",
+        targetPosition: null,
+        currentPosition: 40.5,
+        windowDays: null,
+        observedImpressions: 1350,
+        technical: false,
+      },
+      winProbability: { rankDistance: 0.05, authorityGap: null, pageStrength: null, serpCompetition: 0.88, playTypeFactor: 0.6 },
+      winProbabilitySource: {
+        rankDistance: "measured",
+        authorityGap: "assumed",
+        pageStrength: "assumed",
+        serpCompetition: "measured",
+        playTypeFactor: "assumed",
+      },
+      effort: { playTypeBase: 8, sizeFactor: 1 },
+      freshness: 0.9,
+      stability: 0.8,
+      evidenceCompleteness: "both",
+    } as never);
+    expect(withoutTarget.impact.kind).toBe("hypothesis");
+  });
+});
