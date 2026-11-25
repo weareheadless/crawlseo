@@ -33,7 +33,14 @@ export type PlannerBrand = {
   };
 };
 
-export type PlannerPost = { subject: string; headline: string; publishedAt: string | null };
+export type PlannerPost = {
+  subject: string;
+  headline: string;
+  publishedAt: string | null;
+  /** The page it promoted and the photograph it used: the pair not to repeat. */
+  pageUrl?: string;
+  image?: string;
+};
 
 export type PlannerOpportunity = {
   title: string;
@@ -108,11 +115,14 @@ You have tools. Use them, in this order:
    handful of generic shots and usually not of the subject.
 
 A photograph has to be of the thing the post is about: the building, the beach,
-the street the headline names. Not a pool, not an interior, not a skyline, never a
-logo. If you choose from the brand's catalogue or from stock, "image_note" must
-say why that picture is still of this subject and where it came from — if you
-cannot say it, choose something else. Do not skip read_page because a catalogue is
-quicker.
+the street the headline names. Not a pool, not an interior, not a skyline, and
+never a picture of a logo or a sign. If you choose from the brand's catalogue or
+from stock, "image_note" must say why that picture is still of this subject and
+where it came from — if you cannot say it, choose something else. Do not skip
+read_page because a catalogue is quicker.
+
+The brand's mark always sits on the cover. Art direction is about the photograph
+and the words; it does not need to place the logo and must not forbid it.
 
 Answer, when you are done, with a single JSON object and nothing else. Either:
 
@@ -125,7 +135,7 @@ or
  "subject": "the place or project this is about",
  "page_url": "the page this post promotes, from the bundle",
  "angle": "the one idea the post carries",
- "claims": [{"text": "a specific the post asserts", "source_url": "URL from the bundle or from a page you read"}],
+ "claims": [{"text": "something the promoted page itself states", "source_url": "the page_url"}],
  "image_url": "https://... the photograph you chose, from read_page or search_photos",
  "image": "or a file name from list_brand_photos, if that is the better picture",
  "image_note": "why this picture, and where it came from",
@@ -135,9 +145,15 @@ Rules checked in code:
 - subject must be one of "represented".
 - page_url must be a page from the bundle: the post promotes a page, and the
   facts a cover may state have to come from that page.
+- every claim must come from page_url. The desk holds a cover line whose source is
+  any other page, so a claim from a page you are not promoting is wasted: pick a
+  page that states your angle, or pick an angle the page states.
 - image_url must be a URL a tool returned; image must be a catalogue file. One of them is required.
 - claims must cite a URL from the bundle or a page you read.
 - Do not repeat a subject or headline from "posts".
+- Do not promote a page or use a photograph from "posts": those are the last
+  covers this brand published, and a run of posts on one page with one picture
+  is one post, not a feed. The page and the picture both have to be new.
 - {"post": false} is a correct answer on a quiet day.`;
 
 function compact(input: PlannerInput) {
@@ -229,7 +245,27 @@ export function parsePlan(
     return { error: `the editor chose a photo the brand does not have: ${image || "(none)"}` };
   }
 
-  const sources = bundleSources(input);
+  // The editor is the one that decides; what it cannot decide is to repeat the
+  // last cover. History is a mechanical check because taste has no memory.
+  const lastPages = new Set(
+    input.posts.map((post) => post.pageUrl?.trim()).filter((url): url is string => Boolean(url)),
+  );
+  if (lastPages.has(pageUrl)) {
+    return {
+      error: `that page promoted one of the last covers: choose a different page, or say post: false`,
+    };
+  }
+  const chosenImage = imageUrl || image;
+  const lastImages = new Set(
+    input.posts.map((post) => post.image?.trim()).filter((name): name is string => Boolean(name)),
+  );
+  if (lastImages.has(chosenImage)) {
+    return {
+      error: `that photograph appeared on one of the last covers: choose a different picture`,
+    };
+  }
+
+  const sources = pages;
   const droppedClaims: string[] = [];
   const claims: Array<{ text: string; source_url: string }> = [];
   for (const item of Array.isArray(value.claims) ? value.claims : []) {
@@ -291,6 +327,24 @@ export function plannerConfig(): { apiKey: string; model: string } | null {
 }
 
 type ChatMessage = Record<string, unknown>;
+
+/**
+ * A tool that fails is an answer the editor can work with, not the end of the
+ * run: a page that times out is one page it cannot use, and it still has to
+ * decide. The failure is shown to it as `{error}`, in the same shape as a
+ * refusal, so the next step is the model's choice rather than a crash.
+ */
+async function callTool(
+  name: string,
+  args: Record<string, unknown>,
+  tools: SocialTools,
+): Promise<unknown> {
+  try {
+    return await runTool(name, args, tools);
+  } catch (error) {
+    return { error: `the tool failed: ${(error as Error).message}` };
+  }
+}
 
 async function complete(
   call: typeof fetch,
@@ -442,7 +496,7 @@ export async function planPost(
         } catch {
           args = {};
         }
-        const result = await runTool(call_.function.name, args, tools);
+        const result = await callTool(call_.function.name, args, tools);
         imagesIn(result, discovered);
         pagesIn(result, discoveredPages);
         const summary = result as { count?: number; images?: unknown[]; photos?: unknown[]; error?: string };
@@ -472,7 +526,7 @@ export async function planPost(
     if (tools && embedded.length > 0) {
       messages.push({ role: "assistant", content });
       for (const call of embedded) {
-        const result = await runTool(call.name, call.args, tools);
+        const result = await callTool(call.name, call.args, tools);
         imagesIn(result, discovered);
         pagesIn(result, discoveredPages);
         messages.push({
@@ -507,5 +561,32 @@ export async function planPost(
     }
     return checked;
   }
-  return { error: "the editor kept calling tools and never answered" };
+
+  // It read instead of deciding. An editor that will not stop reading is asked
+  // once, with no tools, for the decision it has already earned.
+  messages.push({
+    role: "user",
+    content:
+      "You have read enough. Answer now with the JSON object from the brief and nothing else: " +
+      "post, reason, subject, page_url, angle, claims, image_url or image, image_note, art_direction.",
+  });
+  const forced = await complete(call, apiKey, {
+    model,
+    messages,
+    max_tokens: 4000,
+    response_format: { type: "json_object" },
+  });
+  if (forced.error) return { error: forced.error };
+  const content = String(forced.message.content ?? "").trim();
+  if (!content) return { error: "the editor kept calling tools and never answered" };
+  try {
+    return parsePlan(
+      JSON.parse(content),
+      input,
+      allowedImages(input, discovered),
+      siteUrls(input, discoveredPages),
+    );
+  } catch {
+    return { error: `the editor did not answer with a plan: ${content.slice(0, 200)}` };
+  }
 }

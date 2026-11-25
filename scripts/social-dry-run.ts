@@ -67,7 +67,7 @@ async function bundle(): Promise<PlannerInput> {
     _sum: { clicks: true, impressions: true },
     _avg: { position: true },
     orderBy: { _sum: { impressions: "desc" } },
-    take: 12,
+    take: 40,
   });
   const crawl = pages.map((row) => ({
     url: row.url,
@@ -108,6 +108,13 @@ async function bundle(): Promise<PlannerInput> {
     select: { caption: true, publishedAt: true, status: true, opportunityId: true },
   });
 
+  // The pages and photographs the last covers used. Cicero rendered them, so it
+  // is the record: the database row only knows what was published, and a draft
+  // that a human rejected still used that page and that picture.
+  const history = await createCiceroClient({ siteId })
+    .history(8)
+    .catch(() => []);
+
   return {
     brand: {
       name: brand?.name ?? tenant,
@@ -118,11 +125,22 @@ async function bundle(): Promise<PlannerInput> {
       persona: brand?.persona,
     },
     represented: names(representation),
-    posts: posts.map((post) => ({
-      subject: "",
-      headline: post.caption.slice(0, 120),
-      publishedAt: post.publishedAt?.toISOString() ?? null,
-    })),
+    posts: [
+      ...history.map((item) => ({
+        subject: item.subject,
+        headline: item.onImage[1] ?? item.onImage[0] ?? "",
+        publishedAt: item.createdAt || null,
+        pageUrl: item.pageUrl,
+        // A catalogue photo is recorded as content/<name>; the planner names it
+        // by its bare file name, so the two have to compare equal.
+        image: (item.assets[0] ?? "").replace(/^content\//, ""),
+      })),
+      ...posts.map((post) => ({
+        subject: "",
+        headline: post.caption.slice(0, 120),
+        publishedAt: post.publishedAt?.toISOString() ?? null,
+      })),
+    ],
     opportunities: opportunities.map((row) => ({
       title: row.title,
       summary: row.summary,
@@ -229,6 +247,8 @@ async function main() {
       id: artifact.id,
       channel: "facebook_page",
       locale,
+      page_url: plan.pageUrl,
+      subject: plan.subject,
       copy: {
         kicker: artifact.social.kicker,
         headline: artifact.social.headline,
@@ -249,4 +269,7 @@ async function main() {
   await db.$disconnect();
 }
 
-void main();
+void main().catch((error: unknown) => {
+  console.error(`the run stopped: ${(error as Error).message}`);
+  process.exitCode = 1;
+});

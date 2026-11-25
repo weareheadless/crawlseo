@@ -163,3 +163,73 @@ describe("parsePlan", () => {
     expect(result.plan.claims).toHaveLength(1);
   });
 });
+
+describe("parsePlan after the last covers", () => {
+  const RECENT: PlannerInput = {
+    ...INPUT,
+    posts: [
+      {
+        subject: "Playa del Carmen",
+        headline: "Old news.",
+        publishedAt: "2026-11-24T00:00:00Z",
+        pageUrl: "https://www.susimacdonald.com/beachfront",
+        image: "https://cdn.example/media/facade.jpg/v1/fill/w_1600/facade.jpg",
+      },
+    ],
+  };
+
+  it("refuses the page the last cover promoted", () => {
+    const result = parsePlan(VALID, RECENT);
+    expect(result).toHaveProperty("error");
+  });
+
+  it("refuses the photograph the last cover used", () => {
+    const result = parsePlan(
+      {
+        ...VALID,
+        image: "",
+        image_url: "https://cdn.example/media/facade.jpg/v1/fill/w_1600/facade.jpg",
+      },
+      {
+        ...RECENT,
+        crawl: [
+          ...INPUT.crawl,
+          { url: "https://www.susimacdonald.com/tulum", clicks: 1, impressions: 90, position: 9 },
+        ],
+      },
+      allowedImages(INPUT, ["https://cdn.example/media/facade.jpg/v1/fill/w_1600/facade.jpg"]),
+    );
+    expect(result).toHaveProperty("error");
+  });
+
+  it("accepts a new page and a different photograph", () => {
+    const result = parsePlan(
+      { ...VALID, page_url: "https://www.susimacdonald.com/tulum", image: "susi-photo-2.jpg" },
+      {
+        ...RECENT,
+        crawl: [
+          ...INPUT.crawl,
+          { url: "https://www.susimacdonald.com/tulum", clicks: 1, impressions: 90, position: 9 },
+        ],
+      },
+    );
+    expect(result).not.toHaveProperty("error");
+  });
+
+  it("keeps a claim from a page a tool returned", () => {
+    const page = "https://www.susimacdonald.com/tulum";
+    const result = parsePlan(
+      {
+        ...VALID,
+        page_url: page,
+        claims: [{ text: "The town behind the ruins is where people buy.", source_url: page }],
+      },
+      INPUT,
+      allowedImages(INPUT),
+      new Set([...INPUT.crawl.map((row) => row.url), page]),
+    );
+    if ("error" in result) throw new Error(result.error);
+    if (!result.plan.post) return;
+    expect(result.plan.claims).toHaveLength(1);
+  });
+});

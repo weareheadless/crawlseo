@@ -26,6 +26,8 @@ export type SocialArtifactPayload = {
   id: string;
   channel: "facebook_page";
   locale: string;
+  page_url?: string;
+  subject?: string;
   copy: {
     kicker: string;
     headline: string;
@@ -57,6 +59,16 @@ export type PublishOutcome =
     }
   | { outcome: "refused"; code: string; detail: string; retryable: boolean };
 
+export type SocialHistoryItem = {
+  renderId: string;
+  createdAt: string;
+  pageUrl: string;
+  subject: string;
+  onImage: string[];
+  assets: string[];
+  facts: string[];
+};
+
 export type CiceroClient = {
   render(input: {
     artifact: SocialArtifactPayload;
@@ -68,6 +80,8 @@ export type CiceroClient = {
     draft?: boolean;
     caption?: string;
   }): Promise<PublishOutcome>;
+  /** Recent renders, newest first: the pages and photographs already used. */
+  history(limit?: number): Promise<SocialHistoryItem[]>;
 };
 
 /** What a status code means for the caller. A 5xx may be retried; a 409 may not. */
@@ -158,6 +172,33 @@ export function createCiceroClient(options: {
       const detail = payload?.detail;
       const text = typeof detail === "string" ? detail : JSON.stringify(detail ?? `Cicero returned ${status}`);
       return { outcome: "refused", ...refusalFor(status, text) };
+    },
+
+    async history(limit = 8) {
+      const config = ciceroConfig();
+      if (!config) return [];
+      const query = new URLSearchParams({ limit: String(limit) });
+      const response = await call(`${config.url}/v1/social/renders?${query.toString()}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          authorization: `Bearer ${config.token}`,
+          "x-crawlseo-site-id": options.siteId,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Cicero history failed: ${response.status}`);
+      }
+      const payload: any = await response.json();
+      return (Array.isArray(payload?.items) ? payload.items : []).map((item: any) => ({
+        renderId: String(item?.render_id ?? ""),
+        createdAt: String(item?.created_at ?? ""),
+        pageUrl: String(item?.page_url ?? ""),
+        subject: String(item?.subject ?? ""),
+        onImage: Array.isArray(item?.on_image) ? item.on_image.map(String) : [],
+        assets: Array.isArray(item?.assets) ? item.assets.map(String) : [],
+        facts: Array.isArray(item?.facts) ? item.facts.map(String) : [],
+      }));
     },
   };
 }
