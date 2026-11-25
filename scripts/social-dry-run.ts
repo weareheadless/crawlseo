@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { db } from "@/lib/db";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 import { createCiceroClient } from "@/lib/social/cicero";
 import { parseSiteBrand, parseSiteRepresentation, readSiteBrand } from "@/lib/site/brand";
 import { planPost, type PlannerInput } from "@/lib/social/plan";
@@ -78,7 +79,7 @@ async function bundle(): Promise<PlannerInput> {
 
   const opportunities = await db.opportunity.findMany({
     where: { projectId: site.projectId, status: { in: ["detected", "accepted", "in_progress", "delivered"] } },
-    orderBy: [{ scoreValue: "desc" }, { updatedAt: "desc" }],
+    orderBy: opportunityOrder(),
     take: 14,
     select: { title: true, summary: true, type: true, status: true, scoreValue: true },
   });

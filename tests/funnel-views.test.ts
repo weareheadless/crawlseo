@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
+
 import {
   getFunnelCounts,
   getOpportunityDetail,
@@ -106,10 +108,12 @@ describe("funnel read model (wave 4 surfaces)", () => {
     expect(rows[0].reason).toContain("coral print");
     expect(rows[0].score).toBe(42);
     expect(rows[0].evidenceCount).toBe(1);
-    // sorted by score desc at the query level
-    expect((client as unknown as { opportunity: { findMany: ReturnType<typeof vi.fn> } }).opportunity.findMany.mock.calls[0][0].orderBy[0]).toEqual({
-      scoreValue: "desc",
-    });
+    // The one shared order, not a literal that can drift: see
+    // `lib/funnel/opportunity-order.ts`. Asserting the shared value means a change to
+    // the board's ranking fails here instead of quietly applying to one surface.
+    expect((client as unknown as { opportunity: { findMany: ReturnType<typeof vi.fn> } }).opportunity.findMany.mock.calls[0][0].orderBy).toEqual(
+      opportunityOrder()
+    );
   });
 
   it("renders a missing leg as missing rather than inventing evidence", async () => {
