@@ -15,6 +15,8 @@ import { createCiceroClient } from "@/lib/social/cicero";
 import { parseSiteBrand, parseSiteRepresentation, readSiteBrand } from "@/lib/site/brand";
 import { planPost, type PlannerInput } from "@/lib/social/plan";
 import { verifySocialPost } from "@/lib/editorial-service/social";
+import { resolveImage } from "@/lib/social/image";
+import { findUnsplashCover } from "@/lib/delivery/unsplash";
 
 function arg(name: string, fallback = ""): string {
   const index = process.argv.indexOf(`--${name}`);
@@ -159,6 +161,23 @@ async function main() {
   if (!planned.plan.post) return;
 
   const plan = planned.plan;
+  // The photo follows the subject: the site's own page about it, else a stock
+  // photograph found for it, else one of the brand's photos chosen by description.
+  const resolved = await resolveImage({
+    subject: plan.subject,
+    pages: input.crawl.map((page) => page.url),
+    findStock: async (query) => {
+      const cover = await findUnsplashCover(query, { location: plan.subject, siteId });
+      return { url: cover.url, alt: cover.altText, credit: `Photo: ${cover.photographer} / Unsplash` };
+    },
+  }).catch((error: Error) => ({ source: "none" as const, reason: error.message }));
+  console.log(JSON.stringify({ stage: "image", resolved }, null, 2));
+
+  const asset =
+    resolved.source === "none"
+      ? { path: `content/${plan.image}`, alt: plan.copy.headline, credit: "" }
+      : { url: resolved.url, alt: resolved.alt, credit: resolved.credit };
+
   const verification = await verifySocialPost({
     tenant,
     locale,
@@ -166,7 +185,11 @@ async function main() {
     subject: plan.subject,
     angle: plan.angle,
     copy: plan.copy,
-    image: { name: plan.image, alt: plan.copy.headline, provenance: "own_photo" },
+    image: {
+      name: resolved.source === "none" ? plan.image : resolved.url,
+      alt: asset.alt,
+      provenance: resolved.source === "page" ? "own_photo" : resolved.source === "unsplash" ? "generic_location" : "own_photo",
+    },
     representation: "represented",
     claims: plan.claims,
     idempotencyKey: `plan:${siteId}:${input.today}:${plan.image}:${plan.copy.headline.slice(0, 40)}`,
@@ -187,7 +210,9 @@ async function main() {
         subline: artifact.social.subline,
         caption: artifact.social.caption,
       },
-      asset: { path: `content/${artifact.social.image.asset_id}`, alt: artifact.social.image.alt },
+      asset: asset.path
+        ? { path: asset.path, alt: asset.alt, credit: asset.credit }
+        : { url: asset.url, alt: asset.alt, credit: asset.credit },
       content_hash: artifact.contentHash,
     },
     artDirection: plan.artDirection,
