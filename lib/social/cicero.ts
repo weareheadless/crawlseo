@@ -52,7 +52,11 @@ export type PublishOutcome =
   | { outcome: "refused"; code: string; detail: string; retryable: boolean };
 
 export type CiceroClient = {
-  render(input: { artifact: SocialArtifactPayload; artDirection: string }): Promise<RenderOutcome>;
+  render(input: {
+    artifact: SocialArtifactPayload;
+    artDirection: string;
+    composition?: string;
+  }): Promise<RenderOutcome>;
   publish(input: {
     renderId: string;
     idempotencyKey: string;
@@ -109,10 +113,11 @@ export function createCiceroClient(options: {
   }
 
   return {
-    async render({ artifact, artDirection }) {
+    async render({ artifact, artDirection, composition }) {
       const { status, payload } = await request("/v1/social/renders", {
         artifact,
         art_direction: artDirection,
+        composition,
       });
       if (status === 200) {
         return {

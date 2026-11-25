@@ -9,7 +9,7 @@
  *     --photos <dir> [--locale en] [--voice default]
  */
 
-import { readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { db } from "@/lib/db";
 import { createCiceroClient } from "@/lib/social/cicero";
 import { parseSiteBrand, parseSiteRepresentation, readSiteBrand } from "@/lib/site/brand";
@@ -31,6 +31,24 @@ function names(representation: ReturnType<typeof parseSiteRepresentation>): stri
   const places = representation.serviceArea.places;
   const entries = representation.entries.flatMap((entry) => [entry.name, ...entry.aliases]);
   return [...new Set([...places, ...entries].filter(Boolean))];
+}
+
+/**
+ * The photos, with what is in them. A planner handed bare file names picks
+ * blind — which is how a rooftop pool ended up illustrating a story about a
+ * residential street. A photo with no description is not offered.
+ */
+function photosCatalog(dir: string): Array<{ file: string; description: string }> {
+  const path = `${dir}/photos.json`;
+  let entries: Array<{ file: string; description: string; usable?: boolean }> = [];
+  try {
+    entries = (JSON.parse(readFileSync(path, "utf8")) as { photos?: typeof entries }).photos ?? [];
+  } catch {
+    throw new Error(`no photo catalogue at ${path}; every photo needs a description before a planner can choose one`);
+  }
+  return entries
+    .filter((entry) => entry.usable !== false && entry.description.trim())
+    .map((entry) => ({ file: entry.file, description: entry.description }));
 }
 
 async function bundle(): Promise<PlannerInput> {
@@ -116,7 +134,7 @@ async function bundle(): Promise<PlannerInput> {
       confidence: row.confidence,
       sourceUrl: firstSource.get(row.runId) ?? "",
     })),
-    photos: readdirSync(photoDir).filter((file) => /\.(jpe?g|png)$/i.test(file)),
+    photos: photosCatalog(photoDir),
     locales: ["en", "es"],
     today: new Date().toISOString().slice(0, 10),
   };
@@ -173,6 +191,7 @@ async function main() {
       content_hash: artifact.contentHash,
     },
     artDirection: plan.artDirection,
+    composition: plan.composition,
   });
   console.log(JSON.stringify({ stage: "render", rendered }, null, 2));
   await db.$disconnect();
