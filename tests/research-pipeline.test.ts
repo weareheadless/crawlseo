@@ -117,6 +117,109 @@ function deps(overrides: Partial<PipelineDeps> & { calls?: string[] } = {}): Pip
   } as PipelineDeps;
 }
 
+describe("the pipeline re-scores the board it just drafted", () => {
+  /** A db whose only job is the re-score: one stale row, and its update recorded. */
+  function rescoreDb() {
+    const updates: Record<string, unknown>[] = [];
+    const db = {
+      site: {
+        findUnique: async () => ({ id: "site-1", domain: "example.test", projectId: "proj-1", retiredAt: null }),
+        findMany: async () => [{ domain: "example.test", projectId: "proj-1" }],
+      },
+      researchRun: { findFirst: async ({ where }: { where: { idempotencyKey?: string } }) =>
+        where.idempotencyKey === "monthly:site-1:2026-11:bundle" ? bundleRun() : where.idempotencyKey === "topic-map:site-1:2026-11" ? topicRun() : null },
+      demandMapCluster: { count: async () => 1 },
+      opportunity: {
+        findMany: async () => [
+          {
+            id: "op-1",
+            title: "New Spanish article: apnea as a sport",
+            status: "detected",
+            // Written when the row had no measured reach; its inputs have since improved.
+            scoreValue: 1,
+            scoreInputs: {
+              worth: { volume: 1300, businessValue: 0.85, businessValueSource: "cluster", measurement: "observed_baseline" },
+              effort: { sizeFactor: 1, playTypeBase: 8 },
+              freshness: 0.9,
+              stability: 0.8,
+              evidenceCompleteness: "both",
+              winProbability: { playTypeFactor: 0.6 },
+              winProbabilitySource: { playTypeFactor: "assumed" },
+            },
+          },
+        ],
+        update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+          updates.push(args.data);
+          return {};
+        },
+      },
+    };
+    return { db: db as never, updates };
+  }
+
+  it("recomputes scoreValue when the pipeline drafted work", async () => {
+    // The drafting stage writes `scoreValue` once. A bundle that just supplied
+    // impressions changes what that score should be, and nothing else would recompute
+    // it — so a board read seconds later would be stale.
+    const { db, updates } = rescoreDb();
+    const result = await runResearchPipeline(db, {
+      siteId: "site-1",
+      month: "2026-11",
+      mode: "execute",
+      approval: "owner-ref",
+      deps: deps(),
+    });
+
+    expect(result.stages[2].status).toBe("completed");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].scoreValue).toBeGreaterThan(1);
+    expect(result.stages[2].detail).toContain("re-scored 1 opportunity");
+  });
+
+  it("reports the movement on the stage, so it is visible rather than silent", async () => {
+    const { db } = rescoreDb();
+    const result = await runResearchPipeline(db, {
+      siteId: "site-1",
+      month: "2026-11",
+      mode: "execute",
+      approval: "owner-ref",
+      deps: deps(),
+    });
+    expect(result.stages[2].detail).toMatch(/largest \+\d+ on "New Spanish article/);
+  });
+
+  it("does not fail the pipeline when the re-score cannot run", async () => {
+    // Work was drafted; the board is merely stale, and the nightly sweep is the
+    // backstop. Failing the run would throw away a completed stage for a derived number.
+    const db = {
+      site: {
+        findUnique: async () => ({ id: "site-1", domain: "example.test", projectId: "proj-1", retiredAt: null }),
+        findMany: async () => [{ domain: "example.test", projectId: "proj-1" }],
+      },
+      researchRun: { findFirst: async ({ where }: { where: { idempotencyKey?: string } }) =>
+        where.idempotencyKey === "monthly:site-1:2026-11:bundle" ? bundleRun() : where.idempotencyKey === "topic-map:site-1:2026-11" ? topicRun() : null },
+      demandMapCluster: { count: async () => 1 },
+      opportunity: {
+        findMany: async () => {
+          throw new Error("connection reset");
+        },
+        update: async () => ({}),
+      },
+    } as never;
+
+    const result = await runResearchPipeline(db, {
+      siteId: "site-1",
+      month: "2026-11",
+      mode: "execute",
+      approval: "owner-ref",
+      deps: deps(),
+    });
+    expect(result.stages[2].status).toBe("completed");
+    expect(result.blockedBy).toBeNull();
+    expect(result.stages[2].detail).toContain("re-score failed");
+  });
+});
+
 describe("the research pipeline gate", () => {
   it("runs the three stages in order when the bundle completes", async () => {
     const calls: string[] = [];

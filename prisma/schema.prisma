@@ -231,6 +231,20 @@ enum EvidenceLeg {
   none
 }
 
+/// The evidence class a row's priority rests on, ordered best first.
+///
+/// `measured` is this site's own observed data; `estimated` is a projection from
+/// provider volume and a position curve; `technical` is a defect with severity and
+/// reach but no demand of its own; `hypothesis` has no demand evidence yet.
+///
+/// The order is the value order: a projection never displaces a measurement.
+enum EvidenceClass {
+  measured
+  estimated
+  technical
+  hypothesis
+}
+
 /// Decision-shaped object detected automatically from evidence. Scored with
 /// declared, recomputable inputs (plan §2.3); acceptance is a human call.
 /// One post produced from one opportunity, and what Cicero's receipt said.
@@ -292,6 +306,13 @@ model Opportunity {
   recommendationFingerprint String?
   recommendationEvidenceId String?
   evidenceCompleteness EvidenceLeg      @default(none)
+  /// Which kind of evidence this row's priority rests on: a measurement of this site,
+  /// a projection from provider data, or a hypothesis with no demand evidence yet.
+  ///
+  /// Stored rather than read out of `scoreInputs.assessment.kind` because the board is
+  /// ordered by it and Postgres cannot order by a JSON field. Denormalised on purpose:
+  /// it is written wherever `scoreValue` is written, which is one place.
+  evidenceClass      EvidenceClass     @default(hypothesis)
   /// Version of the impact-assessment model behind scoreValue. A row scored by an
   /// older model is identifiable without deleting it, so a rollout can be compared
   /// and rolled back.
@@ -311,7 +332,9 @@ model Opportunity {
   socialPost SocialPost?
 
   @@unique([projectId, dedupKey])
-  @@index([projectId, status])
+  /// The board's order: evidence class, then score. Class is in the index because it
+  /// is the first sort key, not a filter applied afterwards.
+  @@index([projectId, status, evidenceClass])
   @@index([projectId, type])
   @@index([clusterId])
 }

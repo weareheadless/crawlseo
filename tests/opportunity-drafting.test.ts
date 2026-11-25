@@ -13,6 +13,7 @@ import {
   proposalIdentity,
   type DraftInput,
 } from "@/lib/research/opportunity-drafting";
+import { MONTHLY_TRANCHE_CLUSTERS } from "@/lib/research/monthly-tranche";
 import type { TopicCluster, TopicMap } from "@/lib/research/topic-map";
 
 const now = new Date("2026-11-05T12:00:00Z");
@@ -167,7 +168,17 @@ describe("cluster drafting", () => {
     expect(result.proposals[0].expiresAt).toBeNull();
   });
 
-  it("drafts every cluster, not the first N", async () => {
+  it("drafts the month's tranche, and reports how many it deferred", async () => {
+    // This test used to assert the opposite: that 30 clusters meant 8 batched calls
+    // because "batching is transport, not selection". That principle was right about an
+    // *undeclared* cap and it produced the defect #232 describes — susimacdonald's 24
+    // clusters were six model calls of drafting every month, most of which parked at the
+    // open cap. Paying to draft work that is then hidden is not generous, it is wasteful,
+    // and it buries the good rows in a long board.
+    //
+    // The tranche replaces it with a declared product decision: a month of work is a
+    // handful of pieces. What made the old cap wrong was that it was silent, so the
+    // deferral is now reported in `truncations`.
     mocks.chatJson.mockReset();
     mocks.chatJson.mockResolvedValue({ proposals: [] });
     const base = input();
@@ -176,13 +187,44 @@ describe("cluster drafting", () => {
       slug: `topic-${index}`,
       name: `Topic ${index}`,
     }));
+    const result = await draftClusterProposals({
+      ...base,
+      map: { ...base.map, clusters } as never,
+      evidenceByCluster: new Map(clusters.map((cluster) => [cluster.slug, []])),
+    });
+    // MONTHLY_TRANCHE_CLUSTERS = 8, batched by 4 -> 2 calls, not 8.
+    expect(mocks.chatJson).toHaveBeenCalledTimes(MONTHLY_TRANCHE_CLUSTERS / 4);
+    expect(result.truncations[0]).toContain("22 of 30 clusters were deferred");
+    expect(result.truncations[0]).toContain("re-ranked against fresh data next month");
+  });
+
+  it("drafts the best-supported clusters, not the first eight in the taxonomy", async () => {
+    // Selection is by evidence, so a cluster this site already ranks for beats one it has
+    // never been shown for, wherever it sits in the map.
+    mocks.chatJson.mockReset();
+    mocks.chatJson.mockResolvedValue({ proposals: [] });
+    const base = input();
+    const clusters = Array.from({ length: 12 }, (_, index) => ({
+      ...base.map.clusters[0],
+      slug: `topic-${index}`,
+      name: `Topic ${index}`,
+      metrics: {
+        ...base.map.clusters[0].metrics,
+        // Only the last one has measured reach: it should be drafted first.
+        measuredQueries: index === 11 ? 5 : 0,
+      },
+    }));
+    const payloads: string[] = [];
+    mocks.chatJson.mockImplementation(async (args: { user: string }) => {
+      payloads.push(args.user);
+      return { proposals: [] };
+    });
     await draftClusterProposals({
       ...base,
       map: { ...base.map, clusters } as never,
       evidenceByCluster: new Map(clusters.map((cluster) => [cluster.slug, []])),
     });
-    // 30 clusters / batch of 4 = 8 calls. A cap at 24 would stop at 6.
-    expect(mocks.chatJson).toHaveBeenCalledTimes(8);
+    expect(payloads[0]).toContain("topic-11");
   });
 
   it("reports proposals a batch bound dropped instead of hiding them", async () => {

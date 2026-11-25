@@ -93,7 +93,7 @@ export async function upsertOpportunity(
     Math.max(input.whyEvidenceIds.length, heldWhy),
     Math.max(input.howEvidenceIds.length, heldHow)
   );
-  const { scoreValue, inputs } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
+  const { scoreValue, inputs, evidenceClass } = computeScore({ ...input.scoreInputs, evidenceCompleteness: leg });
 
   const record = existing
     ? await db.opportunity.update({
@@ -103,6 +103,8 @@ export async function upsertOpportunity(
           summary: input.summary,
           clusterId: input.clusterId ?? undefined,
           scoreValue,
+          // The board's first sort key, written with the score it describes.
+          evidenceClass,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,
@@ -128,6 +130,8 @@ export async function upsertOpportunity(
           dedupKey: input.dedupKey,
           clusterId: input.clusterId ?? null,
           scoreValue,
+          // The board's first sort key, written with the score it describes.
+          evidenceClass,
           scoreInputs: inputs as unknown as Prisma.InputJsonValue,
           evidenceCompleteness: leg,
           assessmentVersion: ASSESSMENT_VERSION,
@@ -170,7 +174,17 @@ export async function upsertOpportunity(
 }
 
 /** Parks the system applied. A human park uses its own reason and is left alone. */
-export const SYSTEM_PARK_REASONS = ["score_below_threshold", "cap"] as const;
+/**
+ * Reasons the system parks work without a person deciding anything.
+ *
+ * - `score_below_threshold` — hysteresis.
+ * - `cap` — the open-opportunity overflow.
+ * - `hygiene_only` — a technical defect whose affected pages carry no measured
+ *   demand. It is a health line, not an opportunity, and it is visible on the crawl
+ *   page. Parked rather than dropped so that the day those pages gain impressions or
+ *   a cluster starts working them, the defect returns on its own.
+ */
+export const SYSTEM_PARK_REASONS = ["score_below_threshold", "cap", "hygiene_only"] as const;
 /** `superseded` is not restorable: the detector no longer emits the key. */
 const RESTORABLE_PARK_REASONS = [...SYSTEM_PARK_REASONS];
 

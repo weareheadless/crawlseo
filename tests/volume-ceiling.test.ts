@@ -25,6 +25,15 @@ import { computeScore, type ScoreInputs } from "@/lib/funnel/scoring";
  * guard is older than this issue and is not lowered to make rows appear.
  */
 
+/** All four winnability inputs measured, so CMP-012's assumed-fight ceiling does not bind. */
+const measuredSource = {
+  rankDistance: "measured",
+  authorityGap: "measured",
+  pageStrength: "measured",
+  serpCompetition: "measured",
+  playTypeFactor: "assumed",
+} as const;
+
 const base = (over: Partial<ScoreInputs["worth"]> = {}): ScoreInputs => ({
   worth: {
     volume: null,
@@ -83,13 +92,28 @@ describe("CMP-005 the hypothesis ceiling stops binding once demand is measured",
     expect(result.impact.limitations.join(" ")).toContain("impressions");
   });
 
-  it("orders two measured rows by their real upside, not by their volume alone", () => {
-    // Same market size, different reach: the row the site can actually reach must
-    // outrank the one it cannot. A board that sorted by volume alone would invert
-    // these.
-    const reachable = computeScore(base({ volume: 480, volumeSource: "provider", observedImpressions: 400 }));
-    const unreachable = computeScore(base({ volume: 480, volumeSource: "provider", observedImpressions: 12 }));
-    expect(reachable.scoreValue).toBeGreaterThan(unreachable.scoreValue);
+  it("orders two measured rows by the chance of winning, not by our current reach", () => {
+    // This test used to assert that more impressions beat fewer at the same market and the
+    // same position. That held because reach *was* the multiplier — `observed x CTR delta`
+    // — which is the defect ASSESSMENT_VERSION 4 removed: it made priority a function of how
+    // visible a site already is, so identical work scored 3 on a small site and 40 on a large
+    // one. Its fixture was also internally impossible: 400 impressions a month at position 15
+    // implies a market of ~1,100, not the 480 it declared.
+    //
+    // What must still be true, and is what an SEO is choosing between, is that two rows on
+    // the same market differ by how winnable the fight is. Ranking 6th against weak
+    // incumbents beats ranking 60th against strong ones, and the score has to say so.
+    const winnable = computeScore({
+      ...base({ volume: 480, volumeSource: "provider", observedImpressions: 200, currentPosition: 6 }),
+      winProbability: { rankDistance: 0.95, authorityGap: 0.9, pageStrength: 0.8, serpCompetition: 0.9, playTypeFactor: 0.6 },
+      winProbabilitySource: measuredSource,
+    });
+    const unlikely = computeScore({
+      ...base({ volume: 480, volumeSource: "provider", observedImpressions: 200, currentPosition: 60 }),
+      winProbability: { rankDistance: 0.1, authorityGap: 0.1, pageStrength: 0.2, serpCompetition: 0.15, playTypeFactor: 0.6 },
+      winProbabilitySource: measuredSource,
+    });
+    expect(winnable.scoreValue).toBeGreaterThan(unlikely.scoreValue);
   });
 
   it("never scores a hypothesis row above a measured one with the same inputs", () => {

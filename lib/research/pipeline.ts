@@ -4,6 +4,7 @@ import { bundleKey, findBundleRun, runMonthlyBundle, type BundleResult } from "@
 import { runTopicMapStage } from "@/lib/research/topic-map-stage";
 import { readTopicMapStaleness } from "@/lib/research/map-staleness";
 import { runOpportunitiesStage } from "@/lib/research/opportunities-stage";
+import { rescoreProjectOpportunities } from "@/lib/funnel/rescore";
 
 /**
  * One research pipeline, in the order the data requires.
@@ -171,6 +172,28 @@ function bundleStatus(result: BundleResult): { status: PipelineStageStatus; deta
     case "failed":
     default:
       return { status: "failed", detail: `bundle failed: ${result.error ?? "unknown error"}` };
+  }
+}
+
+/**
+ * Re-score the project's board and describe the movement in one clause.
+ *
+ * Inline and total: it never throws, because a pipeline that drafted work has not
+ * failed merely because the number derived from that work could not be refreshed.
+ */
+async function rescoreStage(
+  db: Parameters<typeof runOpportunitiesStage>[0],
+  projectId: string
+): Promise<string> {
+  try {
+    const result = await rescoreProjectOpportunities(db as never, { projectId });
+    if (result.changed === 0) return "no opportunity score changed";
+    const top = result.movements[0];
+    return `re-scored ${result.changed} opportunit${result.changed === 1 ? "y" : "ies"}${
+      top ? `, largest ${top.delta > 0 ? "+" : ""}${top.delta} on "${top.title.slice(0, 48)}"` : ""
+    }`;
+  } catch (error) {
+    return `re-score failed (${error instanceof Error ? error.message : String(error)}); the nightly sweep will retry`;
   }
 }
 
@@ -383,6 +406,14 @@ export async function runResearchPipeline(
     refresh: input.refresh,
     onNote: note,
   });
+  // Re-score before reporting, so a board read seconds after the pipeline is current.
+  // The drafting stage writes `scoreValue` once; a bundle that just supplied
+  // impressions changes what that score should be, and nothing else would recompute
+  // it. A re-score failure must not fail the pipeline — the work is drafted and the
+  // board is merely stale, which the nightly sweep will fix — so it is reported on the
+  // stage's detail rather than thrown.
+  const rescore = await rescoreStage(db, site.projectId);
+
   stages.push({
     stage: "opportunities",
     status:
@@ -392,9 +423,14 @@ export async function runResearchPipeline(
           ? "skipped"
           : "failed",
     runId: opportunityStage.runId,
-    detail: mapIsStale
-      ? `${opportunityStage.detail}; drafted from a topic map that is older than its bundle`
-      : opportunityStage.detail,
+    detail: [
+      mapIsStale
+        ? `${opportunityStage.detail}; drafted from a topic map that is older than its bundle`
+        : opportunityStage.detail,
+      rescore,
+    ]
+      .filter(Boolean)
+      .join("; "),
   });
 
   return finish(satisfiesGate(stages[2].status) ? null : "opportunities");

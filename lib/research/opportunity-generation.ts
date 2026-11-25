@@ -6,7 +6,7 @@ import { chatJson } from "@/lib/ai/chat";
 import { contentWriterConfig } from "@/lib/ai-seo/writer";
 import { upsertOpportunity, type OpportunityDb } from "@/lib/funnel/opportunity";
 import { ctrAtPosition, type ScoreInputs } from "@/lib/funnel/scoring";
-import { TARGET_POSITION } from "@/lib/funnel/impact";
+import { resolveDemand, TARGET_POSITION } from "@/lib/funnel/impact";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
 import {
@@ -419,6 +419,7 @@ export function proposalScoreInputs(
   stability: number;
 } {
   const volume = cluster?.metrics.volume || cluster?.metrics.impressions || null;
+  const observedImpressions = cluster?.metrics.impressions ?? null;
   const businessValue = cluster?.relevance === "high" ? 0.85 : cluster?.relevance === "medium" ? 0.55 : 0.25;
   // Where that number came from. The model rated the topic's commercial relevance
   // from the site's own knowledge facts and its pages, so the provenance is
@@ -477,9 +478,31 @@ export function proposalScoreInputs(
       currentPosition: cluster?.metrics.position ?? null,
       // The window the impressions were measured over, so they can be read per month.
       windowDays: cluster?.metrics.windowDays ?? null,
-      observedImpressions: cluster?.metrics.impressions ?? null,
-      technical: false,
-      unmeasured: !volume,
+      observedImpressions,
+      /**
+       * D3: a bought SERP resolves the demand read even when the site has no impressions.
+       *
+       * `metrics.difficulty` is only populated from a purchased snapshot (`topic-map.ts`
+       * reads `provider:difficulty`), so its presence means this cluster has a real
+       * competitive read. That is what lets a new site size a market it has never been
+       * shown for — the whole point of buying the $0.004 snapshot.
+       */
+      hasSerp: cluster?.metrics.difficulty != null,
+      /**
+       * Whether this row's demand is resolved, via the one shared rule.
+       *
+       * Not restated here, so the producer, the scorer and the re-score cannot drift
+       * apart on what "resolved" means. `unresolved` is the D3 candidate: market size with
+       * no read behind it, so the row quotes no return.
+       */
+      demandResolution:
+        resolveDemand({
+          observedImpressions,
+          hasSerp: cluster?.metrics.difficulty != null,
+          hasPage: !proposal.target.newAsset,
+        }) === "unresolved"
+          ? "candidate"
+          : "observed",
     },
     // CMP-012: no literals here. A generated proposal has measured nothing yet, so every
     // input is null and the row scores as low-confidence until the resolver reads a stored

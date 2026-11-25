@@ -11,6 +11,7 @@ import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -91,6 +92,28 @@ export const DETECTOR_THRESHOLDS = {
    * 120 searches/month query fallback (plan §2.3, §10).
    */
   technicalImpactVolume: 10,
+  /**
+   * Whether a *presentational* defect competes for a board slot at all.
+   *
+   * Two kinds of technical work are not the same thing and must not share a rule:
+   *
+   *  - **Crawlability defects** (`O7`: a broken link, a duplicate title, a missing
+   *    canonical, a slow page) can be the reason a page has no demand yet. Requiring
+   *    demand before admitting them is circular: the fix is the precondition for the
+   *    impressions that would justify it. They always earn a slot.
+   *  - **Presentational gaps** (`O8`: missing structured data) do not prevent a page
+   *    from being found or from ranking. They earn a slot only when the pages they
+   *    affect carry measured demand, or belong to a cluster being worked.
+   *
+   * Measured 2026-11-25: inmersionfreediving's "Missing structured data on 48 pages"
+   * sat above the only content proposal while none of its 48 pages had measured
+   * demand, and superincompetence's "on 2 pages" scored 21 for a site with three
+   * queries. An SEO does not choose between a schema sweep and the article that
+   * defines the offer; they add schema when it serves a page that earns.
+   *
+   * Set to `false` to put presentational gaps back on the board.
+   */
+  presentationalGapNeedsDemand: true,
 } as const;
 
 /**
@@ -1314,6 +1337,41 @@ export async function clusterPlayDetector(db: DetectorDb, projectId: string, now
   return candidates;
 }
 
+/**
+ * Whether a technical defect has earned a board slot.
+ *
+ * A defect is admitted only when the pages it affects carry measured demand, or when
+ * it belongs to a cluster that is being worked. Otherwise it is a health line: the
+ * crawl page already lists it with its severity and page count, so nothing is hidden
+ * by keeping it off the opportunity board.
+ *
+ * This is a filter at the boundary, not a score adjustment. Adjusting the number
+ * would leave a no-demand schema sweep competing for the slot below a real proposal,
+ * which is the same mistake one rank down.
+ */
+export function technicalDefectEarnsSlot(
+  candidate: DetectorCandidate,
+  opts: { clusterId: string | null; threshold?: boolean }
+): boolean {
+  const gate = opts.threshold ?? DETECTOR_THRESHOLDS.presentationalGapNeedsDemand;
+  if (!gate) return true;
+  const worth = candidate.scoreInputs.worth;
+  if (!worth.technical) return true;
+  // Crawlability defects are never gated: a page that cannot be crawled cannot earn
+  // the demand the gate would ask it for.
+  if (candidate.type === "O7_technical_defect") return true;
+  // A presentational gap earns a slot when the pages it affects carry enough measured
+  // demand to justify the work. The floor is `minImpressions` — the same declared
+  // number the striking-distance detector uses for "enough impressions that a click is
+  // worth winning" — not a second threshold invented for this rule. One impression a
+  // month is not demand, and admitting it would let a schema sweep outrank the article
+  // that defines the offer, which is the defect this gate exists to fix.
+  if (worth.volumeSource === "first_party" && (worth.volume ?? 0) >= DETECTOR_THRESHOLDS.minImpressions) return true;
+  // Or when the page belongs to a topic someone is working: the fix serves that topic.
+  if (opts.clusterId != null) return true;
+  return false;
+}
+
 export type DetectorRunResult = {
   created: number;
   updated: number;
@@ -1322,6 +1380,12 @@ export type DetectorRunResult = {
   disabled: DisabledDetector[];
   /** Every candidate produced, when the run was a dry run (shadow comparison). */
   candidates?: DetectorCandidate[];
+  /**
+   * Technical defects kept off the board because the pages they affect carry no
+   * measured demand, and no cluster is working them. They are still on the crawl
+   * page; this counter is what stops their absence from being invisible.
+   */
+  hygieneOnly?: number;
 };
 
 /** Run every detector for a project, upsert opportunities, then hysteresis. */
@@ -1376,6 +1440,9 @@ export async function runDetectors(
 
   let created = 0;
   let updated = 0;
+  let hygieneOnly = 0;
+  /** Dedup keys the gate kept off the board, so existing rows can be parked as such. */
+  const hygieneParked: string[] = [];
   const candidates: DetectorCandidate[] = [];
   const produced = new Map<OpportunityType, Set<string>>();
   const remember = (candidate: DetectorCandidate) => {
@@ -1452,7 +1519,18 @@ export async function runDetectors(
       comparisonOverlapDays: comparison.overlapDays,
     })) {
       const candidate = await withMeasuredWinnability(rawCandidate);
+      const clusterId = clusterIdFor(candidate);
+      // Remembered before the gate on purpose: `retireStaleDetected` parks rows this
+      // producer no longer emits, and a gated defect must be *parked as hygiene*, not
+      // retired as stale — the difference is whether it comes back when demand does.
       remember(candidate);
+      if (!technicalDefectEarnsSlot(candidate, { clusterId })) {
+        // Counted, not silently dropped: the row stays on the crawl page and this
+        // number is how the run says so.
+        hygieneOnly += 1;
+        if (!opts.dryRun) hygieneParked.push(candidate.dedupKey);
+        continue;
+      }
       if (opts.dryRun) {
         candidates.push(candidate);
         continue;
@@ -1465,7 +1543,7 @@ export async function runDetectors(
         summary: candidate.summary,
         dedupKey: candidate.dedupKey,
         detectedBy,
-        clusterId: clusterIdFor(candidate),
+        clusterId,
         scoreInputs: candidate.scoreInputs,
         whyEvidenceIds: candidate.whyEvidenceIds,
         howEvidenceIds: candidate.howEvidenceIds,
@@ -1480,7 +1558,13 @@ export async function runDetectors(
   }
   for (const rawCandidate of await clusterPlayDetector(db, projectId, now)) {
     const candidate = await withMeasuredWinnability(rawCandidate);
+    const clusterId = clusterIdFor(candidate);
     remember(candidate);
+    if (!technicalDefectEarnsSlot(candidate, { clusterId })) {
+      hygieneOnly += 1;
+      if (!opts.dryRun) hygieneParked.push(candidate.dedupKey);
+      continue;
+    }
     if (opts.dryRun) {
       candidates.push(candidate);
       continue;
@@ -1493,7 +1577,7 @@ export async function runDetectors(
       summary: candidate.summary,
       dedupKey: candidate.dedupKey,
       detectedBy,
-      clusterId: clusterIdFor(candidate),
+      clusterId,
       scoreInputs: candidate.scoreInputs,
       whyEvidenceIds: candidate.whyEvidenceIds,
       howEvidenceIds: candidate.howEvidenceIds,
@@ -1502,6 +1586,20 @@ export async function runDetectors(
     else updated += 1;
   }
 
+  if (hygieneParked.length > 0) {
+    // Park by id, like every other system park, so one shape covers hysteresis, the
+    // cap and this. A dedupKey filter would be a second way to address the same rows.
+    const gated = await db.opportunity.findMany({
+      where: { projectId, status: "detected", detectedBy, dedupKey: { in: hygieneParked } },
+      select: { id: true },
+    });
+    if (gated.length > 0) {
+      await db.opportunity.updateMany({
+        where: { id: { in: gated.map((row) => row.id) } },
+        data: { status: "parked", parkReason: "hygiene_only", decidedBy: detectedBy, decidedAt: now },
+      });
+    }
+  }
   const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
@@ -1510,6 +1608,7 @@ export async function runDetectors(
     created,
     updated,
     parked: [...parked, ...superseded, ...capped, ...suppressed],
+    hygieneOnly,
     disabled,
     ...(opts.dryRun ? { candidates } : {}),
   };
@@ -1592,7 +1691,7 @@ export async function applyOpenCap(
   const open = await db.opportunity.findMany({
     where: { projectId: opts.projectId, status: "detected" },
     select: { id: true, scoreValue: true, recommendationDecision: true },
-    orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "asc" }],
+    orderBy: opportunityOrder(),
   });
   // A resource cap must not hide a canonical decision. Legacy rows remain capped.
   const capped = open.filter((row) => row.recommendationDecision == null);

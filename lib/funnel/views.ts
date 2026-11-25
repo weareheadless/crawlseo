@@ -10,6 +10,7 @@ import type {
 } from "@prisma/client";
 
 import { fallbackLane, parseOpportunityProposal, type OpportunityLane, type OpportunityProposal } from "@/lib/funnel/proposal";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 
 /**
@@ -49,6 +50,19 @@ export type EvidenceLine = {
   metrics: Array<{ label: string; value: number | null; unit: string; source: string }>;
 };
 
+/**
+ * How a row's demand was resolved, read from its stored inputs.
+ *
+ * A missing marker reads as `unrecorded`, never as `observed`: rows written before D3
+ * existed have no marker, and assuming they were measured would present a legacy
+ * projection as a measurement.
+ */
+function demandResolutionOf(scoreInputs: unknown): "observed" | "candidate" | "unrecorded" {
+  const worth = (scoreInputs as { worth?: { demandResolution?: unknown } } | null)?.worth;
+  const value = worth?.demandResolution;
+  return value === "observed" || value === "candidate" ? value : "unrecorded";
+}
+
 export type OpportunityRow = {
   id: string;
   type: OpportunityType;
@@ -57,6 +71,18 @@ export type OpportunityRow = {
   title: string;
   summary: string;
   score: number | null;
+  /**
+   * D1: which kind of evidence the score rests on. The board is ordered by this before
+   * the score, so the row has to carry it — an order the reader cannot see the reason
+   * for is worse than the order it replaced.
+   */
+  evidenceClass: string;
+  /**
+   * D3: `candidate` when this row's demand is market size rather than measured reach —
+   * a discovered topic with no present page and no bought SERP. Its expected clicks are
+   * null, and the board must say so rather than show a number.
+   */
+  demandResolution: "observed" | "candidate" | "unrecorded";
   completeness: string;
   detectedBy: string;
   firstDetectedAt: Date;
@@ -440,7 +466,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
         ? [{ title: { contains: filter.search, mode: "insensitive" } }, { summary: { contains: filter.search, mode: "insensitive" } }]
         : undefined,
     },
-    orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "desc" }],
+    orderBy: opportunityOrder(),
     select: {
       id: true,
       projectId: true,
@@ -450,6 +476,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       title: true,
       summary: true,
       scoreValue: true,
+      evidenceClass: true,
       evidenceCompleteness: true,
       detectedBy: true,
       firstDetectedAt: true,
@@ -492,6 +519,8 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
       title: row.title,
       summary: row.summary,
       score: row.scoreValue,
+      evidenceClass: row.evidenceClass,
+      demandResolution: demandResolutionOf(row.scoreInputs),
       completeness: row.evidenceCompleteness,
       detectedBy: row.detectedBy,
       firstDetectedAt: row.firstDetectedAt,
@@ -521,6 +550,7 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       summary: true,
       scoreValue: true,
       scoreInputs: true,
+      evidenceClass: true,
       evidenceCompleteness: true,
       detectedBy: true,
       firstDetectedAt: true,
@@ -617,6 +647,8 @@ export async function getOpportunityDetail(db: FunnelDb, opportunityId: string):
       ? canonical.benefits[0]?.measurement ?? "unquantified"
       : decisionFromScoreInputs(row.scoreInputs).measurement,
     score: row.scoreValue,
+    evidenceClass: row.evidenceClass,
+    demandResolution: demandResolutionOf(row.scoreInputs),
     scoreInputs: row.scoreInputs,
     recommendation: canonical,
     lane: parseOpportunityProposal(row.recommendationDecision)?.lane ?? fallbackLane(row.dimension),

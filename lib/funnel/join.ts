@@ -123,7 +123,7 @@ export async function applyJoin(
     opportunity.evidenceCompleteness === "how" ? 1 : opportunity.evidenceCompleteness === "both" ? 1 : howCount
   );
   const overrides = assessmentOverridesFromEvidence(evidence);
-  const { scoreValue, inputs } = computeScore({
+  const { scoreValue, inputs, evidenceClass } = computeScore({
     ...(scoreInputs as Omit<ScoreInputs, "evidenceCompleteness">),
     worth: { ...(scoreInputs as Omit<ScoreInputs, "evidenceCompleteness">).worth, ...overrides },
     evidenceCompleteness: joinedLeg,
@@ -133,6 +133,9 @@ export async function applyJoin(
     where: { id: opportunityId },
     data: {
       scoreValue,
+      // Joining new evidence can change what the row's priority rests on, and the
+      // board is ordered by that class. Written with the score, never separately.
+      evidenceClass,
       scoreInputs: inputs as never,
       evidenceCompleteness: joinedLeg,
       lastScoredAt: opts.now ?? new Date(),

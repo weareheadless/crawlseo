@@ -1,6 +1,6 @@
 import type { EvidenceLeg } from "@prisma/client";
 
-import { assessImpact, type ImpactAssessment } from "@/lib/funnel/impact";
+import { assessImpact, TARGET_POSITION, type ImpactAssessment } from "@/lib/funnel/impact";
 
 /**
  * Scoring model (docs/seo-funnel-spine-plan.md §2.3).
@@ -23,6 +23,19 @@ export type ScoreInputs = {
      * must stay visible (plan §2.3).
      */
     volumeSource?: "first_party" | "provider" | "impact_proxy" | "unknown";
+    /**
+     * D3: how this row's demand was resolved.
+     *
+     * - `observed` — the site's own impressions for the query, so any estimate is grounded.
+     * - `candidate` — a discovered topic with provider volume and no present page or SERP.
+     *   Its `expectedClicks` is `null` on purpose: nothing about this site's reach for the
+     *   query has been measured, so a click estimate would be a projection presented as a
+     *   measurement. One $0.004 SERP turns it into `observed`.
+     *
+     * Absent on legacy rows, which is not the same as `observed` — a reader must not
+     * assume a missing marker means the demand was measured.
+     */
+    demandResolution?: "observed" | "candidate";
     /**
      * The demand itself is invented, not measured: a question generated from
      * business knowledge that nobody has been shown to search. Scoring it on the
@@ -51,6 +64,14 @@ export type ScoreInputs = {
     severity?: number | null;
     /** Impressions actually observed for the query, which bound the upside. */
     observedImpressions?: number | null;
+    /**
+     * A SERP snapshot was bought for this query or cluster.
+     *
+     * The second route to a resolved demand read: a site with no impressions still learns
+     * what winning costs, which is what D3 buys the snapshot for. Stored, so the row can
+     * explain why it quotes a market it has never been shown for.
+     */
+    hasSerp?: boolean;
     /** Marks a page/site defect whose traffic impact is not quantifiable. */
     technical?: boolean;
     /** Decision readiness from the recommendation contract, when it was decided. */
@@ -125,10 +146,39 @@ export type ScoreResult = {
   inputs: ScoreInputs;
   /** What the play is expected to change, and what that estimate rests on. */
   impact: ImpactAssessment;
+  /**
+   * Which kind of evidence the score rests on, as stored in `Opportunity.evidenceClass`.
+   * The board is ordered by this before the score, so it is returned with the score
+   * rather than re-derived by each writer.
+   */
+  evidenceClass: ImpactAssessment["kind"];
+  /**
+   * D3: `null` for a candidate — a topic whose demand has not been measured for this site.
+   *
+   * The number a candidate has is market size, not reach. Surfacing it as a click estimate
+   * is how a page that does not exist scored 38 while a page ranking 29th scored 1.
+   */
+  expectedClicksPerMonth: number | null;
+  /** Whether this row's demand is measured here or is still a candidate. */
+  demandResolution: "observed" | "candidate" | "unrecorded";
 };
 
-/** Bumped when the assessment or index changes meaning. */
-export const ASSESSMENT_VERSION = 2;
+/**
+ * Bumped when the assessment or index changes meaning.
+ *
+ * 3 — the readiness band stopped claiming technical rows, so the same defect with the
+ * same inputs scores 6 where it used to score 23. A row carrying 2 was scored by a model
+ * that no longer exists: the number is not a priority anyone chose, it is a stale
+ * computation, and the board must not present it beside a class badge as if it were
+ * current.
+ *
+ * 4 — the score became a **rate**, and its numerator became the market instead of our
+ * current reach. Both change what the number is, not just its value: `observed x CTR
+ * delta` measured our visibility, and a bigger site therefore scored higher for identical
+ * work. A row carrying 3 was scored on a quantity that no longer means priority, so every
+ * row is re-scored rather than compared against the old numbers.
+ */
+export const ASSESSMENT_VERSION = 4;
 
 /** Declared recovery for a technical or structured-data fix. */
 export const TECHNICAL_UPLIFT = 0.1;
@@ -146,6 +196,21 @@ export const MEASURABLE_WIN_INPUTS = ["rankDistance", "authorityGap", "pageStren
  * Not a drop and not a zero: the work is visible, and visibly low-confidence.
  */
 export const ASSUMED_WIN_PROBABILITY_CEILING = 40;
+
+/**
+ * The rate of return at which the priority index reaches 100.
+ *
+ * The index is a log scale of incremental clicks per hour of work, so it needs one anchor
+ * or it is an arbitrary curve. 200 clicks/hour is the declared top: a 40-hour project
+ * earning 8,000 clicks a month. Ahead of that, a row is not more of the same thing — it is
+ * a business change, and it should be judged by a person rather than sorted against content
+ * edits.
+ *
+ * Chosen from the live boards rather than in the abstract: measured 2026-11-25, real rows
+ * spread from 0.07 to ~325 clicks/hour, and this anchor puts that whole range inside 10–100
+ * so the board keeps its resolution instead of piling at either end.
+ */
+export const CLICKS_PER_HOUR_AT_CEILING = 200;
 
 export const LEG_COMPLETENESS_MULTIPLIER: Record<EvidenceLeg, number> = {
   none: 0.25,
@@ -191,11 +256,44 @@ export const PLAY_TYPE_EFFORT_BASE: Record<string, number> = {
   O14_offer_positioning_gap: 12,
 };
 
+/**
+ * The target position declared for this kind of work, or null when none is declared.
+ *
+ * Deliberately conservative: it maps only the interventions that have an unambiguous entry
+ * in `TARGET_POSITION`. A play that reaches a position nobody declared stays unsized, which
+ * is honest — a missing goal is a missing decision, not a default of 10.
+ */
+function declaredTargetPosition(inputs: ScoreInputs): number | null {
+  const intervention = inputs.worth.intervention;
+  if (intervention === "create_asset") return TARGET_POSITION.O3_content_gap;
+  if (intervention === "improve_journey") return TARGET_POSITION.O3_content_gap;
+  if (intervention === "update_page") return TARGET_POSITION.O1_winnable_rank;
+  return null;
+}
+
 function geometricMean(values: Array<number | null>): number | null {
   const present = values.filter((v): v is number => v != null && v >= 0);
   if (present.length === 0) return null;
   const product = present.reduce((acc, v) => acc * Math.max(v, 0.01), 1);
   return Math.pow(product, 1 / present.length);
+}
+
+/**
+ * The D3 fields every return carries.
+ *
+ * Written as a helper so a new early return cannot forget them: a row that omits
+ * `demandResolution` reads as "unrecorded", and a candidate that omits it would be
+ * presented with a click estimate it does not have.
+ */
+function demandFields(
+  worth: ScoreInputs["worth"],
+  assessment: ImpactAssessment
+): { expectedClicksPerMonth: number | null; demandResolution: "observed" | "candidate" | "unrecorded" } {
+  const demandResolution = worth.demandResolution ?? "unrecorded";
+  return {
+    expectedClicksPerMonth: demandResolution === "candidate" ? null : assessment.incrementalClicksPerMonth,
+    demandResolution,
+  };
 }
 
 export function computeScore(inputs: ScoreInputs): ScoreResult {
@@ -204,11 +302,26 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
     volumeSource: inputs.worth.volumeSource,
     observedCtr: inputs.worth.observedCtr ?? inputs.worth.ctrAtPosition,
     currentPosition: inputs.worth.currentPosition ?? null,
-    targetPosition: inputs.worth.targetPosition ?? null,
+    /**
+     * The declared target for this kind of play, when the producer did not state one.
+     *
+     * A null target is not a detail: `assessImpact` needs it to compute anything, so the
+     * row lands in the band and is never sized. Measured 2026-11-25, 49 of 117 open rows
+     * carried no target position and none of them could be sized no matter how much
+     * evidence they had — susimacdonald's whole board read a flat 7 while its rows held
+     * 944 observed impressions at position 60 on a 1,230/month market.
+     *
+     * `TARGET_POSITION` is a declared table keyed by play type, so the fallback is not a
+     * guess: it is the same target the producer would have written. Uses `intervention`
+     * only when the play type is unknown, and otherwise leaves it null rather than
+     * inventing a goal.
+     */
+    targetPosition: inputs.worth.targetPosition ?? declaredTargetPosition(inputs),
     windowDays: inputs.worth.windowDays ?? null,
     severity: inputs.worth.severity ?? null,
     technical: inputs.worth.technical,
     observedImpressions: inputs.worth.observedImpressions ?? null,
+    hasSerp: inputs.worth.hasSerp ?? false,
   });
 
   // Readiness comes from the decision contract, not from whether a demand number
@@ -224,17 +337,37 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // orders by severity and reach and never invents a click count.
   const readiness = inputs.worth.readiness;
   if (readiness === "rejected") {
-    return { scoreValue: 0, inputs: withAssessment(inputs, assessment), impact: assessment };
+    return {
+      scoreValue: 0,
+      inputs: withAssessment(inputs, assessment),
+      impact: assessment,
+      evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
+    };
   }
+  /**
+   * The band: rows whose demand cannot be sized.
+   *
+   * The ceiling is deliberately small. A row here has no click estimate, so the number is
+   * not a priority — it is a *rank among other unsized rows*, and its job is to keep them
+   * orderable without ever competing with work whose upside is known.
+   *
+   * These ceilings used to be 10 / 15 / 30, which paid 21 points for "we do not know" and
+   * put hypotheses above measured rows scoring 5. That is the band paying for ignorance:
+   * the log rate scale below can award a genuine 200 clicks/hour a 100, and a row with no
+   * demand evidence gets 76% of the old ceiling for having none. Missing evidence is not
+   * negative evidence — that is handled by labelling the row and placing it last (D1) —
+   * but it is not extra credit either, and it must not outrank a sized win.
+   */
   const band = inputs.worth.technical ? null
-    : readiness === "research_backlog" ? 10
-    : readiness === "needs_investigation" ? 15
-    : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 30
+    : readiness === "research_backlog" ? 4
+    : readiness === "needs_investigation" ? 6
+    : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 10
     // Legacy rows predate the contract: unknown demand is a question, not work.
-    : readiness == null && assessment.kind === "hypothesis" ? 15
+    : readiness == null && assessment.kind === "hypothesis" ? 6
     : null;
   if ((band != null || inputs.worth.unmeasured) && !inputs.worth.technical) {
-    const ceiling = inputs.worth.unmeasured ? 5 : (band ?? 10);
+    const ceiling = inputs.worth.unmeasured ? 3 : (band ?? 6);
     const strength =
       Math.max(inputs.freshness, 0) *
       Math.max(inputs.stability, 0) *
@@ -244,6 +377,8 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       scoreValue: Math.max(0, Math.min(ceiling, Math.round(strength * ceiling))),
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
+      evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
     };
   }
 
@@ -256,6 +391,8 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
       scoreValue: Math.max(0, Math.min(14, Math.round(index))),
       inputs: withAssessment(inputs, assessment),
       impact: assessment,
+      evidenceClass: assessment.kind,
+      ...demandFields(inputs.worth, assessment),
     };
   }
 
@@ -284,9 +421,29 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   // rather than as a stand-in for every other source.
   const relevance =
     RELEVANCE_BY_SOURCE[inputs.worth.businessValueSource ?? "unknown"] ?? 0.25;
-  const PRIORITY_SCALE_CLICKS = 5;
-  const ratio = (clicks * winProb * inputs.worth.businessValue * relevance) / effort;
-  const scaled = ratio / (ratio + PRIORITY_SCALE_CLICKS);
+  /**
+   * Priority is value per hour of work, on a declared log scale.
+   *
+   * The numerator is the incremental clicks the play could add (a market-sized number,
+   * see `assessImpact`), weighted by the chance of winning it and by what those clicks are
+   * worth to this business. The denominator is the effort the play type costs. So the
+   * number answers the one question a person with a month of time is actually asking:
+   * which hour buys the most.
+   *
+   * It is a *rate*, not a return. A return makes priority a function of how big the site
+   * already is — measured 2026-11-25, holding the play constant (rank 29 -> 10, same
+   * effort) a site with 76 impressions scored 3 and one with 7,600 scored 40. A rate with
+   * the market as its numerator does not do that, and that is the whole point: for a site
+   * trying to grow, the marginal hour is worth most where it has the most room.
+   *
+   * The scale is logarithmic because the quantity spans orders of magnitude — a
+   * high-volume national query and a niche local one can differ by 1,000x in clicks/hour,
+   * and a linear curve would put every row at the ceiling and sort nothing. Against the
+   * declared ceiling below it reads: 1 click/hour scores 13, 10 scores 45, 50 scores 74,
+   * 200 scores 100.
+   */
+  const valuePerHour = clicks * winProb * inputs.worth.businessValue * relevance / effort;
+  const scaled = valuePerHour <= 0 ? 0 : Math.log10(1 + valuePerHour) / Math.log10(1 + CLICKS_PER_HOUR_AT_CEILING);
   const multiplier =
     LEG_COMPLETENESS_MULTIPLIER[inputs.evidenceCompleteness] *
     Math.max(inputs.freshness, 0) *
@@ -304,12 +461,31 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
   const lowConfidence = MEASURABLE_WIN_INPUTS.every(
     (key) => (inputs.winProbabilitySource?.[key] ?? "assumed") === "assumed"
   );
+  /**
+   * The assumed-fight ceiling is a **cap**, not a multiplier.
+   *
+   * Scaling by the ceiling was tried on 2026-11-25 and reverted: it cut rows that were
+   * already below the ceiling (21 to 7), which put measured work underneath the hypothesis
+   * band and inverted the one rule the board depends on. A cap is the honest shape — "do not
+   * reach the top band" — and it costs nothing for a row that was never going to reach it.
+   *
+   * It does mean several rows above the ceiling tie at 40 and the number alone cannot order
+   * them. That is not a scorer defect to paper over: it is the scorer saying it has no
+   * measured winnability for any of them, and the rows it happens to affect on astridrincon
+   * are also carrying a national market volume for a local business, which is the real
+   * problem (see the market-scope note in the plan).
+   */
   const scoreValue = Math.max(0, Math.min(lowConfidence ? ASSUMED_WIN_PROBABILITY_CEILING : 100, Math.round(value * 100)));
 
   return {
     scoreValue,
     inputs: withAssessment(inputs, assessment),
     impact: assessment,
+    // The stored ordering key. Returned here so the two places that write a score
+    // cannot disagree about which class it belongs to: they read the same value the
+    // score was computed with, rather than re-deriving it from `scoreInputs`.
+    evidenceClass: assessment.kind,
+    ...demandFields(inputs.worth, assessment),
   };
 }
 

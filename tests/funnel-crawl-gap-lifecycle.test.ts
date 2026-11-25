@@ -163,9 +163,38 @@ describe("crawl gap → work lifecycle (ported from the retired action factory)"
   });
 
   it("keeps the opportunity deduplicated across repeated crawls", async () => {
-    const { db, opportunities } = mockDb([crawlIssue]);
+    // Demand is part of the fixture: a schema gap whose page earns nothing is a health
+    // line now, so omitting it would leave this test asserting an empty board.
+    const { db, opportunities } = mockDb([crawlIssue, pageDemand]);
     await runDetectors(db, "p1", { now: AT });
     await runDetectors(db, "p1", { now: AT });
     expect(opportunities.size).toBe(1);
+  });
+
+  it("keeps a schema gap off the board when its page earns nothing", async () => {
+    // The gate: a presentational gap is not an opportunity until the page it affects
+    // carries demand. Its row stays on the crawl page, and the run counts it.
+    const { db, opportunities } = mockDb([crawlIssue]);
+    const result = await runDetectors(db, "p1", { now: AT });
+    expect(opportunities.size).toBe(0);
+    expect(result.hygieneOnly).toBe(1);
+  });
+
+  it("admits a crawlability defect even with no demand, because the fix is what lets it earn", async () => {
+    // A page Google cannot crawl cannot earn the impressions a demand gate would ask
+    // for. Gating this class would be circular.
+    // Three pages share the defect, which is the pre-existing §3 rule for a
+    // no-demand page: one broken link on a dead page is noise, the same link on three
+    // is one delivery. This gate is about what happens next, not about that floor.
+    const broken = ["a", "b", "c"].map((slug) => ({
+      ...crawlIssue,
+      id: `ev-broken-${slug}`,
+      dimensions: { url: `https://example.com/${slug}`, issueType: "BROKEN_LINK", impact: "crawlability" },
+      metrics: { "first_party:issueCount": { value: 2, unit: "count", source: "first_party" } },
+    }));
+    const { db, opportunities } = mockDb(broken);
+    const result = await runDetectors(db, "p1", { now: AT });
+    expect([...opportunities.values()].some((row) => row.type === "O7_technical_defect")).toBe(true);
+    expect(result.hygieneOnly ?? 0).toBe(0);
   });
 });
