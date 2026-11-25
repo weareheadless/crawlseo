@@ -402,7 +402,17 @@ export async function refreshFunnelForSite(
   db: RefreshDb,
   siteId: string,
   opts: { detectedBy?: string } = {}
-): Promise<BackfillResult & { created: number; updated: number; parked: number; knowledgeFacts: number; questionCoverage: number }> {
+): Promise<
+  BackfillResult & {
+    created: number;
+    updated: number;
+    parked: number;
+    /** Technical defects kept off the board: no demand on the pages they affect. */
+    hygieneOnly: number;
+    knowledgeFacts: number;
+    questionCoverage: number;
+  }
+> {
   const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true, domain: true } });
   if (!site?.projectId) {
     return {
@@ -415,6 +425,7 @@ export async function refreshFunnelForSite(
       created: 0,
       updated: 0,
       parked: 0,
+      hygieneOnly: 0,
       knowledgeFacts: 0,
       questionCoverage: 0,
     };
@@ -436,6 +447,7 @@ export async function refreshFunnelForSite(
       created: 0,
       updated: 0,
       parked: owned.parked,
+      hygieneOnly: 0,
     };
   }
   // Grouping is share-based as well as count-based: the denominator is the
@@ -459,5 +471,9 @@ export async function refreshFunnelForSite(
     created: detection.created,
     updated: detection.updated,
     parked: detection.parked.length,
+    // Technical defects kept off the board because the pages they affect carry no
+    // demand. They are not lost — the crawl page lists them with severity and page
+    // count — but their absence from the board has to be countable, not silent.
+    hygieneOnly: detection.hygieneOnly ?? 0,
   };
 }
