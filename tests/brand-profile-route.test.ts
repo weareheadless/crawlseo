@@ -53,6 +53,16 @@ function call(fn: typeof GET, body?: unknown) {
   );
 }
 
+const LOGO = {
+  assetId: "logo_susi",
+  path: "brands/susimacdonald/logo/susi-logo.png",
+  url: null,
+  alt: "Susana MacDonald",
+  hasText: true,
+  width: 500,
+  height: 150,
+};
+
 const BRAND = {
   name: "Susana MacDonald",
   colors: { ink: "#111111", sand: "#C9B79C" },
@@ -117,6 +127,29 @@ describe("brand profile route", () => {
     const representation = store.representation as ReturnType<typeof parseSiteRepresentation>;
     expect(representation.entries.map((entry) => entry.name)).toEqual(["Distrito Xcalacoco"]);
     expect(representation.serviceArea.countries).toEqual(["MX"]);
+  });
+
+  it("keeps a logo the form never showed", async () => {
+    store.brand = { ...BRAND, logo: LOGO };
+    store.updatedAt = new Date("2026-11-20T10:00:00Z");
+
+    // The panel posts text fields only; `logo` is an uploaded asset.
+    const response = await call(PUT, { ...BRAND, logo: undefined });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.brand.logo).toEqual(LOGO);
+  });
+
+  it("re-saving what it read changes nothing", async () => {
+    // An existing brand, with the logo its upload gave it.
+    store.brand = { ...BRAND, logo: LOGO };
+    store.updatedAt = new Date("2026-11-20T10:00:00Z");
+    const first = await (await call(PUT, BRAND)).json();
+    const reread = await (await call(GET)).json();
+    const again = await (await call(PUT, reread.brand)).json();
+    expect(again.revision).toBe(reread.revision);
+    expect(again.brand.logo).toEqual(LOGO);
+    expect(first.revision).toBe(reread.revision);
   });
 
   it("refuses a brand with no name", async () => {

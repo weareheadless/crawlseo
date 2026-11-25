@@ -78,7 +78,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ siteId: 
     const input = schema.parse(await req.json());
     const existing = await readSiteBrand(db, siteId);
     const record = await saveSiteBrand(db, siteId, {
-      brand: input,
+      brand: {
+        ...(existing?.brand ?? {}),
+        ...input,
+        // The logo is an asset, not a text field: it is uploaded and stored
+        // elsewhere, the panel does not show it, and parsing a brand block
+        // without one drops it. Saving this form deleted Susi's logo once, and
+        // a brand with no logo is refused by the renderer outright.
+        logo: existing?.brand?.logo ?? null,
+      },
       representation: existing?.representation ?? emptyRepresentation(),
     });
     return Response.json({ brand: record.brand, revision: record.revision });
