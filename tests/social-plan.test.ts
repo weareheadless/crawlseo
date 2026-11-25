@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePlan, type PlannerInput } from "@/lib/social/plan";
+import { allowedImages, parsePlan, type PlannerInput } from "@/lib/social/plan";
 
 const INPUT: PlannerInput = {
   brand: {
@@ -55,7 +55,6 @@ const VALID = {
     },
   ],
   image: "susi-photo-1.jpg",
-  composition: "band2",
   art_direction: "Documentary, not postcard.",
 };
 
@@ -110,16 +109,23 @@ describe("parsePlan", () => {
     expect(result).toHaveProperty("error");
   });
 
-  it("falls back to the measured band when the composition is unknown", () => {
-    const result = parsePlan({ ...VALID, composition: "collage" }, INPUT);
-    if ("error" in result) throw new Error(result.error);
-    if (!result.plan.post) return;
-    expect(result.plan.composition).toBe("band2");
-  });
-
   it("refuses a photo the brand does not have", () => {
     const result = parsePlan({ ...VALID, image: "stock-beach.jpg" }, INPUT);
     expect(result).toHaveProperty("error");
+  });
+
+  it("accepts an image URL a tool returned, and refuses one it did not", () => {
+    const allowed = allowedImages(INPUT, ["https://cdn.example/media/villa.jpg/v1/fill/w_1600/villa.jpg"]);
+    const ok = parsePlan(
+      { ...VALID, image: "", image_url: "https://cdn.example/media/villa.jpg/v1/fill/w_1600/villa.jpg" },
+      INPUT,
+      allowed,
+    );
+    if ("error" in ok) throw new Error(ok.error);
+    expect(ok.plan.post && ok.plan.imageUrl).toBe("https://cdn.example/media/villa.jpg/v1/fill/w_1600/villa.jpg");
+
+    const refused = parsePlan({ ...VALID, image: "", image_url: "https://elsewhere.example/x.jpg" }, INPUT, allowed);
+    expect(refused).toHaveProperty("error");
   });
 
   it("refuses a post with no headline", () => {

@@ -15,8 +15,8 @@ import { createCiceroClient } from "@/lib/social/cicero";
 import { parseSiteBrand, parseSiteRepresentation, readSiteBrand } from "@/lib/site/brand";
 import { planPost, type PlannerInput } from "@/lib/social/plan";
 import { verifySocialPost } from "@/lib/editorial-service/social";
-import { resolveImage } from "@/lib/social/image";
 import { findUnsplashCover } from "@/lib/delivery/unsplash";
+import { listSitePages, rankPages, readPage, type SocialTools } from "@/lib/social/tools";
 
 function arg(name: string, fallback = ""): string {
   const index = process.argv.indexOf(`--${name}`);
@@ -152,7 +152,22 @@ async function main() {
   console.error(`bundle: ${input.opportunities.length} opportunities, ${input.crawl.length} pages, ` +
     `${input.research.length} findings, ${input.photos.length} photos, ${input.represented.length} represented names`);
 
-  const planned = await planPost(input);
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { domain: true } });
+  const origin = site?.domain ? `https://${site.domain.replace(/^https?:\/\//, "").replace(/\/+$/, "")}` : "";
+  const tools: SocialTools = {
+    readPage: (url) => readPage(url),
+    listSitePages: () => listSitePages(origin),
+    findPages: async (query) => rankPages(query, await listSitePages(origin)),
+    brandPhotos: input.photos,
+    searchPhotos: async (query) => {
+      const cover = await findUnsplashCover(query, { location: query, siteId });
+      return [{ url: cover.url, alt: cover.altText, credit: `Photo: ${cover.photographer} / Unsplash` }];
+    },
+  };
+  const planned = await planPost(input, {
+    tools,
+    maxSteps: 10,
+  });
   if ("error" in planned) {
     console.log(JSON.stringify({ stage: "plan", error: planned.error }, null, 2));
     process.exit(1);
@@ -161,22 +176,10 @@ async function main() {
   if (!planned.plan.post) return;
 
   const plan = planned.plan;
-  // The photo follows the subject: the site's own page about it, else a stock
-  // photograph found for it, else one of the brand's photos chosen by description.
-  const resolved = await resolveImage({
-    subject: plan.subject,
-    pages: input.crawl.map((page) => page.url),
-    findStock: async (query) => {
-      const cover = await findUnsplashCover(query, { location: plan.subject, siteId });
-      return { url: cover.url, alt: cover.altText, credit: `Photo: ${cover.photographer} / Unsplash` };
-    },
-  }).catch((error: Error) => ({ source: "none" as const, reason: error.message }));
-  console.log(JSON.stringify({ stage: "image", resolved }, null, 2));
-
-  const asset =
-    resolved.source === "none"
-      ? { path: `content/${plan.image}`, alt: plan.copy.headline, credit: "" }
-      : { url: resolved.url, alt: resolved.alt, credit: resolved.credit };
+  const asset = plan.imageUrl
+    ? { url: plan.imageUrl, alt: plan.copy.headline, credit: "" }
+    : { path: `content/${plan.image}`, alt: plan.copy.headline, credit: "" };
+  console.log(JSON.stringify({ stage: "image", chosen: plan.imageUrl || plan.image, note: plan.imageNote }, null, 2));
 
   const verification = await verifySocialPost({
     tenant,
@@ -186,9 +189,9 @@ async function main() {
     angle: plan.angle,
     copy: plan.copy,
     image: {
-      name: resolved.source === "none" ? plan.image : resolved.url,
+      name: plan.imageUrl || plan.image,
       alt: asset.alt,
-      provenance: resolved.source === "page" ? "own_photo" : resolved.source === "unsplash" ? "generic_location" : "own_photo",
+      provenance: plan.imageUrl ? "own_photo" : "own_photo",
     },
     representation: "represented",
     claims: plan.claims,
@@ -216,7 +219,6 @@ async function main() {
       content_hash: artifact.contentHash,
     },
     artDirection: plan.artDirection,
-    composition: plan.composition,
   });
   console.log(JSON.stringify({ stage: "render", rendered }, null, 2));
   await db.$disconnect();

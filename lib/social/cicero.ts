@@ -55,7 +55,6 @@ export type CiceroClient = {
   render(input: {
     artifact: SocialArtifactPayload;
     artDirection: string;
-    composition?: string;
   }): Promise<RenderOutcome>;
   publish(input: {
     renderId: string;
@@ -113,11 +112,10 @@ export function createCiceroClient(options: {
   }
 
   return {
-    async render({ artifact, artDirection, composition }) {
+    async render({ artifact, artDirection }) {
       const { status, payload } = await request("/v1/social/renders", {
         artifact,
         art_direction: artDirection,
-        composition,
       });
       if (status === 200) {
         return {
