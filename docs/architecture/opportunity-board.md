@@ -361,64 +361,84 @@ This is PIPE-7 and #233 as one change, because they are one change.
 What is dead, what is duplicated, and what to do. "Orphan" means nothing outside
 its own test imports it.
 
-### 7.1 Delete — no application caller
+### 7.1 Dead modules, and how to tell
 
-Measured 2026-11-25: every module below has **zero** callers in `lib/`, `app/`,
-`scripts/` or `components/`. Most are referenced only by their own test, which
-means part of the suite is testing dead code — deleting the module means deleting
-its test too, and the test count will fall. That is the correct outcome, not a
-loss of coverage.
+The first version of this section was wrong in a way worth recording, because the
+method was wrong, not the arithmetic.
 
-| module | referenced by |
+It searched for `lib/<path>` imports and declared 27 modules dead. Two errors:
+
+- **`mcp/` is a source root.** `lib/reports/monthly-site-evidence.ts` is imported by
+  `mcp/project-tools.ts`, so it was live and deleting it broke the build.
+- **Relative imports carry no path.** `lib/aeo/run.ts` imports `./run-types`, so the
+  whole `lib/aeo/` set looked dead. It is not — `run.ts`, `surface.ts` and
+  `question-set.ts` are live and import their types from it.
+
+**The method that works:** delete the module *and its test together*, then let
+`tsc` and the suite be the authority. A grep is a candidate list, never a verdict.
+
+Deleted in P0-2, each with its test, suite down 38 cases (1939 → 1901):
+
+| module | what it was |
 |---|---|
-| `lib/ai-seo/opportunity-priority.ts` | its test only |
-| `lib/research/score-reconciliation.ts` | its test only (superseded by D5) |
-| `lib/research/intelligence-view.ts`, `intelligence-overview.ts` | their tests |
-| `lib/research/ai-visibility-import.ts`, `ai-visibility-capabilities.ts` | their tests |
-| `lib/pipeline/results.ts` | 2 tests |
-| `lib/pipeline/overview.ts`, `findings.ts` | their tests |
-| `lib/google/index.ts` | 1 test |
-| `lib/design-tokens.ts` | nothing |
-| `lib/social/publish.ts` | 2 tests |
-| `lib/work/service.ts` | 1 test |
-| `lib/reports/monthly-site-evidence.ts` | nothing |
-| `lib/dataforseo/keyword-run-view.ts`, `ai-mentions-cadence.ts` | their tests |
-| `lib/crawler/schema-semantics-persistence.ts` | 1 test |
-| `lib/recommendation/evaluation-manifest.ts` | 1 test |
-| `lib/aeo/perplexity.ts` | 2 tests — the AEO path moved to DataForSEO |
-| `lib/aeo/observation.ts`, `observation-types.ts`, `cap.ts`, `brand.ts`, `run-types.ts`, `question-set-types.ts` | their tests, or nothing |
+| `lib/ai-seo/opportunity-priority.ts` | the fourth scorer |
+| `lib/pipeline/{overview,findings}.ts` | a second read model beside `views.ts` |
+| `lib/research/{intelligence-view,intelligence-overview}.ts` | unused projections |
+| `lib/dataforseo/{keyword-run-view,ai-mentions-cadence}.ts` | unused views |
+| `lib/recommendation/evaluation-manifest.ts` | unused |
+| `lib/work/service.ts` | unused |
+| `lib/design-tokens.ts` | unused |
 
-Twenty-seven modules. The whole `lib/aeo/` Perplexity-era set is dead: AEO now runs
-through `lib/dataforseo/google-ai-overview-collection.ts`.
+**Kept despite having no caller**, because they are finished readers for product
+stages that were never wired:
 
-### 7.2 The legacy freeze is a live landmine — do not enable it
+| module | why it stays |
+|---|---|
+| `lib/pipeline/results.ts` | `readResultEvidence` projects actions and deliveries into `not_delivered \| delivered_unverified \| verified_unmeasured \| measured_unattributed`. Nothing renders it — the Results stage of the product's own pipeline contract is unbuilt. |
+| `lib/funnel/visibility-view.ts` | `getVisibilityProjection` is the only code that knows an unobserved question is not zero, an uncited observation is a measurement, and cohorts are never summed. |
 
-`lib/db.ts` wraps the Prisma client in `withFrozenLegacyFunnel` when
-`CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict`. Its comment says the freeze is for "the
-cutover release" and that legacy producers still own those tables until their
-replacements exist. **That is no longer true, and the flag would break the
-pipeline.**
+Deleting either would remove the only implementation of a rule, and the rule would
+be re-derived by whoever builds the surface. The **unbuilt Results stage** is the
+finding; it belongs in the open questions, not in a deletion.
 
-`FROZEN_FUNNEL_MODELS` includes `researchRun`. `researchRun` is now written by
-**8 live modules** — `topic-map-stage`, `opportunities-stage`, `monthly-bundle`,
-`weekly-refresh`, the pipeline itself. Every bundle, map and proposal run writes a
-`ResearchRun` row. Enabling the flag in a "cutover" would make the entire monthly
-pipeline fail its writes.
+**Not dead, and previously miscategorised:** `lib/research/ai-visibility-import.ts`
+(live via `lib/research/service.ts`), `lib/research/ai-visibility-capabilities.ts`
+(live), `lib/google/index.ts` (a barrel two routes import), `lib/funnel/visibility-view.ts`
+and `lib/pipeline/results.ts` (above).
 
-| frozen model | live writers | verdict |
-|---|---|---|
-| `researchRun` | **8** | the freeze is wrong for this model now |
-| `researchSource` | 0 | genuinely legacy |
-| `researchFinding` | 0 | genuinely legacy |
-| `rankSnapshot` | 0 | genuinely legacy |
+### 7.2 The legacy freeze — one wrong entry, and a list that reads like a set
 
-The other frozen models are correctly legacy. So the fix is not to delete the
-mechanism but to **remove `researchRun` from the freeze list**, and to delete the
-three models that are genuinely unused — after confirming nothing reads them.
+`lib/db.ts` wraps the Prisma client when `CRAWLSEO_LEGACY_FUNNEL_FREEZE=strict`, and
+its comment said to enable it "in the cutover release".
 
-This is the single most dangerous item in the inventory: a documented,
-tested, plausible-looking switcheroo that would take down the pipeline at exactly
-the moment someone follows the comment and enables it.
+**The defect is one entry, not ten.** The first version of this section claimed
+`FROZEN_FUNNEL_MODELS` was the freeze set and that ten models were misfiled. It is
+not: that constant is the *audit list* of every table the retired spine owned. The
+actual freeze is `FROZEN_NOW` (empty) and `FROZEN_CREATES`, which held exactly one
+entry — `researchAction` — and that one was live.
+
+`researchAction` is created by nine modules, including `lib/research/runner.ts`
+(reached from `scripts/job-worker.ts`) and `lib/agent-tasks/service.ts`. Enabling the
+flag would have thrown on every one of those writes.
+
+Fixed in P0-2: `FROZEN_CREATES` is empty, both constants now document which is the
+audit list and which is the freeze, and `tests/legacy-freeze-writers.test.ts` scans
+the source for write delegates and fails when a frozen table has a live writer. Put
+`researchAction` back and it names all nine.
+
+Audit-list tables production still writes — 10 of 11, with `rankSnapshot` the only
+one genuinely gone:
+
+```
+researchRun:10   researchAction:9   articleKeywordResearchRun:3   researchSource:2
+researchFinding:2   researchSourceIdentity:1   researchDispatchClaim:1
+seoResearchRun:1   seoResearchTask:1   prelaunchResearchRequest:1
+```
+
+Two tests encrypted the mistake and passed: one asserted `researchAction.create`
+throws under the flag, proving only that the proxy blocks a write and never asking
+whether anything needed it; the other asserted `FROZEN_CREATES === ["researchAction"]`
+outright.
 
 ### 7.3 Reachable, needs a trace before removal
 
@@ -427,8 +447,8 @@ These have real app callers, so removal needs a trace, not a grep:
 - `lib/funnel/views.ts` (7 callers) — the board read model. Keep; it is the product.
 - `lib/funnel/decision.ts` (5) — the pre-contract decision path.
 - `lib/recommendation/*` (11 files, `projection.ts` has 4) — still writes `scoreInputs`.
-- `lib/pipeline/{results,overview,findings}` (0 app callers) — a second read model
-  beside `views.ts`; already counted as dead in §7.1.
+- `lib/pipeline/results.ts` (0 app callers) — a finished reader for an unbuilt stage;
+  kept per §7.1, not deleted.
 - `lib/funnel/legacy-freeze.ts` (3) — see §7.2.
 
 ### 7.4 Data to repair
