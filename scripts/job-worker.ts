@@ -22,6 +22,7 @@ import { runSeoResearch } from "@/lib/dataforseo/research";
 import { runPrelaunchResearch } from "@/lib/dataforseo/prelaunch-runner";
 import { runArticleKeywordResearch } from "@/lib/dataforseo/article-research";
 import { runResearchRun } from "@/lib/research/runner";
+import { runPipelineJob } from "@/lib/jobs/research-pipeline-job";
 import { runAgentTask } from "@/lib/agent-tasks/runner";
 import { resumeWixPageDelivery, runWixPageTask } from "@/lib/agent-tasks/wix-page";
 import { reconcileEditorialArticleTask } from "@/lib/editorial-service/article-task";
@@ -175,6 +176,25 @@ async function executeJob(
     }
     case JobKind.RESEARCH_RUN: {
       if (!job.siteId) throw new JobExecutionError("RESEARCH_SITE_REQUIRED");
+      // The monthly cycle queues the ordered research pipeline on the same job
+      // kind, so no schema change is needed. It carries `pipeline: "monthly"`
+      // and no research run id, because there is no single run to execute.
+      if (text(payload.pipeline, "") === "monthly") {
+        const outcome = await runPipelineJob(db, {
+          siteId: job.siteId,
+          month: typeof payload.month === "string" ? payload.month : undefined,
+          approval: typeof payload.approval === "string" ? payload.approval : null,
+        });
+        console.log(
+          `[CrawlSEO worker] research pipeline for site ${job.siteId}: ${outcome.status} — ${outcome.detail}`
+        );
+        // A blocked stage needs an approval reference, which no retry supplies.
+        // A failed stage is a real fault and is retried; a partial is reported.
+        if (outcome.status === "failed" && !outcome.terminal) {
+          throw new JobExecutionError("RESEARCH_PIPELINE_FAILED");
+        }
+        return;
+      }
       const researchRunId = text(payload.researchRunId, "");
       if (!researchRunId) throw new JobExecutionError("RESEARCH_RUN_ID_REQUIRED");
       await runResearchRun(researchRunId);

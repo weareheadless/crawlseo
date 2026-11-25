@@ -18,6 +18,8 @@ import {
   relativeTime,
 } from "@/components/funnel/badges";
 import { RefreshFunnelButton } from "@/components/funnel/refresh-button";
+import { MapStalenessNotice } from "@/components/funnel/map-staleness-notice";
+import { readLatestTopicMapStaleness } from "@/lib/research/map-staleness";
 import { cn } from "@/lib/utils";
 import type { OpportunityStatus } from "@prisma/client";
 
@@ -150,7 +152,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
     bothLegs: proposalState.filter((row) => row.evidenceCompleteness === "both").length,
     parked: proposalState.filter((row) => row.status === "parked").length,
   };
-  const [rows, counts] = await Promise.all([
+  const [rows, counts, mapStaleness] = await Promise.all([
     listOpportunities(db, {
       projectId: site.projectId,
       statuses: tab.statuses,
@@ -166,6 +168,11 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
             : undefined,
     }),
     getFunnelCounts(db, site.projectId),
+    // Why the board can look empty: a map built before its evidence, or one
+    // built with no paid evidence at all, produces clusters with no queries. That
+    // is a different statement from "this site has no demand", and the board has
+    // to say which one it is.
+    readLatestTopicMapStaleness(db, siteId),
   ]);
 
   return (
@@ -176,6 +183,10 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
         description="What we could win, why it matters, and what it costs. Accept one to turn it into a task."
         actions={<RefreshFunnelButton siteId={siteId} />}
       />
+
+      {mapStaleness && mapStaleness.state !== "current" ? (
+        <MapStalenessNotice state={mapStaleness.state} detail={mapStaleness.detail} month={mapStaleness.month} />
+      ) : null}
 
       {/* Stage strip: the funnel in one line, every number a link. */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">

@@ -15,15 +15,21 @@ import { sweepDeliveredOutcomes } from "@/lib/funnel/outcome-measurement";
  * the same code backs the CLI, so there is one definition of the cycle.
  *
  * One cycle per site per calendar month, keyed so it cannot double-queue:
- *   crawl → search-console sync → research run
+ *   crawl → search-console sync → research run → research pipeline
  * and the research run's completion runs the tenant pipeline (business knowledge,
  * joins, funnel refresh) in the worker.
+ *
+ * The research-pipeline stage is the ordered tail — paid bundle, topic map,
+ * proposals — and it is queued rather than run here so a slow provider call
+ * cannot block the cycle. Until it existed, the cycle stopped after research and
+ * the tail ran only when a person typed three scripts, which is how a topic map
+ * came to be built before the bundle it was supposed to read.
  *
  * A stage that is already queued or completed this month is skipped, not repeated.
  */
 
 export type MonthlyCycleStage = {
-  stage: "crawl" | "search-console" | "research" | "outcome";
+  stage: "crawl" | "search-console" | "research" | "pipeline" | "outcome";
   status: "queued" | "skipped" | "failed";
   detail: string;
 };
@@ -216,6 +222,76 @@ export async function runMonthlyCycle(
         } catch (error) {
           stages.push({ stage: "research", status: "failed", detail: error instanceof Error ? error.message.slice(0, 120) : "failed" });
         }
+      }
+    }
+
+    // 3b. The research pipeline: the ordered tail of the month.
+    //
+    // This is queued, not executed here, because the bundle is a paid provider
+    // pass and the map and proposals are model calls: a cycle that waited on
+    // them would hold the worker for minutes per site. The job entry point is
+    // `runPipelineJob`, which runs the same `runResearchPipeline` a manual CLI
+    // runs, so the two cannot diverge.
+    //
+    // No approval reference is attached by the cycle. The paid bundle inside the
+    // pipeline therefore reports itself `blocked` and nothing is bought, which is
+    // the intended behaviour: spending stays a decision with a reference, and the
+    // stage detail says so instead of the stage silently not existing.
+    const pipelineKey = key("research-pipeline");
+    const existingPipelineRun = await db.researchRun.findFirst({
+      where: {
+        siteId: site.id,
+        idempotencyKey: `opportunities:${site.id}:${month}`,
+      },
+      select: { id: true, status: true },
+    });
+    if (existingPipelineRun?.status === "COMPLETED") {
+      stages.push({
+        stage: "pipeline",
+        status: "skipped",
+        detail: `proposals ${existingPipelineRun.id} already completed this month`,
+      });
+    } else if (opts.dryRun) {
+      stages.push({ stage: "pipeline", status: "queued", detail: "would queue (bundle stays blocked without an approval reference)" });
+    } else {
+      try {
+        const existingJob = await db.job.findUnique({
+          where: {
+            siteId_kind_idempotencyKey: {
+              siteId: site.id,
+              kind: JobKind.RESEARCH_RUN,
+              idempotencyKey: pipelineKey,
+            },
+          },
+          select: { id: true, status: true },
+        });
+        if (existingJob) {
+          stages.push({
+            stage: "pipeline",
+            status: "skipped",
+            detail: `job ${existingJob.id} already ${existingJob.status.toLowerCase()} this month`,
+          });
+        } else {
+          const job = await enqueueJob({
+            projectId: site.projectId,
+            siteId: site.id,
+            kind: JobKind.RESEARCH_RUN,
+            payload: { pipeline: "monthly", month },
+            idempotencyKey: pipelineKey,
+            maxAttempts: 2,
+          });
+          stages.push({
+            stage: "pipeline",
+            status: "queued",
+            detail: `job ${job.id}; the paid bundle in it needs an approval reference, so it reports blocked rather than spending`,
+          });
+        }
+      } catch (error) {
+        stages.push({
+          stage: "pipeline",
+          status: "failed",
+          detail: error instanceof Error ? error.message.slice(0, 120) : "failed",
+        });
       }
     }
 

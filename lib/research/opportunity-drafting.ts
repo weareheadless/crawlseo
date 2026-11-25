@@ -253,6 +253,10 @@ function clusterPayload(cluster: TopicCluster, evidence: DraftEvidence[]) {
       impressions: query.impressions,
       position: query.position == null ? null : Number(query.position.toFixed(1)),
       volume: query.volume,
+      // Whether this site has ever been measured for the query. `impressions: 0`
+      // alone cannot say that, and a proposal that reads it as "we rank and earn
+      // nothing" is describing a site state that was never observed.
+      measured: query.measured !== false,
     })),
     pages: cluster.pages.map((page) => ({
       url: page.url,
@@ -367,6 +371,7 @@ const SYSTEM = [
   "Coverage is a page match, not visibility. A cluster with strong coverage but no impressions is unproven: the page exists but earns nothing, so it can still be worth proposing. Use the visibility field, not coverage alone, to decide a topic is finished.",
   "A cluster's competitors field states who holds its queries. Each query gives ourPosition, nearestAbove (the domain one or a few places above us, with how many places) and leader (the domain at the top). Act on nearestAbove, not the leader: taking one place from the domain just above us is a rewrite, while beating a leader 40 places up is a different project. Say which domain the work is aimed at and cite that competitor's evidence id. When competitors is empty but gives a reason, the SERP was not sampled: do not claim a competitor's absence, and do not invent one.",
   "When ourPosition is null we do not rank for the query at all. That is the largest gap there is: say so plainly and name the sampled domains that hold it, rather than treating a missing position as position zero.",
+  "Every query carries measured. measured: false means this site has never had a Search Console row for it, so its demand is provider volume only: zero impressions is the absence of a measurement, not evidence that the site ranks and earns nothing. Do not write 'zero impressions' or 'null position' as a finding for those queries. Write what the volume says and that the site is unmeasured, and if the site is new or unranked say the work is to establish the page rather than to recover it. When demand.measuredQueries is 0 for a cluster, the whole cluster is unmeasured.",
   "unfiledCompetitors lists queries a sampled SERP found and no topic could claim, with who holds each one. They are demand the site has no page and no cluster for. Treat them as real opportunities: propose against them when the market scope fits the business, name the sampled domain holding the query and cite its evidenceId, and set topicSlug to null because they belong to no topic. Do not invent a topic for them and do not fold them into an unrelated cluster. If the business genuinely does not serve the query, say nothing about it rather than proposing it.",
   "Our own position and a competitor's position are different numbers. Never present a competitor's rank as ours, and never describe a query as a gap without saying who is ahead of us or that nobody was sampled.",
   "The owner is one person. Propose at most two items for a cluster, and only when they are genuinely different jobs (for example a page fix and a new asset). Do not split one job across several rows.",

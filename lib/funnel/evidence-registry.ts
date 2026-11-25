@@ -157,7 +157,7 @@ export const EVIDENCE_REGISTRY: Record<EvidenceRecordKind, EvidenceKindSpec> = {
     window: "single_point",
   },
   keyword_universe_membership: {
-    producers: ["lib/research/topic-map", "lib/funnel/cluster-discovery", "lib/funnel/tracked-grid"],
+    producers: ["lib/research/topic-map", "lib/funnel/tracked-grid"],
     dimensions: {
       required: ["query", "cluster"],
       // `grid: "tracked"` is CMP-004's declaration that this membership is part of
