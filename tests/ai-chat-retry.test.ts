@@ -72,4 +72,40 @@ describe("chat client backoff", () => {
     );
     await expect(chatJson({ config, system: "s", user: "u" })).resolves.toEqual({ a: 1 });
   });
+
+  it("does not retry a 429 that means the key is out of credit", async () => {
+    // OpenRouter answers an exhausted balance with HTTP 429 and
+    // `code: "credit_balance_exhausted"`, not 402. Treating it as a rate limit
+    // spent four attempts and minutes of backoff to report a condition no delay
+    // can fix, and the run surfaced it as a model problem.
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "You have no credits remaining. Add credits to continue using the API.",
+            type: "insufficient_quota",
+            code: "credit_balance_exhausted",
+          },
+        }),
+        { status: 429, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const error = (await chatJson({ config, system: "s", user: "u", attempts: 4 }).catch((thrown) => thrown)) as ChatError;
+    expect(error).toBeInstanceOf(ChatError);
+    expect(error.billing).toBe(true);
+    expect(error.message).toMatch(/no credit/);
+    // One call: no backoff, because waiting cannot add credit.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries a plain 429, which is a rate limit", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("slow down", { status: 429, headers: { "retry-after": "0.001" } }))
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"ok":true}' } }] }));
+
+    await expect(chatJson({ config, system: "s", user: "u", attempts: 3 })).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
