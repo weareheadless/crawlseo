@@ -107,7 +107,7 @@ export type BrandReadDb = Pick<PrismaClient, "siteProfile">;
 export type BrandWriteDb = Pick<PrismaClient, "site" | "siteProfile">;
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const COLOR_NAME = /^[a-z][a-z0-9-]{0,30}$/i;
+export const COLOR_NAME = /^[a-z][a-z0-9-]{0,30}$/i;
 const FONT_BAD = /[()[\]{}<>/\\|?*+=^$]/;
 const COUNTRY = /^[A-Za-z]{2}$/;
 const ENTRY_KINDS = new Set(["project", "developer", "service", "place"]);
