@@ -47,6 +47,8 @@ function seedAllTypes(): SeedRow[] {
     row("e-o7-demand", "keyword_rank", { query: "broken page", url: "https://x.com/broken", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "first_party:impressions": metric(300, "count", "first_party") }),
     // O8 structured data gap
     row("e-o8", "onpage_crawl", { url: "https://x.com/services", schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
+    // The page carries demand, which is what admits a presentational gap to the board.
+    row("e-o8-demand", "keyword_rank", { query: "local seo services", url: "https://x.com/services", windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "first_party:impressions": metric(120, "count", "first_party") }),
     row("e-o8-why", "knowledge_fact", { question: "who are you" }, {}),
     // O9 backlink gap
     row("e-o9", "backlink_profile", { competitor: "rival.com", cluster: "local" }, { "provider:referringDomainGap": metric(9, "count") }),
@@ -264,9 +266,13 @@ describe("page-level defect economics (spine plan §2.3, §3)", () => {
   });
 
   it("collapses ten pages sharing a schema gap into one site-level opportunity", async () => {
-    const seed = Array.from({ length: 12 }, (_, i) =>
-      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") })
-    );
+    // Demand is seeded on each page: a presentational gap is admitted only when the
+    // pages it affects earn, so without this the gate filters it before collapse can
+    // be observed. That is a different rule; this test is about the collapse.
+    const seed = Array.from({ length: 12 }, (_, i) => [
+      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "LocalBusiness", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
+      row(`s${i}-demand`, "keyword_rank", { query: `q${i}`, url: `https://x.com/p${i}`, windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "first_party:impressions": metric(40, "count", "first_party") }),
+    ]).flat();
     const { db, created } = mockDb(seed);
     await runDetectors(db as never, "p1", { now: NOW });
     const o8 = created.filter((row) => row.type === "O8_structured_data_gap");
@@ -275,9 +281,10 @@ describe("page-level defect economics (spine plan §2.3, §3)", () => {
   });
 
   it("collapses an issue covering a quarter of crawled pages even below the page floor", async () => {
-    const seed = Array.from({ length: 2 }, (_, i) =>
-      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "identity", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") })
-    );
+    const seed = Array.from({ length: 2 }, (_, i) => [
+      row(`s${i}`, "onpage_crawl", { url: `https://x.com/p${i}`, schemaType: "identity", schemaMissing: "true", impact: "structured_data" }, { "first_party:issueCount": metric(1, "count", "first_party") }),
+      row(`s${i}-demand`, "keyword_rank", { query: `q${i}`, url: `https://x.com/p${i}`, windowEnd: "2026-10-31T00:00:00.000Z", windowRole: "current" }, { "first_party:impressions": metric(40, "count", "first_party") }),
+    ]).flat();
     // Six crawled pages: two affected pages are a third of the site, so one
     // delivery closes the whole issue.
     const small = mockDb(seed);
