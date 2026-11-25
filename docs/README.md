@@ -15,6 +15,10 @@ requirements.
   to demand qualification: one job-map pass, the taxonomy projected from it,
   per-query demand verdicts in tranches, and the guardrails that keep it from
   drifting back into word matching.
+- **[Opportunity board architecture](architecture/opportunity-board.md)** —
+  authoritative for the board: the contracts, the four scoring paths and which one
+  the product actually reads, the legacy inventory, and the decisions that order
+  the board. Read it before touching scoring, clustering or a board query.
 - **[Research and business context to opportunities](research-to-opportunities-plan.md)**
   — the active implementation plan for making knowledge present at run time,
   feeding it to every model call, turning research findings into paid keyword
@@ -51,15 +55,18 @@ requirements.
 - [Runtime connector credential issuance](runtime-connector-credential-issuance.md)
 - [Legacy budget import](legacy-budget-import.md)
 
-## Code-referenced architecture notes
+## Superseded by the opportunity board architecture
 
-These are referenced by code comments, migrations or tests. They are reference
-material, not product requirements.
+These describe stages the pipeline has replaced. They are kept for provenance and
+**must not be read as requirements**; the architecture document above is
+authoritative.
 
-- [SEO funnel spine plan](seo-funnel-spine-plan.md)
-- [Demand map cluster discovery](demand-map-cluster-discovery.md)
-- [DS-02 run unification](ds-02-run-unification.md)
-- [Wave 6 cleanup ledger](wave6-cleanup-ledger.md)
+- [SEO funnel spine plan](seo-funnel-spine-plan.md) — superseded; its lens model
+  was replaced by the monthly bundle.
+- [Demand map cluster discovery](demand-map-cluster-discovery.md) — superseded; the
+  second clustering path was retired in #226.
+- [DS-02 run unification](ds-02-run-unification.md) — historical.
+- [Wave 6 cleanup ledger](wave6-cleanup-ledger.md) — historical.
 
 ## Historical
 
