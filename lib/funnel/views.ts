@@ -10,6 +10,7 @@ import type {
 } from "@prisma/client";
 
 import { fallbackLane, parseOpportunityProposal, type OpportunityLane, type OpportunityProposal } from "@/lib/funnel/proposal";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 import { parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 
 /**
@@ -440,7 +441,7 @@ export async function listOpportunities(db: FunnelDb, filter: OpportunityFilter)
         ? [{ title: { contains: filter.search, mode: "insensitive" } }, { summary: { contains: filter.search, mode: "insensitive" } }]
         : undefined,
     },
-    orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "desc" }],
+    orderBy: opportunityOrder(),
     select: {
       id: true,
       projectId: true,

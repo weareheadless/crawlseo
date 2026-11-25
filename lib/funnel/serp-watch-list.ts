@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 
 /**
  * CMP-004: the monthly SERP watch list.
@@ -122,7 +123,7 @@ export async function readWatchList(
     db.opportunity.findMany({
       where: { projectId: input.projectId, status: { in: ["detected", "accepted", "in_progress"] } },
       select: { dedupKey: true, scoreValue: true, title: true },
-      orderBy: [{ scoreValue: "desc" }],
+      orderBy: opportunityOrder(),
     }),
     db.evidenceRecord.findMany({
       where: {

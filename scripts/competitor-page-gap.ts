@@ -23,6 +23,7 @@ import { loadEnvConfig } from "@next/env";
 if (!process.env.DATABASE_URL) loadEnvConfig(process.cwd());
 
 import { competitorPageGap, competitorReferences, ourPageProfile, storeCompetitorProfile } from "@/lib/funnel/competitor-page-gap";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 import { queryFromDedupKey } from "@/lib/funnel/cluster-resolver";
 import type { PageProfile } from "@/lib/funnel/page-gap";
 
@@ -60,7 +61,7 @@ async function main(): Promise<void> {
     const opportunities = await db.opportunity.findMany({
       where: { projectId: site.projectId, status: { in: ["detected", "accepted", "in_progress"] } },
       select: { dedupKey: true, clusterId: true },
-      orderBy: { scoreValue: "desc" },
+      orderBy: opportunityOrder(),
       take: args.limit,
     });
 

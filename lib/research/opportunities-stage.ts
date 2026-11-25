@@ -7,6 +7,7 @@ import {
   storeProposals,
   type Proposal,
 } from "@/lib/research/opportunity-generation";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 import { draftProposals, proposalIdentity } from "@/lib/research/opportunity-drafting";
 import { topicMapKey, type TopicMap } from "@/lib/research/topic-map";
 import {
@@ -188,7 +189,7 @@ export async function runOpportunitiesStage(
       status: { in: ["detected", "accepted", "in_progress"] },
     },
     select: { id: true, type: true, title: true, summary: true, scoreValue: true },
-    orderBy: { scoreValue: "desc" },
+    orderBy: opportunityOrder(),
     take: 5,
   });
 

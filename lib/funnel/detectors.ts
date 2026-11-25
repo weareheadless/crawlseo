@@ -11,6 +11,7 @@ import { clusterByQuery, queryFromDedupKey, resolveCluster } from "@/lib/funnel/
 import { decisionFingerprint, parsePersistedDecision, type RecommendationDecision } from "@/lib/recommendation/contracts";
 import { scoreInputsFromDecision } from "@/lib/recommendation/publish";
 import { resolveWinProbability } from "@/lib/funnel/win-probability";
+import { opportunityOrder } from "@/lib/funnel/opportunity-order";
 
 /**
  * Automatic opportunity detectors (docs/seo-funnel-spine-plan.md §2/§3).
@@ -1690,7 +1691,7 @@ export async function applyOpenCap(
   const open = await db.opportunity.findMany({
     where: { projectId: opts.projectId, status: "detected" },
     select: { id: true, scoreValue: true, recommendationDecision: true },
-    orderBy: [{ scoreValue: "desc" }, { firstDetectedAt: "asc" }],
+    orderBy: opportunityOrder(),
   });
   // A resource cap must not hide a canonical decision. Legacy rows remain capped.
   const capped = open.filter((row) => row.recommendationDecision == null);
