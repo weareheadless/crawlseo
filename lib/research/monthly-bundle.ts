@@ -103,16 +103,34 @@ export const BUNDLE_COST_ESTIMATES = {
 export type BundleLocale = {
   language: string;
   languageCode: string;
-  country: string;
-  locationCode: number;
+  /**
+   * The market the priced sections are scoped to, or null when none could be named.
+   *
+   * A null market is not a failure. Every paid call needs a DataForSEO location, but
+   * keyword *discovery* and the model's own seed proposal need only a language and what
+   * the business says about itself — so a site with no measurable audience can still
+   * learn what it should be competing for. Refusing the whole bundle threw that work
+   * away with the priced half, which is how a brand-new site ended up with no research
+   * at all (see `unresolved` below).
+   */
+  country: string | null;
+  locationCode: number | null;
   /**
    * Which fact chose the market, so a wrong locale is visible in the report.
    *
    * `measured` means no one stated a market and the audience's own recorded country
    * split supplied it. It is deliberately distinguishable from `audience` and `business`:
    * an inferred market must never read as a stated one.
+   *
+   * `unresolved` means nothing named a market and the audience could not measurably
+   * supply one. The priced sections are then skipped, not guessed.
    */
-  marketSource: "override" | "audience" | "business" | "measured";
+  marketSource: "override" | "audience" | "business" | "measured" | "unresolved";
+  /**
+   * Why the market is unresolved, in the owner's terms, when `marketSource` is
+   * `unresolved`. Null otherwise.
+   */
+  unresolved: string | null;
   fallback?: unknown;
 };
 
@@ -813,17 +831,34 @@ export async function resolveBundleLocale(input: {
   }
 
   if (!country) {
-    // Two different refusals, because they need different actions. "Nothing was ever
-    // measured" means the site is new or unwired; "measured and scattered" means the
-    // audience exists and does not name one market. Collapsing them would tell an owner
-    // with no data that their audience is scattered.
+    /**
+     * No market. Continue with the sections that do not need one.
+     *
+     * This used to throw, and the throw was wrong in a way that mattered most for the
+     * sites the research path exists for. Every paid call is scoped to a DataForSEO
+     * location, but keyword *discovery* and the model's seed proposal are not: they need a
+     * language and the business's own services. So a site with no measurable audience lost
+     * its discovery along with its priced sections and ended up with a map built from
+     * Search Console alone — measured 2026-11-25 on alaguillotine, whose map said "built
+     * without paid evidence" while the one section that could have found demand was
+     * refused before it ran.
+     *
+     * Two different reasons, because they need different actions from the owner. "Nothing
+     * was ever measured" means the site is new or unwired; "measured and scattered" means
+     * the audience exists and does not name one market. Collapsing them would tell an owner
+     * with no data that their audience is scattered.
+     */
     const measuredButNoMarket = measured && measured.impressions > 0 ? measured.blockedReason : null;
-    throw new BundleError(
-      measuredButNoMarket
-        ? `the site states no market and its audience cannot supply one: ${measuredButNoMarket}. State the market in the site profile or business knowledge, or pass --country`
-        : "the site has no audience market or country in business knowledge, the site profile or its domain; pass --country",
-      2
-    );
+    return {
+      language,
+      languageCode: language,
+      country: null,
+      locationCode: null,
+      marketSource: "unresolved",
+      unresolved: measuredButNoMarket
+        ? `no market was stated and the measured audience cannot supply one: ${measuredButNoMarket}`
+        : "no market was stated and nothing has measured one: the site has no Search Console history carrying a country",
+    };
   }
   if (input.mode === "execute") {
     try {
@@ -834,6 +869,7 @@ export async function resolveBundleLocale(input: {
         country: resolved.country ?? country,
         locationCode: resolved.locationCode,
         marketSource,
+        unresolved: null,
         fallback: resolved.fallback,
       };
     } catch {
@@ -845,7 +881,7 @@ export async function resolveBundleLocale(input: {
   if (!locationCode) {
     throw new BundleError(`no DataForSEO location code is known for ${country}; pass a supported --country`, 2);
   }
-  return { language, languageCode: language, country, locationCode, marketSource };
+  return { language, languageCode: language, country, locationCode, marketSource, unresolved: null };
 }
 
 export async function buildBundlePlan(input: {
@@ -1775,6 +1811,19 @@ async function collectCrawlAndGscSections(
   }
 }
 
+/**
+ * The reason a priced section cannot run, or null when the market is known.
+ *
+ * Written as one function because all four priced collectors need the same answer, and a
+ * section that reports "skipped" without saying why is indistinguishable from one that had
+ * nothing to do. The market being unresolved is a fact about the *site*, not an error in
+ * the run: it is reported beside the section, and the run itself succeeds.
+ */
+function pricedSectionBlocked(locale: BundleLocale): string | null {
+  if (locale.locationCode != null) return null;
+  return locale.unresolved ?? "no market is known, so a location-scoped call cannot be made";
+}
+
 async function collectKeywordSection(
   db: BundleDb,
   input: {
@@ -1789,6 +1838,10 @@ async function collectKeywordSection(
 ): Promise<BundleSectionResult> {
   const missing = input.plan.missing.keywordQueries;
   const reused = input.plan.reuse.keywordQueries.length;
+  const blocked = pricedSectionBlocked(input.plan.locale);
+  if (blocked) {
+    return { name: "keyword_metrics", status: "skipped", stored: 0, reused, costMicros: 0, evidenceIds: [], error: blocked };
+  }
   if (missing.length === 0) {
     return {
       name: "keyword_metrics",
@@ -1819,7 +1872,7 @@ async function collectKeywordSection(
         siteId: input.plan.siteId,
         queries: batch,
         languageCode: input.plan.locale.languageCode,
-        locationCode: input.plan.locale.locationCode,
+        locationCode: input.plan.locale.locationCode!,
         attempt: input.attemptToken,
       });
       input.spend.totalMicros += result.spentMicros;
@@ -1860,6 +1913,10 @@ async function collectDiscoverySection(
 ): Promise<BundleSectionResult> {
   const missing = input.plan.missing.discoverySeeds;
   const reused = input.plan.reuse.discoverySeeds.length;
+  const blocked = pricedSectionBlocked(input.plan.locale);
+  if (blocked) {
+    return { name: "keyword_discovery", status: "skipped", stored: 0, reused, costMicros: 0, evidenceIds: [], error: blocked };
+  }
   if (missing.length === 0) {
     return {
       name: "keyword_discovery",
@@ -1890,7 +1947,7 @@ async function collectDiscoverySection(
         siteId: input.plan.siteId,
         queries: [seed],
         languageCode: input.plan.locale.languageCode,
-        locationCode: input.plan.locale.locationCode,
+        locationCode: input.plan.locale.locationCode!,
         attempt: input.attemptToken,
       });
       input.spend.totalMicros += result.spentMicros;
@@ -1932,6 +1989,10 @@ async function collectSerpSection(
 ): Promise<BundleSectionResult> {
   const missing = input.plan.missing.serpQueries;
   const reused = input.plan.reuse.serpQueries.length;
+  const blocked = pricedSectionBlocked(input.plan.locale);
+  if (blocked) {
+    return { name: "serp_snapshots", status: "skipped", stored: 0, reused, costMicros: 0, evidenceIds: [], error: blocked };
+  }
   if (missing.length === 0) {
     return {
       name: "serp_snapshots",
@@ -1961,7 +2022,7 @@ async function collectSerpSection(
         siteId: input.plan.siteId,
         queries: [query],
         languageCode: input.locale.languageCode,
-        locationCode: input.locale.locationCode,
+        locationCode: input.locale.locationCode!,
         domain: input.plan.domain,
         attempt: input.attemptToken,
       });
@@ -2004,6 +2065,10 @@ async function collectAeoSection(
 ): Promise<BundleSectionResult> {
   const missing = input.plan.missing.aeoQuestions;
   const reused = input.plan.reuse.aeoQuestions.length;
+  const blocked = pricedSectionBlocked(input.plan.locale);
+  if (blocked) {
+    return { name: "aeo_geo", status: "skipped", stored: 0, reused, costMicros: 0, evidenceIds: [], error: blocked };
+  }
   if (missing.length === 0) {
     return {
       name: "aeo_geo",
@@ -2035,7 +2100,7 @@ async function collectAeoSection(
         siteId: input.plan.siteId,
         questions: [question],
         languageCode: input.locale.languageCode,
-        locationCode: input.locale.locationCode,
+        locationCode: input.locale.locationCode!,
         domain: input.plan.domain,
         brand: input.plan.brand,
         attempt: input.attemptToken,
@@ -2081,6 +2146,20 @@ async function collectNewsSection(
   const sources: ResearchSourceInput[] = [];
   const seen = new Set<string>();
   let errors = 0;
+
+  // Google News search is scoped to a country edition, so it is a priced, market-scoped
+  // section exactly like the DataForSEO calls.
+  if (input.locale.country == null) {
+    return {
+      name: "news_events",
+      status: "skipped",
+      stored: 0,
+      reused: 0,
+      costMicros: 0,
+      evidenceIds: [],
+      error: pricedSectionBlocked(input.locale) ?? undefined,
+    };
+  }
 
   for (const query of input.plan.selected.newsQueries) {
     if (sources.length >= input.caps.newsItems) break;

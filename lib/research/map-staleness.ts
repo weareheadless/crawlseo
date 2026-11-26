@@ -155,7 +155,11 @@ function describe(state: MapStaleness, mapBundleRunId: string | null, latestBund
     case "current":
       return "";
     case "no-bundle":
-      return "no completed bundle exists for this month, so the map was built without paid evidence; its clusters describe only what Search Console and the crawl already knew";
+      // Deliberately does not say "no bundle exists" as if it were an accident. A bundle can
+      // be absent because none was attempted, or because it was refused for a reason the
+      // owner can act on — a stated market is missing. Saying only the first makes the
+      // second look like a bug in the product.
+      return "no completed bundle exists for this month, so the map was built without paid evidence; its clusters describe only what Search Console and the crawl already knew. If a bundle was attempted and refused, the reason is in the run log: a market-scoped bundle needs a stated audience market, and a site whose measured audience is too scattered to name one is refused rather than guessed";
     case "stale":
     default:
       return mapBundleRunId
