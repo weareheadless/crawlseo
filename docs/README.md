@@ -52,6 +52,10 @@ requirements.
 These are referenced by code comments, migrations or tests. They are reference
 material, not product requirements.
 
+- [Opportunity capability ownership](architecture/opportunity-capability-ownership.md)
+  — which producer owns each of the 14 opportunity types, who may change a row's
+  state, and how a capability that cannot run reports itself. Read this before
+  adding a producer, a detector or a retirement path.
 - [SEO funnel spine plan](seo-funnel-spine-plan.md)
 - [Demand map cluster discovery](demand-map-cluster-discovery.md)
 - [DS-02 run unification](ds-02-run-unification.md)
