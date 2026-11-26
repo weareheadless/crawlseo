@@ -28,6 +28,12 @@ import {
   requireProjectScope,
   type ServicePrincipalContext,
 } from "@/lib/auth/service-credentials";
+import {
+  ExecutionError,
+  readExecutionConfig,
+  reportOpportunityWork,
+} from "@/lib/opportunities/external-execution";
+import { readOpportunityBoard, readWorkBrief } from "@/lib/opportunities/board";
 import { projectSite } from "@/lib/projects/project-site";
 
 type ToolData = Record<string, unknown>;
@@ -42,11 +48,25 @@ function success(data: ToolData): {
   };
 }
 
+/**
+ * What a client is told when a call fails.
+ *
+ * A refusal the caller can act on must reach them verbatim: "no cloneable repoUrl" and
+ * "opportunity is parked; accept it first" are instructions, and replacing them with
+ * "could not complete that request" turns a fixable situation into a support ticket.
+ *
+ * So the rule is by *class*, not by matching words in the text. An `ExecutionError` carries
+ * a message written for the caller. Everything else is masked, because an unexpected error
+ * can carry a connection string, a filesystem path or a provider payload.
+ */
 function failure(error: unknown) {
   const message = error instanceof Error ? error.message : "Request failed";
-  const safe = message.includes("scope") || message.includes("connected") || message.includes("DataForSEO")
-    ? message
-    : "CrawlSEO could not complete that request";
+  const actionable =
+    error instanceof ExecutionError ||
+    message.includes("scope") ||
+    message.includes("connected") ||
+    message.includes("DataForSEO");
+  const safe = actionable ? message : "CrawlSEO could not complete that request";
   return {
     content: [{ type: "text" as const, text: safe }],
     structuredContent: { error: safe },
@@ -645,6 +665,142 @@ export function createProjectMcpServer(principal: ServicePrincipalContext): McpS
           idempotencyKey: idempotency_key || `mcp:${randomUUID()}`,
         });
         return success({ job_id: job.id, status: job.status.toLowerCase(), site_id: site.id });
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // The opportunity board, and reporting work against it.
+  //
+  // These are the only tools here that can change site-facing state, so they are
+  // the only ones that ask for a scope beyond read. A client with `connector:read`
+  // can see the board; only `connector:write` can report a delivery.
+  // -------------------------------------------------------------------------
+
+  server.registerTool(
+    "seo_list_opportunities",
+    {
+      description:
+        "List this project's opportunities in board order (evidence class, then score, then oldest first), "
+        + "with the page and queries each is about and any deliveries already reported against it.",
+      inputSchema: {
+        status: z
+          .enum(["detected", "accepted", "in_progress", "delivered", "parked", "rejected", "closed"])
+          .optional()
+          .describe("Restrict to one workflow state; counts stay whole-project."),
+        evidence_class: z
+          .enum(["measured", "estimated", "technical", "hypothesis"])
+          .optional()
+          .describe("Restrict to one evidence class. measured first is the board's own order."),
+        limit: z.number().int().min(1).max(100).optional().default(25),
+        cursor: z.string().min(1).max(120).optional().describe("nextCursor from a previous call."),
+      },
+    },
+    async ({ status, evidence_class, limit, cursor }) => {
+      try {
+        requireProjectScope(principal, "connector:read");
+        const site = await projectSite(projectId);
+        return success(
+          await readOpportunityBoard(db as never, projectId, {
+            siteId: site.id,
+            status,
+            evidenceClass: evidence_class,
+            limit,
+            cursor,
+          })
+        );
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "seo_get_opportunity",
+    {
+      description:
+        "Read one opportunity as a work brief: the page, the queries, the change the recommendation asks for, "
+        + "how success is measured, and any deliveries already reported.",
+      inputSchema: { opportunity_id: z.string().min(1).max(120) },
+    },
+    async ({ opportunity_id }) => {
+      try {
+        requireProjectScope(principal, "connector:read");
+        return success(await readWorkBrief(db as never, projectId, opportunity_id));
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "seo_get_execution_config",
+    {
+      description:
+        "Read how work reaches this site: the cloneable repository, the branch, the site's own deployment document, "
+        + "the delivery adapters, and exactly which of those facts are missing before an external executor can work.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        requireProjectScope(principal, "connector:read");
+        const site = await projectSite(projectId);
+        return success(await readExecutionConfig(db as never, projectId, site.id));
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "seo_report_work",
+    {
+      description:
+        "Report work you have done for one opportunity, and move it to delivered. Requires who did it, what kind of "
+        + "work it was, why it closes the opportunity, and at least one locator (commit, PR or live URL) so the claim "
+        + "can be checked. Attributed as an external agent; this never records a human confirmation.",
+      inputSchema: {
+        opportunity_id: z.string().min(1).max(120),
+        executor_id: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe("Your own identity, so a reader knows who to ask about this delivery."),
+        work_kind: z.enum(["code_change", "content", "configuration", "external"]),
+        note: z
+          .string()
+          .min(1)
+          .max(2000)
+          .describe("Why this closes the opportunity, in your words. The next reader's first question."),
+        status: z
+          .enum(["delivered", "in_progress"])
+          .optional()
+          .default("delivered")
+          .describe("Default delivered. Use in_progress to record progress without claiming completion."),
+        commit_sha: z.string().min(7).max(40).optional(),
+        pull_request_url: z.string().url().max(500).optional(),
+        deployed_url: z.string().url().max(500).optional(),
+      },
+    },
+    async ({ opportunity_id, executor_id, work_kind, note, status, commit_sha, pull_request_url, deployed_url }) => {
+      try {
+        requireProjectScope(principal, "connector:write");
+        const site = await projectSite(projectId);
+        return success(
+          await reportOpportunityWork(db as never, projectId, {
+            siteId: site.id,
+            opportunityId: opportunity_id,
+            executorId: executor_id,
+            workKind: work_kind,
+            note,
+            status,
+            commitSha: commit_sha ?? null,
+            pullRequestUrl: pull_request_url ?? null,
+            deployedUrl: deployed_url ?? null,
+          })
+        );
       } catch (error) {
         return failure(error);
       }

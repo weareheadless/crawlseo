@@ -43,6 +43,9 @@ requirements.
 - [AEO Google AI Overviews contract](aeo-google-contract.md)
 - [AEO Perplexity contract](aeo-perplexity-contract.md)
 - [AEO run contract](aeo-run-contract.md)
+- [External execution over MCP](external-execution-mcp.md) — how an outside agent
+  finds work, does it in a site's own repository, and reports back without pretending a
+  person confirmed it.
 - [Site-agent connector contract](site-agent-connector-contract.md)
 - [Runtime connector credential issuance](runtime-connector-credential-issuance.md)
 - [Legacy budget import](legacy-budget-import.md)
