@@ -102,6 +102,85 @@ describe("Opportunity anchor", () => {
     }).pageUrl).toBeNull();
   });
 
+  it("reads a rank finding's query and page from its identity", () => {
+    expect(opportunityAnchor({
+      type: "O1_winnable_rank",
+      dedupKey: "O1:freediving course cancun:https://oceanicvibes.com/freediving-course",
+      scoreInputs: {},
+      recommendationDecision: null,
+    })).toEqual({
+      pageUrl: "https://oceanicvibes.com/freediving-course",
+      newPage: null,
+      queries: ["freediving course cancun"],
+    });
+  });
+
+  it("keeps a query whole when it contains a colon", () => {
+    const anchor = opportunityAnchor({
+      type: "O2_striking_distance",
+      dedupKey: "O2:coaching : tarif groupe:https://oceanicvibes.com/coaching",
+      scoreInputs: {},
+      recommendationDecision: null,
+    });
+    expect(anchor.queries).toEqual(["coaching : tarif groupe"]);
+    expect(anchor.pageUrl).toBe("https://oceanicvibes.com/coaching");
+  });
+
+  it("splits at the last url boundary, so a site: operator query keeps its own url", () => {
+    const anchor = opportunityAnchor({
+      type: "O1_winnable_rank",
+      dedupKey: "O1:site:https://oceanicvibes.com:https://oceanicvibes.com/courses",
+      scoreInputs: {},
+      recommendationDecision: null,
+    });
+    expect(anchor.queries).toEqual(["site:https://oceanicvibes.com"]);
+    expect(anchor.pageUrl).toBe("https://oceanicvibes.com/courses");
+  });
+
+  it("reports the query and no page when the detector recorded an empty url", () => {
+    expect(opportunityAnchor({
+      type: "O2_striking_distance",
+      dedupKey: "O2:freediving drills:",
+      scoreInputs: {},
+      recommendationDecision: null,
+    })).toEqual({ pageUrl: null, newPage: null, queries: ["freediving drills"] });
+  });
+
+  it("keeps the query when the recorded url does not validate", () => {
+    const anchor = opportunityAnchor({
+      type: "O11_freshness_decay",
+      dedupKey: "O11:breath hold training:https://",
+      scoreInputs: {},
+      recommendationDecision: null,
+    });
+    expect(anchor.pageUrl).toBeNull();
+    expect(anchor.queries).toEqual(["breath hold training"]);
+  });
+
+  it("reads an overlap observation's query from its identity", () => {
+    expect(opportunityAnchor({
+      type: "O10_cannibalization",
+      dedupKey: "O10:open water certification cancun",
+      scoreInputs: {},
+      recommendationDecision: null,
+    })).toEqual({ pageUrl: null, newPage: null, queries: ["open water certification cancun"] });
+  });
+
+  it("reads a page-experience finding's page from its identity", () => {
+    expect(opportunityAnchor({
+      type: "O12_page_experience",
+      dedupKey: "O12:https://oceanicvibes.com/courses",
+      scoreInputs: {},
+      recommendationDecision: null,
+    })).toEqual({ pageUrl: "https://oceanicvibes.com/courses", newPage: null, queries: [] });
+    expect(opportunityAnchor({
+      type: "O12_page_experience",
+      dedupKey: "O12:",
+      scoreInputs: {},
+      recommendationDecision: null,
+    })).toEqual({ pageUrl: null, newPage: null, queries: [] });
+  });
+
   it("keeps the stored row intact and appends the anchor", () => {
     const row = {
       id: "op",
