@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   ExecutionError,
@@ -200,35 +204,65 @@ describe("the execution config reports every lane, so a caller takes the one it 
     } as never;
   }
 
-  // A checkout that actually exists on this host, so the verification is exercised rather
-  // than mocked away.
-  const REAL_CHECKOUT = "/home/admin/susimacdonald-wix";
-  const REAL_DEPLOY_DOC = "/home/admin/wix-site-bridge/sites/susimacdonald/DEPLOYMENT.md";
+  /**
+   * A throwaway tree, built here, so these tests prove the resolution rules without
+   * depending on this machine's layout.
+   *
+   * The first version pointed at `/home/admin/susimacdonald-wix` and the real bridge
+   * directory. It passed here and failed in CI, which has no `/home/admin` — and a test that
+   * only passes on one host is not testing the code, it is testing the host.
+   */
+  let root = "";
+  let checkout = "";
+  let bridge = "";
+  let sharedDoc = "";
+  let siteDoc = "";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "crawlseo-exec-"));
+    checkout = join(root, "a-site");
+    await mkdir(join(checkout, ".git"), { recursive: true });
+    bridge = join(root, "bridge");
+    await mkdir(join(bridge, "sites", "site-with-doc"), { recursive: true });
+    await mkdir(join(bridge, "docs"), { recursive: true });
+    sharedDoc = join(bridge, "docs", "PAGE_DELIVERY.md");
+    await writeFile(sharedDoc, "# Page delivery\n");
+    siteDoc = join(bridge, "sites", "site-with-doc", "DEPLOYMENT.md");
+    await writeFile(siteDoc, "# Deploy this site\n");
+    process.env.WIX_BRIDGE_ROOT = bridge;
+  });
+
+  afterAll(() => {
+    delete process.env.WIX_BRIDGE_ROOT;
+  });
+
+  const REAL_CHECKOUT = () => checkout;
+  const REAL_DEPLOY_DOC = () => siteDoc;
 
   it("treats a checkout on this host as an executable lane", async () => {
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
-        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "site-with-doc", adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
     );
-    expect(config.lanes[0]).toMatchObject({ lane: "local_checkout", target: REAL_CHECKOUT, usable: true });
+    expect(config.lanes[0]).toMatchObject({ lane: "local_checkout", target: REAL_CHECKOUT(), usable: true });
     expect(config.canExecute).toBe(true);
   });
 
   it("finds the deploy document the site actually has", async () => {
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
-        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "site-with-doc", adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
     );
     expect(config.repo.deployDocFound).toBe(true);
-    expect(config.repo.deployDocPath).toBe(REAL_DEPLOY_DOC);
+    expect(config.repo.deployDocPath).toBe(REAL_DEPLOY_DOC());
     expect(config.repo.deployDocAuthority).toBe("bridge_site");
   });
 
@@ -236,7 +270,7 @@ describe("the execution config reports every lane, so a caller takes the one it 
     const config = await readExecutionConfig(
       site({
         repoPath: null, repoUrl: "weareheadless/example-wix", defaultBranch: "main",
-        deployDocPath: REAL_DEPLOY_DOC, bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
+        deployDocPath: REAL_DEPLOY_DOC(), bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
@@ -248,8 +282,8 @@ describe("the execution config reports every lane, so a caller takes the one it 
   it("refuses a local path that does not resolve, and says why", async () => {
     const config = await readExecutionConfig(
       site({
-        repoPath: "/home/admin/a-checkout-that-was-deleted", repoUrl: null, defaultBranch: "main",
-        deployDocPath: REAL_DEPLOY_DOC, bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
+        repoPath: join(root, "gone"), repoUrl: null, defaultBranch: "main",
+        deployDocPath: REAL_DEPLOY_DOC(), bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
@@ -270,8 +304,8 @@ describe("the execution config reports every lane, so a caller takes the one it 
   it("reports a disabled delivery as disabled", async () => {
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: REAL_DEPLOY_DOC,
-        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: false,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: REAL_DEPLOY_DOC(),
+        bridgeAlias: "site-with-doc", adapters: ["wix_embed"], enabled: false,
       }),
       "project-1",
       "site-1"
@@ -288,15 +322,15 @@ describe("the execution config reports every lane, so a caller takes the one it 
     // exactly the duplication that drifts.
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
-        bridgeAlias: "atelier-harmonie", adapters: ["wix_embed"], enabled: true,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "site-with-no-doc", adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
     );
     expect(config.repo.deployDocFound).toBe(true);
     expect(config.repo.deployDocAuthority).toBe("bridge_shared");
-    expect(config.repo.deployDocPath).toMatch(/PAGE_DELIVERY\.md$/);
+    expect(config.repo.deployDocPath).toBe(sharedDoc);
     expect(config.canExecute).toBe(true);
   });
 
@@ -304,14 +338,14 @@ describe("the execution config reports every lane, so a caller takes the one it 
     // A site whose process genuinely differs keeps its own document, and it wins.
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
-        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "site-with-doc", adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
     );
     expect(config.repo.deployDocAuthority).toBe("bridge_site");
-    expect(config.repo.deployDocPath).toMatch(/susimacdonald/);
+    expect(config.repo.deployDocPath).toBe(siteDoc);
   });
 
   it("refuses a site that has no method at all", async () => {
@@ -319,7 +353,7 @@ describe("the execution config reports every lane, so a caller takes the one it 
     // to learn how a change ships, so this stays refused.
     const config = await readExecutionConfig(
       site({
-        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        repoPath: REAL_CHECKOUT(), repoUrl: null, defaultBranch: "main", deployDocPath: null,
         bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",

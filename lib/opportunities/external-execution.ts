@@ -1,5 +1,5 @@
 import { stat as stat_path } from "node:fs/promises";
-import { join as join_path } from "node:path";
+import { join as join_path, resolve as resolve_path } from "node:path";
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 
@@ -362,6 +362,18 @@ async function fileExists(file: string): Promise<boolean> {
 }
 
 /**
+ * Where the Wix bridge lives on this host.
+ *
+ * A deployment fact, not a code fact: it is overridable through `WIX_BRIDGE_ROOT` so the same
+ * code works on a host that keeps the bridge elsewhere, and so tests can point at a fixture
+ * instead of depending on this machine's filesystem. The default matches the documented
+ * layout on the shared coding host.
+ */
+function bridgeRoot(): string {
+  return resolve_path(process.env.WIX_BRIDGE_ROOT?.trim() || "/home/admin/wix-site-bridge");
+}
+
+/**
  * Resolve how a change reaches production.
  *
  * ## The deploy method belongs to the bridge, not to each site
@@ -411,7 +423,7 @@ async function resolveDeployDoc(
   }
 
   if (bridgeAlias) {
-    const siteDir = join_path("/home/admin/wix-site-bridge/sites", bridgeAlias);
+    const siteDir = join_path(bridgeRoot(), "sites", bridgeAlias);
     for (const name of ["DEPLOYMENT.md", "docs/DEPLOYMENT.md"]) {
       const candidate = join_path(siteDir, name);
       if (await fileExists(candidate)) return { path: candidate, found: true, authority: "bridge_site" };
@@ -423,7 +435,7 @@ async function resolveDeployDoc(
    * including one that has no document of its own — which is most of them, and is correct:
    * their process *is* the shared one.
    */
-  const shared = "/home/admin/wix-site-bridge/docs/PAGE_DELIVERY.md";
+  const shared = join_path(bridgeRoot(), "docs", "PAGE_DELIVERY.md");
   if (bridgeAlias && await fileExists(shared)) {
     return { path: shared, found: true, authority: "bridge_shared" };
   }
