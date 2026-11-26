@@ -186,7 +186,12 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
       />
 
       {mapStaleness && mapStaleness.state !== "current" ? (
-        <MapStalenessNotice state={mapStaleness.state} detail={mapStaleness.detail} month={mapStaleness.month} />
+        <MapStalenessNotice
+          state={mapStaleness.state}
+          detail={mapStaleness.detail}
+          month={mapStaleness.month}
+          bundleIsPartial={mapStaleness.latestBundleStatus === "PARTIAL"}
+        />
       ) : null}
 
       {/* Stage strip: the funnel in one line, every number a link. */}

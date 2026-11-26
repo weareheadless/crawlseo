@@ -16,15 +16,25 @@ export function MapStalenessNotice({
   state,
   detail,
   month,
+  bundleIsPartial = false,
 }: {
   state: Exclude<MapStaleness, "current">;
   detail: string;
   month: string;
+  /**
+   * The bundle being compared against collected only some of its sections.
+   *
+   * A partial bundle is not an absent one, and the difference is what the reader should
+   * act on: complete the collection rather than query why nothing was bought.
+   */
+  bundleIsPartial?: boolean;
 }) {
   const title =
     state === "no-bundle"
       ? "This map was built without paid evidence"
-      : "This map is older than its evidence";
+      : bundleIsPartial
+        ? "This map is older than its evidence, and that evidence is incomplete"
+        : "This map is older than its evidence";
   const tone =
     state === "no-bundle"
       ? "border-warning/40 bg-warning/5 text-warning-foreground"

@@ -24,6 +24,22 @@ describe("map staleness", () => {
     expect(mapStaleness({ mapBundleRunId: null, latestBundleRunId: null })).toBe("no-bundle");
   });
 
+  it("treats a partial bundle as evidence that exists", () => {
+    // A partial bundle can hold the keyword metrics, SERP snapshots and competitor ranks
+    // that were paid for, with one section short. Measured 2026-11-25 on alaguillotine: a
+    // partial bundle held 187 keyword metrics, 10 SERP snapshots and 134 competitor ranks
+    // for $0.27 while two AI Overview queries failed at the provider. The map had recorded
+    // that exact run id, and the check still said "no completed bundle exists" — because it
+    // filtered to COMPLETED before comparing. That is the check describing the wrong thing.
+    expect(mapStaleness({ mapBundleRunId: "bundle-a", latestBundleRunId: "bundle-a", latestBundleStatus: "PARTIAL" })).toBe("current");
+    expect(mapStaleness({ mapBundleRunId: "bundle-old", latestBundleRunId: "bundle-a", latestBundleStatus: "PARTIAL" })).toBe("stale");
+  });
+
+  it("still reports no-bundle when nothing was ever stored", () => {
+    // The distinction the state exists for must survive: absent is absent.
+    expect(mapStaleness({ mapBundleRunId: null, latestBundleRunId: null, latestBundleStatus: null })).toBe("no-bundle");
+  });
+
   it("uses time to clear a legacy map that finished after the bundle", () => {
     // Maps written before this contract carry no `inputs.bundleRunId`. Time is
     // the other fact we have: a map that finished after the newest bundle cannot

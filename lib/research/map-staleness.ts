@@ -31,8 +31,19 @@ export type MapStaleness = "current" | "stale" | "no-bundle";
 export type StalenessInput = {
   /** The bundle run the map consumed, as recorded on the map. Null on maps written before this contract. */
   mapBundleRunId: string | null;
-  /** The latest completed bundle for the same site and month. */
+  /**
+   * The latest bundle that stored anything for the same site and month.
+   *
+   * `PARTIAL` and `COMPLETED` both count. A partial bundle is not an absent one: it can
+   * hold the keyword metrics, SERP snapshots and competitor ranks that were paid for,
+   * with one section short. Measured 2026-11-25 on alaguillotine, a partial bundle held
+   * 187 keyword metrics, 10 SERP snapshots and 134 competitor ranks for $0.27 while two
+   * AI Overview queries failed at the provider. Treating it as no bundle told the owner
+   * their map had no paid evidence at all, which was false.
+   */
   latestBundleRunId: string | null;
+  /** Whether that bundle completed every section. `PARTIAL` means some evidence is missing. */
+  latestBundleStatus?: "COMPLETED" | "PARTIAL" | null;
   /**
    * When the map run was created. Used as evidence only when no bundle id was
    * recorded.
@@ -72,6 +83,13 @@ export type TopicMapStaleness = {
   topicMapRunId: string;
   mapBundleRunId: string | null;
   latestBundleRunId: string | null;
+  /**
+   * Whether the bundle the map is judged against completed every section.
+   *
+   * `PARTIAL` is surfaced so the board can say "some evidence is missing" instead of
+   * either claiming the map is fully grounded or claiming there is no evidence at all.
+   */
+  latestBundleStatus: "COMPLETED" | "PARTIAL" | null;
   latestBundleCompletedAt: string | null;
   /** One sentence a reader can act on. Empty when the map is current. */
   detail: string;
@@ -98,14 +116,22 @@ export async function readTopicMapStaleness(
   const map = (topicMapRun.report as { map?: TopicMap } | null)?.map ?? null;
   const mapBundleRunId = map?.inputs?.bundleRunId ?? null;
 
+  /**
+   * The newest bundle that produced evidence — `PARTIAL` included.
+   *
+   * The map's own record is the strongest signal available, and it names the run it read.
+   * Filtering to `COMPLETED` here meant a partial bundle was invisible to this check even
+   * when the map had literally recorded its id, and the board then reported "no completed
+   * bundle exists" about evidence the map was built from.
+   */
   const latestBundle = await db.researchRun.findFirst({
     where: {
       siteId: input.siteId,
       idempotencyKey: bundleKey(input.siteId, input.month),
-      status: "COMPLETED",
+      status: { in: ["COMPLETED", "PARTIAL"] },
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, completedAt: true },
+    select: { id: true, completedAt: true, status: true },
   });
 
   const state = mapStaleness({
@@ -113,14 +139,16 @@ export async function readTopicMapStaleness(
     latestBundleRunId: latestBundle?.id ?? null,
     mapCreatedAt: topicMapRun.createdAt,
     latestBundleCompletedAt: latestBundle?.completedAt ?? null,
+    latestBundleStatus: (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null,
   });
   return {
     state,
     topicMapRunId: topicMapRun.id,
     mapBundleRunId,
+    latestBundleStatus: (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null,
     latestBundleRunId: latestBundle?.id ?? null,
     latestBundleCompletedAt: latestBundle?.completedAt?.toISOString() ?? null,
-    detail: describe(state, mapBundleRunId, latestBundle?.id ?? null),
+    detail: describe(state, mapBundleRunId, latestBundle?.id ?? null, (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null),
   };
 }
 
@@ -150,7 +178,12 @@ export async function readLatestTopicMapStaleness(
   return staleness ? { ...staleness, month } : null;
 }
 
-function describe(state: MapStaleness, mapBundleRunId: string | null, latestBundleRunId: string | null): string {
+function describe(
+  state: MapStaleness,
+  mapBundleRunId: string | null,
+  latestBundleRunId: string | null,
+  latestBundleStatus: "COMPLETED" | "PARTIAL" | null = null
+): string {
   switch (state) {
     case "current":
       return "";
@@ -161,9 +194,14 @@ function describe(state: MapStaleness, mapBundleRunId: string | null, latestBund
       // second look like a bug in the product.
       return "no completed bundle exists for this month, so the map was built without paid evidence; its clusters describe only what Search Console and the crawl already knew. If a bundle was attempted and refused, the reason is in the run log: a market-scoped bundle needs a stated audience market, and a site whose measured audience is too scattered to name one is refused rather than guessed";
     case "stale":
-    default:
+    default: {
+      // A stale map against a PARTIAL bundle is still worth rebuilding — the evidence it
+      // has was paid for — but the reader should know the new bundle is short a section,
+      // so a cluster with nothing attached is not read as proof of no demand.
+      const partial = latestBundleStatus === "PARTIAL" ? " (that bundle is partial: not every section was collected)" : "";
       return mapBundleRunId
-        ? `built from bundle ${mapBundleRunId}, but ${latestBundleRunId} is the latest completed one; rebuild the map to include it`
-        : `built before ${latestBundleRunId} completed; rebuild the map to include it`;
+        ? `built from bundle ${mapBundleRunId}, but ${latestBundleRunId} is the latest one${partial}; rebuild the map to include it`
+        : `built before ${latestBundleRunId} finished${partial}; rebuild the map to include it`;
+    }
   }
 }
