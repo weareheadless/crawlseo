@@ -1695,17 +1695,33 @@ export async function runDetectors(
       });
     }
   }
+  /**
+   * A dry run performs no writes at all.
+   *
+   * Only `applyDecisionSuppression` used to be guarded, so the three sweeps above it ran on
+   * every "shadow" comparison: `dryRun` skipped creating and updating rows, then parked the
+   * ones already there. Measured 2026-11-25 on susimacdonald, a dry run taken to *measure* what
+   * turning the detectors back on would do parked 35 live rows as `superseded` before anything
+   * was decided. `scripts/shadow-analysis.ts` has the same shape, so every shadow run it ever
+   * made was mutating the board it was comparing against — which is how a measurement can
+   * quietly become the cause of the thing it is measuring.
+   *
+   * A flag named `dryRun` that writes is worse than no flag: it invites exactly the confident
+   * read-only measurement that damages production.
+   */
+  if (opts.dryRun) {
+    return { created, updated, parked: [], hygieneOnly, disabled, candidates };
+  }
   const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy, ownedTypes });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
   const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy, ownedTypes });
-  const suppressed = opts.dryRun ? [] : await applyDecisionSuppression(db, { projectId, detectedBy, evidence });
+  const suppressed = await applyDecisionSuppression(db, { projectId, detectedBy, evidence });
   return {
     created,
     updated,
     parked: [...parked, ...superseded, ...capped, ...suppressed],
     hygieneOnly,
     disabled,
-    ...(opts.dryRun ? { candidates } : {}),
   };
 }
 

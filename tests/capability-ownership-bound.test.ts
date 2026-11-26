@@ -205,3 +205,72 @@ describe("a modelled project still runs the detectors", () => {
     expect(reported).toHaveLength(14);
   });
 });
+
+describe("a dry run writes nothing", () => {
+  /**
+   * `dryRun` skipped creating and updating rows but still ran every sweep, so a "shadow"
+   * comparison parked the rows already on the board. Measured 2026-11-25 on susimacdonald: a dry
+   * run taken to measure what turning the detectors back on would do parked 35 live rows as
+   * `superseded` — and `superseded` is deliberately not restorable, so nothing brought them back.
+   *
+   * A flag named `dryRun` that writes is worse than no flag: it invites the confident read-only
+   * measurement that damages production. Every writer in the run is asserted absent here.
+   */
+  it("performs no update, no updateMany and no create", async () => {
+    const { runDetectors } = await import("@/lib/funnel/detectors");
+    const calls: string[] = [];
+    const seed = [
+      {
+        id: "r1",
+        kind: "keyword_rank",
+        observedAt: new Date("2026-11-20T00:00:00Z"),
+        dimensions: { query: "pricing software", url: "https://x.com/a", windowEnd: "2026-11-20T00:00:00.000Z", windowDays: 28, windowRole: "current", scope: "all" },
+        metrics: {
+          "first_party:position": { value: 8, unit: "rank", source: "first_party" },
+          "first_party:impressions": { value: 400, unit: "count", source: "first_party" },
+          "first_party:clicks": { value: 4, unit: "count", source: "first_party" },
+          "first_party:ctr": { value: 0.01, unit: "ratio", source: "first_party" },
+        },
+      },
+    ];
+    const db = {
+      evidenceRecord: { findMany: vi.fn(async () => seed) },
+      demandMapCluster: { findMany: vi.fn(async () => []) },
+      site: { findFirst: vi.fn(async () => null) },
+      crawl: { findFirst: vi.fn(async () => null) },
+      auditPage: { findMany: vi.fn(async () => []) },
+      opportunity: {
+        // A row already on the board, which the sweeps would reach for.
+        findMany: vi.fn(async () => [
+          { id: "existing", type: "O2_striking_distance", dedupKey: "O2:some other query", status: "detected", scoreValue: 1, scoreInputs: null, recommendationDecision: null },
+        ]),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => {
+          calls.push("create");
+          return { id: "new" };
+        }),
+        update: vi.fn(async () => {
+          calls.push("update");
+          return { id: "x" };
+        }),
+        updateMany: vi.fn(async (args: { where?: Record<string, unknown> }) => {
+          calls.push("updateMany");
+          return { count: 0 };
+        }),
+        groupBy: vi.fn(async () => []),
+      },
+      evidenceEdge: {
+        upsert: vi.fn(async () => {
+          calls.push("evidenceEdge.upsert");
+          return { id: "edge" };
+        }),
+        count: vi.fn(async () => 1),
+      },
+    };
+    const result = await runDetectors(db as never, "p1", { dryRun: true, topicMapOwnsBoard: true });
+    expect(calls).toEqual([]);
+    // And it still reports what it would have produced, which is the point of a dry run.
+    expect(Array.isArray(result.candidates)).toBe(true);
+    expect(result.parked).toEqual([]);
+  });
+});
