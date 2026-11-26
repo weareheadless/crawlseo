@@ -120,7 +120,13 @@ describe("query overlap", () => {
     expect(o10).toBeTruthy();
     expect(String(o10!.summary)).toContain("not proof");
     expect(String(o10!.summary)).not.toMatch(/consolidate them|merge them/i);
-    // No demand of its own: it stays a hypothesis.
-    expect((o10!.scoreInputs as { worth: { volume: unknown } }).worth.volume).toBeNull();
+    // The impressions are measured and carried, because they are the size of the question:
+    // 160 impressions across two pages is a different decision from 4. This used to assert
+    // `volume: null`, which discarded the measurement and left every cannibalisation row at
+    // score 2 — below the parking threshold, so the detector's whole output was invisible.
+    const worth = (o10!.scoreInputs as { worth: { volume: unknown; readiness: unknown } }).worth;
+    expect(worth.volume).toBe(160);
+    // Still not a prescription: the cause has to be judged before anything is consolidated.
+    expect(worth.readiness).toBe("needs_investigation");
   });
 });

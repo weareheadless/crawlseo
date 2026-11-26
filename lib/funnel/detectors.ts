@@ -1110,26 +1110,58 @@ const DETECTORS: Detector[] = [
         const urls = new Set(competing.map((row) => dim(row, "url") ?? "").filter(Boolean));
         if (urls.size < 2) continue;
         const [first] = competing;
+
+        /**
+         * The numbers the detector already has, instead of a null.
+         *
+         * It knows how many impressions the query gets, and how far down the pages sit. All
+         * of it was discarded — `volume: null`, no observed impressions, no window — so every
+         * cannibalisation row scored 2 and the hysteresis sweep parked it below a threshold
+         * of 3. Measured 2026-11-25: all 4 cannibalisation rows on the fleet were retired,
+         * which is why the detector looked like it did not exist.
+         *
+         * What is *not* claimed: that the pages compete. Overlap is not proof, so readiness
+         * stays `needs_investigation` and the summary asks for the intent check. The
+         * impressions are the size of the question, not of a win.
+         */
+        const strongest = competing.reduce((best, row) => {
+          const position = rankOf(row.metrics) ?? Number.POSITIVE_INFINITY;
+          const bestPosition = rankOf(best.metrics) ?? Number.POSITIVE_INFINITY;
+          return position < bestPosition ? row : best;
+        }, competing[0]);
+        const totalImpressions = competing.reduce((sum, row) => sum + (num(row, "first_party:impressions") ?? 0), 0);
+        const disputed = Math.max(0, totalImpressions - (num(strongest, "first_party:impressions") ?? 0));
+        const windowDays = dimNum(first, "windowDays") ?? dimNum(strongest, "windowDays") ?? 28;
+
         candidates.push({
           type: "O10_cannibalization",
           title: `Query overlap: ${urls.size} of our pages appear for "${query}"`,
-          summary: `${urls.size} pages each received impressions for this query in the window. Check the query's intent and the pages' content before changing anything: overlap is not proof that they compete, and consolidation is not the default fix.`,
+          summary: `${urls.size} pages each received impressions for this query in the window (${Math.round(totalImpressions)} impressions, ${Math.round(disputed)} on pages other than the best-placed one at position ${Math.round(rankOf(strongest.metrics) ?? 0)}). Check the query's intent and the pages' content before changing anything: overlap is not proof that they compete, and consolidation is not the default fix.`,
           dedupKey: `O10:${query}`,
           clusterSlug: dim(first, "cluster"),
           whyEvidenceIds: [],
           howEvidenceIds: competing.map((row) => row.id),
           scoreInputs: scoreDefaults({
-            // No demand of its own and no declared play: this is a question to
-            // answer, so it stays a hypothesis rather than claiming an upside.
             worth: {
-              volume: null,
-              ctrAtPosition: null,
+              // Measured impressions, so the row is sized by what is actually at stake rather
+              // than being a hypothesis with no evidence behind it.
+              volume: totalImpressions > 0 ? totalImpressions : null,
+              volumeSource: totalImpressions > 0 ? "first_party" : "unknown",
+              observedImpressions: totalImpressions > 0 ? totalImpressions : null,
+              ctrAtPosition: ctrAtPosition(rankOf(strongest.metrics)),
+              currentPosition: rankOf(strongest.metrics),
+              targetPosition: TARGET_POSITION.O10_cannibalization,
+              // The window the impressions cover. Without it the impact cannot be
+              // annualised and the row falls back to a hypothesis.
+              windowDays,
               businessValue: 0.6,
-              volumeSource: "unknown",
               readiness: "needs_investigation",
-              measurement: "unquantified",
+              measurement: "observed_baseline",
               benefitTrack: "organic_growth",
               intervention: "investigate",
+              change: `Decide whether the ${urls.size} pages appearing for "${query}" compete, and consolidate only if they do`,
+              successMeasure: `one page holds the query instead of ${urls.size}`,
+              targetPages: [...urls],
             },
             winProbability: { playTypeFactor: 0.5 },
             effort: { playTypeBase: 4, sizeFactor: 1 },

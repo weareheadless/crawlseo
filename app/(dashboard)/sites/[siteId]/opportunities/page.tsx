@@ -191,6 +191,7 @@ export default async function OpportunitiesPage({ params, searchParams }: Props)
           detail={mapStaleness.detail}
           month={mapStaleness.month}
           bundleIsPartial={mapStaleness.latestBundleStatus === "PARTIAL"}
+          bundleCompleteness={mapStaleness.latestBundleCompleteness}
         />
       ) : null}
 

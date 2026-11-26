@@ -17,6 +17,7 @@ export function MapStalenessNotice({
   detail,
   month,
   bundleIsPartial = false,
+  bundleCompleteness = null,
 }: {
   state: Exclude<MapStaleness, "current">;
   detail: string;
@@ -25,9 +26,13 @@ export function MapStalenessNotice({
    * The bundle being compared against collected only some of its sections.
    *
    * A partial bundle is not an absent one, and the difference is what the reader should
-   * act on: complete the collection rather than query why nothing was bought.
+   * act on: complete the collection rather than query why nothing was bought. The share
+   * matters too — one missing section of eight is a gap to fill, five of eight is a run to
+   * redo.
    */
   bundleIsPartial?: boolean;
+  /** `stored/planned` sections, so the banner can say how incomplete rather than that it is. */
+  bundleCompleteness?: { stored: number; planned: number; short: string[] } | null;
 }) {
   const title =
     state === "no-bundle"
@@ -44,6 +49,14 @@ export function MapStalenessNotice({
     <div role="status" className={`mb-6 rounded-xl border px-4 py-3 ${tone}`}>
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p>
+      {bundleCompleteness ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {/* The number, not just the word. A run that is one section short is usable; one
+              that is half empty is not, and the reader cannot tell from "partial" alone. */}
+          Evidence collected: <span className="font-medium">{bundleCompleteness.stored} of {bundleCompleteness.planned}</span> sections
+          {bundleCompleteness.short.length > 0 ? ` (short on ${bundleCompleteness.short.join(", ")})` : ""}.
+        </p>
+      ) : null}
       <p className="mt-1 text-xs text-muted-foreground">
         The rows below were drafted from that map, so a cluster with no work attached may mean the map never
         saw the demand rather than the site not having any. Rebuild it for {month}:

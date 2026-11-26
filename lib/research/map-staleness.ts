@@ -60,6 +60,46 @@ export type StalenessInput = {
   latestBundleCompletedAt?: Date | null;
 };
 
+/**
+ * How much of a bundle actually landed, when it is not complete.
+ *
+ * "Partial" covers everything from one failed question to most of the run, and those are
+ * different facts. Measured 2026-11-25 on alaguillotine: a PARTIAL bundle stored 187 keyword
+ * metrics, 10 SERP snapshots and 134 competitor ranks, with one section short — 8 of 12 AI
+ * Overview questions answered. Calling that and a half-empty run the same thing hides the
+ * only number an owner needs.
+ *
+ * The share is computed from the section plan, not from impressions or rows, because a
+ * section is the unit that was bought: a section either collected or it did not.
+ */
+export type BundleCompleteness = {
+  /** Sections that stored evidence. */
+  stored: number;
+  /** Sections that were planned. */
+  planned: number;
+  /** 0–1. 1 means every planned section stored something. */
+  share: number;
+  /** Sections that stored nothing, or only part of what they selected. */
+  short: string[];
+};
+
+/**
+ * Read how complete a bundle was from its own report.
+ *
+ * Returns null when the report has no section list (a run written before sections were
+ * recorded), so an unknown completeness is never presented as a good or bad one.
+ */
+export function readBundleCompleteness(report: unknown): BundleCompleteness | null {
+  const sections = (report as { sections?: unknown } | null)?.sections;
+  if (!Array.isArray(sections) || sections.length === 0) return null;
+  const rows = sections as Array<{ name?: string; status?: string; partial?: boolean }>;
+  const stored = rows.filter((row) => row.status === "stored" || row.status === "reused").length;
+  const short = rows
+    .filter((row) => (row.status !== "stored" && row.status !== "reused") || row.partial === true)
+    .map((row) => String(row.name ?? "unknown"));
+  return { stored, planned: rows.length, share: stored / rows.length, short };
+}
+
 export function mapStaleness(input: StalenessInput): MapStaleness {
   if (!input.latestBundleRunId) return "no-bundle";
   if (input.mapBundleRunId) return input.mapBundleRunId === input.latestBundleRunId ? "current" : "stale";
@@ -90,6 +130,13 @@ export type TopicMapStaleness = {
    * either claiming the map is fully grounded or claiming there is no evidence at all.
    */
   latestBundleStatus: "COMPLETED" | "PARTIAL" | null;
+  /**
+   * How much of the bundle landed, when the report says. Null when it does not say.
+   *
+   * A partial bundle missing one of eight sections is a different problem from one missing
+   * five, and only this tells them apart.
+   */
+  latestBundleCompleteness: BundleCompleteness | null;
   latestBundleCompletedAt: string | null;
   /** One sentence a reader can act on. Empty when the map is current. */
   detail: string;
@@ -131,9 +178,10 @@ export async function readTopicMapStaleness(
       status: { in: ["COMPLETED", "PARTIAL"] },
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, completedAt: true, status: true },
+    select: { id: true, completedAt: true, status: true, report: true },
   });
 
+  const completeness = readBundleCompleteness(latestBundle?.report);
   const state = mapStaleness({
     mapBundleRunId,
     latestBundleRunId: latestBundle?.id ?? null,
@@ -146,9 +194,10 @@ export async function readTopicMapStaleness(
     topicMapRunId: topicMapRun.id,
     mapBundleRunId,
     latestBundleStatus: (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null,
+    latestBundleCompleteness: completeness,
     latestBundleRunId: latestBundle?.id ?? null,
     latestBundleCompletedAt: latestBundle?.completedAt?.toISOString() ?? null,
-    detail: describe(state, mapBundleRunId, latestBundle?.id ?? null, (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null),
+    detail: describe(state, mapBundleRunId, latestBundle?.id ?? null, (latestBundle?.status as "COMPLETED" | "PARTIAL" | undefined) ?? null, completeness),
   };
 }
 
@@ -182,7 +231,8 @@ function describe(
   state: MapStaleness,
   mapBundleRunId: string | null,
   latestBundleRunId: string | null,
-  latestBundleStatus: "COMPLETED" | "PARTIAL" | null = null
+  latestBundleStatus: "COMPLETED" | "PARTIAL" | null = null,
+  completeness: BundleCompleteness | null = null
 ): string {
   switch (state) {
     case "current":
@@ -198,7 +248,14 @@ function describe(
       // A stale map against a PARTIAL bundle is still worth rebuilding — the evidence it
       // has was paid for — but the reader should know the new bundle is short a section,
       // so a cluster with nothing attached is not read as proof of no demand.
-      const partial = latestBundleStatus === "PARTIAL" ? " (that bundle is partial: not every section was collected)" : "";
+      // Say how short it is, not just that it is short. One missing section and a
+      // half-empty run are different facts, and the owner acts differently on each.
+      const partial =
+        latestBundleStatus !== "PARTIAL"
+          ? ""
+          : completeness
+            ? ` (that bundle is partial: ${completeness.stored} of ${completeness.planned} sections collected${completeness.short.length ? `; short on ${completeness.short.join(", ")}` : ""})`
+            : " (that bundle is partial: not every section was collected)";
       return mapBundleRunId
         ? `built from bundle ${mapBundleRunId}, but ${latestBundleRunId} is the latest one${partial}; rebuild the map to include it`
         : `built before ${latestBundleRunId} finished${partial}; rebuild the map to include it`;

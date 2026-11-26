@@ -327,6 +327,18 @@ const TYPE_FOR_PROPOSAL: Record<
   "technical:technical": "O7_technical_defect",
 };
 
+/**
+ * The opportunity types this producer can emit, for callers that need to know its coverage.
+ *
+ * Exported so `retireLegacyOpportunitiesForTopicMap` can be checked against reality instead of
+ * against a list someone maintained by hand. Retiring a legacy row parks it, so claiming a
+ * capability the map does not have is how whole kinds of analysis disappear while the run
+ * reports success.
+ */
+export function opportunityTypesTheTopicMapCanProduce(): string[] {
+  return [...new Set(Object.values(TYPE_FOR_PROPOSAL))];
+}
+
 const DIMENSION_FOR_TYPE = {
   O3_content_gap: "content",
   O4_aeo_citation_gap: "aeo",

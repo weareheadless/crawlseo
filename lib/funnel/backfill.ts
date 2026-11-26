@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { OpportunityType, PrismaClient } from "@prisma/client";
 
 import { storeEvidenceRecord, type EvidenceDb } from "@/lib/funnel/evidence";
 import { currentPerformanceWindow, readPagePerformance, readQueryPagePerformance } from "@/lib/funnel/gsc-performance";
@@ -328,20 +328,67 @@ export async function retireLegacyClustersForTopicMap(
  * produced; their detected rows are parked with a stated reason, and a human
  * decision (accepted, in progress, rejected) is never touched.
  */
+/**
+ * The opportunity types the topic map's producer can emit.
+ *
+ * Kept as an explicit list because it is the *coverage* test, not a detail. Retirement below
+ * parks a legacy row only when the replacement can express the same kind of finding; a type
+ * the producer never emits is a capability, and parking it deletes the capability while
+ * reporting a successful migration.
+ *
+ * Derived from `TYPE_FOR_PROPOSAL` in `lib/research/opportunity-generation.ts`, with a test
+ * that fails when that map grows a type this list has not been told about — so the two cannot
+ * drift apart silently in the direction that loses work.
+ */
+export const TYPES_THE_TOPIC_MAP_PRODUCES = [
+  "O3_content_gap",
+  "O4_aeo_citation_gap",
+  "O7_technical_defect",
+  "O11_freshness_decay",
+  "O14_offer_positioning_gap",
+] as const satisfies readonly OpportunityType[];
+
+const TOPIC_MAP_TYPES: readonly OpportunityType[] = TYPES_THE_TOPIC_MAP_PRODUCES;
+
+/**
+ * The topic map owns the opportunities it can express.
+ *
+ * When the project has model topics, the legacy detectors must not add a parallel board
+ * beside the one the job map produced; their rows are parked with a stated reason, and a
+ * human decision (accepted, in progress, rejected) is never touched.
+ *
+ * ## Retirement is per capability, not per producer
+ *
+ * This used to park every legacy row regardless of type, on the assumption that the topic map
+ * replaced the detectors wholesale. It did not: the map's producer emits five of the fourteen
+ * declared types. Measured 2026-11-25, that swept 352 rows away and **109 of them were types
+ * the map cannot emit at all** — striking distance (31), user pain point (30), winnable rank
+ * (28), structured data (15), cannibalisation (4), backlink gap (1). Cannibalisation is why
+ * this was noticed: the detector runs, writes its rows, and the retirement immediately parks
+ * them, so the functionality appears not to exist.
+ *
+ * A row of a type the map cannot express parks for a different reason, and says which: it is
+ * *unreplaced*, not superseded. That keeps it visible in the census and in the board's own
+ * reporting instead of being filed as a successful migration.
+ */
 export async function retireLegacyOpportunitiesForTopicMap(
   db: Pick<PrismaClient, "demandMapCluster" | "opportunity">,
   projectId: string
-): Promise<{ modelled: number; parked: number }> {
+): Promise<{ modelled: number; parked: number; unreplaced: number }> {
   const modelled = await db.demandMapCluster.count({
     where: { projectId, supersededAt: null, proposedBy: "topic-map-v1" },
   });
-  if (modelled === 0) return { modelled, parked: -1 };
+  if (modelled === 0) return { modelled, parked: 0, unreplaced: 0 };
+
+  const candidate = {
+    projectId,
+    status: "detected" as const,
+    detectedBy: { notIn: ["phase3:topic-map", "phase5:weekly"] },
+  };
+
+  // Only the types the replacement can actually produce.
   const parked = await db.opportunity.updateMany({
-    where: {
-      projectId,
-      status: "detected",
-      detectedBy: { notIn: ["phase3:topic-map", "phase5:weekly"] },
-    },
+    where: { ...candidate, type: { in: [...TOPIC_MAP_TYPES] } },
     data: {
       status: "parked",
       parkReason: "superseded by the topic-map pipeline",
@@ -349,7 +396,20 @@ export async function retireLegacyOpportunitiesForTopicMap(
       decidedAt: new Date(),
     },
   });
-  return { modelled, parked: parked.count };
+
+  /**
+   * The rest are left alone and counted.
+   *
+   * Deliberately not parked. They are the detectors' remaining output, and a board that shows
+   * them beside the map's rows is telling the truth: two producers, one of which has no
+   * replacement for this kind of finding yet. Silently dropping them is what made the board
+   * look complete while missing whole classes of work.
+   */
+  const unreplaced = await db.opportunity.count({
+    where: { ...candidate, type: { notIn: [...TOPIC_MAP_TYPES] } },
+  });
+
+  return { modelled, parked: parked.count, unreplaced };
 }
 
 /**

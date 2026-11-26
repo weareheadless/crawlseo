@@ -359,12 +359,26 @@ export function computeScore(inputs: ScoreInputs): ScoreResult {
    * negative evidence — that is handled by labelling the row and placing it last (D1) —
    * but it is not extra credit either, and it must not outrank a sized win.
    */
+  /**
+   * A finding with measured demand is not `unmeasured`, and must not be capped like one.
+   *
+   * `unmeasured` means the demand figure itself is invented — a question generated from
+   * business knowledge that nobody has been shown to search. A detector finding (striking
+   * distance, cannibalisation, a winnable rank) is the opposite: its demand is measured, and
+   * only its *fix* is unquantified.
+   *
+   * Those were sharing the lowest ceiling, which is how 371 parked rows came to hold 282 real
+   * findings beside 89 invented ones. The distinction is the one the whole file is about, so
+   * it is read from the inputs rather than inferred from readiness.
+   */
+  const measuredDemand = inputs.worth.measurement === "observed_baseline" || (inputs.worth.volume ?? 0) > 0;
   const band = inputs.worth.technical ? null
     : readiness === "research_backlog" ? 4
-    : readiness === "needs_investigation" ? 6
-    : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? 10
-    // Legacy rows predate the contract: unknown demand is a question, not work.
-    : readiness == null && assessment.kind === "hypothesis" ? 6
+    : readiness === "needs_investigation" ? (measuredDemand ? 12 : 6)
+    : readiness === "actionable" && (inputs.worth.measurement === "unquantified" || assessment.kind === "hypothesis") ? (measuredDemand ? 18 : 10)
+    // Legacy rows predate the contract. A legacy row that measured its demand is real work
+    // whose fix is unquantified; one that did not is a question. Same split.
+    : readiness == null && assessment.kind === "hypothesis" ? (measuredDemand ? 12 : 6)
     : null;
   if ((band != null || inputs.worth.unmeasured) && !inputs.worth.technical) {
     const ceiling = inputs.worth.unmeasured ? 3 : (band ?? 6);
