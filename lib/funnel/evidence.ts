@@ -412,6 +412,53 @@ export function partitionByWindowRole<T extends CurrentEvidenceRow>(
   return { current, previous, pairs: new Map() };
 }
 
+/**
+ * The latest observation per identity, for detectors that ask "what is true now".
+ *
+ * ## Why this is not `compareRankWindows`
+ *
+ * `compareRankWindows` answers O11's question — "give me two aligned windows to diff" — and
+ * to do that it narrows to a single `windowEnd`. Search Console does not project every query
+ * on the same day, so that single date is a subset: measured 2026-11-25 on casamigo, 9 distinct
+ * queries carried a `current` role across 5 different `windowEnd`s, and taking the newest kept
+ * 4 rows. With 4 rows, **no query had two competing URLs**, so the cannibalisation detector
+ * could never fire on real data — the analysis looked absent rather than starved.
+ *
+ * Detectors that answer "what is the current state of each query/page" need the other rule:
+ * the newest period per query and page, keeping every row inside it. That is arithmetic on a
+ * stored date, not a judgement about periods.
+ */
+export function latestWindowPerIdentity<T extends CurrentEvidenceRow>(rows: T[]): T[] {
+  /**
+   * The newest period each thing was observed in — one period, but every row inside it.
+   *
+   * This is a *window* rule, not a dedup rule, and the difference is the whole point. A query
+   * projected under several segments is stored as several rows sharing one identity; they are
+   * one observation expressed several ways, and a consumer that has to choose between them
+   * (O11 keeps the projection with the most impressions) can only choose if it sees all of
+   * them. Collapsing to a single row here would pick arbitrarily and hand the detector a
+   * decision already made. Measured 2026-11-24 on Susi: `akumal real estate` is four rows.
+   *
+   * What is dropped is the *older periods*: a row describing September is superseded by one
+   * describing October for the same query and page.
+   */
+  const newestEnd = new Map<string, string | null>();
+  for (const row of rows) {
+    const key = identityOf(row);
+    const end = windowEndOf(row);
+    const held = newestEnd.get(key);
+    if (held === undefined) newestEnd.set(key, end);
+    else if (end != null && (held == null || end > held)) newestEnd.set(key, end);
+  }
+  return rows.filter((row) => {
+    const end = newestEnd.get(identityOf(row)) ?? null;
+    // No `windowEnd` anywhere for this identity is the documented legacy shape: nothing says
+    // which period a row describes, so every row is kept and an un-migrated project analyses.
+    if (end == null) return true;
+    return windowEndOf(row) === end;
+  });
+}
+
 export async function currentEvidence(db: EvidenceDb, options: CurrentEvidenceOptions): Promise<EvidenceRecord[]> {
   const rows = await db.evidenceRecord.findMany({
     where: {

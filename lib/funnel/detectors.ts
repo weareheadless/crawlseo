@@ -1,7 +1,7 @@
 import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
 
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
-import { compareRankWindows, partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
+import { compareRankWindows, latestWindowPerIdentity, partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
 import { ctrAtPosition, rankDistanceFactor, freshnessFactor } from "@/lib/funnel/scoring";
@@ -500,8 +500,25 @@ function latestValue(evidence: Evidence[], kind: string, key: string): string | 
  * run counted a query once per month and kept defects a later crawl had fixed.
  */
 export function selectCurrentEvidence(evidence: Evidence[]): Evidence[] {
-  const { current } = partitionByWindowRole(evidence.filter((row) => row.kind === "keyword_rank") as never);
-  const currentRankIds = new Set(current.map((row) => row.id));
+  /**
+   * Rank rows: the newest observation per (query, url), not one aligned window.
+   *
+   * This used `partitionByWindowRole`, which narrows to a single `windowEnd` because O11 needs
+   * two aligned windows to diff. That is the wrong question for every other detector: Search
+   * Console projects different queries on different days, so "the newest window" is a subset of
+   * the queries rather than the current state of all of them.
+   *
+   * Measured 2026-11-25 on casamigo: 9 distinct queries carried a `current` role across 5
+   * `windowEnd`s, the newest held 4 rows, and **no query had two competing URLs** — so
+   * cannibalisation could not fire on real data at all, while its detector and its tests both
+   * passed.
+   *
+   * O11 still gets its aligned pair through `rankWindowComparison`, which is called separately
+   * with the unfiltered evidence. The two rules stay separate because they answer different
+   * questions, and conflating them is what starved the other detectors.
+   */
+  const rankRows = latestWindowPerIdentity(evidence.filter((row) => row.kind === "keyword_rank") as never);
+  const currentRankIds = new Set(rankRows.map((row) => (row as { id: string }).id));
   const crawl = latestValue(evidence, "onpage_crawl", "crawlId");
   return evidence.filter((row) => {
     if (row.kind === "keyword_rank") return currentRankIds.has(row.id);
