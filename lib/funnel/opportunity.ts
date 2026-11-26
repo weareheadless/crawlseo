@@ -198,10 +198,30 @@ const RESTORABLE_PARK_REASONS = [...SYSTEM_PARK_REASONS];
  */
 export async function applyHysteresis(
   db: OpportunityDb,
-  opts: { projectId: string; threshold: number; detectedBy: string }
+  opts: {
+    projectId: string;
+    threshold: number;
+    detectedBy: string;
+    /**
+     * The capabilities this run owns, and therefore the only rows it may park or restore.
+     *
+     * Both legs used to sweep every `detected` row in the project and use `detectedBy` only to
+     * label the park. That made any producer able to evict — and to unpark — another
+     * producer's work, which is how a capability disappears while every run reports success.
+     * Ownership is by type, not by writer: `detectedBy` has 23 distinct values in production,
+     * most of them one-off analysis scripts that will never run again, so scoping by writer
+     * would strand the rows they left behind.
+     */
+    ownedTypes: OpportunityType[];
+  }
 ): Promise<string[]> {
   const drifting = await db.opportunity.findMany({
-    where: { projectId: opts.projectId, status: "detected", scoreValue: { lt: opts.threshold } },
+    where: {
+      projectId: opts.projectId,
+      status: "detected",
+      type: { in: opts.ownedTypes },
+      scoreValue: { lt: opts.threshold },
+    },
     select: { id: true, scoreInputs: true, recommendationDecision: true },
   });
   // The compatibility index must not hide a classified recommendation. A supported
@@ -228,6 +248,7 @@ export async function applyHysteresis(
     where: {
       projectId: opts.projectId,
       status: "parked",
+      type: { in: opts.ownedTypes },
       parkReason: { in: RESTORABLE_PARK_REASONS },
       scoreValue: { gte: opts.threshold },
     },

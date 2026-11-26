@@ -1,6 +1,7 @@
 import { type DemandMapCluster, type EvidenceRecord, type EvidenceRecordKind, type OpportunityDimension, type OpportunityType, type PrismaClient } from "@prisma/client";
 
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
+import { capabilitiesOwnedBy, ALL_CAPABILITIES } from "@/lib/funnel/capabilities";
 import { compareRankWindows, latestWindowPerIdentity, partitionByWindowRole, rankOf } from "@/lib/funnel/evidence";
 import { upsertOpportunity, applyHysteresis } from "@/lib/funnel/opportunity";
 import type { ScoreInputs } from "@/lib/funnel/scoring";
@@ -1437,14 +1438,47 @@ export type DetectorRunResult = {
   hygieneOnly?: number;
 };
 
-/** Run every detector for a project, upsert opportunities, then hysteresis. */
+/**
+ * Run the detectors this project's ownership allows, upsert opportunities, then hysteresis.
+ *
+ * ## Which detectors run
+ *
+ * The topic map and the detectors are complementary, not alternatives. The map owns the five
+ * capabilities its proposal pipeline can express; the detectors own the nine that only exist as
+ * arithmetic over stored evidence. When the map owns the board, the detectors run for their own
+ * nine and stay out of the map's five — that is the "one board per project" rule, and it is
+ * right, because two producers reasoning differently about the same finding would show it twice.
+ *
+ * What was wrong is that "the map owns the board" was implemented as "the detectors do not run",
+ * which deleted nine capabilities instead of dividing fourteen. Measured 2026-11-25: all 8
+ * tenants had modelled clusters, so no detector ran in production for any of them.
+ *
+ * A project with no modelled topics still bootstraps through every detector, so an unmodelled
+ * tenant is not left with an empty board.
+ */
 export async function runDetectors(
   db: DetectorDb,
   projectId: string,
-  opts: { detectedBy?: string; now?: Date; dryRun?: boolean; brandTerms?: string[]; crawledPages?: number } = {}
+  opts: {
+    detectedBy?: string;
+    now?: Date;
+    dryRun?: boolean;
+    brandTerms?: string[];
+    crawledPages?: number;
+    /**
+     * The topic map has modelled this project and owns the capabilities it can express.
+     *
+     * The detectors then produce only their own. Ownership comes from `CAPABILITY_PRODUCER`,
+     * the single declared table, so this flag cannot become a second opinion about which
+     * capabilities exist.
+     */
+    topicMapOwnsBoard?: boolean;
+  } = {}
 ): Promise<DetectorRunResult> {
   const detectedBy = opts.detectedBy ?? "funnel-detectors";
   const now = opts.now ?? new Date();
+  const ownedTypes = opts.topicMapOwnsBoard ? capabilitiesOwnedBy("detectors") : ALL_CAPABILITIES;
+  const owned = new Set<OpportunityType>(ownedTypes);
   const allEvidence = (await db.evidenceRecord.findMany({
     where: { projectId, supersededById: null },
   })) as Evidence[];
@@ -1459,7 +1493,17 @@ export async function runDetectors(
   for (const resolution of byQuery.values()) slugToId.set(resolution.slug, resolution.clusterId);
 
   const available = new Set(evidence.map((row) => row.kind));
+  /**
+   * Capabilities this run owns but cannot produce, with the input that is missing.
+   *
+   * Only owned types are reported: a capability the topic map owns is not this run's business,
+   * and saying "O3 disabled, no SERP snapshot" beside a board full of the map's O3 rows would be
+   * a false alarm. Scoped this way the list is the honest one — absence of *this* producer's
+   * work, which is the number that has to exist for a missing capability to be visible rather
+   * than silent.
+   */
   const disabled: DisabledDetector[] = DETECTORS.flatMap((detector) => {
+    if (!owned.has(detector.type)) return [];
     const missing = (DETECTOR_REQUIRES[detector.type] ?? []).filter((kind) => !available.has(kind));
     if (missing.length > 0) return [{ type: detector.type, missing }];
     // CMP-010: O11 needs two honest windows, not just the `keyword_rank` kind. A project with
@@ -1559,6 +1603,8 @@ export async function runDetectors(
   };
 
   for (const detector of DETECTORS) {
+    // Not this run's capability: its producer of record is elsewhere.
+    if (!owned.has(detector.type)) continue;
     if (disabledTypes.has(detector.type)) continue;
     for (const rawCandidate of detector.detect(evidence, {
       now,
@@ -1649,9 +1695,9 @@ export async function runDetectors(
       });
     }
   }
-  const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy });
+  const parked = await applyHysteresis(db, { projectId, threshold: DETECTOR_THRESHOLDS.hysteresis, detectedBy, ownedTypes });
   const superseded = await retireStaleDetected(db, { projectId, produced, detectedBy });
-  const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy });
+  const capped = await applyOpenCap(db, { projectId, cap: DETECTOR_THRESHOLDS.openCap, detectedBy, ownedTypes });
   const suppressed = opts.dryRun ? [] : await applyDecisionSuppression(db, { projectId, detectedBy, evidence });
   return {
     created,
@@ -1712,10 +1758,19 @@ export async function retireStaleDetected(
   opts: { projectId: string; produced: Map<OpportunityType, Set<string>>; detectedBy: string }
 ): Promise<string[]> {
   if (opts.produced.size === 0) return [];
-  // Only the rows this producer owns: another producer's proposal of the same
-  // type must not be retired just because this detector did not re-produce it.
+  /**
+   * Only the types this run actually produced, across every writer.
+   *
+   * Scoping by capability rather than by `detectedBy` is deliberate. A type the topic map owns
+   * must not be retired because a detector did not re-produce it — `produced` only holds the
+   * types this run emitted, so that is already excluded. But a type this run *did* emit is this
+   * capability's current state, and rows of it left behind by an older writer (`batch-reanalysis`,
+   * `cmp-005-verify`, and 21 other producers that will never run again) have to be maintained by
+   * whoever owns the capability now. Otherwise they stay `detected` forever: stale work shown
+   * as current, which is the same defect as hiding work.
+   */
   const existing = await db.opportunity.findMany({
-    where: { projectId: opts.projectId, status: "detected", detectedBy: opts.detectedBy, type: { in: [...opts.produced.keys()] } },
+    where: { projectId: opts.projectId, status: "detected", type: { in: [...opts.produced.keys()] } },
     select: { id: true, type: true, dedupKey: true },
   });
   const stale = existing.filter((row) => !(opts.produced.get(row.type)?.has(row.dedupKey) ?? false));
@@ -1733,12 +1788,20 @@ export async function retireStaleDetected(
  */
 export async function applyOpenCap(
   db: DetectorDb,
-  opts: { projectId: string; cap: number; detectedBy: string }
+  opts: { projectId: string; cap: number; detectedBy: string; ownedTypes: OpportunityType[] }
 ): Promise<string[]> {
-  // Only machine-detected work is capped. A human accepted these; parking them
-  // would silently undo a decision.
+  /**
+   * Only machine-detected work is capped, and only work this producer owns.
+   *
+   * A human accepted some of these; parking them would silently undo a decision. The ownership
+   * bound is the other half: the cap used to order the whole board and park whatever fell past
+   * the limit, so turning one producer on could evict another producer's rows to make room for
+   * its own. A resource limit on how much work the owner is shown is a display concern; using
+   * deletion to enforce it is how capabilities vanish. Each producer is accountable for its own
+   * overflow.
+   */
   const open = await db.opportunity.findMany({
-    where: { projectId: opts.projectId, status: "detected" },
+    where: { projectId: opts.projectId, status: "detected", type: { in: opts.ownedTypes } },
     select: { id: true, scoreValue: true, recommendationDecision: true },
     orderBy: opportunityOrder(),
   });

@@ -343,7 +343,22 @@ describe("superseding stale detected rows (spine plan §3)", () => {
     });
     expect(superseded).toEqual(["old-page"]);
     expect(parkedIds).toEqual(["old-page"]);
-    // Ownership is part of the query: a detector retires only its own rows.
-    expect((findArgs[0].where as Record<string, unknown>).detectedBy).toBe("test");
+    /**
+     * Ownership is the capability, not the writer.
+     *
+     * This used to assert `where.detectedBy === "test"` — a detector retires only rows it wrote.
+     * That is the wrong bound, and it is the one that strands work: `detectedBy` has 23 distinct
+     * values in production, most of them one-off analysis and verification scripts that will
+     * never run again. Rows they left behind could then never be maintained, so a capability
+     * would keep showing findings that no current run still sees — stale work presented as
+     * current, which is the same defect as hiding work.
+     *
+     * Scoping by type keeps the guarantee the assertion was reaching for, more strongly: `produced`
+     * only ever holds types this run emitted, so a capability owned by the topic map can never be
+     * retired by a detector that did not re-produce it.
+     */
+    const where = findArgs[0].where as Record<string, unknown>;
+    expect((where.type as { in: string[] }).in).toEqual(["O8_structured_data_gap"]);
+    expect(where.detectedBy).toBeUndefined();
   });
 });

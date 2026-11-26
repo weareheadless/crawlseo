@@ -5,7 +5,8 @@ import { currentPerformanceWindow, readPagePerformance, readQueryPagePerformance
 import { previousWindow } from "@/lib/funnel/performance-window";
 import { bridgeBusinessKnowledgeToEvidence } from "@/lib/projects/business-knowledge-evidence";
 import { bridgeQuestionCoverageToEvidence } from "@/lib/research/question-coverage-evidence";
-import { brandTermsFromDomain, runDetectors } from "@/lib/funnel/detectors";
+import { brandTermsFromDomain, runDetectors, type DisabledDetector } from "@/lib/funnel/detectors";
+import { ALL_CAPABILITIES, capabilitiesOwnedBy } from "@/lib/funnel/capabilities";
 import { reassessLegacyFindings } from "@/lib/research/reassess-findings";
 import type { OpportunityDb } from "@/lib/funnel/opportunity";
 
@@ -331,22 +332,15 @@ export async function retireLegacyClustersForTopicMap(
 /**
  * The opportunity types the topic map's producer can emit.
  *
- * Kept as an explicit list because it is the *coverage* test, not a detail. Retirement below
- * parks a legacy row only when the replacement can express the same kind of finding; a type
- * the producer never emits is a capability, and parking it deletes the capability while
- * reporting a successful migration.
+ * Read from `CAPABILITY_PRODUCER`, the single declared ownership table, rather than listed here.
+ * It was a hand-maintained list beside the producer's own `TYPE_FOR_PROPOSAL` map, and the two
+ * agreeing was a coincidence rather than a check.
  *
- * Derived from `TYPE_FOR_PROPOSAL` in `lib/research/opportunity-generation.ts`, with a test
- * that fails when that map grows a type this list has not been told about — so the two cannot
- * drift apart silently in the direction that loses work.
+ * Retirement below parks a legacy row only when the replacement can express the same kind of
+ * finding; a type the producer never emits is a capability, and parking it deletes the
+ * capability while reporting a successful migration. Measured 2026-11-25: 109 rows.
  */
-export const TYPES_THE_TOPIC_MAP_PRODUCES = [
-  "O3_content_gap",
-  "O4_aeo_citation_gap",
-  "O7_technical_defect",
-  "O11_freshness_decay",
-  "O14_offer_positioning_gap",
-] as const satisfies readonly OpportunityType[];
+export const TYPES_THE_TOPIC_MAP_PRODUCES: readonly OpportunityType[] = capabilitiesOwnedBy("topic-map");
 
 const TOPIC_MAP_TYPES: readonly OpportunityType[] = TYPES_THE_TOPIC_MAP_PRODUCES;
 
@@ -471,6 +465,16 @@ export async function refreshFunnelForSite(
     hygieneOnly: number;
     knowledgeFacts: number;
     questionCoverage: number;
+    /**
+     * Capabilities that could not be produced, with the input that is missing.
+     *
+     * Carried out rather than dropped, because this is the only place a missing capability can
+     * become a number. `runDetectors` computed it and the caller discarded it, so a tenant with
+     * no backlink profile reported an empty backlink board instead of "O9 needs
+     * `backlink_profile`, which was never collected". Silence and absence are indistinguishable
+     * without it.
+     */
+    disabled: DisabledDetector[];
   }
 > {
   const site = await db.site.findUnique({ where: { id: siteId }, select: { projectId: true, domain: true } });
@@ -488,27 +492,34 @@ export async function refreshFunnelForSite(
       hygieneOnly: 0,
       knowledgeFacts: 0,
       questionCoverage: 0,
+      disabled: [],
     };
   }
   // The why leg, question coverage and clusters all have to exist before
   // detection; refreshEvidenceForSite owns that order.
   const evidence = await refreshEvidenceForSite(db, siteId, { projectId: site.projectId });
-  // One board per project. A modelled project's board is the topic map's; the
-  // legacy detectors would add a second, differently-reasoned list of work.
+  /**
+   * One board per project — but one board is *both* producers, not whichever ran last.
+   *
+   * This used to return early whenever the project had modelled clusters, on the reading that a
+   * modelled project's board is the topic map's. The map emits 5 of the 14 declared capabilities,
+   * so the early return deleted the other 9 instead of dividing the work: cannibalisation,
+   * striking distance, winnable rank, AEO presence, structured data, backlink gap, page
+   * experience, user pain point and business fact mismatch had no producer at all. Measured
+   * 2026-11-25, all 8 tenants had modelled clusters, so no detector had run in production for any
+   * of them — and the run reported success, because the missing work was missing rather than
+   * failed.
+   *
+   * The detectors now always run, for the capabilities they own. The map keeps its own, so the
+   * "no second, differently-reasoned list of the same finding" rule still holds; it is
+   * `CAPABILITY_PRODUCER` that decides which is which, in one place.
+   */
   const owned = await retireLegacyOpportunitiesForTopicMap(db, site.projectId);
-  if (owned.modelled > 0) {
+  const topicMapOwnsBoard = owned.modelled > 0;
+  if (topicMapOwnsBoard) {
     evidence.backfill.skipped.push(
-      `opportunities are owned by the topic map; legacy detectors skipped${owned.parked > 0 ? `, ${owned.parked} legacy opportunities parked` : ""}`
+      `the topic map owns ${TYPES_THE_TOPIC_MAP_PRODUCES.length} capabilities; detectors ran for the other ${ALL_CAPABILITIES.length - TYPES_THE_TOPIC_MAP_PRODUCES.length}${owned.parked > 0 ? `, ${owned.parked} superseded legacy opportunities parked` : ""}`
     );
-    return {
-      ...evidence.backfill,
-      knowledgeFacts: evidence.knowledgeFacts,
-      questionCoverage: evidence.questionCoverage,
-      created: 0,
-      updated: 0,
-      parked: owned.parked,
-      hygieneOnly: 0,
-    };
   }
   // Grouping is share-based as well as count-based: the denominator is the
   // pages the latest completed crawl actually assessed, not the pages that
@@ -522,6 +533,7 @@ export async function refreshFunnelForSite(
     detectedBy: opts.detectedBy ?? "funnel-refresh",
     // The site's own name is not an opportunity: a brand query already ranks.
     brandTerms: brandTermsFromDomain(site.domain),
+    topicMapOwnsBoard,
     ...(latestCompletedCrawl?.pagesFound ? { crawledPages: latestCompletedCrawl.pagesFound } : {}),
   });
   return {
@@ -535,5 +547,6 @@ export async function refreshFunnelForSite(
     // demand. They are not lost — the crawl page lists them with severity and page
     // count — but their absence from the board has to be countable, not silent.
     hygieneOnly: detection.hygieneOnly ?? 0,
+    disabled: detection.disabled,
   };
 }
