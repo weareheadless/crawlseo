@@ -1,3 +1,6 @@
+import { stat as stat_path } from "node:fs/promises";
+import { join as join_path } from "node:path";
+
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { withOpportunityAnchor, type OpportunityAnchor } from "@/lib/connectors/opportunity-anchor";
@@ -268,31 +271,62 @@ export async function listOpportunityExecutions(
 }
 
 /**
- * What an external executor needs to know before it can do the work.
+ * What an executor needs to know before it can do the work.
  *
- * Deliberately reports what is *missing* rather than filling it in. A site with no
- * `repoUrl` cannot be executed against by a remote agent, and saying so is more useful than
- * returning a local path the caller cannot use.
+ * ## Why there are two lanes
+ *
+ * The first version of this reported `canExecute: false` unless the site had a cloneable
+ * `repoUrl`, on the reasoning that a remote client cannot `cd` into a local path. That was
+ * wrong about who executes: the common executor is an agent session running *on this host*,
+ * beside the checkouts and the Wix bridge — which is exactly the case `repoPath` was built
+ * for. Reporting "cannot execute" for a site that is sitting right there, checked out and
+ * deployable, is a false refusal that hides working capability.
+ *
+ * So the two facts are two lanes, and either one makes the site executable:
+ *
+ * - **local checkout** — `repoPath` names a directory on this host. Verified on disk: the
+ *   directory exists and is a git work tree. This is the lane a session on this box uses.
+ * - **clone** — `repoUrl` names a repository a remote executor can clone.
+ *
+ * `canExecute` is true when *either* lane works, and `missing` lists what is absent. The
+ * distinction is kept because the lanes are not interchangeable: a local path is useless to
+ * a remote client, and a clone URL is not a checkout. Reporting both lets each caller take
+ * the one it can use instead of guessing from a single boolean.
  */
+export type ExecutionLane = {
+  lane: "local_checkout" | "clone";
+  /** What to use: an absolute path, or a cloneable identifier. */
+  target: string;
+  /** True when this lane is usable as verified. */
+  usable: boolean;
+  /** Why it is not usable, when it is not. */
+  problem: string | null;
+};
+
 export type ExecutionConfig = {
+  schemaVersion: "1.0";
   siteId: string;
   domain: string;
-  /** True only when every fact an external executor needs is present. */
+  /** True when at least one lane can execute. */
   canExecute: boolean;
+  /** Every lane considered, usable or not, so a caller picks rather than guesses. */
+  lanes: ExecutionLane[];
   repo: {
-    /** Cloneable identifier, or null when none is configured. */
+    /** A path on this host, for a local executor. */
+    localPath: string | null;
+    /** A cloneable identifier, for a remote executor. */
     url: string | null;
-    /** The branch external work targets. */
+    /** The branch work targets. */
     branch: string | null;
-    /** Where the site documents its own deploy process, relative to the repo root. */
+    /** Where the site documents its own deploy process. */
     deployDocPath: string | null;
+    /** True when the deploy document was found at the stated path. */
+    deployDocFound: boolean;
   };
   /** The delivery adapters this site accepts, as stored. */
   adapters: readonly string[];
-  /** What is missing before an external executor could work here. */
+  /** What is missing for an executor to work here. Empty when a lane is usable. */
   missing: string[];
-  /** A local checkout path, when one exists. Useful to the in-product agent only. */
-  localCheckout: string | null;
   /** Deliveries previously reported for this site, newest first. */
   recentExecutions: ExecutionRecord[];
   /**
@@ -305,6 +339,50 @@ export type ExecutionConfig = {
   };
 };
 
+/** Whether a directory is a git work tree, without shelling out. */
+async function isGitCheckout(dir: string): Promise<boolean> {
+  try {
+    const stat = await stat_path(dir);
+    if (!stat.isDirectory()) return false;
+    await stat_path(join_path(dir, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    return (await stat_path(file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the deploy document.
+ *
+ * Sites document their release process in one of two places, and which one is a fact about
+ * the site rather than something to normalise: the site's own repository (`DEPLOYMENT.md`
+ * beside the code) or the bridge's site directory (where the deploy scripts live). The
+ * stated `deployDocPath` is tried first, then the two conventional locations. Whichever
+ * resolves is reported; none resolving is reported as not found rather than assumed.
+ */
+async function resolveDeployDoc(
+  stated: string | null,
+  repoPath: string | null,
+  bridgeAlias: string | null
+): Promise<{ path: string | null; found: boolean }> {
+  const candidates: string[] = [];
+  if (stated) candidates.push(stated);
+  if (repoPath) candidates.push(join_path(repoPath, "DEPLOYMENT.md"));
+  if (bridgeAlias) candidates.push(join_path("/home/admin/wix-site-bridge/sites", bridgeAlias, "DEPLOYMENT.md"));
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) return { path: candidate, found: true };
+  }
+  return { path: stated ?? (repoPath ? join_path(repoPath, "DEPLOYMENT.md") : null), found: false };
+}
+
 export async function readExecutionConfig(
   db: Pick<PrismaClient, "site" | "opportunityExecution">,
   projectId: string,
@@ -316,7 +394,10 @@ export async function readExecutionConfig(
       id: true,
       domain: true,
       siteDeliveryConfig: {
-        select: { repoPath: true, repoUrl: true, defaultBranch: true, deployDocPath: true, adapters: true, enabled: true },
+        select: {
+          repoPath: true, repoUrl: true, defaultBranch: true, deployDocPath: true,
+          bridgeAlias: true, adapters: true, enabled: true,
+        },
       },
     },
   });
@@ -326,12 +407,44 @@ export async function readExecutionConfig(
   const adapters = Array.isArray(config?.adapters) ? (config!.adapters as string[]) : [];
 
   const missing: string[] = [];
-  if (!config) missing.push("no delivery configuration: the site has no repository or adapters recorded");
-  else {
+  const lanes: ExecutionLane[] = [];
+
+  if (!config) {
+    missing.push("no delivery configuration: the site has no repository or adapters recorded");
+  } else {
     if (!config.enabled) missing.push("delivery is disabled for this site");
-    if (!config.repoUrl) missing.push("no cloneable repoUrl: a local checkout path is not reachable by an external executor");
-    if (!config.deployDocPath) missing.push("no deployDocPath: the site has not named the document that describes its release process");
+
+    // Lane 1: a checkout on this host. Verified, because a stale path is the same as no path.
+    if (config.repoPath) {
+      const usable = await isGitCheckout(config.repoPath);
+      lanes.push({
+        lane: "local_checkout",
+        target: config.repoPath,
+        usable,
+        problem: usable ? null : "path does not exist or is not a git work tree on this host",
+      });
+    }
+
+    // Lane 2: something a remote executor can clone.
+    if (config.repoUrl) {
+      lanes.push({ lane: "clone", target: config.repoUrl, usable: true, problem: null });
+    }
+
+    if (lanes.length === 0) {
+      missing.push("no repository: neither a repoPath (a checkout on this host) nor a repoUrl (something to clone)");
+    } else if (!lanes.some((lane) => lane.usable)) {
+      missing.push("no usable repository lane: the local path does not resolve and no repoUrl is set");
+    }
     if (adapters.length === 0) missing.push("no delivery adapters recorded");
+  }
+
+  const deployDoc = await resolveDeployDoc(
+    config?.deployDocPath ?? null,
+    config?.repoPath ?? null,
+    config?.bridgeAlias ?? null
+  );
+  if (config && !deployDoc.found) {
+    missing.push("no deploy document found: the site does not state how a change reaches production");
   }
 
   const recent = await db.opportunityExecution.findMany({
@@ -346,21 +459,30 @@ export async function readExecutionConfig(
   });
 
   return {
+    schemaVersion: "1.0",
     siteId: site.id,
     domain: site.domain,
-    canExecute: missing.length === 0,
+    // Disabled means disabled: a site whose delivery is switched off is not executable even
+    // when every fact is present, or the tool would invite work that cannot ship.
+    canExecute:
+      config?.enabled === true &&
+      lanes.some((lane) => lane.usable) &&
+      adapters.length > 0 &&
+      deployDoc.found,
+    lanes,
     repo: {
+      localPath: config?.repoPath ?? null,
       url: config?.repoUrl ?? null,
       branch: config?.defaultBranch ?? null,
-      deployDocPath: config?.deployDocPath ?? null,
+      deployDocPath: deployDoc.path,
+      deployDocFound: deployDoc.found,
     },
     adapters,
     missing,
-    localCheckout: config?.repoPath ?? null,
     recentExecutions: recent.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
     reporting: {
       tool: "seo_report_work",
-      requires: ["executorId", "workKind", "note", "and one of commitSha / pullRequestUrl / deployedUrl"],
+      requires: ["executor_id", "work_kind", "note", "and one of commit_sha / pull_request_url / deployed_url"],
     },
   };
 }

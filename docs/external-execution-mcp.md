@@ -18,6 +18,10 @@ CrawlSEO supplies the **decision** (what to change, which page, which queries, w
 worth doing) and the client supplies the **execution**. Neither side has to model the
 other.
 
+The most common executor is an agent session running **on this host**, beside the site
+checkouts and the Wix bridge. That case needs no credential and no network hop, so it has a
+second entry point — `scripts/opportunity.ts` — over the same library functions. See §8.
+
 ## 2. The tools
 
 All four are project-scoped: one credential is one tenant. See §6.
@@ -27,6 +31,7 @@ All four are project-scoped: one credential is one tenant. See §6.
 | `seo_list_opportunities` | `connector:read` | The board, in product order, with page/queries and delivery history |
 | `seo_get_opportunity` | `connector:read` | One row as a work brief: action, success measure, target pages |
 | `seo_get_execution_config` | `connector:read` | Repository, branch, deploy doc, adapters — and what is missing |
+| `seo_decide_opportunity` | `connector:write` | Accept, park or reject — with the person who decided |
 | `seo_report_work` | `connector:write` | Records a delivery and moves the opportunity |
 
 The read order is deliberate and is not the caller's to change: **evidence class, then
@@ -39,6 +44,7 @@ measurement, which is the inversion `evidenceClass` exists to prevent.
 seo_list_opportunities            → what is worth doing, best-evidenced first
 seo_get_opportunity <id>          → which page, which queries, what change, how success is measured
 seo_get_execution_config          → which repository, which branch, which deploy document
+seo_decide_opportunity <id>       → accept (creates the task), or park/reject with a reason
         ... the client does the work in the site's own checkout ...
 seo_report_work                   → commit / PR / live URL + why, and the row moves
 ```
@@ -96,19 +102,67 @@ is a new scope with its own blast radius, and nothing yet needs it.
 
 ## 7. Configuring a site
 
-`siteDeliveryConfig` must carry the facts an external executor can actually use:
+`siteDeliveryConfig` must carry the facts an executor can actually use. There are **two
+lanes**, and either one makes a site executable:
 
-| Field | Needed because |
-| --- | --- |
-| `repoUrl` | a cloneable identifier. **`repoPath` is not a substitute** — it is a path on the machine the built-in agent runs on, and a remote client cannot `cd` into it |
-| `defaultBranch` | what a delivery report is checked against |
-| `deployDocPath` | where the site documents its own release process |
-| `adapters` | which delivery lanes the site accepts |
+| Lane | Field | Use |
+| --- | --- | --- |
+| local checkout | `repoPath` | an agent session on this host, beside the checkout |
+| clone | `repoUrl` | a client connecting from elsewhere |
 
-`seo_get_execution_config` reports `canExecute: false` and names each missing fact rather
-than returning a local path the caller will fail to use. Live state as of this writing: of
-eight sites, none has a `repoUrl`, so none is externally executable yet — two have a
-`repoPath` and six have no delivery config at all.
+Both are reported together, because they are not interchangeable: a local path is useless to
+a remote client and a clone URL is not a checkout.
 
-That is the honest current state, and it is why the tool reports `missing` instead of
-guessing: the capability is built, and the configuration is unset.
+A local checkout is **verified**, not trusted — the directory must exist and be a git work
+tree when the config is read. A stale path and no path are the same thing to a caller, so the
+difference is reported rather than assumed.
+
+`deployDocPath` names the site's own deployment document. It is looked for at the stated path,
+then in the site repository, then in the bridge's site directory — and the one that resolves
+is reported. A site with no deploy document is refused, because knowing where the code is but
+not how a change reaches production is how a change gets lost.
+
+Live state as of this writing:
+
+| Site | Lane | Deploy doc | Executable |
+| --- | --- | --- | --- |
+| susimacdonald | local, verified | found (bridge) | yes |
+| atelier-harmonie | local, verified | **none** | no |
+| the other six | none | none | not configured |
+
+Atelier is the honest refusal: it is checked out and deployable in principle, but nothing in
+its repository or bridge directory says how a change ships.
+
+## 8. The local executor
+
+An agent session on this host does not need MCP at all. `scripts/opportunity.ts` is a thin
+CLI over the same library functions — the same rules cannot drift between the two lanes,
+because there is only one implementation:
+
+```
+npx tsx scripts/opportunity.ts list    --project <id> [--status detected] [--limit 20]
+npx tsx scripts/opportunity.ts show    <opportunityId> --project <id>
+npx tsx scripts/opportunity.ts config  --project <id>
+npx tsx scripts/opportunity.ts accept  <opportunityId> --by "<person>" --project <id>
+npx tsx scripts/opportunity.ts park    <opportunityId> --by "<person>" --reason "<why>"
+npx tsx scripts/opportunity.ts deliver <opportunityId> --by "<agent>" --note "<why>" \
+      --commit <sha> | --pr <url> | --url <live url>
+```
+
+This follows `scripts/deliver-page.ts`: the caller is local, the work happens locally, and no
+credential has to be minted, stored or rotated to do it. With several active projects,
+`--project` is required — guessing which tenant a piece of work belongs to is not a decision a
+CLI should make.
+
+## 9. Two identities, on purpose
+
+`seo_decide_opportunity` requires `decided_by`, and `seo_report_work` requires `executor_id`.
+They are not the same field because they are not the same act:
+
+- **`decided_by`** is the person who decided this work is worth doing. An agent has no
+  standing to decide what a business should invest in.
+- **`executor_id`** is who did the work.
+
+Keeping them separate is what makes the record read *"Sam accepted it, the session delivered
+it, here is the commit"* instead of attributing a business judgement to a tool. Both are
+required; a tool with no name attached is not an executor, it is an unsigned change.

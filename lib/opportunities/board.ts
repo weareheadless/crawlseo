@@ -3,6 +3,84 @@ import type { PrismaClient } from "@prisma/client";
 import { ExecutionError, withExecutions, type ExecutionRecord } from "@/lib/opportunities/external-execution";
 
 /**
+ * The queries a page is actually seen for, from Search Console.
+ *
+ * ## Why this is read rather than derived
+ *
+ * A work brief that says "strengthen this page for its head terms" without naming them is
+ * not actionable: the executor either guesses which terms matter or rebuilds the query set
+ * from scratch. Both are waste. The queries are a *stored fact* — Search Console recorded
+ * each one against this exact page — so reading them is arithmetic, not judgement.
+ *
+ * The first version of this brief returned `queries: []` for these rows, because it only
+ * looked at structured fields on the opportunity itself and the producing detector had left
+ * the queries in prose. That is the honest null for that source, but it was the wrong source:
+ * the measurement existed all along, keyed by page.
+ *
+ * Anchoring on the page URL is what makes this safe. It is not inferring which query belongs
+ * to which topic — that would be the semantic judgement this codebase forbids — it is asking
+ * Search Console "which queries returned this URL", which is a fact it recorded. When the
+ * page is a proposal with no URL yet there is nothing to read, and the brief says so.
+ */
+
+export type PageQuery = {
+  query: string;
+  impressions: number;
+  clicks: number;
+  /** Impression-weighted average position, or null when a query had no impressions. */
+  position: number | null;
+};
+
+/** How many queries a brief carries. Ordered by impressions, so this is a head, not a cap. */
+export const BRIEF_QUERY_LIMIT = 25;
+
+/**
+ * Read the queries a page earns impressions for.
+ *
+ * Weighted by impressions rather than a plain average: a query seen once at position 80 and
+ * once at position 3 is not "position 41", and reporting it that way would make a winnable
+ * term look hopeless.
+ */
+export async function readPageQueries(
+  db: Pick<PrismaClient, "keyword">,
+  siteId: string,
+  pageUrl: string | null,
+  options: { windowDays?: number; limit?: number } = {}
+): Promise<{ queries: PageQuery[]; windowDays: number; totalQueries: number }> {
+  const windowDays = options.windowDays ?? 28;
+  const limit = options.limit ?? BRIEF_QUERY_LIMIT;
+  if (!pageUrl) return { queries: [], windowDays, totalQueries: 0 };
+
+  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+  const rows = await db.keyword.findMany({
+    where: { siteId, page: pageUrl, date: { gte: since } },
+    select: { query: true, clicks: true, impressions: true, position: true },
+  });
+
+  const byQuery = new Map<string, { clicks: number; impressions: number; weightedPosition: number }>();
+  for (const row of rows) {
+    const current = byQuery.get(row.query) ?? { clicks: 0, impressions: 0, weightedPosition: 0 };
+    current.clicks += row.clicks;
+    current.impressions += row.impressions;
+    current.weightedPosition += row.position * row.impressions;
+    byQuery.set(row.query, current);
+  }
+
+  const queries = [...byQuery.entries()]
+    .map(([query, value]) => ({
+      query,
+      impressions: value.impressions,
+      clicks: value.clicks,
+      position: value.impressions > 0
+        ? Math.round((value.weightedPosition / value.impressions) * 10) / 10
+        : null,
+    }))
+    .sort((a, b) => b.impressions - a.impressions || a.query.localeCompare(b.query));
+
+  return { queries: queries.slice(0, limit), windowDays, totalQueries: queries.length };
+}
+
+/**
  * The opportunity board for one project, as an external executor sees it.
  *
  * ## Why this does not reuse `listConnectorOpportunities`
@@ -180,6 +258,17 @@ export type WorkBrief = {
   rationale: string | null;
   /** Pages the score was computed against. */
   targetPages: string[];
+  /**
+   * What the page is actually seen for, from Search Console, heaviest first.
+   *
+   * Empty when the page does not exist yet — a proposal has no measured queries, and saying
+   * so is better than listing the queries the model guessed it might rank for.
+   */
+  pageQueries: PageQuery[];
+  /** How many distinct queries the page earned impressions for, before the display limit. */
+  pageQueryCount: number;
+  /** The measurement window for `pageQueries`, so a reader knows what "28 days" means here. */
+  pageQueryWindowDays: number;
   executions: ExecutionRecord[];
 };
 
@@ -191,7 +280,7 @@ export type WorkBrief = {
  * contract — a brief that invented them would be worse than one that says it does not know.
  */
 export async function readWorkBrief(
-  db: Pick<PrismaClient, "opportunity" | "opportunityExecution">,
+  db: Pick<PrismaClient, "opportunity" | "opportunityExecution" | "keyword" | "site">,
   projectId: string,
   opportunityId: string
 ): Promise<WorkBrief> {
@@ -212,6 +301,16 @@ export async function readWorkBrief(
 
   const anchored = withExecutions(row, []);
   const decision = (row.recommendationDecision ?? {}) as Record<string, unknown>;
+  // The queries belong to the page, and the measurement is keyed by site, so the site is
+  // resolved from the opportunity's project rather than passed in by the caller.
+  const site = await db.site.findFirst({
+    where: { projectId },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const measured = site
+    ? await readPageQueries(db, site.id, anchored.pageUrl)
+    : { queries: [], windowDays: 28, totalQueries: 0 };
   const worth = ((row.scoreInputs ?? {}) as { worth?: Record<string, unknown> }).worth ?? {};
   const executions = await listExecutions(db, projectId, opportunityId);
 
@@ -231,6 +330,9 @@ export async function readWorkBrief(
     successMeasure: text(decision.successMeasure) ?? text(worth.successMeasure),
     rationale: text(decision.rationale) ?? text(worth.offerFitRationale) ?? text(worth.needRationale),
     targetPages: Array.isArray(worth.targetPages) ? (worth.targetPages as string[]) : [],
+    pageQueries: measured.queries,
+    pageQueryCount: measured.totalQueries,
+    pageQueryWindowDays: measured.windowDays,
     executions,
   };
 }

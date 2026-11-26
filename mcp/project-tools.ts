@@ -34,6 +34,7 @@ import {
   reportOpportunityWork,
 } from "@/lib/opportunities/external-execution";
 import { readOpportunityBoard, readWorkBrief } from "@/lib/opportunities/board";
+import { decideOpportunityAsExecutor } from "@/lib/opportunities/decide";
 import { projectSite } from "@/lib/projects/project-site";
 
 type ToolData = Record<string, unknown>;
@@ -748,6 +749,53 @@ export function createProjectMcpServer(principal: ServicePrincipalContext): McpS
         requireProjectScope(principal, "connector:read");
         const site = await projectSite(projectId);
         return success(await readExecutionConfig(db as never, projectId, site.id));
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "seo_decide_opportunity",
+    {
+      description:
+        "Accept, park or reject one opportunity. Accepting creates the work task, which is how work becomes real. "
+        + "decided_by is the person making the call — a tool cannot decide what a business should invest in, it "
+        + "carries out a decision someone made.",
+      inputSchema: {
+        opportunity_id: z.string().min(1).max(120),
+        decision: z.enum(["accept", "park", "reject"]),
+        decided_by: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe("The person making this call. Recorded as the decision's owner."),
+        reason: z
+          .string()
+          .max(2000)
+          .optional()
+          .describe("Why, for park and reject. The next reader's first question is 'why not'."),
+        expected_decision_id: z
+          .string()
+          .max(240)
+          .optional()
+          .describe("The decision version you reviewed. Acceptance then refuses a row that changed since."),
+      },
+    },
+    async ({ opportunity_id, decision, decided_by, reason, expected_decision_id }) => {
+      try {
+        requireProjectScope(principal, "connector:write");
+        const site = await projectSite(projectId);
+        return success(
+          await decideOpportunityAsExecutor(db as never, projectId, {
+            siteId: site.id,
+            opportunityId: opportunity_id,
+            decision,
+            decidedBy: decided_by,
+            reason,
+            expectedDecisionId: expected_decision_id ?? null,
+          })
+        );
       } catch (error) {
         return failure(error);
       }

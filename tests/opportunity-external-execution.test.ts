@@ -185,7 +185,12 @@ describe("a delivery is refused when it cannot be checked or attributed", () => 
   });
 });
 
-describe("the execution config says what is missing instead of filling it in", () => {
+describe("the execution config reports every lane, so a caller takes the one it can use", () => {
+  /**
+   * The correction this encodes: an agent session running on this host is the common
+   * executor, and `repoPath` is exactly the fact it needs. Treating a local checkout as
+   * "not executable" refused a site that was checked out and deployable right there.
+   */
   function site(config: Record<string, unknown> | null) {
     return {
       site: {
@@ -195,51 +200,78 @@ describe("the execution config says what is missing instead of filling it in", (
     } as never;
   }
 
-  it("reports the cloneable repository and the site's own deployment document", async () => {
+  // A checkout that actually exists on this host, so the verification is exercised rather
+  // than mocked away.
+  const REAL_CHECKOUT = "/home/admin/susimacdonald-wix";
+  const REAL_DEPLOY_DOC = "/home/admin/wix-site-bridge/sites/susimacdonald/DEPLOYMENT.md";
+
+  it("treats a checkout on this host as an executable lane", async () => {
     const config = await readExecutionConfig(
       site({
-        repoPath: "/home/admin/example",
-        repoUrl: "weareheadless/example-wix",
-        defaultBranch: "main",
-        deployDocPath: "DEPLOYMENT.md",
-        adapters: ["wix_embed"],
-        enabled: true,
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
       }),
       "project-1",
       "site-1"
     );
+    expect(config.lanes[0]).toMatchObject({ lane: "local_checkout", target: REAL_CHECKOUT, usable: true });
     expect(config.canExecute).toBe(true);
-    expect(config.repo).toEqual({
-      url: "weareheadless/example-wix",
-      branch: "main",
-      deployDocPath: "DEPLOYMENT.md",
-    });
-    expect(config.localCheckout).toBe("/home/admin/example");
   });
 
-  it("says a local checkout path is not executable evidence", async () => {
-    // The defect this is shaped around: `repoPath` is a path on the machine the built-in
-    // agent runs on. An external executor cannot `cd` into it, so a site carrying only that
-    // must report as not executable rather than return a path the caller will fail to use.
+  it("finds the deploy document the site actually has", async () => {
     const config = await readExecutionConfig(
-      site({ repoPath: "/home/admin/example", repoUrl: null, defaultBranch: null, deployDocPath: null, adapters: ["wix_embed"], enabled: true }),
+      site({
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
+      }),
+      "project-1",
+      "site-1"
+    );
+    expect(config.repo.deployDocFound).toBe(true);
+    expect(config.repo.deployDocPath).toBe(REAL_DEPLOY_DOC);
+  });
+
+  it("uses a clone URL when there is no local checkout", async () => {
+    const config = await readExecutionConfig(
+      site({
+        repoPath: null, repoUrl: "weareheadless/example-wix", defaultBranch: "main",
+        deployDocPath: REAL_DEPLOY_DOC, bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
+      }),
+      "project-1",
+      "site-1"
+    );
+    expect(config.lanes).toEqual([{ lane: "clone", target: "weareheadless/example-wix", usable: true, problem: null }]);
+    expect(config.canExecute).toBe(true);
+  });
+
+  it("refuses a local path that does not resolve, and says why", async () => {
+    const config = await readExecutionConfig(
+      site({
+        repoPath: "/home/admin/a-checkout-that-was-deleted", repoUrl: null, defaultBranch: "main",
+        deployDocPath: REAL_DEPLOY_DOC, bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
+      }),
       "project-1",
       "site-1"
     );
     expect(config.canExecute).toBe(false);
-    expect(config.missing.join(" ")).toMatch(/cloneable repoUrl/);
+    expect(config.lanes[0].usable).toBe(false);
+    expect(config.lanes[0].problem).toMatch(/not a git work tree|does not exist/);
   });
 
-  it("reports no configuration as a missing configuration, not as an empty one", async () => {
+  it("reports a site with no configuration as missing one", async () => {
     const config = await readExecutionConfig(site(null), "project-1", "site-1");
     expect(config.canExecute).toBe(false);
     expect(config.missing[0]).toMatch(/no delivery configuration/);
     expect(config.adapters).toEqual([]);
+    expect(config.lanes).toEqual([]);
   });
 
   it("reports a disabled delivery as disabled", async () => {
     const config = await readExecutionConfig(
-      site({ repoPath: null, repoUrl: "o/r", defaultBranch: "main", deployDocPath: "DEPLOYMENT.md", adapters: ["wix_embed"], enabled: false }),
+      site({
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: REAL_DEPLOY_DOC,
+        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: false,
+      }),
       "project-1",
       "site-1"
     );
@@ -247,9 +279,24 @@ describe("the execution config says what is missing instead of filling it in", (
     expect(config.missing.join(" ")).toMatch(/disabled/);
   });
 
+  it("refuses to call a site executable when nobody documented how it ships", async () => {
+    // A checkout alone is not enough: without a deploy document the caller knows where the
+    // code is but not how a change reaches production, which is the step that gets forgotten.
+    const config = await readExecutionConfig(
+      site({
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: null, adapters: ["wix_embed"], enabled: true,
+      }),
+      "project-1",
+      "site-1"
+    );
+    expect(config.canExecute).toBe(false);
+    expect(config.missing.join(" ")).toMatch(/deploy document/);
+  });
+
   it("states how to report back, so a client does not guess the shape", async () => {
     const config = await readExecutionConfig(site(null), "project-1", "site-1");
     expect(config.reporting.tool).toBe("seo_report_work");
-    expect(config.reporting.requires.join(" ")).toMatch(/locator|commitSha/i);
+    expect(config.reporting.requires.join(" ")).toMatch(/commit_sha|locator/i);
   });
 });

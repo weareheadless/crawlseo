@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readOpportunityBoard, readWorkBrief } from "@/lib/opportunities/board";
+import { readOpportunityBoard, readPageQueries, readWorkBrief } from "@/lib/opportunities/board";
 
 /**
  * The board an external executor reads.
@@ -160,6 +160,10 @@ describe("the work brief reads the recommendation, not the prose", () => {
           }),
         },
         opportunityExecution: { findMany: async () => [] },
+        // The brief now reads the page's measured queries, so a site and the keyword store
+        // are part of its dependency. Empty here: these tests are about the decision text.
+        site: { findFirst: async () => ({ id: "site-1" }) },
+        keyword: { findMany: async () => [] },
       } as never,
       "p1",
       "op-1"
@@ -178,11 +182,72 @@ describe("the work brief reads the recommendation, not the prose", () => {
           findFirst: async () => ({ ...row(), recommendationDecision: null, scoreInputs: {} }),
         },
         opportunityExecution: { findMany: async () => [] },
+        // The brief now reads the page's measured queries, so a site and the keyword store
+        // are part of its dependency. Empty here: these tests are about the decision text.
+        site: { findFirst: async () => ({ id: "site-1" }) },
+        keyword: { findMany: async () => [] },
       } as never,
       "p1",
       "op-1"
     );
     expect(brief.action).toBeNull();
     expect(brief.successMeasure).toBeNull();
+  });
+});
+
+describe("a brief names the queries the page is actually seen for", () => {
+  /**
+   * The defect this closes: a brief said "strengthen the page for its head terms" and listed
+   * no terms, so the executor had to guess or redo the research. The queries were a stored
+   * fact all along — Search Console recorded each against this page.
+   */
+  const PAGE = "https://example.test/playa-condos";
+
+  function keywordDb(rows: Array<{ query: string; clicks: number; impressions: number; position: number }>) {
+    return { keyword: { findMany: async () => rows } } as never;
+  }
+
+  it("returns the page's queries, heaviest first", async () => {
+    const { queries } = await readPageQueries(
+      keywordDb([
+        { query: "small term", clicks: 0, impressions: 5, position: 40 },
+        { query: "head term", clicks: 0, impressions: 500, position: 25 },
+      ]),
+      "site-1",
+      PAGE
+    );
+    expect(queries.map((q) => q.query)).toEqual(["head term", "small term"]);
+    expect(queries[0].impressions).toBe(500);
+  });
+
+  it("weights position by impressions rather than averaging", async () => {
+    // Seen once at 80 and once at 3 is not "position 41.5"; it is a term that is nearly
+    // there, and reporting it as hopeless would bury a winnable query.
+    const { queries } = await readPageQueries(
+      keywordDb([
+        { query: "winnable", clicks: 0, impressions: 100, position: 3 },
+        { query: "winnable", clicks: 0, impressions: 1, position: 80 },
+      ]),
+      "site-1",
+      PAGE
+    );
+    expect(queries[0].position).toBeCloseTo(3.76, 1);
+  });
+
+  it("says a page has no queries yet instead of inventing them", async () => {
+    // A proposal has no URL, so there is nothing measured. Listing guessed queries would be
+    // the semantic inference this codebase refuses.
+    const { queries, totalQueries } = await readPageQueries(keywordDb([]), "site-1", null);
+    expect(queries).toEqual([]);
+    expect(totalQueries).toBe(0);
+  });
+
+  it("reports the full count when the display list is shorter", async () => {
+    const many = Array.from({ length: 40 }, (_, index) => ({
+      query: `q${index}`, clicks: 0, impressions: 100 - index, position: 20,
+    }));
+    const { queries, totalQueries } = await readPageQueries(keywordDb(many), "site-1", PAGE);
+    expect(queries).toHaveLength(25);
+    expect(totalQueries).toBe(40);
   });
 });
