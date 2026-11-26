@@ -37,8 +37,8 @@ model Workspace {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
-  projects    Project[]
-  connections GoogleConnection[]
+  projects                    Project[]
+  connections                 GoogleConnection[]
   projectRegistrationReceipts ProjectRegistrationReceipt[]
 }
 
@@ -58,7 +58,7 @@ model Project {
   registrationRequestHash        String?
   registrationDomain             String?
 
-  workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace                  Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sites                      Site[]
   integrationGrants          IntegrationGrant[]
   servicePrincipals          ServicePrincipal[]
@@ -66,12 +66,12 @@ model Project {
   dataforseoGrants           ProjectApiKeyGrant[]
   seoResearchPolicies        SeoResearchPolicy[]
   seoResearchRuns            SeoResearchRun[]
-  prelaunchResearchRequests PrelaunchResearchRequest[]
+  prelaunchResearchRequests  PrelaunchResearchRequest[]
   articleKeywordResearchRuns ArticleKeywordResearchRun[]
   siteProfiles               SiteProfile[]
   researchRuns               ResearchRun[]
   researchSourceIdentities   ResearchSourceIdentity[]
-  researchDispatchClaims    ResearchDispatchClaim[]
+  researchDispatchClaims     ResearchDispatchClaim[]
   researchActions            ResearchAction[]
   connectorBindings          ConnectorBinding[]
   connectorBindingTransfers  ConnectorBindingTransfer[]
@@ -82,18 +82,19 @@ model Project {
   connectorExecutionStates   ConnectorExecutionState[]
   connectorEventCounter      ConnectorEventCounter?
   researchBudgetReservations ResearchBudgetReservation[]
-  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportSourceProject")
-  legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetProject")
+  opportunityExecutions      OpportunityExecution[]
+  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[]       @relation("LegacyBudgetImportSourceProject")
+  legacyBudgetImportsTo      LegacyBudgetImportReceipt[]       @relation("LegacyBudgetImportTargetProject")
   legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceProject")
   legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetProject")
   businessKnowledgeDocuments BusinessKnowledgeDocument[]
-  businessKnowledgeReceipts BusinessKnowledgeReceipt[]
-  questionCoverages        QuestionCoverage[]
-  aiVisibilityObservations AIVisibilityObservation[]
-  aeoEvaluationRuns        AeoEvaluationRun[]
-  evidenceRecords          EvidenceRecord[]
-  opportunities            Opportunity[]
-  demandMapClusters        DemandMapCluster[]
+  businessKnowledgeReceipts  BusinessKnowledgeReceipt[]
+  questionCoverages          QuestionCoverage[]
+  aiVisibilityObservations   AIVisibilityObservation[]
+  aeoEvaluationRuns          AeoEvaluationRun[]
+  evidenceRecords            EvidenceRecord[]
+  opportunities              Opportunity[]
+  demandMapClusters          DemandMapCluster[]
 
   @@unique([workspaceId, externalProjectId])
   @@index([workspaceId])
@@ -154,7 +155,7 @@ model RawProviderResponse {
 /// Typed, normalized observation with provenance. One envelope for both
 /// evidence legs (business and search). Superseded, never deleted.
 model EvidenceRecord {
-  id              String            @id @default(cuid())
+  id              String             @id @default(cuid())
   projectId       String
   siteId          String?
   kind            EvidenceRecordKind
@@ -167,8 +168,8 @@ model EvidenceRecord {
   metrics         Json
   observationHash String
   supersededById  String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site         Site?                @relation(fields: [siteId], references: [id], onDelete: SetNull)
@@ -281,55 +282,56 @@ model SocialPost {
 }
 
 model Opportunity {
-  id                 String              @id @default(cuid())
-  projectId          String
-  type               OpportunityType
-  status             OpportunityStatus   @default(detected)
-  dimension          OpportunityDimension
-  title              String
-  summary            String
+  id                        String               @id @default(cuid())
+  projectId                 String
+  type                      OpportunityType
+  status                    OpportunityStatus    @default(detected)
+  dimension                 OpportunityDimension
+  title                     String
+  summary                   String
   /// Stable dedup identity within a project: same keyword+URL across
   /// detectors is one opportunity (plan §2 detector hygiene).
-  dedupKey           String
-  clusterId          String?
-  scoreValue         Int?
+  dedupKey                  String
+  clusterId                 String?
+  scoreValue                Int?
   /// Declared, recomputable scoring inputs (worth, win probability, effort,
   /// completeness, freshness, stability) — never a black box.
-  scoreInputs        Json
+  scoreInputs               Json
   /// The complete validated recommendation decision for this row. Null for legacy
   /// rows that predate the canonical contract; those are never presented as freshly
   /// validated.
-  recommendationDecision Json?
+  recommendationDecision    Json?
   /// Version/fingerprint of the decision and the immutable evidence record it came
   /// from, so a stale projection can be detected and rolled back.
-  recommendationVersion String?
+  recommendationVersion     String?
   recommendationFingerprint String?
-  recommendationEvidenceId String?
-  evidenceCompleteness EvidenceLeg      @default(none)
+  recommendationEvidenceId  String?
+  evidenceCompleteness      EvidenceLeg          @default(none)
   /// Which kind of evidence this row's priority rests on: a measurement of this site,
   /// a projection from provider data, or a hypothesis with no demand evidence yet.
   ///
   /// Stored rather than read out of `scoreInputs.assessment.kind` because the board is
   /// ordered by it and Postgres cannot order by a JSON field. Denormalised on purpose:
   /// it is written wherever `scoreValue` is written, which is one place.
-  evidenceClass      EvidenceClass     @default(hypothesis)
+  evidenceClass             EvidenceClass        @default(hypothesis)
   /// Version of the impact-assessment model behind scoreValue. A row scored by an
   /// older model is identifiable without deleting it, so a rollout can be compared
   /// and rolled back.
-  assessmentVersion  Int                 @default(1)
-  firstDetectedAt    DateTime            @default(now())
-  detectedBy         String
-  decidedBy          String?
-  decidedAt          DateTime?
-  lastScoredAt       DateTime?
-  parkReason         String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  assessmentVersion         Int                  @default(1)
+  firstDetectedAt           DateTime             @default(now())
+  detectedBy                String
+  decidedBy                 String?
+  decidedAt                 DateTime?
+  lastScoredAt              DateTime?
+  parkReason                String?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
 
-  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  cluster    DemandMapCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  tasks      Task[]
-  socialPost SocialPost?
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cluster               DemandMapCluster?      @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  tasks                 Task[]
+  socialPost            SocialPost?
+  opportunityExecutions OpportunityExecution[]
 
   @@unique([projectId, dedupKey])
   /// The board's order: evidence class, then score. Class is in the index because it
@@ -360,14 +362,14 @@ enum EdgeRelation {
 }
 
 model EvidenceEdge {
-  id        String            @id @default(cuid())
+  id        String           @id @default(cuid())
   fromType  EdgeEndpointType
   fromId    String
   toType    EdgeEndpointType
   toId      String
   relation  EdgeRelation
   createdBy String
-  createdAt DateTime          @default(now())
+  createdAt DateTime         @default(now())
 
   @@unique([fromType, fromId, toType, toId, relation])
   @@index([toType, toId])
@@ -409,10 +411,10 @@ model DemandMapCluster {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]
-  supersededBy DemandMapCluster?  @relation("ClusterSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
-  superseded   DemandMapCluster[] @relation("ClusterSupersede")
+  supersededBy  DemandMapCluster?  @relation("ClusterSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded    DemandMapCluster[] @relation("ClusterSupersede")
 
   @@unique([projectId, slug])
   @@unique([projectId, identityKey])
@@ -422,22 +424,22 @@ model DemandMapCluster {
 }
 
 model Task {
-  id            String           @id @default(cuid())
-  opportunityId String
-  title         String
+  id                String     @id @default(cuid())
+  opportunityId     String
+  title             String
   /// Human executor (plan decision 3). Agent assistance is recorded
   /// separately and never publishes autonomously in this phase.
-  assignedTo    String
-  status        TaskStatus       @default(todo)
-  plan          Json?
+  assignedTo        String
+  status            TaskStatus @default(todo)
+  plan              Json?
   agentPreparedById String?
   humanConfirmedBy  String?
   humanConfirmedAt  DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  baselines   Baseline[]
+  opportunity         Opportunity          @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  baselines           Baseline[]
   outcomeObservations OutcomeObservation[]
 
   @@index([opportunityId])
@@ -454,11 +456,11 @@ enum TaskStatus {
 
 /// Pre-delivery measurement for the task's success metric (plan §3).
 model Baseline {
-  id        String   @id @default(cuid())
-  taskId    String
-  metrics   Json
+  id         String   @id @default(cuid())
+  taskId     String
+  metrics    Json
   observedAt DateTime
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -476,59 +478,58 @@ enum OutcomeVerdict {
 }
 
 model OutcomeObservation {
-  id                String         @id @default(cuid())
-  taskId            String
-  baselineMetrics   Json
+  id                 String         @id @default(cuid())
+  taskId             String
+  baselineMetrics    Json
   baselineObservedAt DateTime
-  afterMetrics      Json
-  afterObservedAt   DateTime
-  verdict           OutcomeVerdict
-  measuredBy        String
-  createdAt         DateTime       @default(now())
+  afterMetrics       Json
+  afterObservedAt    DateTime
+  verdict            OutcomeVerdict
+  measuredBy         String
+  createdAt          DateTime       @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
 }
 
-
-
 model AIVisibilityObservation {
-  id                  String                 @id @default(cuid())
-  projectId           String
-  question            String
-  provider            String
-  modelSurface        String
-  observedAt          DateTime
-  questionSetVersion  String
-  sourceKind          AIVisibilitySourceKind
-  rawExportReference  String
-  denominator         Int
-  coverage            Json
-  mentions            Json?
-  recommendations     Json?
-  citations           Json?
-  observationHash     String
-  version             Int
-  answerText          String?                @db.VarChar(12000)
-  promptText          String?                @db.VarChar(4000)
-  locale              String?                @db.VarChar(35)
-  country             String?                @db.VarChar(2)
-  device              String?                @db.VarChar(32)
-  aiAnswerPresent     Boolean?
-  modelVersion        String?                @db.VarChar(128)
-  runId               String?                @db.VarChar(128)
-  citedSources        Json?
-  mentionedBrands     Json?
-  createdAt           DateTime               @default(now())
-  project             Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                 String                 @id @default(cuid())
+  projectId          String
+  question           String
+  provider           String
+  modelSurface       String
+  observedAt         DateTime
+  questionSetVersion String
+  sourceKind         AIVisibilitySourceKind
+  rawExportReference String
+  denominator        Int
+  coverage           Json
+  mentions           Json?
+  recommendations    Json?
+  citations          Json?
+  observationHash    String
+  version            Int
+  answerText         String?                @db.VarChar(12000)
+  promptText         String?                @db.VarChar(4000)
+  locale             String?                @db.VarChar(35)
+  country            String?                @db.VarChar(2)
+  device             String?                @db.VarChar(32)
+  aiAnswerPresent    Boolean?
+  modelVersion       String?                @db.VarChar(128)
+  runId              String?                @db.VarChar(128)
+  citedSources       Json?
+  mentionedBrands    Json?
+  createdAt          DateTime               @default(now())
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, version], map: "AIVisibilityObservation_version_key")
   @@unique([projectId, question, provider, modelSurface, questionSetVersion, observedAt, observationHash], map: "AIVisibilityObservation_hash_key")
   @@index([projectId, provider, observedAt])
 }
 
 model AeoEvaluationRun {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   projectId          String
   siteId             String
   runId              String
@@ -537,34 +538,34 @@ model AeoEvaluationRun {
   questionSetVersion String
   providers          Json
   cap                Int
-  asked              Int      @default(0)
-  stored             Int      @default(0)
-  answerAbsent       Int      @default(0)
-  failed             Int      @default(0)
-  skippedByCap       Int      @default(0)
-  costMicros         Int      @default(0)
-  status             String   @default("running")
+  asked              Int       @default(0)
+  stored             Int       @default(0)
+  answerAbsent       Int       @default(0)
+  failed             Int       @default(0)
+  skippedByCap       Int       @default(0)
+  costMicros         Int       @default(0)
+  status             String    @default("running")
   errorCode          String?
-  startedAt          DateTime @default(now())
+  startedAt          DateTime  @default(now())
   finishedAt         DateTime?
-  createdAt          DateTime @default(now())
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site               Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt          DateTime  @default(now())
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site               Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, runId])
   @@index([siteId, startedAt])
 }
 
 model BusinessKnowledgeDocument {
-  id               String   @id @default(cuid())
-  logicalId        String
-  projectId        String   @unique
-  revision         Int      @default(0)
-  acceptedRevision Int?
-  updatedAt        DateTime @updatedAt
-  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  revisions        BusinessKnowledgeRevision[]
-  acceptances      BusinessKnowledgeAcceptance[]
+  id                String                        @id @default(cuid())
+  logicalId         String
+  projectId         String                        @unique
+  revision          Int                           @default(0)
+  acceptedRevision  Int?
+  updatedAt         DateTime                      @updatedAt
+  project           Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisions         BusinessKnowledgeRevision[]
+  acceptances       BusinessKnowledgeAcceptance[]
   questionCoverages QuestionCoverage[]
 
   @@unique([projectId, logicalId])
@@ -572,35 +573,35 @@ model BusinessKnowledgeDocument {
 }
 
 model BusinessKnowledgeRevision {
-  id                String   @id @default(cuid())
-  documentId        String
-  revision          Int
-  state             String
-  fields            Json
-  reason            String
-  changedFields     Json
-  affectedActionIds Json
-  affectedActionsHaveMore Boolean @default(false)
-  serviceCaller     String
-  createdAt         DateTime @default(now())
-  document   BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id                      String                    @id @default(cuid())
+  documentId              String
+  revision                Int
+  state                   String
+  fields                  Json
+  reason                  String
+  changedFields           Json
+  affectedActionIds       Json
+  affectedActionsHaveMore Boolean                   @default(false)
+  serviceCaller           String
+  createdAt               DateTime                  @default(now())
+  document                BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, revision])
   @@index([documentId, createdAt])
 }
 
 model BusinessKnowledgeAcceptance {
-  id            String   @id @default(cuid())
-  documentId    String
-  revision      Int
-  actorType     String
-  actorId       String
-  serviceCaller String?
-  reason        String
+  id             String                    @id @default(cuid())
+  documentId     String
+  revision       Int
+  actorType      String
+  actorId        String
+  serviceCaller  String?
+  reason         String
   idempotencyKey String
-  requestHash   String
-  createdAt     DateTime @default(now())
-  document      BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  requestHash    String
+  createdAt      DateTime                  @default(now())
+  document       BusinessKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, idempotencyKey])
   @@index([documentId, revision, createdAt])
@@ -953,9 +954,9 @@ model SeoResearchRun {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
-  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site?             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  tasks   SeoResearchTask[]
+  project           Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site              Site?                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  tasks             SeoResearchTask[]
   prelaunchRequests PrelaunchResearchRequest[]
 
   @@unique([siteId, periodStart, packageVersion])
@@ -964,7 +965,7 @@ model SeoResearchRun {
 }
 
 model PrelaunchResearchRequest {
-  id             String @id @default(cuid())
+  id             String          @id @default(cuid())
   projectId      String
   /// Legacy target, kept for rows created before the DS-02 cutover.
   researchRunId  String?
@@ -972,9 +973,10 @@ model PrelaunchResearchRequest {
   researchRunRef String?
   idempotencyKey String
   requestHash    String
-  createdAt      DateTime @default(now())
-  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   researchRun    SeoResearchRun? @relation(fields: [researchRunId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, idempotencyKey])
   @@index([researchRunId])
 }
@@ -1006,35 +1008,35 @@ model SeoResearchTask {
 // ============ CONTENT STUDIO ============
 
 model ContentDraft {
-  id              String             @id @default(cuid())
-  siteId          String
-  actionId        String?
-  opportunityKey  String
-  actionKind      String
-  format          String
-  primaryQuery    String             @default("")
-  targetUrl       String?
-  intent          String
-  title           String
-  slug            String
-  metaTitle       String
-  metaDescription String
-  excerpt         String
-  markdown        String
-  outline         Json?
-  brief           Json
-  model           String
-  provider        String
+  id                  String             @id @default(cuid())
+  siteId              String
+  actionId            String?
+  opportunityKey      String
+  actionKind          String
+  format              String
+  primaryQuery        String             @default("")
+  targetUrl           String?
+  intent              String
+  title               String
+  slug                String
+  metaTitle           String
+  metaDescription     String
+  excerpt             String
+  markdown            String
+  outline             Json?
+  brief               Json
+  model               String
+  provider            String
   /// Images chosen by the writer (cover and inline), destination-neutral.
   /// The body points at them with `<!-- image: img_2 -->` markers.
-  assets          Json?
-  status          ContentDraftStatus @default(READY)
-  wixApprovalHash String?
-  wixApprovedBy   String?
-  wixApprovedAt   DateTime?
+  assets              Json?
+  status              ContentDraftStatus @default(READY)
+  wixApprovalHash     String?
+  wixApprovedBy       String?
+  wixApprovedAt       DateTime?
   wixApprovedRevision Int?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   site       Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
   action     ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
@@ -1055,34 +1057,34 @@ enum ContentDraftStatus {
 // ============ RESEARCH ENGINE ============
 
 model SiteProfile {
-  id          String   @id @default(cuid())
-  siteId      String   @unique
-  projectId   String?
-  language    String   @default("en")
-  country     String?
-  audience    Json?
-  topics      Json?
-  services    Json?
-  competitors Json?
-  brandVoice  String?
+  id             String   @id @default(cuid())
+  siteId         String   @unique
+  projectId      String?
+  language       String   @default("en")
+  country        String?
+  audience       Json?
+  topics         Json?
+  services       Json?
+  competitors    Json?
+  brandVoice     String?
   /// Stored design reference for generated pages: palette, fonts, notes and
   /// where they came from. Extracted from the site repo or the live site, and
   /// editable by a human.
-  design      Json?
+  design         Json?
   /// The site's published locales and how each one appears in a URL. A page
   /// task writes one native page per locale, not a translation.
-  locales     Json?
-  constraints Json?
+  locales        Json?
+  constraints    Json?
   /// Brand identity: name, logo reference, palette, fonts, voice sample. The one
   /// record a renderer reads; Cicero's brands/<id>/brand.json is a cache at most.
   /// `design` above is a scan of the site's stylesheets, kept to prefill this
   /// block for a human — nothing renders from it.
-  brand           Json?
+  brand          Json?
   /// What the brand may promote: represented projects, developers and services,
   /// plus the area it sells into. Read by the social eligibility gate.
-  representation  Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  representation Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -1091,31 +1093,31 @@ model SiteProfile {
 }
 
 model ResearchRun {
-  id            String            @id @default(cuid())
+  id                   String            @id @default(cuid())
   /// Null for project-scoped runs (prelaunch research has no site).
-  siteId        String?
-  projectId     String?
-  scheduleKey   String?
-  kind          ResearchRunKind   @default(MARKET)
-  trigger       ResearchTrigger   @default(MANUAL)
-  status        ResearchRunStatus @default(QUEUED)
-  title         String
-  brief         Json
-  topics        Json?
-  recencyDays   Int               @default(90)
-  policyRevision Int?
-  providerSet   Json?
-  promptVersion String            @default("research-v1")
-  model         String?
-  report        Json?
-  sourceCount   Int               @default(0)
-  findingCount  Int               @default(0)
-  actionCount   Int               @default(0)
-  costMicros    Int               @default(0)
-  errorCode     String?
-  requestedBy   String?
-  startedAt     DateTime?
-  completedAt   DateTime?
+  siteId               String?
+  projectId            String?
+  scheduleKey          String?
+  kind                 ResearchRunKind   @default(MARKET)
+  trigger              ResearchTrigger   @default(MANUAL)
+  status               ResearchRunStatus @default(QUEUED)
+  title                String
+  brief                Json
+  topics               Json?
+  recencyDays          Int               @default(90)
+  policyRevision       Int?
+  providerSet          Json?
+  promptVersion        String            @default("research-v1")
+  model                String?
+  report               Json?
+  sourceCount          Int               @default(0)
+  findingCount         Int               @default(0)
+  actionCount          Int               @default(0)
+  costMicros           Int               @default(0)
+  errorCode            String?
+  requestedBy          String?
+  startedAt            DateTime?
+  completedAt          DateTime?
   /// DS-02 bookkeeping moved off the per-family run tables.
   idempotencyKey       String?
   parentRunId          String?
@@ -1124,8 +1126,8 @@ model ResearchRun {
   providerLanguageCode String?
   providerLocationCode Int?
   attemptedAt          DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   site     Site?             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   project  Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -1133,38 +1135,38 @@ model ResearchRun {
   findings ResearchFinding[]
   actions  ResearchAction[]
 
-  @@index([siteId, createdAt])
-  @@index([siteId, status])
-  @@index([projectId, createdAt])
   @@unique([siteId, scheduleKey])
   @@unique([projectId, kind, idempotencyKey])
   @@unique([parentRunId])
+  @@index([siteId, createdAt])
+  @@index([siteId, status])
+  @@index([projectId, createdAt])
 }
 
 model ResearchSourceIdentity {
-  id              String @id @default(cuid())
-  projectId       String
-  provider        String
-  sourceId        String
-  normalizedUrl   String
-  currentHash     String?
-  queryKeys       Json     @default("[]")
-  updatedAt       DateTime @updatedAt
-  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  observations    ResearchSource[]
+  id            String           @id @default(cuid())
+  projectId     String
+  provider      String
+  sourceId      String
+  normalizedUrl String
+  currentHash   String?
+  queryKeys     Json             @default("[]")
+  updatedAt     DateTime         @updatedAt
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  observations  ResearchSource[]
 
   @@unique([projectId, provider, normalizedUrl])
   @@index([projectId, provider, sourceId])
 }
 
 model ResearchDispatchClaim {
-  id           String   @id @default(cuid())
-  projectId    String
-  provider     String
-  requestKey   String
-  owner        String
+  id             String   @id @default(cuid())
+  projectId      String
+  provider       String
+  requestKey     String
+  owner          String
   leaseExpiresAt DateTime
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, provider, requestKey])
   @@index([leaseExpiresAt])
@@ -1187,7 +1189,7 @@ model ResearchSource {
   identityId  String?
   createdAt   DateTime  @default(now())
 
-  run ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run      ResearchRun             @relation(fields: [runId], references: [id], onDelete: Cascade)
   identity ResearchSourceIdentity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
 
   @@unique([runId, contentHash])
@@ -1213,8 +1215,8 @@ model ResearchFinding {
   verification        Json?
   createdAt           DateTime            @default(now())
 
-  run     ResearchRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
-  actions ResearchAction[]
+  run               ResearchRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  actions           ResearchAction[]
   questionCoverages QuestionCoverage[]
 
   @@index([runId, type])
@@ -1233,29 +1235,29 @@ enum QuestionCoverageReason {
 }
 
 model QuestionCoverage {
-  id                 String @id @default(cuid())
-  projectId          String
-  question           String @default("")
-  findingId          String?
-  service            String
-  audience           String
-  locale             String
-  sectionIdentity    String
-  contentHash        String
-  status             QuestionCoverageStatus
-  documentId         String?
-  fieldPath          String?
-  evidenceRevision   Int?
-  missingEvidence    String?
-  reason             QuestionCoverageReason?
-  requestedAt        DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  finding            ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
-  document           BusinessKnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  actionId           String?
-  action             ResearchAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  id               String                     @id @default(cuid())
+  projectId        String
+  question         String                     @default("")
+  findingId        String?
+  service          String
+  audience         String
+  locale           String
+  sectionIdentity  String
+  contentHash      String
+  status           QuestionCoverageStatus
+  documentId       String?
+  fieldPath        String?
+  evidenceRevision Int?
+  missingEvidence  String?
+  reason           QuestionCoverageReason?
+  requestedAt      DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  project          Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  finding          ResearchFinding?           @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  document         BusinessKnowledgeDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  actionId         String?
+  action           ResearchAction?            @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, question, sectionIdentity])
   @@index([projectId, status, updatedAt])
@@ -1296,14 +1298,14 @@ model ResearchAction {
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
 
-  site       Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  project    Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  run        ResearchRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
-  finding    ResearchFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  site              Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project           Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run               ResearchRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
+  finding           ResearchFinding?   @relation(fields: [findingId], references: [id], onDelete: SetNull)
   questionCoverages QuestionCoverage[]
-  drafts     ContentDraft[]
-  deliveries Delivery[]
-  agentTasks AgentTask[]
+  drafts            ContentDraft[]
+  deliveries        Delivery[]
+  agentTasks        AgentTask[]
 
   @@unique([siteId, dedupeKey])
   @@index([siteId, status, priority])
@@ -1320,7 +1322,7 @@ model LegacyBudgetImportReceipt {
   idempotencyKey     String
   requestHash        String
   sourceEvidenceHash String
-  reservationIds    Json
+  reservationIds     Json
   snapshot           Json
   createdAt          DateTime @default(now())
 
@@ -1525,20 +1527,20 @@ enum AgentMessageRole {
 /// One paid-acquisition pass, recorded so spend can be audited against a decision
 /// without reading CLI output or a worker log.
 model AcquisitionReceipt {
-  id           String   @id @default(cuid())
-  projectId    String
-  siteId       String?
-  windowStart  DateTime
-  windowEnd    DateTime
-  requested    Int      @default(0)
-  measured     Int      @default(0)
-  noData       Int      @default(0)
-  failed       Int      @default(0)
-  cached       Int      @default(0)
-  spentMicros  Int      @default(0)
-  requests     Json
-  skipped      Json
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  projectId   String
+  siteId      String?
+  windowStart DateTime
+  windowEnd   DateTime
+  requested   Int      @default(0)
+  measured    Int      @default(0)
+  noData      Int      @default(0)
+  failed      Int      @default(0)
+  cached      Int      @default(0)
+  spentMicros Int      @default(0)
+  requests    Json
+  skipped     Json
+  createdAt   DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -1600,18 +1602,81 @@ model ResearchBudgetReservation {
 }
 
 model SiteDeliveryConfig {
-  id          String   @id @default(cuid())
-  siteId      String   @unique
-  bridgeAlias String
+  id            String   @id @default(cuid())
+  siteId        String   @unique
+  bridgeAlias   String
   /// The site's connected source repository, read by the page agent for its
   /// design tokens and component patterns. Never modified by a page task.
-  repoPath    String?
-  adapters    Json?
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  repoPath      String?
+  /// The same repository as a cloneable identifier (`owner/name` or a git URL).
+  ///
+  /// `repoPath` is a path on the machine the agent runs on, which is meaningless to an
+  /// external executor: it cannot `cd` into this host's filesystem. An external agent needs
+  /// something it can clone, so the two facts are stored separately rather than one being
+  /// parsed out of the other — a local path does not reliably contain an owner and a name,
+  /// and inferring one from the other is the guessing this codebase refuses.
+  repoUrl       String?
+  /// The branch external work targets. Null means "whatever the repository's default is";
+  /// a stated branch is what a delivery report is checked against.
+  defaultBranch String?
+  /// The site's own deployment document, relative to the repository root.
+  ///
+  /// Pointed at, never restated. Each site documents its own lane (packets, publish,
+  /// verification) and that document is the authority; a copy inside crawlSEO would drift
+  /// and then contradict the thing it copied. A site with no document reports none rather
+  /// than inheriting another site's process.
+  deployDocPath String?
+  adapters      Json?
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+/// A piece of work an executor reports as done, and the evidence it did it.
+///
+/// Why this is separate from `Task.humanConfirmedBy`: those two fields answer different
+/// questions and collapsing them loses both answers. `humanConfirmedBy` records that a
+/// person confirmed execution, which the funnel plan requires and which must stay true when
+/// it is set. An external agent delivering work is a *different* executor, so it gets its
+/// own record rather than being written into the human field as if a person had confirmed.
+///
+/// The effect is that a row can always answer "who actually did this, and how do I check?"
+/// without inferring it from a status.
+model OpportunityExecution {
+  id              String   @id @default(cuid())
+  opportunityId   String
+  siteId          String
+  projectId       String
+  /// Who executed: `external_agent` for an MCP client, `builtin_agent` for the in-product
+  /// runner. Never `human` — a human completing work is a Task confirmation, not this.
+  executorKind    String
+  /// The executor's own identity (an MCP client name, an agent id). Required, because an
+  /// unattributed delivery is indistinguishable from one nobody can ask about.
+  executorId      String
+  /// One of `code_change`, `content`, `configuration`, `external` — what kind of work this
+  /// was, so a reader knows whether to look at a commit or a page.
+  workKind        String
+  commitSha       String?
+  pullRequestUrl  String?
+  deployedUrl     String?
+  /// Why this work closes the opportunity, in the executor's words. Required for the same
+  /// reason the other fields are checked: the next person's first question is "why is this
+  /// done", and a status alone does not answer it.
+  note            String
+  /// The opportunity status this record moved the row to. Stored so a later status change
+  /// (a re-score re-opening work, a human rejecting it) cannot silently rewrite history.
+  resultingStatus String
+  createdAt       DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  site        Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([siteId, createdAt])
 }
 
 model AgentTaskMessage {
@@ -1664,19 +1729,19 @@ model DeliveryTarget {
 // ============ SITES ============
 
 model Site {
-  id                       String   @id @default(cuid())
+  id                       String    @id @default(cuid())
   userId                   String?
   projectId                String?
   domain                   String // e.g. "brandson.digital"
   gscProperty              String? // e.g. "sc-domain:brandson.digital"
   domainVerificationMethod String?
-  createdAt                DateTime @default(now())
+  createdAt                DateTime  @default(now())
   /// Set when the record must stay for audit but must no longer be analysed.
   retiredAt                DateTime?
-  updatedAt                DateTime @updatedAt
+  updatedAt                DateTime  @updatedAt
 
-  user                       User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                       User?                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project                    Project?                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   keywords                   Keyword[]
   pages                      Page[]
   crawls                     Crawl[]
@@ -1706,11 +1771,12 @@ model Site {
   connectorOperationReceipts ConnectorOperationReceipt[]
   connectorExecutionStates   ConnectorExecutionState[]
   researchBudgetReservations ResearchBudgetReservation[]
-  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportSourceSite")
-  legacyBudgetImportsTo      LegacyBudgetImportReceipt[] @relation("LegacyBudgetImportTargetSite")
+  legacyBudgetImportsFrom    LegacyBudgetImportReceipt[]       @relation("LegacyBudgetImportSourceSite")
+  legacyBudgetImportsTo      LegacyBudgetImportReceipt[]       @relation("LegacyBudgetImportTargetSite")
   legacyBudgetFreezesFrom    LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeSourceSite")
   legacyBudgetFreezesTo      LegacyBudgetSourceFreezeReceipt[] @relation("LegacyBudgetFreezeTargetSite")
   aeoEvaluationRuns          AeoEvaluationRun[]
+  opportunityExecutions      OpportunityExecution[]
 
   @@unique([userId, domain])
   @@unique([projectId, domain])
