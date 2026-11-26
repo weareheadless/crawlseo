@@ -117,21 +117,33 @@ A local checkout is **verified**, not trusted — the directory must exist and b
 tree when the config is read. A stale path and no path are the same thing to a caller, so the
 difference is reported rather than assumed.
 
-`deployDocPath` names the site's own deployment document. It is looked for at the stated path,
-then in the site repository, then in the bridge's site directory — and the one that resolves
-is reported. A site with no deploy document is refused, because knowing where the code is but
-not how a change reaches production is how a change gets lost.
+`deployDocPath` names the site's own deployment document, and it is resolved most-specific
+first:
+
+| Order | Source | Authority |
+| --- | --- | --- |
+| 1 | the path the site states | `site_stated` |
+| 2 | `DEPLOYMENT.md` in the connected repository | `repository` |
+| 3 | a per-site document in the bridge directory | `bridge_site` |
+| 4 | the bridge's shared `docs/PAGE_DELIVERY.md` | `bridge_shared` |
+
+**The deploy method belongs to the bridge, not to each site.** Every site the bridge delivers
+uses the same lane — a custom element in the page, a HEAD packet via `create-snippet`, then
+`publish-site` — and the bridge states that once, for all of them. A site with no document of
+its own is therefore not undocumented; it uses the shared method, and the config says so with
+`bridge_shared`.
+
+Copying that document into each site would be the duplication this project refuses: N copies
+that drift, and the one that drifts is the one an agent reads. A per-site document is an
+*override* for a site whose process genuinely differs.
 
 Live state as of this writing:
 
-| Site | Lane | Deploy doc | Executable |
+| Site | Lane | Deploy authority | Executable |
 | --- | --- | --- | --- |
-| susimacdonald | local, verified | found (bridge) | yes |
-| atelier-harmonie | local, verified | **none** | no |
+| susimacdonald | local, verified | `bridge_site` | yes |
+| atelier-harmonie | local, verified | `bridge_shared` | yes |
 | the other six | none | none | not configured |
-
-Atelier is the honest refusal: it is checked out and deployable in principle, but nothing in
-its repository or bridge directory says how a change ships.
 
 ## 8. The local executor
 

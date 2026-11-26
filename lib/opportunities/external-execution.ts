@@ -320,8 +320,10 @@ export type ExecutionConfig = {
     branch: string | null;
     /** Where the site documents its own deploy process. */
     deployDocPath: string | null;
-    /** True when the deploy document was found at the stated path. */
+    /** True when a deploy method was found. */
     deployDocFound: boolean;
+    /** Which document is authoritative, and therefore how specific it is to this site. */
+    deployDocAuthority: DeployAuthority;
   };
   /** The delivery adapters this site accepts, as stored. */
   adapters: readonly string[];
@@ -360,27 +362,73 @@ async function fileExists(file: string): Promise<boolean> {
 }
 
 /**
- * Resolve the deploy document.
+ * Resolve how a change reaches production.
  *
- * Sites document their release process in one of two places, and which one is a fact about
- * the site rather than something to normalise: the site's own repository (`DEPLOYMENT.md`
- * beside the code) or the bridge's site directory (where the deploy scripts live). The
- * stated `deployDocPath` is tried first, then the two conventional locations. Whichever
- * resolves is reported; none resolving is reported as not found rather than assumed.
+ * ## The deploy method belongs to the bridge, not to each site
+ *
+ * The first version looked for a per-site `DEPLOYMENT.md` and nothing else, so atelier was
+ * reported as undocumented. That was wrong: atelier is delivered by the same Wix bridge as
+ * every other site — the same HEAD packet, the same `create-snippet`, the same `publish-site`
+ * — and the bridge states that method once, for all of them, in `docs/PAGE_DELIVERY.md`.
+ *
+ * Copying that document into every site would be the duplication this project refuses: N
+ * copies that drift, and the one that drifts is the one an agent reads. So the shared method
+ * is the default answer, and a per-site document is an *override* for a site whose process
+ * genuinely differs.
+ *
+ * Order, most specific first:
+ *
+ *   1. the path the site states (`deployDocPath`)
+ *   2. a per-site document in the connected repository
+ *   3. a per-site document in the bridge's site directory
+ *   4. the bridge's shared `docs/PAGE_DELIVERY.md` — the method for every bridge site
+ *
+ * The authority is reported, not just a path, so a reader knows whether they are looking at
+ * "this site does something unusual" or "this site uses the standard method".
  */
+export type DeployAuthority = "site_stated" | "repository" | "bridge_site" | "bridge_shared" | "none";
+
 async function resolveDeployDoc(
   stated: string | null,
   repoPath: string | null,
   bridgeAlias: string | null
-): Promise<{ path: string | null; found: boolean }> {
-  const candidates: string[] = [];
-  if (stated) candidates.push(stated);
-  if (repoPath) candidates.push(join_path(repoPath, "DEPLOYMENT.md"));
-  if (bridgeAlias) candidates.push(join_path("/home/admin/wix-site-bridge/sites", bridgeAlias, "DEPLOYMENT.md"));
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) return { path: candidate, found: true };
+): Promise<{ path: string | null; found: boolean; authority: DeployAuthority }> {
+  // A stated path may be relative to the checkout, which is how a site would sensibly write it.
+  const statedCandidates: string[] = [];
+  if (stated) {
+    statedCandidates.push(stated);
+    if (!stated.startsWith("/") && repoPath) statedCandidates.push(join_path(repoPath, stated));
   }
-  return { path: stated ?? (repoPath ? join_path(repoPath, "DEPLOYMENT.md") : null), found: false };
+  for (const candidate of statedCandidates) {
+    if (await fileExists(candidate)) return { path: candidate, found: true, authority: "site_stated" };
+  }
+
+  if (repoPath) {
+    for (const name of ["DEPLOYMENT.md", "DEPLOY.md", "docs/DEPLOYMENT.md"]) {
+      const candidate = join_path(repoPath, name);
+      if (await fileExists(candidate)) return { path: candidate, found: true, authority: "repository" };
+    }
+  }
+
+  if (bridgeAlias) {
+    const siteDir = join_path("/home/admin/wix-site-bridge/sites", bridgeAlias);
+    for (const name of ["DEPLOYMENT.md", "docs/DEPLOYMENT.md"]) {
+      const candidate = join_path(siteDir, name);
+      if (await fileExists(candidate)) return { path: candidate, found: true, authority: "bridge_site" };
+    }
+  }
+
+  /**
+   * The shared bridge method. This is the answer for every site the bridge delivers,
+   * including one that has no document of its own — which is most of them, and is correct:
+   * their process *is* the shared one.
+   */
+  const shared = "/home/admin/wix-site-bridge/docs/PAGE_DELIVERY.md";
+  if (bridgeAlias && await fileExists(shared)) {
+    return { path: shared, found: true, authority: "bridge_shared" };
+  }
+
+  return { path: stated, found: false, authority: "none" };
 }
 
 export async function readExecutionConfig(
@@ -444,7 +492,7 @@ export async function readExecutionConfig(
     config?.bridgeAlias ?? null
   );
   if (config && !deployDoc.found) {
-    missing.push("no deploy document found: the site does not state how a change reaches production");
+    missing.push("no deploy method found: no per-site document, and the site is not delivered through the shared bridge");
   }
 
   const recent = await db.opportunityExecution.findMany({
@@ -476,6 +524,7 @@ export async function readExecutionConfig(
       branch: config?.defaultBranch ?? null,
       deployDocPath: deployDoc.path,
       deployDocFound: deployDoc.found,
+      deployDocAuthority: deployDoc.authority,
     },
     adapters,
     missing,

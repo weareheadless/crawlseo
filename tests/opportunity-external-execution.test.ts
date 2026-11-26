@@ -229,6 +229,7 @@ describe("the execution config reports every lane, so a caller takes the one it 
     );
     expect(config.repo.deployDocFound).toBe(true);
     expect(config.repo.deployDocPath).toBe(REAL_DEPLOY_DOC);
+    expect(config.repo.deployDocAuthority).toBe("bridge_site");
   });
 
   it("uses a clone URL when there is no local checkout", async () => {
@@ -279,9 +280,43 @@ describe("the execution config reports every lane, so a caller takes the one it 
     expect(config.missing.join(" ")).toMatch(/disabled/);
   });
 
-  it("refuses to call a site executable when nobody documented how it ships", async () => {
-    // A checkout alone is not enough: without a deploy document the caller knows where the
-    // code is but not how a change reaches production, which is the step that gets forgotten.
+  it("uses the bridge's shared method for a site with no document of its own", async () => {
+    // The correction: atelier has no DEPLOYMENT.md, and that is not a gap. It is delivered by
+    // the same bridge as every other site — same HEAD packet, same create-snippet, same
+    // publish-site — and the bridge states that method once for all of them. Reporting "no
+    // deploy document" invited a per-site copy of a document that already exists, which is
+    // exactly the duplication that drifts.
+    const config = await readExecutionConfig(
+      site({
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "atelier-harmonie", adapters: ["wix_embed"], enabled: true,
+      }),
+      "project-1",
+      "site-1"
+    );
+    expect(config.repo.deployDocFound).toBe(true);
+    expect(config.repo.deployDocAuthority).toBe("bridge_shared");
+    expect(config.repo.deployDocPath).toMatch(/PAGE_DELIVERY\.md$/);
+    expect(config.canExecute).toBe(true);
+  });
+
+  it("prefers a per-site document over the shared method", async () => {
+    // A site whose process genuinely differs keeps its own document, and it wins.
+    const config = await readExecutionConfig(
+      site({
+        repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
+        bridgeAlias: "susimacdonald", adapters: ["wix_embed"], enabled: true,
+      }),
+      "project-1",
+      "site-1"
+    );
+    expect(config.repo.deployDocAuthority).toBe("bridge_site");
+    expect(config.repo.deployDocPath).toMatch(/susimacdonald/);
+  });
+
+  it("refuses a site that has no method at all", async () => {
+    // No per-site document and not delivered through the bridge: there is genuinely nowhere
+    // to learn how a change ships, so this stays refused.
     const config = await readExecutionConfig(
       site({
         repoPath: REAL_CHECKOUT, repoUrl: null, defaultBranch: "main", deployDocPath: null,
@@ -291,7 +326,7 @@ describe("the execution config reports every lane, so a caller takes the one it 
       "site-1"
     );
     expect(config.canExecute).toBe(false);
-    expect(config.missing.join(" ")).toMatch(/deploy document/);
+    expect(config.missing.join(" ")).toMatch(/deploy method/);
   });
 
   it("states how to report back, so a client does not guess the shape", async () => {
