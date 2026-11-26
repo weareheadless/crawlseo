@@ -274,3 +274,127 @@ describe("a dry run writes nothing", () => {
     expect(result.parked).toEqual([]);
   });
 });
+
+describe("no producer path can reach a capability it does not own", () => {
+  /**
+   * The ownership filter on the `DETECTORS` loop is not sufficient on its own.
+   *
+   * `clusterPlayDetector` emits `O3_content_gap` and runs *outside* that loop, so the filter
+   * never saw it. It put O3 into `produced`, which is the map `retireStaleDetected` reads to
+   * decide what is stale — and the sweep then parked 15 of the topic map's own content-gap rows
+   * on susimacdonald, scoring 29, 33 and 21. The highest-value work on the board, removed by a
+   * run that does not own the capability.
+   *
+   * The bound therefore sits in `remember`, the single place a candidate joins the run's output.
+   * This test drives a real (non-dry) run against a board that already holds a topic-map O3 row
+   * and asserts nothing parks it. It is deliberately an end-to-end assertion rather than a unit
+   * test of `remember`, because the defect was a second producer path, and only the whole run
+   * can show that no path exists.
+   */
+  it("leaves the topic map's content-gap rows alone when the detectors run", async () => {
+    const { runDetectors } = await import("@/lib/funnel/detectors");
+    const parkedIds: string[] = [];
+    /**
+     * A cluster whose coverage is low enough that `clusterPlayDetector` *does* emit an
+     * `O3_content_gap` candidate.
+     *
+     * Seeding this is what makes the test mean anything. With no clusters, that detector emits
+     * nothing, O3 never approaches `produced`, and the assertion passes whether or not the
+     * ownership bound exists — a vacuous test guarding a real defect. Three membership rows with
+     * no ranked query gives coverage 0, under the 0.34 ceiling, so the candidate is produced and
+     * the bound has to stop it.
+     */
+    const clusterEvidence = [
+      { id: "m1", kind: "keyword_universe_membership", observedAt: new Date("2026-11-20T00:00:00Z"), dimensions: { cluster: "cozumel-buying", query: "cozumel condos" }, metrics: {} },
+      { id: "m2", kind: "keyword_universe_membership", observedAt: new Date("2026-11-20T00:00:00Z"), dimensions: { cluster: "cozumel-buying", query: "cozumel real estate" }, metrics: {} },
+      { id: "m3", kind: "keyword_universe_membership", observedAt: new Date("2026-11-20T00:00:00Z"), dimensions: { cluster: "cozumel-buying", query: "buy in cozumel" }, metrics: {} },
+    ];
+    const db = {
+      evidenceRecord: {
+        findMany: vi.fn(async (args: { where?: Record<string, unknown> }) => {
+          const kind = ((args?.where ?? {}) as Record<string, unknown>).kind;
+          return kind === "keyword_universe_membership" ? clusterEvidence : [];
+        }),
+      },
+      demandMapCluster: {
+        findMany: vi.fn(async () => [{ id: "c1", slug: "cozumel-buying", name: "Cozumel buying", projectId: "p1" }]),
+      },
+      site: { findFirst: vi.fn(async () => null) },
+      crawl: { findFirst: vi.fn(async () => null) },
+      auditPage: { findMany: vi.fn(async () => []) },
+      opportunity: {
+        /**
+         * One high-scoring row owned by the topic map, returned to whichever sweep asks for it.
+         *
+         * The `where` clause is honoured rather than ignored. A mock that returns the row to every
+         * caller proves nothing: `applyHysteresis` filters on `type: { in: ownedTypes }`, so
+         * returning an O3 row to it fabricates a reach the real query cannot make, and the test
+         * fails on the mock instead of on the bound.
+         */
+        findMany: vi.fn(async (args: { where?: Record<string, unknown> }) => {
+          const row = {
+            id: "topic-map-row",
+            type: "O3_content_gap",
+            dedupKey: "phase3:content_business:222c0acb67f97f50",
+            status: "detected",
+            scoreValue: 29,
+            scoreInputs: null,
+            recommendationDecision: null,
+          };
+          const where = (args?.where ?? {}) as Record<string, unknown>;
+          const typeFilter = where.type as { in?: string[]; notIn?: string[] } | undefined;
+          if (typeFilter?.in && !typeFilter.in.includes(row.type)) return [];
+          if (typeFilter?.notIn && typeFilter.notIn.includes(row.type)) return [];
+          if (where.status !== undefined && where.status !== row.status) return [];
+          const score = where.scoreValue as { lt?: number; gte?: number } | undefined;
+          if (score?.lt !== undefined && !(row.scoreValue < score.lt)) return [];
+          if (score?.gte !== undefined && !(row.scoreValue >= score.gte)) return [];
+          const key = where.dedupKey as { in?: string[] } | undefined;
+          if (key?.in && !key.in.includes(row.dedupKey)) return [];
+          return [row];
+        }),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => ({ id: "new" })),
+        update: vi.fn(async (args: { where: { id: string } }) => {
+          parkedIds.push(args.where.id);
+          return { id: args.where.id };
+        }),
+        updateMany: vi.fn(async (args: { where: { id: { in: string[] } } }) => {
+          parkedIds.push(...args.where.id.in);
+          return { count: args.where.id.in.length };
+        }),
+        groupBy: vi.fn(async () => []),
+      },
+      evidenceEdge: { upsert: vi.fn(async () => ({ id: "edge" })), count: vi.fn(async () => 1) },
+    };
+    const result = await runDetectors(db as never, "p1", { topicMapOwnsBoard: true, detectedBy: "funnel-refresh" });
+    // The bound, and proof the detector really did try: `clusterPlayDetector` produced the
+    // candidate (it is in the run's output path) but it never became a row or a stale-sweep claim.
+    expect(result.created).toBe(0);
+    expect(parkedIds).not.toContain("topic-map-row");
+  });
+
+  it("produces no candidate for a capability owned by the topic map", async () => {
+    const { runDetectors } = await import("@/lib/funnel/detectors");
+    const db = {
+      evidenceRecord: { findMany: vi.fn(async () => []) },
+      demandMapCluster: { findMany: vi.fn(async () => []) },
+      site: { findFirst: vi.fn(async () => null) },
+      crawl: { findFirst: vi.fn(async () => null) },
+      auditPage: { findMany: vi.fn(async () => []) },
+      opportunity: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => ({ id: "new" })),
+        update: vi.fn(async () => ({ id: "x" })),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        groupBy: vi.fn(async () => []),
+      },
+      evidenceEdge: { upsert: vi.fn(async () => ({ id: "edge" })), count: vi.fn(async () => 1) },
+    };
+    const result = await runDetectors(db as never, "p1", { dryRun: true, topicMapOwnsBoard: true });
+    for (const candidate of result.candidates ?? []) {
+      expect(TOPIC_MAP_TYPES).not.toContain(candidate.type);
+    }
+  });
+});

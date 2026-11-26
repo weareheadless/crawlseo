@@ -1538,7 +1538,27 @@ export async function runDetectors(
   const hygieneParked: string[] = [];
   const candidates: DetectorCandidate[] = [];
   const produced = new Map<OpportunityType, Set<string>>();
+  /**
+   * The one place a candidate becomes part of this run's output, and therefore the one place
+   * the ownership bound has to hold.
+   *
+   * `produced` is what `retireStaleDetected` reads: every `detected` row of a type in this map
+   * whose key is absent gets parked as stale. So a type entering `produced` is a claim of
+   * ownership over every row of that type on the project — and an unowned type entering it is
+   * how one producer deletes another's work.
+   *
+   * That is not hypothetical. `clusterPlayDetector` emits `O3_content_gap`, which the topic map
+   * owns, and it runs outside the `DETECTORS` loop, so the ownership filter on that loop never
+   * saw it. Measured 2026-11-25 on susimacdonald: it put O3 into `produced`, and the stale sweep
+   * then parked **15 of the topic map's own content-gap rows**, scoring 29, 33 and 21 — the
+   * highest-value work on the board, removed by a run that does not own the capability.
+   *
+   * Bounding it here rather than in each loop makes the invariant structural: there is no path
+   * by which an unowned type reaches a sweep, so a new producer path added later cannot reopen
+   * the hole by forgetting a filter.
+   */
   const remember = (candidate: DetectorCandidate) => {
+    if (!owned.has(candidate.type)) return;
     produced.set(candidate.type, (produced.get(candidate.type) ?? new Set()).add(candidate.dedupKey));
   };
   /**
@@ -1652,6 +1672,10 @@ export async function runDetectors(
     }
   }
   for (const rawCandidate of await clusterPlayDetector(db, projectId, now)) {
+    // Not this run's capability. `clusterPlayDetector` emits `O3_content_gap`, which belongs to
+    // the topic map whenever the map has modelled the project; producing it here would give the
+    // same finding two differently-reasoned rows on one board.
+    if (!owned.has(rawCandidate.type)) continue;
     const candidate = await withMeasuredWinnability(rawCandidate);
     const clusterId = clusterIdFor(candidate);
     remember(candidate);
