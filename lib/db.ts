@@ -30,10 +30,23 @@ function databaseUrl(): string | undefined {
   return parsed.toString();
 }
 
+/**
+ * Only pass `datasources` when there is a URL to override.
+ *
+ * Prisma rejects an explicit `url: undefined` in the constructor, and ES module
+ * imports are evaluated before the script body runs, so a script that calls
+ * `loadEnvConfig()` and then imports this module was constructed with no
+ * `DATABASE_URL` yet and threw before it could do anything. That is how the
+ * daily GSC sync cron died on 2026-11-25: it imported `db`, `loadEnvConfig`
+ * ran too late, and every run since failed at module load. With no override,
+ * Prisma reads `DATABASE_URL` when it connects, which is also what makes the
+ * ordering irrelevant.
+ */
+const override = databaseUrl();
 const rawClient =
   globalForPrisma.prisma ||
   new PrismaClient({
-    datasources: { db: { url: databaseUrl() } },
+    ...(override ? { datasources: { db: { url: override } } } : {}),
     log:
       process.env.NODE_ENV === "development"
         ? ["error", "warn"]
