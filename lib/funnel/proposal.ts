@@ -13,10 +13,18 @@ export type OpportunityLane = "timely" | "content_business" | "aeo_geo" | "techn
 export type OpportunityProposalKind = "article" | "update" | "cluster_hub" | "business" | "aeo" | "technical";
 export type OpportunityProposalEffort = "small" | "medium" | "large" | "unknown";
 export type OpportunityProposalConfidence = "high" | "medium" | "low";
+/**
+ * Which drafting pipeline wrote the decision. Both speak the same contract; the
+ * source says where the proposal was decided, so a board can tell a topic-map
+ * proposal from a decision drafted for a rank detector's own row.
+ */
+export type OpportunityProposalSource = "phase3-topic-map" | "phase3-rank-drafting";
+
+const PROPOSAL_SOURCES: readonly string[] = ["phase3-topic-map", "phase3-rank-drafting"];
 
 export type OpportunityProposal = {
   schemaVersion: "phase3-v1";
-  source: "phase3-topic-map";
+  source: OpportunityProposalSource;
   lane: OpportunityLane;
   kind: OpportunityProposalKind;
   readiness: "actionable" | "needs_investigation";
@@ -61,7 +69,7 @@ export function laneLabel(lane: OpportunityLane | string | null | undefined): st
 export function parseOpportunityProposal(value: unknown): OpportunityProposal | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  if (row.schemaVersion !== "phase3-v1" || row.source !== "phase3-topic-map") return null;
+  if (row.schemaVersion !== "phase3-v1" || !PROPOSAL_SOURCES.includes(String(row.source))) return null;
   const lane = row.lane;
   const kind = row.kind;
   const readiness = row.readiness;
@@ -75,7 +83,7 @@ export function parseOpportunityProposal(value: unknown): OpportunityProposal | 
   const text = (key: string) => (typeof row[key] === "string" ? (row[key] as string) : "");
   return {
     schemaVersion: "phase3-v1",
-    source: "phase3-topic-map",
+    source: row.source as OpportunityProposalSource,
     lane: lane as OpportunityLane,
     kind: kind as OpportunityProposalKind,
     readiness: readiness as "actionable" | "needs_investigation",

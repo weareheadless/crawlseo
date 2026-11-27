@@ -173,12 +173,12 @@ const CONFIDENCE_WORDS: Record<string, ProposalConfidence> = {
   low: "low", basse: "low", faible: "low", weak: "low",
 };
 
-function normalizeEffort(value: string | null): ProposalEffort | null {
+export function normalizeEffort(value: string | null): ProposalEffort | null {
   if (!value) return null;
   return EFFORT_WORDS[value.trim().toLowerCase()] ?? null;
 }
 
-function normalizeConfidence(value: string | null): ProposalConfidence | null {
+export function normalizeConfidence(value: string | null): ProposalConfidence | null {
   if (!value) return null;
   return CONFIDENCE_WORDS[value.trim().toLowerCase()] ?? null;
 }

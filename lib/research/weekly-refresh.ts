@@ -16,6 +16,7 @@ import { buildNewsQueriesForSite } from "@/lib/research/monthly-bundle";
 import { storeProposals, type Proposal } from "@/lib/research/opportunity-generation";
 import { buildClusterEvidenceCatalogue, selectClusterEvidence } from "@/lib/research/opportunity-evidence";
 import { draftTimelyProposals, TIMELY_WINDOW_DAYS } from "@/lib/research/opportunity-drafting";
+import { draftRankDecisions, type RankDecisionResult } from "@/lib/research/rank-decision-drafting";
 import { fetchGoogleNewsRssSearch } from "@/lib/research/providers/google-news-rss";
 import type { ResearchProviderSource } from "@/lib/research/providers/types";
 import { saveResearchSources } from "@/lib/research/service";
@@ -72,6 +73,18 @@ export type WeeklyRefreshResult = {
     expired: number;
     reason: string | null;
   };
+  /** Decisions drafted for the rank detectors' own rows (O2 first). */
+  rankDecisions: {
+    considered: number;
+    drafted: number;
+    stored: number;
+    declined: Array<{ dedupKey: string; reason: string }>;
+    rejected: Array<{ dedupKey: string; reason: string }>;
+    skipped: Array<{ dedupKey: string; reason: string }>;
+    errors: string[];
+    truncations: string[];
+    reason: string | null;
+  };
 };
 
 export type WeeklyDeps = {
@@ -94,6 +107,7 @@ export type WeeklyDeps = {
   saveNews: (runId: string, sources: ResearchProviderSource[]) => Promise<Array<{ id: string }>>;
   storeProposals: typeof storeProposals;
   draftTimely: typeof draftTimelyProposals;
+  draftRankDecisions: (db: WeeklyRefreshDb, input: { siteId: string; mode: "dry-run" | "execute"; now?: Date }) => Promise<RankDecisionResult>;
 };
 
 export const defaultWeeklyDeps: WeeklyDeps = {
@@ -104,6 +118,7 @@ export const defaultWeeklyDeps: WeeklyDeps = {
   saveNews: saveResearchSources,
   storeProposals,
   draftTimely: draftTimelyProposals,
+  draftRankDecisions,
 };
 
 export function isoWeekKey(now: Date): string {
@@ -117,6 +132,32 @@ export function isoWeekKey(now: Date): string {
 
 export function weeklyKey(siteId: string, week: string): string {
   return `weekly:${siteId}:${week}`;
+}
+
+const noRankDecisions = (reason: string): WeeklyRefreshResult["rankDecisions"] => ({
+  considered: 0,
+  drafted: 0,
+  stored: 0,
+  declined: [],
+  rejected: [],
+  skipped: [],
+  errors: [],
+  truncations: [],
+  reason,
+});
+
+function rankDecisionsSummary(result: RankDecisionResult): WeeklyRefreshResult["rankDecisions"] {
+  return {
+    considered: result.considered,
+    drafted: result.drafted,
+    stored: result.stored,
+    declined: result.declined,
+    rejected: result.rejected,
+    skipped: result.skipped,
+    errors: result.errors,
+    truncations: result.truncations,
+    reason: result.errors.length > 0 ? result.errors.join("; ") : result.detail,
+  };
 }
 
 
@@ -164,6 +205,7 @@ export async function runWeeklyRefresh(
       evidence?: WeeklyRefreshResult["evidence"];
       news?: WeeklyRefreshResult["news"];
       timely?: WeeklyRefreshResult["timely"];
+      rankDecisions?: WeeklyRefreshResult["rankDecisions"];
     } | null;
     return {
       status: "existing",
@@ -173,6 +215,7 @@ export async function runWeeklyRefresh(
       evidence: report?.evidence ?? { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: report?.news ?? { fetched: 0, stored: 0, items: [] },
       timely: report?.timely ?? { proposals: [], stored: 0, dropped: [], rejected: [], expired: 0, reason: "existing run" },
+      rankDecisions: report?.rankDecisions ?? noRankDecisions("existing run"),
     };
   }
 
@@ -185,6 +228,7 @@ export async function runWeeklyRefresh(
       evidence: { crawl: 0, gsc: 0, knowledge: 0, questionCoverage: 0 },
       news: { fetched: 0, stored: 0, items: [] },
       timely: { proposals: [], stored: 0, dropped: [], rejected: [], expired: 0, reason: "dry run" },
+      rankDecisions: noRankDecisions("dry run"),
     };
   }
 
@@ -220,6 +264,12 @@ export async function runWeeklyRefresh(
     const backfill = await deps.backfill(db, site.id, { projectId: site.projectId });
     const knowledge = await deps.bridgeKnowledge(db, { projectId: site.projectId, siteId: site.id });
     const coverage = await deps.bridgeCoverage(db, { projectId: site.projectId, siteId: site.id });
+    // The detectors just refreshed the rank rows, so this is where their
+    // editorial decisions get drafted: weekly cadence, content-writer model,
+    // no paid provider. Rows that already carry a decision are left alone.
+    const rankDecisions = rankDecisionsSummary(
+      await deps.draftRankDecisions(db, { siteId: site.id, mode: "execute", now })
+    );
 
     const fetched: ResearchProviderSource[] = [];
     for (const query of queries) {
@@ -387,6 +437,7 @@ export async function runWeeklyRefresh(
         expired: expiredIds.length,
         reason: timely.errors.length > 0 ? timely.errors.join("; ") : timely.summary,
       },
+      rankDecisions,
       approvalReference: input.approval ?? null,
       generatedAt: new Date().toISOString(),
       counts: {
@@ -395,6 +446,8 @@ export async function runWeeklyRefresh(
         newsStored: saved.length,
         timelyProposals: timely.proposals.length,
         timelyStored: stored,
+        rankDecisionsDrafted: rankDecisions.drafted,
+        rankDecisionsStored: rankDecisions.stored,
       },
     };
     await db.researchRun.update({
@@ -417,6 +470,7 @@ export async function runWeeklyRefresh(
       evidence,
       news: { fetched: fetched.length, stored: saved.length, items: newsItems },
       timely: { proposals: timely.proposals, stored, dropped, rejected: timely.rejected, expired: expiredIds.length, reason: timely.errors.length > 0 ? timely.errors.join("; ") : timely.summary },
+      rankDecisions,
     };
   } catch (error) {
     await db.researchRun.update({
@@ -470,6 +524,22 @@ export function renderWeeklyReport(result: WeeklyRefreshResult, domain: string):
       lines.push(`  - Target: ${proposal.target.url ?? (proposal.target.newAsset ? "new asset" : "none")}`);
       lines.push(`  - Expires: ${proposal.expiresAt?.slice(0, 10) ?? "—"}`);
       lines.push(`  - Stored: ${result.timely.stored > 0 ? "yes" : "no"}`);
+    }
+  }
+  lines.push("");
+  lines.push("## Rank row decisions");
+  lines.push("");
+  {
+    const rank = result.rankDecisions;
+    if (rank.considered === 0 && rank.drafted === 0) {
+      lines.push(`No open rank row without a decision. ${rank.reason ?? ""}`);
+    } else {
+      lines.push(`- Considered: ${rank.considered}; drafted: ${rank.drafted}; stored: ${rank.stored}`);
+      for (const row of rank.declined) lines.push(`- Declined \`${row.dedupKey}\` — ${row.reason}`);
+      for (const row of rank.rejected) lines.push(`- Rejected \`${row.dedupKey}\` — ${row.reason}`);
+      for (const row of rank.skipped) lines.push(`- Skipped \`${row.dedupKey}\` — ${row.reason}`);
+      for (const truncation of rank.truncations) lines.push(`- ${truncation}`);
+      for (const error of rank.errors) lines.push(`- Error: ${error}`);
     }
   }
   lines.push("");
