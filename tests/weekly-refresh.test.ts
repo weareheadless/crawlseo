@@ -177,6 +177,22 @@ function makeDeps(overrides: Partial<WeeklyDeps> = {}): WeeklyDeps {
         model: "test-model",
       };
     },
+    // Inert by default: the drafting pass has its own test file, and these
+    // tests exercise the news and timely flow.
+    draftRankDecisions: async () => ({
+      status: "completed" as const,
+      detail: "no open O2_striking_distance rows without a decision",
+      considered: 0,
+      drafted: 0,
+      stored: 0,
+      decisions: [],
+      declined: [],
+      rejected: [],
+      skipped: [],
+      errors: [],
+      truncations: [],
+      model: null,
+    }),
     ...overrides,
   };
 }
@@ -283,6 +299,40 @@ describe("weekly refresh", () => {
     expect(storedProposals).toBe(1);
     expect(state.created).toBe(1);
     expect(state.runs[0]).toMatchObject({ status: "COMPLETED" });
+  });
+
+  it("carries the rank-decision pass into the result and the stored report", async () => {
+    const { db, state } = makeDb();
+    let askedFor: { siteId?: string; mode?: string } = {};
+    const result = await runWeeklyRefresh(
+      db as never,
+      { siteId: "site-1", mode: "execute", approval: "weekly-test", now },
+      makeDeps({
+        draftRankDecisions: async (_db, input) => {
+          askedFor = input;
+          return {
+            status: "completed" as const,
+            detail: "2 drafted of 2 open rows, 2 stored",
+            considered: 2,
+            drafted: 2,
+            stored: 2,
+            decisions: [],
+            declined: [],
+            rejected: [],
+            skipped: [],
+            errors: [],
+            truncations: ["page bodies were sent truncated to 1200 characters"],
+            model: "test-model",
+          };
+        },
+      })
+    );
+    expect(askedFor).toMatchObject({ siteId: "site-1", mode: "execute" });
+    expect(result.rankDecisions.stored).toBe(2);
+    expect(result.rankDecisions.truncations).toHaveLength(1);
+    const report = state.runs[0].report as { counts: Record<string, number>; rankDecisions: { stored: number } };
+    expect(report.counts.rankDecisionsStored).toBe(2);
+    expect(report.rankDecisions.stored).toBe(2);
   });
 
   it("records an empty timely lane when the news is old", async () => {
